@@ -26,21 +26,26 @@ function asserterr(expected, ok, ...)
 	assert(string.find(actual, expected, 1, true), "wrong error, got "..actual)
 end
 
-local function errorreporter(errmsg)
-	io.stderr:write(debug.traceback(errmsg), "\n")
-	return errmsg
-end
-
-function spawn(f, ...)
-	--[[
-	local t = coroutine.create(function (...)
-		return select(2, assert(xpcall(f, errorreporter, ...)))
-	end)
-	--[=[--]]
+function pspawn(f, ...)
 	local t = coroutine.create(f)
-	--]=]
 	garbage[#garbage+1] = t
 	return coroutine.resume(t, ...)
+end
+
+do
+	local function errorreporter(errmsg)
+		local id = tostring(coroutine.running())
+		io.stderr:write(id,": ",debug.traceback(errmsg),"\n")
+		return errmsg
+	end
+
+	local function threadmain(f, ...)
+		assert(xpcall(f, errorreporter, ...))
+	end
+
+	function spawn(f, ...)
+		assert(pspawn(threadmain, f, ...))
+	end
 end
 
 function counter()

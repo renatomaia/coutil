@@ -1,5 +1,9 @@
 local _G = require "_G"
+local assert = _G.assert
+local error = _G.error
+local next = _G.next
 local pairs = _G.pairs
+local pcall = _G.pcall
 local select = _G.select
 local setmetatable = _G.setmetatable
 
@@ -42,18 +46,12 @@ local function removethread(event, thread, list)
 	elseif following ~= nil then
 		local tail = list.tail
 		local previous
-		if list[tail] == thread then
-			previous = tail
-		else
-			for key, value in pairs(list) do -- this should not take long
-				if value == thread then
-					previous = key
-					break
-				end
-			end
-			if tail == thread then
-				list.tail = previous
-			end
+		local current = tail
+		repeat
+			previous, current = current, list[current]
+		until current == thread
+		if tail == thread then
+			list.tail = previous
 		end
 		list[previous] = following
 		list[thread] = nil
@@ -169,7 +167,7 @@ do
 	function module.awaiteach(callback, ...)
 		assert(isyieldable(), "unable to yield")
 		local thread = running()
-		local events = setmetatable({}, Handler)
+		local events = {}
 		for index = 1, countargs(...) do
 			local event = select(index, ...)
 			if event ~= nil and events[event] == nil then

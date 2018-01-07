@@ -64,8 +64,8 @@ end
 newtest "await" ----------------------------------------------------------------
 
 do case "error messages"
-	asserterr("table index is nil", spawn(await))
-	asserterr("table index is nil", spawn(await, nil))
+	asserterr("table index is nil", pspawn(await))
+	asserterr("table index is nil", pspawn(await, nil))
 	asserterr("unable to yield", pcall(await, "e"))
 	assert(emit("e") == false)
 
@@ -461,9 +461,9 @@ end
 newtest "awaitany" -------------------------------------------------------------
 
 do case "error messages"
-	asserterr("value expected", spawn(awaitany))
-	asserterr("value expected", spawn(awaitany, nil))
-	asserterr("value expected", spawn(awaitany, nil,nil))
+	asserterr("value expected", pspawn(awaitany))
+	asserterr("value expected", pspawn(awaitany, nil))
+	asserterr("value expected", pspawn(awaitany, nil,nil))
 	asserterr("unable to yield", pcall(awaitany, 1,2,3))
 	assert(emit(1) == false)
 	assert(emit(2) == false)
@@ -610,28 +610,34 @@ end
 
 do case "resume order"
 	local es = { {},{},{} }
-	local es = { 1,2,3 }
-	local order = counter()
 	local max = 16
 
-	local list = {}
+	local list
 	for i = 1, max do
 		spawn(function ()
-			awaitany(table.unpack(es, 3-(i-1)%3, 3))
-			list[i] = order()
+			awaitany(table.unpack(es, 1, 1+(i-1)%3))
+			list[#list+1] = i
 		end)
-		assert(list[i] == nil)
 	end
 
+	list = {}
 	assert(emit(es[3]) == true)
-	assert(#list == max)
-	for i, order in ipairs(list) do assert(i == order) end
-	assert(emit(es[2]) == false)
-	assert(#list == max)
-	for i, order in ipairs(list) do assert(i == order) end
+	assert(#list == max//3)
+	for i = 1, #list do assert(list[i] == i*3) end
+
+	list = {}
+	assert(emit(es[2]) == true)
+	assert(#list == max//3)
+	for i = 1, #list do assert(list[i] == i*3-1) end
+
+	list = {}
+	assert(emit(es[1]) == true)
+	assert(#list == max//3+max%3)
+	for i = 1, #list do assert(list[i] == i*3-2) end
+
 	assert(emit(es[1]) == false)
-	assert(#list == max)
-	for i, order in ipairs(list) do assert(i == order) end
+	assert(emit(es[2]) == false)
+	assert(emit(es[3]) == false)
 
 	done()
 end
