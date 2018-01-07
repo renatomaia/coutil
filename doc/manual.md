@@ -1,19 +1,19 @@
 Index
 =====
 
-- [`coutil.event`](#synchronization-with-events)
+- [`coutil.event`](#events)
 - [`coutil.event.await`](#coutileventawait-e)
 - [`coutil.event.awaitall`](#coutileventawaitall-e1-)
 - [`coutil.event.awaitany`](#coutileventawaitany-e1-)
 - [`coutil.event.awaiteach`](#coutileventawaiteach-f-e1-)
 - [`coutil.event.emit`](#coutileventemit-e-)
 
-- [`coutil.promise`](#asynchronous-requests-with-promises)
-- [`coutil.promise.awaitall`](#coutilpromiseawaitall-)
-- [`coutil.promise.awaitany`](#coutilpromiseawaitany-)
-- [`coutil.promise.create`](#coutilpromisecreate)
-- [`coutil.promise.onlypending`](#coutilpromiseonlypending-)
-- [`coutil.promise.pickready`](#coutilpromisepickready-)
+- [`coutil.promise`](#promises)
+- [`coutil.promise.awaitall`](#coutilpromiseawaitall-p-)
+- [`coutil.promise.awaitany`](#coutilpromiseawaitany-p-)
+- [`coutil.promise.create`](#coutilpromisecreate-)
+- [`coutil.promise.onlypending`](#coutilpromiseonlypending-p-)
+- [`coutil.promise.pickready`](#coutilpromisepickready-p-)
 
 Contents
 ========
@@ -29,7 +29,7 @@ The behavior is undefined if a coroutine suspended awaiting events is resumed by
 ### `coutil.event.await (e)`
 
 Suspends the execution of the calling coroutine awaiting an event on value `e`.
-It returns all the additional arguments passed to [`emit`](#coutileventemit-e-)).
+It returns all the additional arguments passed to [`emit`](#coutileventemit-e-).
 
 ### `coutil.event.awaitall ([e1, ...])`
 
@@ -41,13 +41,13 @@ If `e1, ...` are not provided or are all `nil`, this function has no effect.
 ### `coutil.event.awaitany (e1, ...)`
 
 Suspends the execution of the calling coroutine awaiting an event on any of the values `e1, ...`.
-The value on which the event is emitted is returned, followed by any additional values passed to [`emit`](#coutileventemit-e-)).
+The value on which the event is emitted is returned, followed by any additional values passed to [`emit`](#coutileventemit-e-).
 Any `nil` in `e1, ...` is ignored.
 
 ### `coutil.event.awaiteach (f, [e1, ...])`
 
 Suspends the execution of the calling coroutine awaiting an event on each of the values `e1, ...`.
-Whenever one of these events are emited `f` is called with the value on which the event is emitted, followed by any additional values passed to [`emit`](#coutileventemit-e-)).
+Whenever one of these events are emited `f` is called with the value on which the event is emitted, followed by any additional values passed to [`emit`](#coutileventemit-e-).
 
 If `f` returns any value (including `nil`) then the suspension for the events is cancelled, and this function returns the values returned by `f`.
 If `f` raises an error then the suspension for the events is cancelled, and this function raises the error.
@@ -84,7 +84,6 @@ If all promises `p, ...` are fulfilled then this function has no effect.
 
 Returns a fulfilled promise from promises `p, ...`.
 If there are no fulfilled promises in `p, ...`, it suspends the calling coroutine awaiting the fulfillment of any of the promises in `p, ...`.
-If all promises in `p, ...` are fulfilled then this function has no effect.
 
 ### `coutil.promise.create ()`
 
