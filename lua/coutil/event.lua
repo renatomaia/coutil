@@ -63,6 +63,10 @@ end
 
 local module = { version = "1.0 alpha" }
 
+function module.pending(event)
+	return listof[event] ~= nil
+end
+
 function module.emit(event, ...)
 	local list = listof[event]
 	if list ~= nil then

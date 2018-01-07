@@ -1,3 +1,5 @@
+package.path = "../lua/?.lua;"..package.path
+
 garbage = setmetatable({ thread = nil }, { __mode = "v" })
 
 local test

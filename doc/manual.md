@@ -7,6 +7,7 @@ Index
 - [`coutil.event.awaitany`](#coutileventawaitany-e1-)
 - [`coutil.event.awaiteach`](#coutileventawaiteach-f-e1-)
 - [`coutil.event.emit`](#coutileventemit-e-)
+- [`coutil.event.pending`](#coutileventpending-e)
 
 - [`coutil.promise`](#promises)
 - [`coutil.promise.awaitall`](#coutilpromiseawaitall-p-)
@@ -66,6 +67,10 @@ Resumes all coroutines waiting for event `e` in the same order they were suspend
 The additional arguments `...` are passed to every resumed coroutine.
 This function returns after resuming all coroutines awaiting event `e` at the moment this call.
 It returns `true` if there was some coroutine awaiting the event, or `false` otherwise.
+
+### `coutil.event.pending (e)`
+
+Returns `true` is there is some coroutine suspended awaiting for event `e`, or `false` otherwise.
 
 Promises
 --------

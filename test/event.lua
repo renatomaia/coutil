@@ -4,6 +4,42 @@ local awaitall = event.awaitall
 local awaitany = event.awaitany
 local awaiteach = event.awaiteach
 local emit = event.emit
+local pending = event.pending
+
+newtest "pending" -----------------------------------------------------------------
+
+do case "garbage collection"
+	garbage.e = {}
+	assert(pending(garbage.e) == false)
+
+	done()
+end
+
+do case "value types"
+	for _, e in ipairs(types) do
+		assert(pending(e) == false)
+
+		local a = 0
+		spawn(function ()
+			await(e)
+			assert(pending(e) == false)
+			a = 1
+		end)
+		assert(a == 0) -- await suspended the coroutine
+
+		assert(pending(e) == true)
+		assert(a == 0) -- still haven't executed
+
+		assert(emit(e) == true)
+
+		assert(pending(e) == false)
+	end
+
+	assert(pending() == false)
+	assert(pending(nil) == false)
+
+	done()
+end
 
 newtest "emit" -----------------------------------------------------------------
 
@@ -178,6 +214,8 @@ do case "value types"
 	end)
 
 	for _, e in ipairs(types) do
+		assert(a == 0)
+		assert(pending(e) == true)
 		assert(a == 0)
 		assert(emit(e) == true)
 	end
@@ -453,10 +491,18 @@ do case "value types"
 		end)
 		assert(a == 0)
 
+		for _, e in ipairs(types) do
+			assert(pending(e) == true)
+			assert(a == 0)
+		end
+
 		assert(emit(e) == true)
 		assert(a == 1)
 
-		assert(emit(e) == false)
+		for _, e in ipairs(types) do
+			assert(emit(e) == false)
+		end
+
 	end
 
 	done()
@@ -728,6 +774,9 @@ do case "value types"
 	end)
 
 	for i, e in ipairs(types) do
+		assert(a == 0)
+		assert(seq[i] == nil)
+		assert(pending(e) == true)
 		assert(a == 0)
 		assert(seq[i] == nil)
 		assert(emit(e) == true)
