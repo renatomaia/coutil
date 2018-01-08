@@ -33,9 +33,12 @@ local awaitany = event.awaitany
 local emitevent = event.emit
 local pendingevent = event.pending
 
+local timevt = require "coutil.time.event"
+local setuptimer = timevt.create
+local canceltimer = timevt.cancel
+
 local time = require "coutil.time"
-local setuptimer = time.setuptimer
-local canceltimer = time.canceltimer
+local setclock = time.setclock
 local waketimers = time.run
 
 local socketcore = require "socket.core"
@@ -45,7 +48,7 @@ local createudp = socketcore.udp
 local suspendprocess = socketcore.sleep
 local gettime = socketcore.gettime
 
-time.setclock(gettime)
+setclock(gettime)
 
 local reading = ArrayedSet()
 local writing = ArrayedSet()
