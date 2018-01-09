@@ -1,8 +1,6 @@
 local _G = require "_G"                                                         --[[VERBOSE]] local verbose = require "coutil.verbose"
 local ipairs = _G.ipairs
 
-local ArrayedSet = require "loop.collection.ArrayedSet"
-
 local event = require "coutil.event"
 local emitevent = event.emit
 local pendingevent = event.pending
@@ -10,28 +8,54 @@ local pendingevent = event.pending
 local socketcore = require "socket.core"
 local selectsockets = socketcore.select
 
-local reading = ArrayedSet()
-local writing = ArrayedSet()
+local function addsocket(list, socket)
+	if list[socket] == nil then
+		local index = 1 + (list.n or 0)
+		list[index] = socket
+		list[socket] = index
+		list.n = index
+		return socket
+	end
+end
+
+local function removesocket(list, socket)
+	local index = list[socket]
+	if index ~= nil then
+		local size = list.n
+		if index ~= size then
+			local last = list[size]
+			list[index] = last
+			list[last] = index
+		end
+		list[size] = nil
+		list[socket] = nil
+		list.n = size - 1
+		return socket
+	end
+end
+
+local reading = {}
+local writing = {}
 local writeof = {}
 
 local module = {}
 
 function module.create(socket, write)
-	local set, event = reading, socket
+	local list, event = reading, socket
 	if write ~= nil then
 		writeof[socket] = write
-		set, event = writing, write
+		list, event = writing, write
 	end
-	set:add(socket)
+	addsocket(list, socket)
 	return event
 end
 
 function module.cancel(socket, write)
-	local set, event = reading, socket
+	local list, event = reading, socket
 	if write ~= nil then
-		set, event = writing, write
+		list, event = writing, write
 	end
-	if not pendingevent(event) and set:remove(socket) then
+	if not pendingevent(event) and removesocket(list, socket) then
 		if event == write then
 			writeof[socket] = nil
 		end
