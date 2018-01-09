@@ -17,14 +17,7 @@ local unpack = array.unpack
 
 local table = require "loop.table"
 local copy = table.copy
-
-local proto = require "loop.proto"
-local clone = proto.clone
-
-local oo = require "loop.base"
-local class = oo.class
-
-local Wrapper = require "loop.object.Wrapper"
+local memoize = table.memoize
 
 local socketcore = require "socket.core"
 local selectsockets = socketcore.select
@@ -82,16 +75,29 @@ local function idle(deadline)
 	until timeout == 0
 end
 
-local SockWrap = class{ __index = Wrapper.__index }
+local methodwrap = memoize(function(method)
+	return function(self, ...)
+		return method(self.__object, ...)
+	end
+end, "k")
 
-function SockWrap:__tostring()
-	return tostring(self.__object)
-end
+local socketwrap = {
+	__index = function(self, key)
+		local value = self.__object[key]
+		if type(value) == "function"
+			then return methodwrap[value]
+			else return value
+		end
+	end,
+	__tostring = function (self)
+		return tostring(self.__object)
+	end,
+}
 
-local function wrap(ops, socket, ...)
+local function wrapsocket(ops, socket, ...)
 	if type(socket) == "userdata" then
 		socket:settimeout(0)
-		socket = copy(ops, SockWrap{ __object = socket })
+		socket = setmetatable(copy(ops, { __object = socket }), socketwrap)
 	end
 	return socket, ...
 end
@@ -154,7 +160,7 @@ function CoTCP:accept(...)                                                      
 	
 	-- check if the job has not yet been completed
 	if result then
-		result = wrap(CoTCP, result)
+		result = wrapsocket(CoTCP, result)
 	elseif errmsg == "timeout" then
 		local event, deadline = setupevents(socket, nil, self)
 		if event ~= nil then                                                        --[[VERBOSE]] verbose:socket(true, "waiting for new connection request")
@@ -164,7 +170,7 @@ function CoTCP:accept(...)                                                      
 			cancelevents(socket, nil, deadline)
 			-- accept any connection request pending in the socket
 			result, errmsg = socket:accept(...)
-			if result then result = wrap(CoTCP, result) end
+			if result then result = wrapsocket(CoTCP, result) end
 		end
 	end                                                                           --[[VERBOSE]] verbose:socket(false, "new connection ",result and "accepted" or "failed ("..tostring(errmsg)..")")
 	return result, errmsg
@@ -269,14 +275,14 @@ end
 -- Wrapped Lua Socket API ------------------------------------------------------
 --------------------------------------------------------------------------------
 
-local module = clone(socketcore)
+local module = copy(socketcore)
 
 function module.tcp()
-	return wrap(CoTCP, createtcp())
+	return wrapsocket(CoTCP, createtcp())
 end
 
 function module.udp()
-	return wrap(CoUDP, createudp())
+	return wrapsocket(CoUDP, createudp())
 end
 
 local hasusock, socketunix = pcall(require, "socket.unix")
