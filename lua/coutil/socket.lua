@@ -1,4 +1,4 @@
-local _G = require "_G"                                                         --[[VERBOSE]] local verbose = require "coutil.verbose"
+local _G = require "_G"
 local ipairs = _G.ipairs
 local next = _G.next
 local pcall = _G.pcall
@@ -49,7 +49,7 @@ setclock(gettime)
 local function idle(deadline)
 	repeat
 		local timeout = max(0, deadline - gettime())
-		if not emitsockevents(timeout) then                                         --[[VERBOSE]] verbose:socket("suspend for ",timeout," seconds")
+		if not emitsockevents(timeout) then
 			suspendprocess(timeout)
 		end
 	until timeout == 0
@@ -57,7 +57,7 @@ end
 
 local CoTCP = newclass()
 
-function CoTCP:connect(...)                                                     --[[VERBOSE]] verbose:socket(true, "connecting ",self," to ",...)
+function CoTCP:connect(...)
 	-- connect the socket if possible
 	local socket = self.__object
 	local result, errmsg = socket:connect(...)
@@ -65,9 +65,9 @@ function CoTCP:connect(...)                                                     
 	-- check if the job has not yet been completed
 	if not result and errmsg == "timeout" then
 		local event, deadline = setupevents(socket, self, self)
-		if event ~= nil then                                                        --[[VERBOSE]] verbose:socket(true, "waiting for connection establishment")
+		if event ~= nil then
 			-- wait for a connection completion and finish establishment
-			awaitany(event, deadline)                                                 --[[VERBOSE]] verbose:socket(false, "waiting completed")
+			awaitany(event, deadline)
 			-- cancel emission of events
 			cancelevents(socket, self, deadline)
 			-- try to connect again one last time before giving up
@@ -76,11 +76,11 @@ function CoTCP:connect(...)                                                     
 				result, errmsg = 1, nil -- connection was already established
 			end
 		end
-	end                                                                           --[[VERBOSE]] verbose:socket(false, "connection ",result and "established" or "failed ("..tostring(errmsg)..")")
+	end
 	return result, errmsg
 end
 
-function CoTCP:accept(...)                                                      --[[VERBOSE]] verbose:socket(true, "accepting a new connection")
+function CoTCP:accept(...)
 	-- accept any connection request pending in the socket
 	local socket = self.__object
 	local result, errmsg = socket:accept(...)
@@ -90,20 +90,20 @@ function CoTCP:accept(...)                                                      
 		result = wrapsocket(CoTCP, result)
 	elseif errmsg == "timeout" then
 		local event, deadline = setupevents(socket, nil, self)
-		if event ~= nil then                                                        --[[VERBOSE]] verbose:socket(true, "waiting for new connection request")
+		if event ~= nil then
 			-- wait for a connection request signal
-			awaitany(event, deadline)                                                  --[[VERBOSE]] verbose:socket(false, "waiting completed")
+			awaitany(event, deadline)
 			-- cancel emission of events
 			cancelevents(socket, nil, deadline)
 			-- accept any connection request pending in the socket
 			result, errmsg = socket:accept(...)
 			if result then result = wrapsocket(CoTCP, result) end
 		end
-	end                                                                           --[[VERBOSE]] verbose:socket(false, "new connection ",result and "accepted" or "failed ("..tostring(errmsg)..")")
+	end
 	return result, errmsg
 end
 
-function CoTCP:send(data, i, j)                                                 --[[VERBOSE]] verbose:socket(true, "sending byte stream: ",verbose:escaped(data, i, j))
+function CoTCP:send(data, i, j)
 	-- fill space already avaliable in the socket
 	local socket = self.__object
 	local result, errmsg, lastbyte = socket:send(data, i, j)
@@ -111,23 +111,23 @@ function CoTCP:send(data, i, j)                                                 
 	-- check if the job has not yet been completed
 	if not result and errmsg == "timeout" then
 		local event, deadline = setupevents(socket, self, self)
-		if event ~= nil then                                                        --[[VERBOSE]] verbose:socket(true, "waiting for more space to write stream to be sent")
+		if event ~= nil then
 			-- wait for more space on the socket or a timeout
 			while awaitany(event, deadline) == event do
 				-- fill any space free on the socket one last time
 				result, errmsg, lastbyte = socket:send(data, lastbyte+1, j)
-				if result or errmsg ~= "timeout" then                                   --[[VERBOSE]] verbose:socket("stream was partially sent until byte ",lastbyte)
+				if result or errmsg ~= "timeout" then
 					break
 				end
-			end                                                                       --[[VERBOSE]] verbose:socket(false, "waiting completed")
+			end
 			cancelevents(socket, self, deadline)
 		end
-	end                                                                           --[[VERBOSE]] verbose:socket(false, "stream sending ",result and "completed" or "failed ("..tostring(errmsg)..")")
+	end
 	
 	return result, errmsg, lastbyte
 end
 
-function CoTCP:receive(pattern, ...)                                            --[[VERBOSE]] verbose:socket(true, "receiving byte stream")
+function CoTCP:receive(pattern, ...)
 	-- get data already avaliable in the socket
 	local socket = self.__object
 	local result, errmsg, partial = socket:receive(pattern, ...)
@@ -135,7 +135,7 @@ function CoTCP:receive(pattern, ...)                                            
 	-- check if the job has not yet been completed
 	if not result and errmsg == "timeout" then
 		local event, deadline = setupevents(socket, nil, self)
-		if event ~= nil then                                                        --[[VERBOSE]] verbose:socket(true, "waiting for new data to be read")
+		if event ~= nil then
 			-- initialize data read buffer with data already read
 			local buffer = { partial }
 			
@@ -143,7 +143,7 @@ function CoTCP:receive(pattern, ...)                                            
 			while awaitany(event, deadline) == event do -- otherwise it was a timeout
 				-- reduce the number of required bytes
 				if type(pattern) == "number" then
-					pattern = pattern - #partial                                          --[[VERBOSE]] verbose:socket("got more ",#partial," bytes, waiting for more ",pattern)
+					pattern = pattern - #partial
 				end
 				-- read any data left on the socket one last time
 				result, errmsg, partial = socket:receive(pattern)
@@ -163,29 +163,29 @@ function CoTCP:receive(pattern, ...)                                            
 				result = concat(buffer)
 			else
 				partial = concat(buffer)
-			end                                                                       --[[VERBOSE]] verbose:socket(false, "waiting completed")
+			end
 		
 			cancelevents(socket, nil, deadline)
 		end
-	end                                                                           --[[VERBOSE]] verbose:socket(false, "data reading ",result and "completed" or "failed ("..tostring(errmsg)..")")
+	end
 	
 	return result, errmsg, partial
 end
 
-local function getdatagram(opname, self, ...)                                   --[[VERBOSE]] verbose:socket(true, "receiving datagram")
+local function getdatagram(opname, self, ...)
 	-- get data already avaliable in the socket
 	local socket = self.__object
 	local result, errmsg, port = socket[opname](socket, ...)
 	-- check if the job has not yet been completed
 	if not result and errmsg == "timeout" then
 		local event, deadline = setupevents(socket, nil, self)
-		if event ~= nil then                                                        --[[VERBOSE]] verbose:socket(true, "waiting for data")
+		if event ~= nil then
 			if awaitany(event, deadline) == event then
 				result, errmsg, port = socket[opname](socket, ...)
-			end                                                                       --[[VERBOSE]] verbose:socket(false, "waiting completed")
+			end
 			cancelevents(socket, nil, deadline)
 		end
-	end                                                                           --[[VERBOSE]] verbose:socket(false, "data reading ",result and "completed" or "failed ("..tostring(errmsg)..")")
+	end
 	
 	return result, errmsg, port
 end
@@ -226,7 +226,7 @@ if hasusock then
 	end
 end
 
-function module.select(recvt, sendt, timeout)                                   --[[VERBOSE]] verbose:socket(true, "selecting sockets ready")
+function module.select(recvt, sendt, timeout)
 	-- collect sockets so we don't rely on provided tables be left unchanged
 	local wrapof = {}
 	local recv, send
@@ -261,7 +261,7 @@ function module.select(recvt, sendt, timeout)                                   
 		errmsg == "timeout" and
 		next(readok) == nil and
 		next(writeok) == nil
-	then                                                                          --[[VERBOSE]] verbose:socket(true, "waiting for sockets to become ready")
+	then
 		-- setup events to wait
 		local events = {}
 		local deadline
@@ -285,7 +285,7 @@ function module.select(recvt, sendt, timeout)                                   
 			if deadline ~= nil then canceltimer(deadline) end
 			-- collect all ready sockets
 			readok, writeok, errmsg = selectsockets(recv, send, 0)
-		end                                                                         --[[VERBOSE]] verbose:socket(false, "waiting completed")
+		end
 		-- unregister events to wait
 		if recv ~= nil then
 			for _, socket in ipairs(recv) do
@@ -311,16 +311,16 @@ function module.select(recvt, sendt, timeout)                                   
 		writeok[index] = wrap
 		writeok[wrap] = true
 		writeok[socket] = nil
-	end                                                                           --[[VERBOSE]] verbose:socket(false, "returning sockets ready")
+	end
 	
 	return readok, writeok, errmsg
 end
 
 function module.run(timeout)
-	repeat                                                                        --[[VERBOSE]] verbose:socket(true, "running timer emitter")
-		local nextwake = waketimers(idle, timeout)                                  --[[VERBOSE]] verbose:socket(false, "timers emitted, next wake is ",nextwake)
+	repeat
+		local nextwake = waketimers(idle, timeout)
 		if nextwake ~= nil then return nextwake end
-		if not emitsockevents(timeout and max(0, timeout - gettime())) then         --[[VERBOSE]] verbose:socket("no socket nor time event pending")
+		if not emitsockevents(timeout and max(0, timeout - gettime())) then
 			break
 		end
 	until timeout ~= nil and timeout >= gettime()

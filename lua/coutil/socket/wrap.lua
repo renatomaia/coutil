@@ -1,4 +1,4 @@
-local _G = require "_G"                                                         --[[VERBOSE]] local verbose = require "coutil.verbose"
+local _G = require "_G"
 local setmetatable = _G.setmetatable
 local tostring = _G.tostring
 local type = _G.type
@@ -31,13 +31,13 @@ do
 	local CoSock = {}
 
 	function CoSock:setdeadline(timestamp)
-		local old = self.deadline                                                   --[[VERBOSE]] verbose:socket("deadline of ",self," set to ",timestamp, " (was ",old,")")
+		local old = self.deadline
 		self.deadline = timestamp
 		return true, old
 	end
 
 	function CoSock:settimeout(timeout)
-		local oldtm = self.timeout                                                  --[[VERBOSE]] verbose:socket("timeout of ",self," set to ",timeout, " (was ",oldtm,")")
+		local oldtm = self.timeout
 		if not timeout or timeout < 0 then
 			self.timeout = nil
 		else
@@ -48,7 +48,7 @@ do
 
 	function CoSock:close()
 		local socket = self.__object
-		local result, errmsg = socket:close()                                       --[[VERBOSE]] verbose:socket("closing ",self, result and " successful" or " failed ("..tostring(errmsg)..")")
+		local result, errmsg = socket:close()
 		emitevent(socket) -- wake threads reading the socket
 		emitevent(self) -- wake threads writing the socket
 		return result, errmsg
