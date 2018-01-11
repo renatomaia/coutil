@@ -1,4 +1,4 @@
-local _G = require "_G"                                                         --[[VERBOSE]] local verbose = require "coutil.verbose"
+local _G = require "_G"
 local ipairs = _G.ipairs
 
 local event = require "coutil.event"
@@ -65,19 +65,19 @@ function module.cancel(socket, write)
 end
 
 function module.emitall(timeout)
-	if #reading > 0 or #writing > 0 then                                          --[[VERBOSE]] verbose:socket(true, "wait socket event for ",timeout," seconds")
+	if #reading > 0 or #writing > 0 then
 		local recvok, sendok = selectsockets(reading, writing, timeout)
-		for _, socket in ipairs(recvok) do                                          --[[VERBOSE]] verbose:socket("emit read ready for ",socket)
+		for _, socket in ipairs(recvok) do
 			if not emitevent(socket) then
 				removesocket(reading, socket)
 			end
 		end
-		for _, socket in ipairs(sendok) do                                          --[[VERBOSE]] verbose:socket("emit write ready for ",socket)
+		for _, socket in ipairs(sendok) do
 			if not emitevent(writeof[socket]) then
 				removesocket(writing, socket)
 				writeof[socket] = nil
 			end
-		end                                                                         --[[VERBOSE]] verbose:socket(false, "socket events emitted")
+		end
 		return true
 	end
 	return false

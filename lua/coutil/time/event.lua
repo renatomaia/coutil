@@ -1,4 +1,4 @@
-local _G = require "_G"                                                         --[[VERBOSE]] local verbose = require "coutil.verbose"
+local _G = require "_G"
 local assert = _G.assert
 local type = _G.type
 
@@ -46,7 +46,7 @@ local waketimes = {}
 
 local function setuptimer(timestamp)
 	assert(type(timestamp) == "number", "bad argument #1 (number expected)")
-	if timestamp ~= inf then                                                      --[[VERBOSE]] verbose:time("setup timer ",timestamp)
+	if timestamp ~= inf then
 		sortedinsert(waketimes, timestamp, 1, #waketimes)
 	end
 end
@@ -55,17 +55,17 @@ local module = { create = setuptimer }
 
 function module.cancel(timestamp)
 	assert(type(timestamp) == "number", "bad argument #1 (number expected)")
-	if not pendingevent(timestamp) then                                           --[[VERBOSE]] verbose:time("clear timer ",timestamp)
+	if not pendingevent(timestamp) then
 		sortedremove(waketimes, timestamp, 1, #waketimes)
 		return true
 	end
 	return false
 end
 
-function module.emitall(timestamp)                                              --[[VERBOSE]] verbose:time(true, "emitting timers before ",timestamp)
-	while waketimes[1] ~= nil and waketimes[1] <= timestamp do                    --[[VERBOSE]] verbose:time("emit timer ",waketimes[1])
+function module.emitall(timestamp)
+	while waketimes[1] ~= nil and waketimes[1] <= timestamp do
 		emitevent(remove(waketimes, 1))
-	end                                                                           --[[VERBOSE]] verbose:time(false, "timers emitted")
+	end
 	return waketimes[1]
 end
 

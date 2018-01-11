@@ -1,4 +1,4 @@
-local _G = require "_G"                                                         --[[VERBOSE]] local verbose = require "coutil.verbose"
+local _G = require "_G"
 local assert = _G.assert
 local ipairs = _G.ipairs
 local setmetatable = _G.setmetatable
@@ -35,16 +35,16 @@ function CoSSL:dohandshake()
 		local write
 		if errmsg == "wantwrite" then
 			write = self
-		elseif errmsg ~= "wantread" then                                            --[[VERBOSE]] verbose:ssl("unable to complete handshake: ",errmsg)
+		elseif errmsg ~= "wantread" then
 			socket:close()
 			break
 		end
 		local event, deadline = setupevents(socket, write, self)
-		if event ~= nil then                                                        --[[VERBOSE]] verbose:ssl("wait to complete handshake: ",errmsg)
+		if event ~= nil then
 			awaitany(event, deadline)
 			cancelevents(socket, write, deadline)
 			result, errmsg = socket:dohandshake()
-		else                                                                        --[[VERBOSE]] verbose:ssl("unable to complete handshake due to no timeout")
+		else
 			result, errmsg = nil, "timeout"
 			break
 		end
@@ -67,7 +67,7 @@ do
 		wantread = false,
 		wantwrite = true,
 	}
-	function CoSSL:send(data, i, j)                                               --[[VERBOSE]] verbose:socket(true, "sending byte stream: ",verbose.viewer:tostring(data:sub(i or 1, j)))
+	function CoSSL:send(data, i, j)
 		if self.sslhandshake == nil then
 			local result, errmsg = self:dohandshake()
 			if not result then
@@ -83,7 +83,7 @@ do
 			errmsg = "timeout"
 			local write = wantwrite and self or nil
 			local event, deadline = setupevents(socket, write, self)
-			if event ~= nil then                                                      --[[VERBOSE]] verbose:socket(true, "waiting for more space to write stream to be sent")
+			if event ~= nil then
 				-- wait for more space on the socket or a timeout
 				while awaitany(event, deadline) == event do
 					-- fill any space free on the socket one last time
@@ -91,11 +91,11 @@ do
 					result, errmsg, lastbyte, extra = socket:send(data, lastbyte+1, j)
 					if extra then elapsed = elapsed + extra end
 					local newwant = err2wrtevt[errmsg]
-					if result or newwant == nil then                                      --[[VERBOSE]] verbose:socket("stream was sent until byte ",lastbyte)
+					if result or newwant == nil then
 						break
 					else
 						errmsg = "timeout"
-						if newwant ~= wantwrite then                                        --[[VERBOSE]] verbose:ssl("changing socket event from ",wantwrite and "write" or "read"," to ",newwant and "write" or "read"," due to SSL protocol")
+						if newwant ~= wantwrite then
 							wantwrite = newwant
 							cancelevents(socket, write, nil)
 							write = wantwrite and self or nil
@@ -103,10 +103,10 @@ do
 							if event == nil then break end
 						end
 					end
-				end                                                                     --[[VERBOSE]] verbose:socket(false, "waiting completed")
+				end
 				cancelevents(socket, write, deadline)
 			end
-		end                                                                         --[[VERBOSE]] verbose:socket(false, "stream sending ",result and "completed" or "failed")
+		end
 
 		if not result and errmsg == "Broken pipe" then
 			errmsg = "closed"
@@ -128,7 +128,7 @@ do
 			if not result then
 				return nil, errmsg, "", 0
 			end
-		end                                                                         --[[VERBOSE]] verbose:socket(true, "receiving byte stream")
+		end
 		local socket = self.__object
 		local result, errmsg, partial, elapsed = socket:receive(pattern, ...)
 
@@ -138,7 +138,7 @@ do
 			errmsg = "timeout"
 			local write = wantwrite and self or nil
 			local event, deadline = setupevents(socket, write, self)
-			if event ~= nil then                                                     --[[VERBOSE]] verbose:socket(true, "waiting for new data to be read")
+			if event ~= nil then
 				-- initialize data read buffer with data already read
 				local buffer = { partial }
 				
@@ -146,7 +146,7 @@ do
 				while awaitany(event, deadline) == event do -- otherwise it was a timeout
 					-- reduce the number of required bytes
 					if type(pattern) == "number" then
-						pattern = pattern - #partial                                        --[[VERBOSE]] verbose:socket("got more ",#partial," bytes, waiting for more ",pattern)
+						pattern = pattern - #partial
 					end
 					-- read any data left on the socket one last time
 					local extra
@@ -162,7 +162,7 @@ do
 							break
 						else
 							errmsg = "timeout"
-							if newwant ~= wantwrite then                                      --[[VERBOSE]] verbose:ssl("changing socket event from ",wantwrite and "write" or "read"," to ",newwant and "write" or "read"," due to SSL protocol")
+							if newwant ~= wantwrite then
 								wantwrite = newwant
 								cancelevents(socket, write, nil)
 								write = wantwrite and self or nil
@@ -178,11 +178,11 @@ do
 					result = concat(buffer)
 				else
 					partial = concat(buffer)
-				end                                                                     --[[VERBOSE]] verbose:socket(false, "waiting completed")
+				end
 
 				cancelevents(socket, write, deadline)
 			end
-		end                                                                         --[[VERBOSE]] verbose:socket(false, "data reading ",result and "completed" or "failed")
+		end
 
 		return result, errmsg, partial, elapsed
 	end
@@ -206,7 +206,7 @@ function sockets.ssl(socket, context)
 	return result, errmsg
 end
 
-function sockets.select(recvt, sendt, timeout)                                  --[[VERBOSE]] verbose:socket(true, "selecting sockets ready")
+function sockets.select(recvt, sendt, timeout)
 	-- collect sockets and check for concurrent use
 	local defset, switched = {}, {}
 	local recv, send
@@ -252,7 +252,7 @@ function sockets.select(recvt, sendt, timeout)                                  
 			result[result+1] = socket
 			result[socket] = true
 		end
-	end                                                                           --[[VERBOSE]] verbose:socket(false, "returning sockets ready")
+	end
 	
 	return readok, writeok, errmsg
 end

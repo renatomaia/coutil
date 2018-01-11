@@ -1,4 +1,4 @@
-local _G = require "_G"                                                         --[[VERBOSE]] local verbose = require "coutil.verbose"
+local _G = require "_G"
 local assert = _G.assert
 local type = _G.type
 
@@ -42,16 +42,16 @@ end
 
 function module.run(idle, timeout)
 	while true do
-		local nextwake = emituntil(gettime())                                       --[[VERBOSE]] verbose:time("next wake is ",nextwake)
+		local nextwake = emituntil(gettime())
 		if nextwake == nil then
 			return
 		end
 		local now = gettime()
-		if timeout ~= nil and timeout <= now then                                   --[[VERBOSE]] verbose:time("time run reached timeout")
+		if timeout ~= nil and timeout <= now then
 			return nextwake
 		end
-		if nextwake > now then                                                      --[[VERBOSE]] verbose:time(true, "wait until next wake")
-			idle(nextwake)                                                            --[[VERBOSE]] verbose:time(false, "wait done")
+		if nextwake > now then
+			idle(nextwake)
 		end
 	end
 end
