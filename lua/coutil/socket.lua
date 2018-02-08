@@ -279,6 +279,20 @@ function module.udp()
 	return wrap(CoUDP, createudp())
 end
 
+local hasusock, socketunix = pcall(require, "socket.unix")
+if hasusock then
+	local createustrm = socketunix.stream
+	local createudgrm = socketunix.dgram
+
+	function module.stream()
+		return wrapsocket(CoTCP, createustrm())
+	end
+
+	function module.dgram()
+		return wrapsocket(CoUDP, createudgrm())
+	end
+end
+
 function module.select(recvt, sendt, timeout)                                   --[[VERBOSE]] verbose:socket(true, "selecting sockets ready")
 	-- collect sockets so we don't rely on provided tables be left unchanged
 	local wrapof = {}
