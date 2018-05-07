@@ -19,6 +19,7 @@ local socketcore = require "socket.core"
 local selectsockets = socketcore.select
 local createtcp = socketcore.tcp
 local createudp = socketcore.udp
+local createnetlink = socketcore.netlink
 local suspendprocess = socketcore.sleep
 local gettime = socketcore.gettime
 
@@ -210,6 +211,12 @@ end
 
 function module.udp()
 	return wrapsocket(CoUDP, createudp())
+end
+
+if createnetlink ~= nil then
+	function module.netlink()
+		return wrapsocket(CoUDP, createnetlink())
+	end
 end
 
 local hasusock, socketunix = pcall(require, "socket.unix")
