@@ -2,6 +2,8 @@ package.path = "../lua/?.lua;"..package.path
 
 garbage = setmetatable({ thread = nil }, { __mode = "v" })
 
+local spawnerr
+
 local test
 
 function newtest(title)
@@ -15,6 +17,7 @@ function case(title)
 end
 
 function done()
+	assert(spawnerr == nil)
 	collectgarbage("collect")
 	assert(next(garbage) == nil)
 	print("OK")
@@ -33,18 +36,16 @@ function pspawn(f, ...)
 end
 
 do
-	local function errorreporter(errmsg)
-		local id = tostring(coroutine.running())
-		io.stderr:write(id,": ",debug.traceback(errmsg),"\n")
+	local function catcherr(errmsg)
+		if spawnerr == nil then
+			spawnerr = debug.traceback(errmsg)
+			io.stderr:write(spawnerr, "\n")
+		end
 		return errmsg
 	end
 
-	local function threadmain(f, ...)
-		assert(xpcall(f, errorreporter, ...))
-	end
-
 	function spawn(f, ...)
-		assert(pspawn(threadmain, f, ...))
+		pspawn(xpcall, f, catcherr, ...)
 	end
 end
 
@@ -68,5 +69,6 @@ types = {
 
 dofile "event.lua"
 dofile "promise.lua"
+dofile "spawn.lua"
 
 print "\nSuceess!\n"
