@@ -1,11 +1,14 @@
 local _G = require "_G"
 local assert = _G.assert
 local error = _G.error
+local getmetatable = _G.getmetatable
 local next = _G.next
 local pairs = _G.pairs
 local pcall = _G.pcall
+local rawset = _G.rawset
 local select = _G.select
 local setmetatable = _G.setmetatable
+local type = _G.type
 
 local coroutine = require "coroutine"
 local isyieldable = coroutine.isyieldable
@@ -17,7 +20,9 @@ local vararg = require "vararg"
 local countargs = vararg.len
 local vaconcat = vararg.concat
 
-local listof = setmetatable({}, { __mode = "k" })
+local metatable = { __mode = "k" }
+local setlistof = rawset
+local listof = setmetatable({}, metatable)
 
 local function addthread(event, thread)
 	local list = listof[event]
@@ -40,7 +45,7 @@ local function removethread(event, thread, list)
 		list[thread] = nil
 		list.tail = nil
 		if listof[event] == list then
-			listof[event] = nil
+			setlistof(listof, event, nil)
 		end
 		return thread
 	elseif following ~= nil then
@@ -61,6 +66,44 @@ end
 
 local module = { version = "1.0 alpha" }
 
+do
+	local enableof = {}
+	local disableof = {}
+
+	local function actonevent(actions, event)
+		local action = actions[getmetatable(event)]
+		            or actions[type(event)]
+		if action ~= nil then
+			action(event)
+		end
+	end
+
+	local function addevent(listof, event, list)
+		rawset(listof, event, list)
+		actonevent(enableof, event)
+	end
+
+	local function delevent(listof, event)
+		listof[event] = nil
+		actonevent(disableof, event)
+	end
+
+	function module.trap(kind, onenabled, ondisabled)
+		enableof[kind] = onenabled
+		if next(enableof) == nil then
+			metatable.__newindex = nil
+		else
+			metatable.__newindex = addevent
+		end
+		disableof[kind] = ondisabled
+		if next(disableof) == nil then
+			setlistof = rawset
+		else
+			setlistof = delevent
+		end
+	end
+end
+
 function module.pending(event)
 	return listof[event] ~= nil
 end
@@ -68,7 +111,7 @@ end
 function module.emitall(event, ...)
 	local list = listof[event]
 	if list ~= nil then
-		listof[event] = nil
+		setlistof(listof, event, nil)
 		repeat
 			local tail = list.tail
 			local head = list[tail]

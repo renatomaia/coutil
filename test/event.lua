@@ -6,6 +6,80 @@ local awaiteach = event.awaiteach
 local emitall = event.emitall
 local emitone = event.emitone
 local pending = event.pending
+local trap = event.trap
+
+newtest "trap" -----------------------------------------------------------------
+
+do case "garbage collection"
+	garbage.kind = {}
+	garbage.enable = counter()
+	garbage.disable = counter()
+
+	trap(garbage.kind, garbage.enable, garbage.disable)
+	collectgarbage()
+	assert(garbage.kind ~= nil)
+	assert(garbage.enable ~= nil)
+	assert(garbage.disable ~= nil)
+
+	assert(garbage.disable() == 1)
+
+	trap(garbage.kind, garbage.enable, nil)
+	collectgarbage()
+	assert(garbage.kind ~= nil)
+	assert(garbage.enable ~= nil)
+	assert(garbage.disable == nil)
+
+	trap(garbage.kind, nil, nil)
+
+	assert(garbage.enable() == 1)
+
+	done()
+end
+
+do case "value types"
+	for _, e in ipairs(types) do
+		local kind = type(e)
+
+		local enabled = 0
+		local enable = function (event)
+			assert(event == e)
+			enabled = enabled+1
+		end
+
+		local disabled = 0
+		local disable = function (event)
+			assert(event == e)
+			disabled = disabled+1
+		end
+
+		trap(kind, enable, disable)
+
+		assert(enabled == 0)
+		assert(disabled == 0)
+
+		local a = 0
+		spawn(function ()
+			await(e)
+			a = 1
+		end)
+		assert(a == 0)
+		assert(enabled == 1)
+		assert(disabled == 0)
+
+		emit(e)
+		assert(a == 1)
+		assert(enabled == 1)
+		assert(disabled == 1)
+
+		trap(kind, nil, nil)
+		spawn(await, e)
+		emit(e)
+		assert(enabled == 1)
+		assert(disabled == 1)
+	end
+
+	done()
+end
 
 newtest "pending" -----------------------------------------------------------------
 
