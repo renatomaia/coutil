@@ -6,15 +6,22 @@ local os = require "os"
 local gettime = os.time
 
 local event = require "coutil.event"
-local awaitevent = event.await
+local awaitany = event.awaitany
 
 local timevt = require "coutil.time.event"
 local setuptimer = timevt.create
 local emituntil = timevt.emitall
 
-local function waituntil(timestamp)
+local function wait_until_cont(timestamp, event, ...)
+	if event ~= timestamp then
+		timevt.cancel(timestamp)
+	end
+	return event, ...
+end
+
+local function waituntil(timestamp, ...)
 	setuptimer(timestamp)
-	awaitevent(timestamp)
+	return wait_until_cont(timestamp, awaitany(timestamp, ...))
 end
 
 local module = {
@@ -28,8 +35,8 @@ function module.setclock(func)
 	module.gettime = func
 end
 
-function module.sleep(delay)
-	waituntil(gettime()+delay)
+function module.sleep(delay, ...)
+	return waituntil(gettime()+delay, ...)
 end
 
 function module.run(idle, timeout)
