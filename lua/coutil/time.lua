@@ -9,19 +9,20 @@ local event = require "coutil.event"
 local awaitany = event.awaitany
 
 local timevt = require "coutil.time.event"
+local canceltimer = timevt.cancel
 local setuptimer = timevt.create
 local emituntil = timevt.emitall
 
-local function wait_until_cont(timestamp, event, ...)
+local function waitdone(timestamp, event, ...)
 	if event ~= timestamp then
-		timevt.cancel(timestamp)
+		canceltimer(timestamp)
 	end
 	return event, ...
 end
 
 local function waituntil(timestamp, ...)
 	setuptimer(timestamp)
-	return wait_until_cont(timestamp, awaitany(timestamp, ...))
+	return waitdone(timestamp, awaitany(timestamp, ...))
 end
 
 local module = {
