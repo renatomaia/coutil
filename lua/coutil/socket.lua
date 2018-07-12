@@ -2,14 +2,11 @@ local _G = require "_G"                                                         
 local ipairs = _G.ipairs
 local next = _G.next
 local pcall = _G.pcall
-local setmetatable = _G.setmetatable
 local tostring = _G.tostring
 local type = _G.type
 
 local math = require "math"
-local inf = math.huge
 local max = math.max
-local min = math.min
 
 local array = require "table"
 local concat = array.concat
@@ -17,7 +14,6 @@ local unpack = array.unpack
 
 local table = require "loop.table"
 local copy = table.copy
-local memoize = table.memoize
 
 local socketcore = require "socket.core"
 local selectsockets = socketcore.select
@@ -28,7 +24,6 @@ local gettime = socketcore.gettime
 
 local event = require "coutil.event"
 local awaitany = event.awaitany
-local emitevent = event.emit
 
 local sockevt = require "coutil.socket.event"
 local watchsocket = sockevt.create
@@ -43,28 +38,13 @@ local time = require "coutil.time"
 local setclock = time.setclock
 local waketimers = time.run
 
+local sockwrap = require "coutil.socket.wrap"
+local newclass = sockwrap.newclass
+local wrapsocket = sockwrap.wrapsocket
+local setupevents = sockwrap.setupevents
+local cancelevents = sockwrap.cancelevents
+
 setclock(gettime)
-
-local function setupevents(socket, write, self)
-	local deadline = self.deadline
-	local timeout = self.timeout
-	if timeout ~= nil then
-		deadline = min(gettime() + timeout, deadline or inf)
-	end
-	if deadline == nil or deadline > gettime() then
-		if deadline ~= nil then
-			setuptimer(deadline)
-		end
-		return watchsocket(socket, write), deadline -- return events
-	end
-end
-
-local function cancelevents(socket, write, deadline)
-	if deadline ~= nil then
-		canceltimer(deadline)
-	end
-	forgetsocket(socket, write)
-end
 
 local function idle(deadline)
 	repeat
@@ -75,60 +55,7 @@ local function idle(deadline)
 	until timeout == 0
 end
 
-local methodwrap = memoize(function(method)
-	return function(self, ...)
-		return method(self.__object, ...)
-	end
-end, "k")
-
-local socketwrap = {
-	__index = function(self, key)
-		local value = self.__object[key]
-		if type(value) == "function"
-			then return methodwrap[value]
-			else return value
-		end
-	end,
-	__tostring = function (self)
-		return tostring(self.__object)
-	end,
-}
-
-local function wrapsocket(ops, socket, ...)
-	if type(socket) == "userdata" then
-		socket:settimeout(0)
-		socket = setmetatable(copy(ops, { __object = socket }), socketwrap)
-	end
-	return socket, ...
-end
-
-local CoSock = {}
-
-function CoSock:setdeadline(timestamp)
-	local old = self.deadline                                                     --[[VERBOSE]] verbose:socket("deadline of ",self," set to ",timestamp, " (was ",old,")")
-	self.deadline = timestamp
-	return true, old
-end
-
-function CoSock:settimeout(timeout)
-	local oldtm = self.timeout                                                    --[[VERBOSE]] verbose:socket("timeout of ",self," set to ",timeout, " (was ",oldtm,")")
-	if not timeout or timeout < 0 then
-		self.timeout = nil
-	else
-		self.timeout = timeout
-	end
-	return 1, oldtm
-end
-
-function CoSock:close()
-	local socket = self.__object
-	local result, errmsg = socket:close()                                         --[[VERBOSE]] verbose:socket("closing ",self, result and " successful" or " failed ("..tostring(errmsg)..")")
-	emitevent(socket) -- wake threads reading the socket
-	emitevent(self) -- wake threads writing the socket
-	return result, errmsg
-end
-
-local CoTCP = copy(CoSock)
+local CoTCP = newclass()
 
 function CoTCP:connect(...)                                                     --[[VERBOSE]] verbose:socket(true, "connecting ",self," to ",...)
 	-- connect the socket if possible
@@ -263,7 +190,7 @@ local function getdatagram(opname, self, ...)                                   
 	return result, errmsg, port
 end
 
-local CoUDP = copy(CoSock)
+local CoUDP = newclass()
 
 for _, opname in ipairs{ "receive", "receivefrom" } do
 	CoUDP[opname] = function (...)
@@ -355,6 +282,7 @@ function module.select(recvt, sendt, timeout)                                   
 		end
 		-- block until some socket event is signal or timeout
 		if awaitany(unpack(events)) ~= deadline then
+			if deadline ~= nil then canceltimer(deadline) end
 			-- collect all ready sockets
 			readok, writeok, errmsg = selectsockets(recv, send, 0)
 		end                                                                         --[[VERBOSE]] verbose:socket(false, "waiting completed")
