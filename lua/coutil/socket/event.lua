@@ -68,10 +68,15 @@ function module.emitall(timeout)
 	if #reading > 0 or #writing > 0 then                                          --[[VERBOSE]] verbose:socket(true, "wait socket event for ",timeout," seconds")
 		local recvok, sendok = selectsockets(reading, writing, timeout)
 		for _, socket in ipairs(recvok) do                                          --[[VERBOSE]] verbose:socket("emit read ready for ",socket)
-			emitevent(socket)
+			if not emitevent(socket) then
+				removesocket(reading, socket)
+			end
 		end
 		for _, socket in ipairs(sendok) do                                          --[[VERBOSE]] verbose:socket("emit write ready for ",socket)
-			emitevent(writeof[socket])
+			if not emitevent(writeof[socket]) then
+				removesocket(writing, socket)
+				writeof[socket] = nil
+			end
 		end                                                                         --[[VERBOSE]] verbose:socket(false, "socket events emitted")
 		return true
 	end
