@@ -6,7 +6,8 @@ Index
 - [`coutil.event.awaitall`](#coutileventawaitall-e1-)
 - [`coutil.event.awaitany`](#coutileventawaitany-e1-)
 - [`coutil.event.awaiteach`](#coutileventawaiteach-f-e1-)
-- [`coutil.event.emit`](#coutileventemit-e-)
+- [`coutil.event.emitall`](#coutileventemitall-e-)
+- [`coutil.event.emitone`](#coutileventemitone-e-)
 - [`coutil.event.pending`](#coutileventpending-e)
 
 - [`coutil.promise`](#promises)
@@ -34,7 +35,7 @@ The behavior is undefined if a coroutine suspended awaiting events is resumed by
 ### `coutil.event.await (e)`
 
 Suspends the execution of the calling coroutine awaiting an event on value `e`.
-It returns all the additional arguments passed to [`emit`](#coutileventemit-e-).
+It returns all the additional arguments passed to [`emitone`](#coutileventemitone-e-) or [`emitall`](#coutileventemitall-e-).
 
 ### `coutil.event.awaitall ([e1, ...])`
 
@@ -46,13 +47,13 @@ If `e1, ...` are not provided or are all `nil`, this function has no effect.
 ### `coutil.event.awaitany (e1, ...)`
 
 Suspends the execution of the calling coroutine awaiting an event on any of the values `e1, ...`.
-The value on which the event is emitted is returned, followed by any additional values passed to [`emit`](#coutileventemit-e-).
+The value on which the event is emitted is returned, followed by any additional values passed to [`emitone`](#coutileventemitone-e-) or [`emitall`](#coutileventemitall-e-).
 Any `nil` in `e1, ...` is ignored.
 
 ### `coutil.event.awaiteach (f, [e1, ...])`
 
 Suspends the execution of the calling coroutine awaiting an event on each of the values `e1, ...`.
-Whenever one of these events are emited `f` is called with the value on which the event is emitted, followed by any additional values passed to [`emit`](#coutileventemit-e-).
+Whenever one of these events are emited `f` is called with the value on which the event is emitted, followed by any additional values passed to [`emitone`](#coutileventemitone-e-) or [`emitall`](#coutileventemitall-e-).
 
 If `f` returns any value (including `nil`) then the suspension for the events is cancelled, and this function returns the values returned by `f`.
 If `f` raises an error then the suspension for the events is cancelled, and this function raises the error.
@@ -65,11 +66,18 @@ Any `nil` in `e1, ...` is ignored.
 Any repeated values in `e1, ...` are treated as a single one.
 If `e1, ...` are not provided or are all `nil`, this function returns no value and has no effect.
 
-### `coutil.event.emit (e, ...)`
+### `coutil.event.emitall (e, ...)`
 
 Resumes all coroutines waiting for event `e` in the same order they were suspended.
 The additional arguments `...` are passed to every resumed coroutine.
 This function returns after resuming all coroutines awaiting event `e` at the moment this call.
+It returns `true` if there was some coroutine awaiting the event, or `false` otherwise.
+
+### `coutil.event.emitone (e, ...)`
+
+Resumes one single coroutine waiting for event `e`, if there is any.
+The additional arguments `...` are passed to the resumed coroutine.
+This function returns after resuming the coroutine awaiting event `e`.
 It returns `true` if there was some coroutine awaiting the event, or `false` otherwise.
 
 ### `coutil.event.pending (e)`
@@ -108,13 +116,13 @@ It returns `true` the first time it is called, or `false` otherwise.
 
 Coroutines suspeded awaiting a promise's fulfillment are actually suspended awaiting an event on the promise (see [`await`](#coutileventawait-e)).
 Such coroutines can be resumed by emitting an event on the promise.
-In such case, the additional values to [`emit`](#coutileventemit-e-) will be returned by the promise.
+In such case, the additional values to [`emitone`](#coutileventemitone-e-) or [`emitall`](#coutileventemitall-e-) will be returned by the promise.
 But the promise will remain unfulfilled.
 Therefore, when the promise is called again, it will suspend the calling coroutine awaiting an event on the promise (the promise fulfillment).
 
 The first time the fulfillment function is called, an event is emitted on the promise with the promise's results as additional values.
 Therefore, to suspend awaiting the fulfillment of a promise a coroutine may await an event on the promise.
-However, once a promise is fulfilled, any coroutine that suspends awaiting events on the promise will remain suspended until an event is on the promise is emitted with function [`emit`](#coutileventemit-e-).
+However, once a promise is fulfilled, any coroutine that suspends awaiting events on the promise will remain suspended until an event is on the promise is emitted with function [`emitone`](#coutileventemitone-e-) or [`emitall`](#coutileventemitall-e-).
 
 ### `coutil.promise.onlypending ([p, ...])`
 

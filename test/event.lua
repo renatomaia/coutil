@@ -3,7 +3,8 @@ local await = event.await
 local awaitall = event.awaitall
 local awaitany = event.awaitany
 local awaiteach = event.awaiteach
-local emit = event.emit
+local emitall = event.emitall
+local emitone = event.emitone
 local pending = event.pending
 
 newtest "pending" -----------------------------------------------------------------
@@ -30,7 +31,7 @@ do case "value types"
 		assert(pending(e) == true)
 		assert(a == 0) -- still haven't executed
 
-		assert(emit(e) == true)
+		assert(emitall(e) == true)
 
 		assert(pending(e) == false)
 	end
@@ -41,22 +42,92 @@ do case "value types"
 	done()
 end
 
-newtest "emit" -----------------------------------------------------------------
+newtest "emitall" --------------------------------------------------------------
 
 do case "garbage collection"
 	garbage.e = {}
-	emit(garbage.e)
+	emitall(garbage.e)
 
 	done()
 end
 
 do case "value types"
 	for _, e in ipairs(types) do
-		assert(emit(e) == false)
+		assert(emitall(e) == false)
 	end
 
-	assert(emit() == false)
-	assert(emit(nil) == false)
+	assert(emitall() == false)
+	assert(emitall(nil) == false)
+
+	done()
+end
+
+do case "event emission"
+	for _, e in ipairs(types) do
+		local count = 3
+		local done = {}
+		for i = 1, count do
+			done[i] = 0
+			spawn(function ()
+				await(e)
+				done[i] = 1
+			end)
+			assert(done[i] == 0) -- await suspended the coroutine
+		end
+
+		assert(emitall(e) == true)
+		for i = 1, count do
+			assert(done[i] == 1) -- await returned
+		end
+
+		assert(emitall(e) == false)
+	end
+
+	done()
+end
+
+newtest "emitone" --------------------------------------------------------------
+
+do case "garbage collection"
+	garbage.e = {}
+	emitone(garbage.e)
+
+	done()
+end
+
+do case "value types"
+	for _, e in ipairs(types) do
+		assert(emitone(e) == false)
+	end
+
+	assert(emitone() == false)
+	assert(emitone(nil) == false)
+
+	done()
+end
+
+do case "event emission"
+	for _, e in ipairs(types) do
+		local count = 3
+		local done = {}
+		for i = 1, count do
+			done[i] = 0
+			spawn(function ()
+				await(e)
+				done[i] = 1
+			end)
+			assert(done[i] == 0) -- await suspended the coroutine
+		end
+
+		for i = 1, count do
+			assert(emitone(e) == true)
+			for j = 1, count do
+				assert(done[j] == (j <= i and 1 or 0))
+			end
+		end
+
+		assert(emitone(e) == false)
+	end
 
 	done()
 end
@@ -67,7 +138,7 @@ do case "error messages"
 	asserterr("table index is nil", pspawn(await))
 	asserterr("table index is nil", pspawn(await, nil))
 	asserterr("unable to yield", pcall(await, "e"))
-	assert(emit("e") == false)
+	assert(emitall("e") == false)
 
 	done()
 end
@@ -84,15 +155,15 @@ do case "value types"
 		local a = 0
 		spawn(function ()
 			await(e)
-			assert(emit(e) == false)
+			assert(emitall(e) == false)
 			a = 1
 		end)
 		assert(a == 0) -- await suspended the coroutine
 
-		assert(emit(e) == true)
+		assert(emitall(e) == true)
 		assert(a == 1) -- await returned
 
-		assert(emit(e) == false)
+		assert(emitall(e) == false)
 	end
 
 	done()
@@ -115,7 +186,7 @@ do case "extra values"
 	end)
 
 	local t1,t2,t3 = {},{},{}
-	assert(emit(e, t1,t2,t3) == true)
+	assert(emitall(e, t1,t2,t3) == true)
 	assert(a1 == t1)
 	assert(a2 == t2)
 	assert(a3 == t3)
@@ -143,7 +214,7 @@ do case "resume order"
 		assert(list[i] == nil)
 	end
 
-	assert(emit(e) == true)
+	assert(emitall(e) == true)
 	assert(#list == max)
 	for i, order in ipairs(list) do
 		assert(i == order)
@@ -159,26 +230,26 @@ do case "nested emission"
 	local a1,a2,a3
 	spawn(function ()
 		a1 = await(e)
-		a2 = emit(e, t2)
+		a2 = emitall(e, t2)
 		a3 = await(e)
 	end)
 
 	local b1,b2
 	spawn(function ()
 		b1 = await(e)
-		b2 = emit(e, t3)
+		b2 = emitall(e, t3)
 		coroutine.yield()
 		b1,b2,b3 = nil
 	end)
 
-	assert(emit(e, t1) == true)
+	assert(emitall(e, t1) == true)
 	assert(a1 == t1)
 	assert(a2 == false) -- emit from first coroutine resumes no coroutines
 	assert(a3 == t3)
 	assert(b1 == t1)
 	assert(b2 == true) -- emit from second coroutine resumes the first one
 
-	assert(emit(e, {}) == false)
+	assert(emitall(e, {}) == false)
 	assert(b1 == t1)
 	assert(b2 == true)
 
@@ -189,9 +260,9 @@ newtest "awaitall" -------------------------------------------------------------
 
 do case "error messages"
 	asserterr("unable to yield", pcall(awaitall, 1,2,3))
-	assert(emit(1) == false)
-	assert(emit(2) == false)
-	assert(emit(3) == false)
+	assert(emitall(1) == false)
+	assert(emitall(2) == false)
+	assert(emitall(3) == false)
 
 	done()
 end
@@ -217,12 +288,12 @@ do case "value types"
 		assert(a == 0)
 		assert(pending(e) == true)
 		assert(a == 0)
-		assert(emit(e) == true)
+		assert(emitall(e) == true)
 	end
 	assert(a == 1)
 
 	for _, e in ipairs(types) do
-		assert(emit(e) == false)
+		assert(emitall(e) == false)
 	end
 
 	done()
@@ -235,13 +306,13 @@ do case "ignore duplications"
 		a = 1
 	end)
 	assert(a == nil)
-	assert(emit(1) == true)
-	assert(emit(2) == true)
-	assert(emit(3) == true)
+	assert(emitall(1) == true)
+	assert(emitall(2) == true)
+	assert(emitall(3) == true)
 	assert(a == 1)
-	assert(emit(1) == false)
-	assert(emit(2) == false)
-	assert(emit(3) == false)
+	assert(emitall(1) == false)
+	assert(emitall(2) == false)
+	assert(emitall(3) == false)
 
 	done()
 end
@@ -262,16 +333,16 @@ do case "ignore 'nil's"
 	end)
 	assert(a == 1)
 	for i = 2, 5 do
-		assert(emit(1) == true)
-		assert(emit(2) == true)
-		assert(emit(3) == true)
+		assert(emitall(1) == true)
+		assert(emitall(2) == true)
+		assert(emitall(3) == true)
 		assert(a == i)
 	end
 
-	assert(emit(1) == false)
-	assert(emit(2) == false)
-	assert(emit(3) == false)
-	assert(emit(nil) == false)
+	assert(emitall(1) == false)
+	assert(emitall(2) == false)
+	assert(emitall(3) == false)
+	assert(emitall(nil) == false)
 
 	done()
 end
@@ -283,13 +354,13 @@ do case "different sets"
 	spawn(function ()
 		a = 1
 		awaitall(e1,e2,e3)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		a = 2
 		awaitall(e1)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		a = 3
 		coroutine.yield()
 		a = 4
@@ -301,50 +372,50 @@ do case "different sets"
 		awaitall() -- no effect
 		b = 1
 		awaitall(e2)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
 		b = 2
 		awaitall(e1,e3)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		b = 3
 		coroutine.yield()
 		b = 4
 	end)
 	assert(b == 1)
 
-	assert(emit(e1) == true)
+	assert(emitall(e1) == true)
 	assert(a == 1)
 	assert(b == 1)
-	assert(emit(e1) == false)
+	assert(emitall(e1) == false)
 	assert(a == 1)
 	assert(b == 1)
 
-	assert(emit(e2) == true)
+	assert(emitall(e2) == true)
 	assert(a == 1)
 	assert(b == 2)
-	assert(emit(e2) == false)
+	assert(emitall(e2) == false)
 	assert(a == 1)
 	assert(b == 2)
 
-	assert(emit(e3) == true)
+	assert(emitall(e3) == true)
 	assert(a == 2)
 	assert(b == 2)
-	assert(emit(e3) == false)
+	assert(emitall(e3) == false)
 	assert(a == 2)
 	assert(b == 2)
 
-	assert(emit(e1) == true)
+	assert(emitall(e1) == true)
 	assert(a == 3)
 	assert(b == 3)
-	assert(emit(e1) == false)
+	assert(emitall(e1) == false)
 	assert(a == 3)
 	assert(b == 3)
-	assert(emit(e2) == false)
+	assert(emitall(e2) == false)
 	assert(a == 3)
 	assert(b == 3)
-	assert(emit(e3) == false)
+	assert(emitall(e3) == false)
 	assert(a == 3)
 	assert(b == 3)
 
@@ -365,11 +436,11 @@ do case "resume order"
 		assert(list[i] == nil)
 	end
 
-	assert(emit(es[3]) == true)
+	assert(emitall(es[3]) == true)
 	assert(#list == 0)
-	assert(emit(es[2]) == true)
+	assert(emitall(es[2]) == true)
 	assert(#list == 0)
-	assert(emit(es[1]) == true)
+	assert(emitall(es[1]) == true)
 	assert(#list == max)
 	for i, order in ipairs(list) do
 		assert(i == order)
@@ -387,20 +458,20 @@ do case "nested emission"
 
 	spawn(function ()
 		awaitall(e1,e2,e3)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		step(a) -- a[1] = 1
 		awaitall(e1,e2,e3)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == true) -- emits to other (awaiting: e2')
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == true) -- emits to other (awaiting: e2')
 		assert(#b == 1 and b[1] == 2)
 		step(a) -- a[2] = 3
 		awaitall(e1,e2,e3)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		step(a) -- a[3] = 5
 		coroutine.yield()
 		step(a)
@@ -408,50 +479,50 @@ do case "nested emission"
 
 	spawn(function ()
 		awaitall(e1)
-		assert(emit(e1) == false)
-		assert(emit(e2) == true) -- emits to other (awaiting: e3)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == true) -- emits to other (awaiting: e3)
 		assert(#a == 0)
-		assert(emit(e3) == true) -- resumes other (awaiting: e1,e2,e3)
+		assert(emitall(e3) == true) -- resumes other (awaiting: e1,e2,e3)
 		assert(#a == 1 and a[1] == 1)
-		assert(emit(e1) == true) -- emits to other (awaiting: e2,e3)
+		assert(emitall(e1) == true) -- emits to other (awaiting: e2,e3)
 		assert(#a == 1 and a[1] == 1)
-		assert(emit(e3) == true) -- emits to other (awaiting: e2)
+		assert(emitall(e3) == true) -- emits to other (awaiting: e2)
 		assert(#a == 1 and a[1] == 1)
 		step(b) -- b[1] = 2
 		awaitall(e2,e3)
-		assert(emit(e1) == true) -- emits to other (awaiting: e2,e3)
+		assert(emitall(e1) == true) -- emits to other (awaiting: e2,e3)
 		assert(#a == 2 and a[2] == 3)
-		assert(emit(e2) == true) -- emits to other (awaiting: e3)
+		assert(emitall(e2) == true) -- emits to other (awaiting: e3)
 		assert(#a == 2 and a[2] == 3)
 		step(b) -- b[2] = 4
 		awaitall(e3)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		step(b) -- b[3] = 6
 		coroutine.yield()
 		step(b)
 	end)
 
-	assert(emit(e1) == true)
+	assert(emitall(e1) == true)
 	assert(#a == 1 and a[1] == 1) -- awaiting: e2
 	assert(#b == 1 and b[1] == 2) -- awaiting: e2,e3
 
-	assert(emit(e2) == true)
+	assert(emitall(e2) == true)
 	assert(#a == 2 and a[2] == 3) -- awaiting: e3
 	assert(#b == 2 and b[2] == 4) -- awaiting: e3
 
-	assert(emit(e3) == true)
+	assert(emitall(e3) == true)
 	assert(#a == 3 and a[3] == 5)
 	assert(#b == 3 and b[3] == 6)
 
-	assert(emit(e1) == false)
+	assert(emitall(e1) == false)
 	assert(#a == 3 and a[3] == 5)
 	assert(#b == 3 and b[3] == 6)
-	assert(emit(e2) == false)
+	assert(emitall(e2) == false)
 	assert(#a == 3 and a[3] == 5)
 	assert(#b == 3 and b[3] == 6)
-	assert(emit(e3) == false)
+	assert(emitall(e3) == false)
 	assert(#a == 3 and a[3] == 5)
 	assert(#b == 3 and b[3] == 6)
 
@@ -465,9 +536,9 @@ do case "error messages"
 	asserterr("value expected", pspawn(awaitany, nil))
 	asserterr("value expected", pspawn(awaitany, nil,nil))
 	asserterr("unable to yield", pcall(awaitany, 1,2,3))
-	assert(emit(1) == false)
-	assert(emit(2) == false)
-	assert(emit(3) == false)
+	assert(emitall(1) == false)
+	assert(emitall(2) == false)
+	assert(emitall(3) == false)
 
 	done()
 end
@@ -496,11 +567,11 @@ do case "value types"
 			assert(a == 0)
 		end
 
-		assert(emit(e) == true)
+		assert(emitall(e) == true)
 		assert(a == 1)
 
 		for _, e in ipairs(types) do
-			assert(emit(e) == false)
+			assert(emitall(e) == false)
 		end
 
 	end
@@ -515,11 +586,11 @@ do case "ignore duplications"
 		a = 1
 	end)
 	assert(a == nil)
-	assert(emit(2) == true)
+	assert(emitall(2) == true)
 	assert(a == 1)
-	assert(emit(1) == false)
-	assert(emit(2) == false)
-	assert(emit(3) == false)
+	assert(emitall(1) == false)
+	assert(emitall(2) == false)
+	assert(emitall(3) == false)
 
 	done()
 end
@@ -537,14 +608,14 @@ do case "ignore 'nil's"
 		a = 4
 	end)
 	for i = 1, 4 do
-		assert(emit(2) == true)
+		assert(emitall(2) == true)
 		assert(a == i)
 	end
 
-	assert(emit(1) == false)
-	assert(emit(2) == false)
-	assert(emit(3) == false)
-	assert(emit(nil) == false)
+	assert(emitall(1) == false)
+	assert(emitall(2) == false)
+	assert(emitall(3) == false)
+	assert(emitall(nil) == false)
 
 	done()
 end
@@ -571,7 +642,7 @@ do case "different sets"
 	end)
 
 	local t1,t2,t3 = {},{},{}
-	assert(emit(e1, t1,t2,t3) == true)
+	assert(emitall(e1, t1,t2,t3) == true)
 	assert(ae == e1)
 	assert(be == e1)
 	assert(a1 == t1)
@@ -582,7 +653,7 @@ do case "different sets"
 	assert(b3 == t3)
 
 	local t1,t2,t3 = {},{},{}
-	assert(emit(e2, t1,t2,t3) == true)
+	assert(emitall(e2, t1,t2,t3) == true)
 	assert(ae == e2)
 	assert(be == e2)
 	assert(a1 == t1)
@@ -593,14 +664,14 @@ do case "different sets"
 	assert(b3 == t3)
 
 	local t1,t2,t3 = {},{},{}
-	assert(emit(e3, t1,t2,t3) == true)
+	assert(emitall(e3, t1,t2,t3) == true)
 	assert(ae == e3)
 	assert(be == e2)
 	assert(a1 == t1)
 	assert(a2 == t2)
 	assert(a3 == t3)
 
-	assert(emit(e3) == false)
+	assert(emitall(e3) == false)
 	assert(ae == e3)
 	assert(be == e2)
 
@@ -621,23 +692,23 @@ do case "resume order"
 	end
 
 	list = {}
-	assert(emit(es[3]) == true)
+	assert(emitall(es[3]) == true)
 	assert(#list == max//3)
 	for i = 1, #list do assert(list[i] == i*3) end
 
 	list = {}
-	assert(emit(es[2]) == true)
+	assert(emitall(es[2]) == true)
 	assert(#list == max//3)
 	for i = 1, #list do assert(list[i] == i*3-1) end
 
 	list = {}
-	assert(emit(es[1]) == true)
+	assert(emitall(es[1]) == true)
 	assert(#list == max//3+max%3)
 	for i = 1, #list do assert(list[i] == i*3-2) end
 
-	assert(emit(es[1]) == false)
-	assert(emit(es[2]) == false)
-	assert(emit(es[3]) == false)
+	assert(emitall(es[1]) == false)
+	assert(emitall(es[2]) == false)
+	assert(emitall(es[3]) == false)
 
 	done()
 end
@@ -651,21 +722,21 @@ do case "nested emission"
 
 	spawn(function ()
 		assert(awaitany(e1,e2,e3) == e1) -- this time this is resumed first
-		assert(emit(e1) == false) -- other is awaiting: e1'|e2|e3
+		assert(emitall(e1) == false) -- other is awaiting: e1'|e2|e3
 		assert(#b == 0)
-		assert(emit(e2) == true) -- resumes other (awaiting: e1|e2|e3)
+		assert(emitall(e2) == true) -- resumes other (awaiting: e1|e2|e3)
 		assert(#b == 1 and b[1] == 1)
-		assert(emit(e1) == true) -- resumes other (awaiting: e1|e2|e3)
+		assert(emitall(e1) == true) -- resumes other (awaiting: e1|e2|e3)
 		assert(#b == 2 and b[2] == 2)
 		step(a) -- a[1] = 3
 
 		assert(awaitany(e1,e2,e3) == e1) -- this time this is resumed last
 		assert(#b == 3 and b[3] == 4)
-		assert(emit(e1) == true) -- resumes other (awaiting: e1|e2|e3)
+		assert(emitall(e1) == true) -- resumes other (awaiting: e1|e2|e3)
 		assert(#b == 4 and b[4] == 5)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		step(a) -- a[2] = 6
 
 		coroutine.yield()
@@ -674,44 +745,44 @@ do case "nested emission"
 
 	spawn(function ()
 		assert(awaitany(e1,e2,e3) == e2) -- emitted from the other coroutine
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		step(b) -- b[1] = 1
 		assert(awaitany(e1,e2,e3) == e1) -- emitted from the other coroutine
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		step(b) -- b[2] = 2
 
 		assert(awaitany(e1,e2,e3) == e1) -- this time this is resumed first
-		assert(emit(e1) == false) -- other is awaiting: e1'|e2|e3
+		assert(emitall(e1) == false) -- other is awaiting: e1'|e2|e3
 		step(b) -- b[3] = 4
 		assert(awaitany(e1,e2,e3) == e1)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		step(b) -- b[4] = 5
 
 		coroutine.yield()
 		step(b)
 	end)
 
-	assert(emit(e1) == true)
+	assert(emitall(e1) == true)
 	assert(#a == 1 and a[1] == 3)
 	assert(#b == 2 and b[2] == 2)
 
-	assert(emit(e1) == true)
+	assert(emitall(e1) == true)
 	assert(#a == 2 and a[2] == 6)
 	assert(#b == 4 and b[4] == 5)
 
-	assert(emit(e1) == false)
+	assert(emitall(e1) == false)
 	assert(#a == 2 and a[2] == 6)
 	assert(#b == 4 and b[4] == 5)
-	assert(emit(e2) == false)
+	assert(emitall(e2) == false)
 	assert(#a == 2 and a[2] == 6)
 	assert(#b == 4 and b[4] == 5)
-	assert(emit(e3) == false)
+	assert(emitall(e3) == false)
 	assert(#a == 2 and a[2] == 6)
 	assert(#b == 4 and b[4] == 5)
 
@@ -742,19 +813,19 @@ end
 
 do case "error messages"
 	asserterr("unable to yield", pcall(awaiteach, print, 1,2,3))
-	assert(emit(1) == false)
-	assert(emit(2) == false)
-	assert(emit(3) == false)
+	assert(emitall(1) == false)
+	assert(emitall(2) == false)
+	assert(emitall(3) == false)
 
 	local a
 	spawn(function ()
 		asserterr("attempt to call a nil value", pcall(awaiteach, nil, 1,2,3))
 		a = 1
 	end)
-	assert(emit(1) == true)
+	assert(emitall(1) == true)
 	assert(a == 1)
-	assert(emit(2) == false)
-	assert(emit(3) == false)
+	assert(emitall(2) == false)
+	assert(emitall(3) == false)
 
 	done()
 end
@@ -785,14 +856,14 @@ do case "value types"
 		assert(pending(e) == true)
 		assert(a == 0)
 		assert(seq[i] == nil)
-		assert(emit(e) == true)
+		assert(emitall(e) == true)
 		assert(seq[i].event == e)
 	end
 	assert(a == 1)
 	assert(seq.n == #types)
 
 	for _, e in ipairs(types) do
-		assert(emit(e) == false)
+		assert(emitall(e) == false)
 	end
 
 	done()
@@ -808,16 +879,16 @@ do case "ignore duplications"
 		a = 1
 	end)
 	assert(a == nil)
-	assert(emit(1) == true)
+	assert(emitall(1) == true)
 	assertseq(seq, t, 1)
-	assert(emit(2) == true)
+	assert(emitall(2) == true)
 	assertseq(seq, t, 1,2)
-	assert(emit(3) == true)
+	assert(emitall(3) == true)
 	assertseq(seq, t, 1,2,3)
 	assert(a == 1)
-	assert(emit(1) == false)
-	assert(emit(2) == false)
-	assert(emit(3) == false)
+	assert(emitall(1) == false)
+	assert(emitall(2) == false)
+	assert(emitall(3) == false)
 	assertseq(seq, t, 1,2,3)
 
 	done()
@@ -846,19 +917,19 @@ do case "ignore 'nil's"
 		seq[1] = nil
 		seq[2] = nil
 		seq[3] = nil
-		assert(emit(1) == true)
+		assert(emitall(1) == true)
 		assertseq(seq, t, 1)
-		assert(emit(2) == true)
+		assert(emitall(2) == true)
 		assertseq(seq, t, 1,2)
-		assert(emit(3) == true)
+		assert(emitall(3) == true)
 		assertseq(seq, t, 1,2,3)
 		assert(a == i)
 	end
 
-	assert(emit(1) == false)
-	assert(emit(2) == false)
-	assert(emit(3) == false)
-	assert(emit(nil) == false)
+	assert(emitall(1) == false)
+	assert(emitall(2) == false)
+	assert(emitall(3) == false)
+	assert(emitall(nil) == false)
 	assertseq(seq, t, 1,2,3)
 
 	done()
@@ -879,13 +950,13 @@ do case "different sets"
 	spawn(function ()
 		a = 1
 		awaiteach(acb, e1,e2,e3)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		a = 2
 		awaiteach(acb, e1)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		a = 3
 		coroutine.yield()
 		a = 4
@@ -897,68 +968,68 @@ do case "different sets"
 		awaiteach(bcb) -- no effect
 		b = 1
 		awaiteach(bcb, e2)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
 		b = 2
 		awaiteach(bcb, e1,e3)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		b = 3
 		coroutine.yield()
 		b = 4
 	end)
 	assert(b == 1)
 
-	assert(emit(e1, table.unpack(t[e1])) == true)
+	assert(emitall(e1, table.unpack(t[e1])) == true)
 	assert(a == 1)
 	assert(b == 1)
 	assertseq(aseq, t, e1)
 	assertseq(bseq, t)
-	assert(emit(e1, {},{},{}) == false)
+	assert(emitall(e1, {},{},{}) == false)
 	assert(a == 1)
 	assert(b == 1)
 	assertseq(aseq, t, e1)
 	assertseq(bseq, t)
 
-	assert(emit(e2, table.unpack(t[e2])) == true)
+	assert(emitall(e2, table.unpack(t[e2])) == true)
 	assert(a == 1)
 	assert(b == 2)
 	assertseq(aseq, t, e1,e2)
 	assertseq(bseq, t, e2)
-	assert(emit(e2, {},{},{}) == false)
+	assert(emitall(e2, {},{},{}) == false)
 	assert(a == 1)
 	assert(b == 2)
 	assertseq(aseq, t, e1,e2)
 	assertseq(bseq, t, e2)
 
-	assert(emit(e3, table.unpack(t[e3])) == true)
+	assert(emitall(e3, table.unpack(t[e3])) == true)
 	assert(a == 2)
 	assert(b == 2)
 	assertseq(aseq, t, e1,e2,e3)
 	assertseq(bseq, t, e2,e3)
-	assert(emit(e3, {},{},{}) == false)
+	assert(emitall(e3, {},{},{}) == false)
 	assert(a == 2)
 	assert(b == 2)
 	assertseq(aseq, t, e1,e2,e3)
 	assertseq(bseq, t, e2,e3)
 
-	assert(emit(e1, table.unpack(t[e1])) == true)
+	assert(emitall(e1, table.unpack(t[e1])) == true)
 	assert(a == 3)
 	assert(b == 3)
 	assertseq(aseq, t, e1,e2,e3,e1)
 	assertseq(bseq, t, e2,e3,e1)
-	assert(emit(e1, {},{},{}) == false)
+	assert(emitall(e1, {},{},{}) == false)
 	assert(a == 3)
 	assert(b == 3)
 	assertseq(aseq, t, e1,e2,e3,e1)
 	assertseq(bseq, t, e2,e3,e1)
-	assert(emit(e2, {},{},{}) == false)
+	assert(emitall(e2, {},{},{}) == false)
 	assert(a == 3)
 	assert(b == 3)
 	assertseq(aseq, t, e1,e2,e3,e1)
 	assertseq(bseq, t, e2,e3,e1)
-	assert(emit(e3, {},{},{}) == false)
+	assert(emitall(e3, {},{},{}) == false)
 	assert(a == 3)
 	assert(b == 3)
 	assertseq(aseq, t, e1,e2,e3,e1)
@@ -990,18 +1061,18 @@ do case "resume order"
 		assert(list[i] == nil)
 	end
 
-	assert(emit(e3) == true)
+	assert(emitall(e3) == true)
 	assert(#list == 0)
 	for i = 3, max, 3 do
 		assertseq(seqof[i], t, e3)
 	end
-	assert(emit(es[2]) == true)
+	assert(emitall(es[2]) == true)
 	assert(#list == 0)
 	for i = 2, max, 3 do
 		assertseq(seqof[i+0], t, e2)
 		assertseq(seqof[i+1], t, e3,e2)
 	end
-	assert(emit(es[1]) == true)
+	assert(emitall(es[1]) == true)
 	assert(#list == max)
 	for i = 1, max, 3 do
 		assertseq(seqof[i+0], t, e1)
@@ -1034,17 +1105,17 @@ do case "nested emission"
 	spawn(function ()
 		awaiteach(acb, e1,e2,e3)
 		assertseq(aseq, t, e1,e2,e3)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		assertseq(aseq, t, e1,e2,e3)
  		step(a) -- a[1] = 1
 
 		awaiteach(acb, e1,e2,e3)
 		assertseq(aseq, t, e1,e2,e3,e1,e3,e2)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == true) -- emits to other (awaiting: e2')
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == true) -- emits to other (awaiting: e2')
 		assertseq(bseq, t, e1,e3)
 		assert(#b == 1 and b[1] == 2) -- other was not resumed
 		assertseq(aseq, t, e1,e2,e3,e1,e3,e2) -- callback was not called
@@ -1052,9 +1123,9 @@ do case "nested emission"
 
 		awaiteach(acb, e1,e2,e3)
 		assertseq(aseq, t, e1,e2,e3,e1,e3,e2,e1,e2,e3)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		assertseq(aseq, t, e1,e2,e3,e1,e3,e2,e1,e2,e3) -- callback was not called
 
 		step(a) -- a[3] = 5
@@ -1066,15 +1137,15 @@ do case "nested emission"
 		awaiteach(bcb, e1)
 		assertseq(aseq, t, e1)
 		assertseq(bseq, t, e1)
-		assert(emit(e1) == false)
-		assert(emit(e2) == true) -- emits to other (awaiting: e3)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == true) -- emits to other (awaiting: e3)
 		assertseq(aseq, t, e1,e2)
 		assert(#a == 0) -- other was not resumed
-		assert(emit(e3) == true) -- resumes other (awaiting: e1,e2,e3)
+		assert(emitall(e3) == true) -- resumes other (awaiting: e1,e2,e3)
 		assert(#a == 1 and a[1] == 1) -- other was not resumed
-		assert(emit(e1) == true) -- emits to other (awaiting: e2,e3)
+		assert(emitall(e1) == true) -- emits to other (awaiting: e2,e3)
 		assertseq(aseq, t, e1,e2,e3,e1)
-		assert(emit(e3) == true) -- emits to other (awaiting: e2)
+		assert(emitall(e3) == true) -- emits to other (awaiting: e2)
 		assertseq(aseq, t, e1,e2,e3,e1,e3)
 		assert(#a == 1 and a[1] == 1) -- other was not resumed
 		assertseq(bseq, t, e1) -- callback was not called
@@ -1082,9 +1153,9 @@ do case "nested emission"
 
 		awaiteach(bcb, e2,e3)
 		assertseq(bseq, t, e1,e3,e2)
-		assert(emit(e1) == true) -- emits to other (awaiting: e2,e3)
+		assert(emitall(e1) == true) -- emits to other (awaiting: e2,e3)
 		assertseq(aseq, t, e1,e2,e3,e1,e3,e2,e1)
-		assert(emit(e2) == true) -- emits to other (awaiting: e3)
+		assert(emitall(e2) == true) -- emits to other (awaiting: e3)
 		assertseq(aseq, t, e1,e2,e3,e1,e3,e2,e1,e2)
 		assert(#a == 2 and a[2] == 3) -- other was not resumed
 		assertseq(bseq, t, e1,e3,e2) -- callback was not called
@@ -1092,9 +1163,9 @@ do case "nested emission"
 
 		awaiteach(bcb, e3)
 		assertseq(bseq, t, e1,e3,e2,e3)
-		assert(emit(e1) == false)
-		assert(emit(e2) == false)
-		assert(emit(e3) == false)
+		assert(emitall(e1) == false)
+		assert(emitall(e2) == false)
+		assert(emitall(e3) == false)
 		assertseq(bseq, t, e1,e3,e2,e3) -- callback was not called
 		step(b) -- b[3] = 6
 
@@ -1102,25 +1173,25 @@ do case "nested emission"
 		step(b)
 	end)
 
-	assert(emit(e1) == true)
+	assert(emitall(e1) == true)
 	assert(#a == 1 and a[1] == 1) -- awaiting: e2
 	assert(#b == 1 and b[1] == 2) -- awaiting: e2,e3
 
-	assert(emit(e2) == true)
+	assert(emitall(e2) == true)
 	assert(#a == 2 and a[2] == 3) -- awaiting: e3
 	assert(#b == 2 and b[2] == 4) -- awaiting: e3
 
-	assert(emit(e3) == true)
+	assert(emitall(e3) == true)
 	assert(#a == 3 and a[3] == 5)
 	assert(#b == 3 and b[3] == 6)
 
-	assert(emit(e1) == false)
+	assert(emitall(e1) == false)
 	assert(#a == 3 and a[3] == 5)
 	assert(#b == 3 and b[3] == 6)
-	assert(emit(e2) == false)
+	assert(emitall(e2) == false)
 	assert(#a == 3 and a[3] == 5)
 	assert(#b == 3 and b[3] == 6)
-	assert(emit(e3) == false)
+	assert(emitall(e3) == false)
 	assert(#a == 3 and a[3] == 5)
 	assert(#b == 3 and b[3] == 6)
 	assertseq(aseq, t, e1,e2,e3,e1,e3,e2,e1,e2,e3) -- callback was not called
@@ -1136,10 +1207,10 @@ do case "cancelation"
 		asserterr("oops!", pcall(awaiteach, oops, 1,2,3))
 		a = 1
 	end)
-	assert(emit(1) == true)
+	assert(emitall(1) == true)
 	assert(a == 1)
-	assert(emit(2) == false)
-	assert(emit(3) == false)
+	assert(emitall(2) == false)
+	assert(emitall(3) == false)
 
 	local a
 	spawn(function ()
@@ -1155,11 +1226,11 @@ do case "cancelation"
 		assert(r3 == t3)
 		a = 1
 	end)
-	assert(emit(1) == true)
+	assert(emitall(1) == true)
 	assert(a == nil)
-	assert(emit(2) == true)
+	assert(emitall(2) == true)
 	assert(a == 1)
-	assert(emit(3) == false)
+	assert(emitall(3) == false)
 
 	done()
 end

@@ -1,6 +1,6 @@
 local event = require "coutil.event"
 local await = event.await
-local emit = event.emit
+local emitall = event.emitall
 
 local promise = require "coutil.promise"
 --local onlypending = promise.onlypending
@@ -103,7 +103,7 @@ do case "fake fulfillment"
 		end)
 		assert(a == 0) -- 'p' suspended the coroutine
 
-		assert(emit(p, t1,t2,t3) == true)
+		assert(emitall(p, t1,t2,t3) == true)
 		assert(a == 1) -- await returned
 		assert(a1 == t1)
 		assert(a2 == t2)
@@ -150,7 +150,7 @@ do case "missed event"
 	f(1,2,3)
 	assert(a == 0) -- still suspended
 
-	emit(p)
+	emitall(p)
 	assert(a == 1) -- await returned
 
 	done()

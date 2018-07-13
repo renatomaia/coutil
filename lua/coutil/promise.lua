@@ -5,7 +5,7 @@ local coevent = require "coutil.event"
 local await = coevent.await
 local awaitall = coevent.awaitall
 local awaitany = coevent.awaitany
-local emit = coevent.emit
+local emitall = coevent.emitall
 
 local function onlypending(promise, ...)
 	if promise ~= nil then
@@ -45,7 +45,7 @@ function module.create()
 		local notify = (results == nil)
 		results = packargs(...)
 		if notify then
-			emit(promise, ...)
+			emitall(promise, ...)
 			return true
 		end
 		return false

@@ -65,7 +65,7 @@ function module.pending(event)
 	return listof[event] ~= nil
 end
 
-function module.emit(event, ...)
+function module.emitall(event, ...)
 	local list = listof[event]
 	if list ~= nil then
 		listof[event] = nil
@@ -80,6 +80,24 @@ function module.emit(event, ...)
 			list[head] = nil
 			resume(head, event, ...)
 		until list.tail == nil
+		return true
+	end
+	return false
+end
+
+function module.emitone(event, ...)
+	local list = listof[event]
+	if list ~= nil then
+		local tail = list.tail
+		local head = list[tail]
+		if head == tail then
+			list.tail = nil
+			listof[event] = nil
+		else
+			list[tail] = list[head]
+		end
+		list[head] = nil
+		resume(head, event, ...)
 		return true
 	end
 	return false
