@@ -16,6 +16,10 @@ function case(title)
 	io.flush()
 end
 
+function gc()
+	for i = 1, 3 do collectgarbage("collect") end
+end
+
 function done()
 	assert(spawnerr == nil)
 	collectgarbage("collect")
@@ -68,6 +72,7 @@ types = {
 }
 
 dofile "event.lua"
+dofile "queued.lua"
 dofile "promise.lua"
 dofile "mutex.lua"
 dofile "spawn.lua"

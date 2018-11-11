@@ -9,6 +9,15 @@ Index
 	- [`event.emitall`](#eventemitall-e-)
 	- [`event.emitone`](#eventemitone-e-)
 	- [`event.pending`](#eventpending-e)
+- [`coutil.queued`](#queued-events)
+	- [`queued.await`](#queuedawait-e)
+	- [`queued.awaitall`](#queuedawaitall-e1-)
+	- [`queued.awaitany`](#queuedawaitany-e1-)
+	- [`queued.awaiteach`](#queuedawaiteach-f-e1-)
+	- [`queued.emitall`](#queuedemitall-e-)
+	- [`queued.emitone`](#queuedemitone-e-)
+	- [`queued.pending`](#queuedpending-e)
+	- [`queued.isqueued`](#queuedisqueued-e)
 - [`coutil.mutex`](#mutex)
 	- [`mutex.islocked`](#mutexislocked-e)
 	- [`mutex.lock`](#mutexlock-e)
@@ -86,6 +95,43 @@ It returns `true` if there was some coroutine awaiting the event, or `false` oth
 ### `event.pending (e)`
 
 Returns `true` if there is some coroutine suspended awaiting for event `e`, or `false` otherwise.
+
+Queued Events
+-------------
+
+Module `coutil.queued` provides functions similar to module `coutil.event`, however the function in this module store events emitted in a queue to be consumed later as if they were emitted immediately after a coroutine awaits for them.
+
+### `queued.await (e)`
+
+Same as [`event.await`](#eventawait-e), but it consumes a stored event emitted on value `e`, if there is any.
+
+### `queued.awaitall ([e1, ...])`
+
+Same as [`event.awaitall`](#eventawaitall-e1-), but it first attempts to consume one stored event on each value `e1, ...`, and only await on the values `e1, ...` that do not have a stored event.
+
+### `queued.awaitany (e1, ...)`
+
+Same as [`event.awaitany`](#eventawaitany-e1-), but if there is a stored event on any of values `e1, ...`, the stored event on the leftmost value `e1, ...` is consumed instead of awaiting for events.
+
+### `queued.awaiteach (f, [e1, ...])`
+
+Same as [`event.awaiteach`](#eventawaiteach-f-e1-), but it first attempts to consume one stored event on each value `e1, ...`, and later awaits for events on any remaning values of `e1, ...`.
+
+### `queued.emitall (e, ...)`
+
+Same as [`event.emitall`](#eventemitall-e-), but if there is no coroutine awaiting on `e`, it stores the event to be consumed later.
+
+### `queued.emitone (e, ...)`
+
+Same as [`event.emitone`](#eventemitone-e-), but if there is no coroutine awaiting on `e`, it stores the event to be consumed later.
+
+### `queued.pending (e)`
+
+Alias for [`event.pending`](#eventpending-e).
+
+### `queued.isqueued (e)`
+
+Returns `true` if there is some stored event on `e`, or `false` otherwise.
 
 Mutex
 -----
