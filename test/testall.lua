@@ -69,6 +69,7 @@ types = {
 
 dofile "event.lua"
 dofile "promise.lua"
+dofile "mutex.lua"
 dofile "spawn.lua"
 
 print "\nSuceess!\n"

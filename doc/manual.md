@@ -9,6 +9,11 @@ Index
 	- [`event.emitall`](#eventemitall-e-)
 	- [`event.emitone`](#eventemitone-e-)
 	- [`event.pending`](#eventpending-e)
+- [`coutil.mutex`](#mutex)
+	- [`mutex.islocked`](#mutexislocked-e)
+	- [`mutex.lock`](#mutexlock-e)
+	- [`mutex.ownlock`](#mutexownlock-e)
+	- [`mutex.unlock`](#mutexunlock-e)
 - [`coutil.promise`](#promises)
 	- [`promise.awaitall`](#promiseawaitall-p-)
 	- [`promise.awaitany`](#promiseawaitany-p-)
@@ -81,6 +86,31 @@ It returns `true` if there was some coroutine awaiting the event, or `false` oth
 ### `event.pending (e)`
 
 Returns `true` if there is some coroutine suspended awaiting for event `e`, or `false` otherwise.
+
+Mutex
+-----
+
+Module `coutil.mutex` provides functions for mutual exclusion of coroutines when using a resource.
+
+### `mutex.islocked (e)`
+
+Returns `true` if the exclusive ownership identified by value `e` is taken, and `false` otherwise.
+
+### `mutex.lock (e)`
+
+Acquires to the current coroutine the exclusive ownership identified by value `e`.
+If the ownership is not taken then the function acquires the ownership and returns immediately.
+Otherwise it awaits an event on value `e` (see [`coutil.event`](#events)) until the ownership is released so it can be acquired to the coroutine.
+
+### `mutex.ownlock (e)`
+
+Returns `true` if the exclusive ownership identified by value `e` belongs to the calling coroutine, and `false` otherwise.
+
+### `mutex.unlock (e)`
+
+Releases from the current coroutine the exclusive ownership identified by value `e`.
+It also emits an event on `e` (see [`coutil.event`](#events)) to resume one of the coroutines awaiting to acquire this ownership.
+The resumed coroutine shall later emit an event on `e` to resume any remaning threads waiting for the onwership, which is automatically done by calling [`unlock`](#mutexunlock-e) after the call to [`lock`](#mutexlock-e) returns.
 
 Promises
 --------
