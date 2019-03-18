@@ -214,8 +214,8 @@ function module.udp()
 end
 
 if createnetlink ~= nil then
-	function module.netlink()
-		return wrapsocket(CoUDP, createnetlink())
+	function module.netlink(...)
+		return wrapsocket(CoUDP, createnetlink(...))
 	end
 end
 
