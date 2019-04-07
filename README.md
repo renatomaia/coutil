@@ -1,7 +1,7 @@
 CoUtil Library
 ==============
 
-`coutil` is a Lua library to support syncronization of coroutines using events and promises.
+`coutil` is a collection of modules that provide utility functions to support [cooperative multithreading](https://en.wikipedia.org/wiki/Cooperative_multitasking) using coroutines.
 
 Documentation
 -------------
@@ -11,6 +11,9 @@ Documentation
 
 History
 -------
+
+### Version 2.1:
+- Schedule to resume coroutines using [`libuv`](https://libuv.org/).
 
 ### Version 2.0:
 - `event.awaiteach` function removed.
