@@ -49,7 +49,7 @@ do
 	end
 
 	function spawn(f, ...)
-		pspawn(xpcall, f, catcherr, ...)
+		return pspawn(xpcall, f, catcherr, ...)
 	end
 end
 
@@ -76,5 +76,6 @@ dofile "queued.lua"
 dofile "promise.lua"
 dofile "mutex.lua"
 dofile "spawn.lua"
+dofile "scheduler.lua"
 
 print "\nSuceess!\n"

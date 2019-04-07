@@ -30,6 +30,9 @@ Index
 - [`coutil.spawn`](#spawn)
 	- [`spawn.catch`](#spawncatch-h-f-)
 	- [`spawn.trap`](#spawntrap-h-f-)
+- [`coutil.scheduler`](#scheduler)
+	- [`scheduler.run`](#pending--schedulerrun-mode)
+	- [`scheduler.pause`](#scheduled---schedulerpause-)
 
 Contents
 ========
@@ -211,3 +214,29 @@ Calls function `f` with the given arguments in a new coroutine.
 If `f` executes without any error, the coroutine executes function `h` passing as arguments the `true` followed by all the results from `f`.
 In case of any error, `h` is executed with arguments `false` and the error message.
 In the latter case, `h` is executed in the calling context of the raised error, just like a error message handler in `xpcall`.
+
+Scheduler
+---------
+
+Module `coutil.scheduler` provides functions to suspend coroutines and schedule them to be resumed when they are ready according to a system condition.
+
+### `pending = scheduler.run ([mode])`
+
+Resumes scheduled coroutines that becomes ready according to its corresponding system condition.
+
+`mode` is a string that defines how `run` executes, as described below:
+
+- `"loop"` (default): it executes continously resuming every coroutine that becomes ready until there are no more scheduled coroutines.
+- `"step"`: it resumes every ready coroutine once, or waits to resume at least one coroutine that becomes ready.
+- `"ready"`: it resumes only coroutines that are currently ready.
+
+`run` returns `true` if there are scheduled coroutines, or `false` otherwise.
+
+### `scheduled, ... = scheduler.pause (...)`
+
+Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it as ready to be resumed.
+Any arguments to `pause` are passed as extra results to [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
+
+`pause` returns `true` if the calling coroutine is effectively resumed by [`run`](#pending--schedulerrun-mode).
+Otherwise it returns `false` followed by the values provided to the resume (_e.g._ [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume)).
+In any case, the coroutine is not scheduled to be resumed anymore after `pause` returns.
