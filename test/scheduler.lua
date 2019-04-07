@@ -30,6 +30,69 @@ do case "nested call"
 	done()
 end
 
+do case "run step|ready"
+	for _, mode in ipairs{"step", "ready"} do
+		local n = 3
+		local stage = {}
+		for i = 1, n do
+			stage[i] = 0
+			spawn(function (c)
+				for j = 1, c do
+					assert(pause())
+					stage[i] = j
+				end
+			end, i)
+			assert(stage[i] == 0)
+		end
+
+		for i = 1, n do
+			gc()
+			assert(run("step") == (i < n))
+			for j = 1, n do
+				assert(stage[j] == (j < i and j or i))
+			end
+		end
+
+		gc()
+		assert(run() == false)
+		for i = 1, n do
+			assert(stage[i] == i)
+		end
+	end
+
+	done()
+end
+
+do case "run loop"
+	local mode = "loop"
+	do ::again::
+		local n = 3
+		local stage = {}
+		for i = 1, n do
+			stage[i] = 0
+			spawn(function (c)
+				for j = 1, c do
+					assert(pause())
+					stage[i] = j
+				end
+			end, i)
+			assert(stage[i] == 0)
+		end
+
+		gc()
+		assert(run("loop") == false)
+		for i = 1, n do
+			assert(stage[i] == i)
+		end
+		if mode == "loop" then
+			mode = nil
+			goto again
+		end
+	end
+
+	done()
+end
+
 newtest "pause" ----------------------------------------------------------------
 
 do case "error messages"
@@ -41,7 +104,7 @@ end
 do case "yield values"
 	local stage = 0
 	local ok, a,b,c,d,e = spawn(function (...)
-		assert(pause(...) == false)
+		assert(pause(...))
 		stage = 1
 	end, "testing", 1, 2, 3)
 	assert(ok == true)
@@ -62,7 +125,7 @@ end
 do case "scheduled yield"
 	local stage = 0
 	spawn(function ()
-		assert(pause() == false)
+		assert(pause())
 		stage = 1
 		coroutine.yield()
 		stage = 2
@@ -79,15 +142,15 @@ end
 do case "reschedule"
 	local stage = 0
 	spawn(function ()
-		assert(pause() == false)
+		assert(pause())
 		stage = 1
-		assert(pause() == false)
+		assert(pause())
 		stage = 2
 	end)
 	assert(stage == 0)
 
 	gc()
-	assert(run("once") == true)
+	assert(run("step") == true)
 	assert(stage == 1)
 
 	gc()
@@ -101,8 +164,8 @@ do case "cancel schedule"
 	local stage = 0
 	spawn(function (...)
 		garbage.coro = coroutine.running()
-		local cancel, a,b,c = pause()
-		assert(cancel == true)
+		local ok, a,b,c = pause()
+		assert(ok == false)
 		assert(a == true)
 		assert(b == nil)
 		assert(c == 3)
@@ -126,7 +189,7 @@ do case "ignore errors"
 
 	local stage = 0
 	pspawn(function (errmsg)
-		assert(pause() == false)
+		assert(pause())
 		stage = 1
 		error(errmsg)
 	end, "oops!")

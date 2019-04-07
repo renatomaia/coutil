@@ -78,10 +78,10 @@ static void cosL_checkerr (lua_State *L, int err) {
 /* Function 'run' (uv_loop_t) */
 
 static int cosM_run (lua_State *L) {
-	static const char *const opts[] = {"continous", "once", "nowait", NULL};
+	static const char *const opts[] = {"loop", "step", "ready", NULL};
 	uv_loop_t *loop = cosL_toloop(L);
 	int pending;
-	int mode = luaL_checkoption(L, 1, "continous", opts);
+	int mode = luaL_checkoption(L, 1, "loop", opts);
 	luaL_argcheck(L, !loop->data, 1, "already running");
 	lua_settop(L, 2);  /* set trap function as top */
 	loop->data = L;
@@ -135,7 +135,7 @@ static int cosK_checkcancelled (lua_State *L, int status, lua_KContext ctx) {
 	cos_assert(status == LUA_YIELD);
 	if (cancel && !uv_is_closing(h)) uv_close(h, cosB_onclosed);
 	h->data = NULL;  /* mark as not rescheduled */
-	lua_pushboolean(L, cancel);
+	lua_pushboolean(L, !cancel);
 	lua_insert(L, narg+1);
 	return lua_gettop(L)-narg;
 }
