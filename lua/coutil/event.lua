@@ -182,19 +182,6 @@ do
 		end
 	end
 
-	function module.awaiteach(callback, ...)
-		assert(isyieldable(), "unable to yield")
-		local thread = running()
-		local events = {}
-		for index = 1, countargs(...) do
-			local event = select(index, ...)
-			if event ~= nil and events[event] == nil then
-				events[event] = addthread(event, thread)
-			end
-		end
-		if next(events) ~= nil then
-			return handle(callback, thread, events, notify(callback, events, yield()))
-		end
 	end
 end
 

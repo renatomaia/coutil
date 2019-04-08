@@ -12,5 +12,9 @@ Documentation
 History
 -------
 
-### Version 1.0 alpha:
-- First prototype.
+### Version 2.0:
+- `event.awaiteach` function removed.
+
+### Version 1.0:
+- Abstractions for syncronization of coroutines: [events](https://en.wikipedia.org/wiki/Async/await), [promises](https://en.wikipedia.org/wiki/Futures_and_promises) and [mutexes](https://en.wikipedia.org/wiki/Mutex).
+- Creation of coroutines with finalizers.
