@@ -14,7 +14,6 @@ local coevent = require "coutil.event"
 local await = coevent.await
 local awaitall = coevent.awaitall
 local awaitany = coevent.awaitany
-local awaiteach = coevent.awaiteach
 
 local nextof = setmetatable({}, { __mode = "k" })
 
@@ -100,52 +99,6 @@ function module.awaitany(...)
 		end
 	end
 	return awaitany(...)
-end
-
-do
-	local function packres(success, ...)
-		if not success then
-			return false, ...
-		elseif countargs(...) > 0 then
-			return true, pack(...)
-		end
-	end
-
-	local function doqueued(callback, events, i, j, ...)
-		if i <= j then
-			local event = select(i, ...)
-			if event ~= nil then
-				local values = events[event]
-				if values == nil then
-					values = dequeue(event)
-					if values == nil  then
-						events[event] = false
-						return doqueued(callback, events, i+1, j, ...)
-					end
-					local ok, result = packres(pcall(callback, event, unpack(values)))
-					if ok == true then
-						return false, unpack(result) -- don't await and return these values
-					elseif ok == false then
-						return error(result)
-					end
-					events[event] = values
-				end
-			end
-			return doqueued(callback, events, i, j-1, varemove(i, ...))
-		end
-		return true, ... -- await each of the events '...'
-	end
-
-	local function doawait(callback, await, ...)
-		if await then -- '...' are non-queued events, else are 'callback' results
-			return awaiteach(callback, ...)
-		end
-		return ...
-	end
-
-	function module.awaiteach(callback, ...)
-		return doawait(callback, doqueued(callback, {}, 1, countargs(...), ...))
-	end
 end
 
 return module

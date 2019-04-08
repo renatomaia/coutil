@@ -5,7 +5,6 @@ Index
 	- [`event.await`](#eventawait-e)
 	- [`event.awaitall`](#eventawaitall-e1-)
 	- [`event.awaitany`](#eventawaitany-e1-)
-	- [`event.awaiteach`](#eventawaiteach-f-e1-)
 	- [`event.emitall`](#eventemitall-e-)
 	- [`event.emitone`](#eventemitone-e-)
 	- [`event.pending`](#eventpending-e)
@@ -13,7 +12,6 @@ Index
 	- [`queued.await`](#queuedawait-e)
 	- [`queued.awaitall`](#queuedawaitall-e1-)
 	- [`queued.awaitany`](#queuedawaitany-e1-)
-	- [`queued.awaiteach`](#queuedawaiteach-f-e1-)
 	- [`queued.emitall`](#queuedemitall-e-)
 	- [`queued.emitone`](#queuedemitone-e-)
 	- [`queued.pending`](#queuedpending-e)
@@ -62,21 +60,6 @@ Suspends the execution of the calling coroutine awaiting an event on any of the 
 The value on which the event is emitted is returned, followed by any additional values passed to [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-).
 Any `nil` in `e1, ...` is ignored.
 
-### `event.awaiteach (f, [e1, ...])`
-
-Suspends the execution of the calling coroutine awaiting an event on each of the values `e1, ...`.
-Whenever one of these events are emited `f` is called with the value on which the event is emitted, followed by any additional values passed to [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-).
-
-If `f` returns any value (including `nil`) then the suspension for the events is cancelled, and this function returns the values returned by `f`.
-If `f` raises an error then the suspension for the events is cancelled, and this function raises the error.
-Otherwise, this function return no values.
-
-`f` is always executed in context of the calling coroutine, and the behavior is undefined if `f` suspends the calling coroutine (even to await events).
-However `f` might resume another coroutine to await events.
-
-Any `nil` in `e1, ...` is ignored.
-Any repeated values in `e1, ...` are treated as a single one.
-If `e1, ...` are not provided or are all `nil`, this function returns no value and has no effect.
 
 ### `event.emitall (e, ...)`
 
@@ -112,10 +95,6 @@ Same as [`event.awaitall`](#eventawaitall-e1-), but it first attempts to consume
 ### `queued.awaitany (e1, ...)`
 
 Same as [`event.awaitany`](#eventawaitany-e1-), but if there is a stored event on any of values `e1, ...`, the stored event on the leftmost value `e1, ...` is consumed instead of awaiting for events.
-
-### `queued.awaiteach (f, [e1, ...])`
-
-Same as [`event.awaiteach`](#eventawaiteach-f-e1-), but it first attempts to consume one stored event on each value `e1, ...`, and later awaits for events on any remaning values of `e1, ...`.
 
 ### `queued.emitall (e, ...)`
 
