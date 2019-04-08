@@ -153,7 +153,7 @@ do case "value types"
 	for _, e in ipairs(types) do
 		local a = 0
 		spawn(function ()
-			await(e)
+			assert(await(e) == true)
 			assert(emitall(e) == false)
 			a = 1
 		end)
@@ -171,30 +171,60 @@ end
 do case "extra values"
 	local e = "event"
 
-	local a1, a2, a3
+	local a, a1, a2, a3
 	spawn(function ()
-		a1, a2, a3 = await(e)
+		a, a1, a2, a3 = await(e)
 	end)
-	local b1, b2, b3
+	local b, b1, b2, b3
 	spawn(function ()
-		b1, b2, b3 = await(e)
+		b, b1, b2, b3 = await(e)
 	end)
-	local c1, c2, c3
+	local c, c1, c2, c3
 	spawn(function ()
-		c1, c2, c3 = await(e)
+		c, c1, c2, c3 = await(e)
 	end)
 
 	local t1,t2,t3 = {},{},{}
 	assert(emitall(e, t1,t2,t3) == true)
+	assert(a == true)
 	assert(a1 == t1)
 	assert(a2 == t2)
 	assert(a3 == t3)
+	assert(b == true)
 	assert(b1 == t1)
 	assert(b2 == t2)
 	assert(b3 == t3)
+	assert(c == true)
 	assert(c1 == t1)
 	assert(c2 == t2)
 	assert(c3 == t3)
+
+	done()
+end
+
+do case "direct resume"
+	local e = "event"
+
+	local res, v1,v2,v3
+	local a = 0
+	spawn(function (...)
+		garbage.co = coroutine.running()
+		res, v1,v2,v3 = await(e)
+		a = 1
+		coroutine.yield()
+		a = 2
+	end)
+	assert(a == 0)
+
+	coroutine.resume(garbage.co, 1,2,3)
+	assert(a == 1)
+	assert(res == false)
+	assert(v1 == 1)
+	assert(v2 == 2)
+	assert(v3 == 3)
+
+	assert(emitall(e) == false)
+	assert(a == 1)
 
 	done()
 end
@@ -226,31 +256,35 @@ do case "nested emission"
 	local e = "event"
 	local t1,t2,t3 = {},{},{}
 
-	local a1,a2,a3
+	local a1,a2,a3,a4,a5
 	spawn(function ()
-		a1 = await(e)
-		a2 = emitall(e, t2)
-		a3 = await(e)
+		a1,a2 = await(e)
+		a3 = emitall(e, t2)
+		a4,a5 = await(e)
 	end)
 
-	local b1,b2
+	local b1,b2,b3
 	spawn(function ()
-		b1 = await(e)
-		b2 = emitall(e, t3)
+		b1,b2 = await(e)
+		b3 = emitall(e, t3)
 		coroutine.yield()
 		b1,b2,b3 = nil
 	end)
 
 	assert(emitall(e, t1) == true)
-	assert(a1 == t1)
-	assert(a2 == false) -- emit from first coroutine resumes no coroutines
-	assert(a3 == t3)
-	assert(b1 == t1)
-	assert(b2 == true) -- emit from second coroutine resumes the first one
+	assert(a1 == true)
+	assert(a2 == t1)
+	assert(a3 == false) -- emit from first coroutine resumes no coroutines
+	assert(a4 == true)
+	assert(a5 == t3)
+	assert(b1 == true)
+	assert(b2 == t1)
+	assert(b3 == true) -- emit from second coroutine resumes the first one
 
 	assert(emitall(e, {}) == false)
-	assert(b1 == t1)
-	assert(b2 == true)
+	assert(b1 == true)
+	assert(b2 == t1)
+	assert(b3 == true)
 
 	done()
 end
@@ -279,7 +313,7 @@ end
 do case "value types"
 	local a = 0
 	spawn(function ()
-		awaitall(table.unpack(types))
+		assert(awaitall(table.unpack(types)) == true)
 		a = 1
 	end)
 
@@ -294,6 +328,67 @@ do case "value types"
 	for _, e in ipairs(types) do
 		assert(emitall(e) == false)
 	end
+
+	done()
+end
+
+do case "direct resume"
+	local a = 0
+	spawn(function ()
+		garbage.co = coroutine.running()
+		local res, v1,v2,v3 = awaitall(table.unpack(types))
+		assert(res == false)
+		assert(v1 == 1)
+		assert(v2 == 2)
+		assert(v3 == 3)
+		a = 1
+		coroutine.yield()
+		a = 2
+	end)
+
+	coroutine.resume(garbage.co, 1,2,3)
+	assert(a == 1)
+
+	for _, e in ipairs(types) do
+		assert(a == 1)
+		assert(pending(e) == false)
+		assert(a == 1)
+		assert(emitall(e) == false)
+	end
+	assert(a == 1)
+
+	done()
+end
+
+do case "resumed after events"
+	local e = {}
+
+	local a = 0
+	spawn(function ()
+		garbage.co = coroutine.running()
+		local res, v1,v2,v3 = awaitall(e, table.unpack(types))
+		assert(res == false)
+		assert(v1 == 1)
+		assert(v2 == 2)
+		assert(v3 == 3)
+		a = 1
+		coroutine.yield()
+		a = 2
+	end)
+
+	for _, e in ipairs(types) do
+		assert(a == 0)
+		assert(pending(e) == true)
+		assert(a == 0)
+		assert(emitall(e) == true)
+	end
+	assert(a == 0)
+
+	coroutine.resume(garbage.co, 1,2,3)
+	assert(a == 1)
+
+	assert(emitall(e) == false)
+	assert(a == 1)
 
 	done()
 end
@@ -556,7 +651,7 @@ do case "value types"
 	for _, e in ipairs(types) do
 		local a = 0
 		spawn(function ()
-			awaitany(table.unpack(types))
+			assert(awaitany(table.unpack(types)) == true)
 			a = 1
 		end)
 		assert(a == 0)
@@ -573,6 +668,34 @@ do case "value types"
 			assert(emitall(e) == false)
 		end
 
+	end
+
+	done()
+end
+
+do case "direct resume"
+	for _, e in ipairs(types) do
+		local a = 0
+		spawn(function ()
+			garbage.co = coroutine.running()
+			local res, v1,v2,v3 = awaitany(table.unpack(types))
+			assert(res == false)
+			assert(v1 == 1)
+			assert(v2 == 2)
+			assert(v3 == 3)
+			a = 1
+			coroutine.yield()
+			a = 2
+		end)
+		assert(a == 0)
+
+		coroutine.resume(garbage.co, 1,2,3)
+		assert(a == 1)
+
+		for _, e in ipairs(types) do
+			assert(emitall(e) == false)
+		end
+		assert(a == 1)
 	end
 
 	done()
@@ -622,26 +745,28 @@ end
 do case "different sets"
 	local e0,e1,e2,e3 = {},{},{},{}
 
-	local ae,a1,a2,a3 = e0
+	local ae,ar,a1,a2,a3 = e0
 	spawn(function ()
-		ae,a1,a2,a3 = awaitany(e0,e1,e2,e3)
-		ae,a1,a2,a3 = awaitany(e0,e1,e2,e3)
-		ae,a1,a2,a3 = awaitany(e0,e1,e2,e3)
+		ar,ae,a1,a2,a3 = awaitany(e0,e1,e2,e3)
+		ar,ae,a1,a2,a3 = awaitany(e0,e1,e2,e3)
+		ar,ae,a1,a2,a3 = awaitany(e0,e1,e2,e3)
 		coroutine.yield()
 		ae = nil
 	end)
 
-	local be,b1,b2,b3 = e0
+	local be,br,b1,b2,b3 = e0
 	spawn(function ()
-		be,b1,b2,b3 = awaitany(e1)
-		be,b1,b2,b3 = awaitany(e2,e3)
-		be,b1,b2,b3 = awaitany(e0,e1,e2)
+		br,be,b1,b2,b3 = awaitany(e1)
+		br,be,b1,b2,b3 = awaitany(e2,e3)
+		br,be,b1,b2,b3 = awaitany(e0,e1,e2)
 		coroutine.yield()
 		be = nil
 	end)
 
 	local t1,t2,t3 = {},{},{}
 	assert(emitall(e1, t1,t2,t3) == true)
+	assert(ar == true)
+	assert(br == true)
 	assert(ae == e1)
 	assert(be == e1)
 	assert(a1 == t1)
@@ -653,6 +778,8 @@ do case "different sets"
 
 	local t1,t2,t3 = {},{},{}
 	assert(emitall(e2, t1,t2,t3) == true)
+	assert(ar == true)
+	assert(br == true)
 	assert(ae == e2)
 	assert(be == e2)
 	assert(a1 == t1)
@@ -664,6 +791,8 @@ do case "different sets"
 
 	local t1,t2,t3 = {},{},{}
 	assert(emitall(e3, t1,t2,t3) == true)
+	assert(ar == true)
+	assert(br == true)
 	assert(ae == e3)
 	assert(be == e2)
 	assert(a1 == t1)
@@ -671,6 +800,8 @@ do case "different sets"
 	assert(a3 == t3)
 
 	assert(emitall(e3) == false)
+	assert(ar == true)
+	assert(br == true)
 	assert(ae == e3)
 	assert(be == e2)
 
@@ -720,7 +851,9 @@ do case "nested emission"
 	local b = {}
 
 	spawn(function ()
-		assert(awaitany(e1,e2,e3) == e1) -- this time this is resumed first
+		local ok, e = awaitany(e1,e2,e3)
+		assert(ok == true)
+		assert(e == e1) -- this time this is resumed first
 		assert(emitall(e1) == false) -- other is awaiting: e1'|e2|e3
 		assert(#b == 0)
 		assert(emitall(e2) == true) -- resumes other (awaiting: e1|e2|e3)
@@ -729,7 +862,9 @@ do case "nested emission"
 		assert(#b == 2 and b[2] == 2)
 		step(a) -- a[1] = 3
 
-		assert(awaitany(e1,e2,e3) == e1) -- this time this is resumed last
+		local ok, e = awaitany(e1,e2,e3)
+		assert(ok == true)
+		assert(e == e1) -- this time this is resumed last
 		assert(#b == 3 and b[3] == 4)
 		assert(emitall(e1) == true) -- resumes other (awaiting: e1|e2|e3)
 		assert(#b == 4 and b[4] == 5)
@@ -743,21 +878,29 @@ do case "nested emission"
 	end)
 
 	spawn(function ()
-		assert(awaitany(e1,e2,e3) == e2) -- emitted from the other coroutine
+		local ok, e = awaitany(e1,e2,e3)
+		assert(ok == true)
+		assert(e == e2) -- emitted from the other coroutine
 		assert(emitall(e1) == false)
 		assert(emitall(e2) == false)
 		assert(emitall(e3) == false)
 		step(b) -- b[1] = 1
-		assert(awaitany(e1,e2,e3) == e1) -- emitted from the other coroutine
+		local ok, e = awaitany(e1,e2,e3)
+		assert(ok == true)
+		assert(e == e1) -- emitted from the other coroutine
 		assert(emitall(e1) == false)
 		assert(emitall(e2) == false)
 		assert(emitall(e3) == false)
 		step(b) -- b[2] = 2
 
-		assert(awaitany(e1,e2,e3) == e1) -- this time this is resumed first
+		local ok, e = awaitany(e1,e2,e3)
+		assert(ok == true)
+		assert(e == e1) -- this time this is resumed first
 		assert(emitall(e1) == false) -- other is awaiting: e1'|e2|e3
 		step(b) -- b[3] = 4
-		assert(awaitany(e1,e2,e3) == e1)
+		local ok, e = awaitany(e1,e2,e3)
+		assert(ok == true)
+		assert(e == e1)
 		assert(emitall(e1) == false)
 		assert(emitall(e2) == false)
 		assert(emitall(e3) == false)

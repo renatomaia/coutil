@@ -16,6 +16,7 @@ local yield = coroutine.yield
 local vararg = require "vararg"
 local countargs = vararg.len
 local vaconcat = vararg.concat
+local varange = vararg.range
 
 local listof = setmetatable({}, { __mode = "k" })
 
@@ -59,6 +60,11 @@ local function removethread(event, thread, list)
 	end
 end
 
+local function yieldablecaller()
+	assert(isyieldable(), "unable to yield")
+	return running()
+end
+
 local module = { version = "1.0 alpha" }
 
 function module.pending(event)
@@ -78,7 +84,7 @@ function module.emitall(event, ...)
 				list[tail] = list[head]
 			end
 			list[head] = nil
-			resume(head, event, ...)
+			resume(head, listof, event, ...)
 		until list.tail == nil
 		return true
 	end
@@ -97,21 +103,28 @@ function module.emitone(event, ...)
 			list[tail] = list[head]
 		end
 		list[head] = nil
-		resume(head, event, ...)
+		resume(head, listof, event, ...)
 		return true
 	end
 	return false
 end
 
-function module.await(event)
-	assert(isyieldable(), "unable to yield")
-	addthread(event, running())
-	return select(2, yield())
+do
+	local function cancel(event, thread, list, ...)
+		if ... == listof then return true, select(3, ...) end
+		removethread(event, thread, list)
+		return false, ...
+	end
+
+	function module.await(event)
+		local thread = yieldablecaller()
+		local list = addthread(event, thread)
+		return cancel(event, thread, list, yield())
+	end
 end
 
 function module.awaitall(...)
-	assert(isyieldable(), "unable to yield")
-	local thread = running()
+	local thread = yieldablecaller()
 	local count = 0
 	for index = 1, countargs(...) do
 		local event = select(index, ...)
@@ -125,12 +138,12 @@ function module.awaitall(...)
 end
 
 do
-	local function cancel(thread, count, ...)
-		for index = 1, count, 2 do
+	local function cancel(thread, regsz, ...)
+		for index = 1, regsz, 2 do
 			local event, list = select(index, ...)
 			removethread(event, thread, list)
 		end
-		return select(count+1, ...)
+		return select(regsz+1, ...)
 	end
 
 	local function register(thread, count, event, ...)
@@ -145,43 +158,43 @@ do
 		end
 	end
 
-	local function await(thread, ...)
-		local count = countargs(...)
-		assert(count > 0, "non-nil value expected")
-		return cancel(thread, count, vaconcat(yield, ...))
+	local function resumed(thread, regsz, count, ...)
+		if select(regsz+1, ...) ~= listof then
+			return false, cancel(thread, regsz, ...)
+		elseif count == 0 then
+			return true
+		end
+		return resumed(thread, regsz, count-1,
+		               vaconcat(yield, varange(1, regsz, ...)))
+	end
+
+	local function registered(thread, ...)
+		local regsz = countargs(...)
+		if regsz == 0 then return true end
+		return resumed(thread, regsz, regsz//2-1, vaconcat(yield, ...))
+	end
+
+	function module.awaitall(...)
+		local thread = yieldablecaller()
+		return registered(thread, register(thread, countargs(...), ...))
+	end
+
+	local function resumed(thread, regsz, ...)
+		if ... == listof then
+			return true, select(2, ...)
+		end
+		return false, ...
+	end
+
+	local function registered(thread, ...)
+		local regsz = countargs(...)
+		assert(regsz > 0, "non-nil value expected")
+		return resumed(thread, regsz, cancel(thread, regsz, vaconcat(yield, ...)))
 	end
 
 	function module.awaitany(...)
-		assert(isyieldable(), "unable to yield")
-		local thread = running()
-		return await(thread, register(thread, countargs(...), ...))
-	end
-end
-
-do
-	local function cancel(thread, events)
-		for event, list in pairs(events) do
-			removethread(event, thread, list)
-		end
-	end
-
-	local function notify(callback, events, event, ...)
-		events[event] = nil
-		return pcall(callback, event, ...)
-	end
-
-	local function handle(callback, thread, events, success, ...)
-		if not success then
-			cancel(thread, events)
-			error(...)
-		elseif countargs(...) > 0 then
-			cancel(thread, events)
-			return ...
-		elseif next(events) ~= nil then
-			return handle(callback, thread, events, notify(callback, events, yield()))
-		end
-	end
-
+		local thread = yieldablecaller()
+		return registered(thread, register(thread, countargs(...), ...))
 	end
 end
 

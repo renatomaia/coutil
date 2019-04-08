@@ -120,7 +120,7 @@ do case "fulfillment event"
 
 	local a,a1,a2,a3 = 0
 	spawn(function ()
-		a1,a2,a3 = await(p)
+		_,a1,a2,a3 = await(p)
 		assert(p("probe") == true)
 		a = 1
 	end)
