@@ -37,7 +37,7 @@ function module.create()
 		if probe then
 			return results ~= nil
 		elseif results == nil then
-			return await(promise)
+			return select(2, await(promise))
 		end
 		return results()
 	end
@@ -54,15 +54,13 @@ function module.create()
 end
 
 function module.awaitall(...)
-	awaitall(onlypending(...))
+	return awaitall(onlypending(...))
 end
 
 function module.awaitany(...)
 	local ready = pickready(...)
-	if ready == nil then
-		ready = awaitany(...)
-	end
-	return ready
+	if ready ~= nil then return true, ready end
+	return awaitany(...)
 end
 
 return module

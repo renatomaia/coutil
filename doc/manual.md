@@ -40,26 +40,32 @@ Events
 Module `coutil.event` provides functions for synchronization of coroutines using events.
 Events can be emitted on any value that can be stored in a table as a key (all values except `nil`).
 Coroutines might suspend awaiting for events on values, so they are resumed when events are emitted on these values.
-The behavior is undefined if a coroutine suspended awaiting events is resumed by other means than the emission of the expected events.
 
 ### `event.await (e)`
 
 Suspends the execution of the calling coroutine awaiting an event on value `e`.
-It returns all the additional arguments passed to [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-).
+
+If it is resumed by [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-), it returns `true` followed by all the additional arguments passed to these functions.
+Otherwise it returns `false` followed by the values provided to the resume (_e.g._ [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume)).
 
 ### `event.awaitall ([e1, ...])`
 
-Suspends the execution of the calling coroutine awaiting an event on all values `e1, ...`, and returns only after all these events are emitted.
+Suspends the execution of the calling coroutine awaiting an event on every one of values `e1, ...`.
 Any `nil` in `e1, ...` is ignored.
 Any repeated values in `e1, ...` are treated as a single one.
 If `e1, ...` are not provided or are all `nil`, this function has no effect.
 
+It returns `true` if the calling coroutine is resumed due to events emitted on all values `e1, ...`.
+Otherwise it returns like [`event.await`](#eventawait-e).
+
 ### `event.awaitany (e1, ...)`
 
 Suspends the execution of the calling coroutine awaiting an event on any of the values `e1, ...`.
-The value on which the event is emitted is returned, followed by any additional values passed to [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-).
 Any `nil` in `e1, ...` is ignored.
+At least one value in `e1, ...` must not be `nil`.
 
+If the calling coroutine is resumed due to an event emitted on any of values `e1, ...`, `awaitany` returns `true` followed by any additional values passed to [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-).
+Otherwise it returns like [`event.await`](#eventawait-e).
 
 ### `event.emitall (e, ...)`
 
@@ -148,12 +154,15 @@ But once a promise is fulfilled its results become readily available for those t
 ### `promise.awaitall ([p, ...])`
 
 Suspends the calling coroutine awaiting the fulfillment of all promises `p, ...`.
-If all promises `p, ...` are fulfilled then this function has no effect.
+Returns `true` if all promises `p, ...` are fulfilled.
+Otherwise it returns like [`event.await`](#eventawait-e).
 
 ### `promise.awaitany (p, ...)`
 
 Returns a fulfilled promise from promises `p, ...`.
 If there are no fulfilled promises in `p, ...`, it suspends the calling coroutine awaiting the fulfillment of any of the promises in `p, ...`.
+Returns `true` followed by the fulfilled promise in `p, ...`.
+Otherwise it returns like [`event.await`](#eventawait-e).
 
 ### `promise.create ()`
 
