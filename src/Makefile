@@ -11,7 +11,7 @@ LIB_A=	libluacoutil.a
 SCH_M=	scheduler.so
 
 LD= ld
-CC= gcc -std=gnu99
+CC= gcc -std=gnu89
 CFLAGS= -g -Wall -I. -I$(LUA_INC) $(SYSCFLAGS) $(MYCFLAGS)
 LDFLAGS= -L$(LUA_LIB) $(SYSLDFLAGS) $(MYLDFLAGS)
 LIBS= -luv $(SYSLIBS) $(MYLIBS)
