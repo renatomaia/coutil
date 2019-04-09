@@ -33,6 +33,7 @@ Index
 - [`coutil.scheduler`](#scheduler)
 	- [`scheduler.run`](#pending--schedulerrun-mode)
 	- [`scheduler.pause`](#scheduled---schedulerpause-)
+	- [`scheduler.awaitsig`](#scheduled---schedulerawaitsig-signal-)
 
 Contents
 ========
@@ -58,7 +59,7 @@ Any `nil` in `e1, ...` is ignored.
 Any repeated values in `e1, ...` are treated as a single one.
 If `e1, ...` are not provided or are all `nil`, this function has no effect.
 
-It returns `true` if the calling coroutine is resumed due to events emitted on all values `e1, ...`.
+It returns `true` if the calling coroutine is resumed due to events emitted on all values `e1, ...` or if `e1, ...` are not provided or are all `nil`.
 Otherwise it returns like [`event.await`](#eventawait-e).
 
 ### `event.awaitany (e1, ...)`
@@ -238,5 +239,45 @@ Suspends the execution of the calling coroutine (like [`coroutine.yield`](http:/
 Any arguments to `pause` are passed as extra results to [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
 
 `pause` returns `true` if the calling coroutine is effectively resumed by [`run`](#pending--schedulerrun-mode).
-Otherwise it returns `false` followed by the values provided to the resume (_e.g._ [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume)).
+Otherwise it returns like [`event.await`](#eventawait-e).
 In any case, the coroutine is not scheduled to be resumed anymore after `pause` returns.
+
+### `scheduled, ... = scheduler.awaitsig (signal, ...)`
+
+Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it to be resumed when the process receives signal indicated by string `signal`, as listed below:
+
+| Command       | UNIX Name | Description |
+| ------------- | --------- | ----------- |
+| `"abort"`     | SIGABRT   | Process abort signal |
+| `"continue"`  | SIGCONT   | Continue executing, if stopped |
+| `"hangup"`    | SIGHUP    | Hangup |
+| `"interrupt"` | SIGINT    | Terminal interrupt signal |
+| `"quit"`      | SIGQUIT   | Terminal quit signal |
+| `"stop"`      | SIGTSTP   | Terminal stop signal |
+| `"terminate"` | SIGTERM   | Termination signal |
+
+| Condition     | UNIX Name | Description |
+| ------------- | --------- | ----------- |
+| `"badpipe"`   | SIGPIPE   | Write on a pipe with no one to read it |
+| `"bgread"`    | SIGTTIN   | Attempt to read while in background |
+| `"bgwrite"`   | SIGTTOU   | Attempt to write while in background |
+| `"cpulimit"`  | SIGXCPU   | CPU time limit exceeded |
+| `"filelimit"` | SIGXFSZ   | File size limit exceeded |
+| `"syscall"`   | SIGSYS    | Bad system call |
+
+| Event         | UNIX Name | Description |
+| ------------- | --------- | ----------- |
+| `"child"`     | SIGCHLD   | Child process terminated, stopped, or continued |
+| `"clocktime"` | SIGALRM   | Alarm clock |
+| `"cputimprc"` | SIGVTALRM | Virtual timer expired  |
+| `"cputimall"` | SIGPROF   | Profiling timer expired  |
+| `"debug"`     | SIGTRAP   | Trace/breakpoint trap |
+| `"polling"`   | SIGPOLL   | Pollable event |
+| `"urgsock"`   | SIGURG    | High bandwidth data is available at a socket |
+| `"user1"`     | SIGUSR1   | User-defined signal 1 |
+| `"user2"`     | SIGUSR2   | User-defined signal 2 |
+| `"winresize"` | SIGWINCH  | Terminal window size changed |
+
+Any additional arguments to `awaitsig` are passed as extra results to [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
+
+`awaitsig` returns like [`pause`](#scheduled---schedulerpause-).
