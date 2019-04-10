@@ -21,7 +21,7 @@ end
 do case "nested call"
 	local stage = 0
 	spawn(function (...)
-		pause(...)
+		pause(nil, ...)
 		asserterr("already running", pcall(run))
 		stage = 1
 	end)
@@ -97,108 +97,144 @@ end
 newtest "pause" ----------------------------------------------------------------
 
 do case "error messages"
+	asserterr("number expected", pcall(pause, false))
 	asserterr("unable to yield", pcall(pause))
 
 	done()
 end
 
-do case "yield values"
-	local stage = 0
-	local ok, a,b,c,d,e = spawn(function (...)
-		assert(pause(...))
-		stage = 1
-	end, "testing", 1, 2, 3)
-	assert(ok == true)
-	assert(a == "testing")
-	assert(b == 1)
-	assert(c == 2)
-	assert(d == 3)
-	assert(e == nil)
-	assert(stage == 0)
+local args = { nil, 0, 0.1 }
 
-	gc()
-	assert(run() == false)
-	assert(stage == 1)
+do case "yield values"
+	for i = 1, 3 do
+		local delay = args[i]
+		local stage = 0
+		local a,b,c,d,e = spawn(function (...)
+			assert(pause(delay, ...))
+			stage = 1
+		end, "testing", 1, 2, 3)
+		assert(a == "testing")
+		assert(b == 1)
+		assert(c == 2)
+		assert(d == 3)
+		assert(e == nil)
+		assert(stage == 0)
+		gc()
+
+		if delay ~= nil and delay > 0 then
+			assert(run("ready") == true)
+		else
+			assert(run("step") == false)
+		end
+
+		assert(run() == false)
+		assert(stage == 1)
+	end
 
 	done()
 end
 
 do case "scheduled yield"
-	local stage = 0
-	spawn(function ()
-		assert(pause())
-		stage = 1
-		coroutine.yield()
-		stage = 2
-	end)
-	assert(stage == 0)
+	for i = 1, 3 do
+		local delay = args[i]
+		local stage = 0
+		spawn(function ()
+			assert(pause(delay))
+			stage = 1
+			coroutine.yield()
+			stage = 2
+		end)
+		assert(stage == 0)
+		gc()
 
-	gc()
-	assert(run() == false)
-	assert(stage == 1)
+		if delay ~= nil and delay > 0 then
+			assert(run("ready") == true)
+		else
+			assert(run("step") == false)
+		end
+
+		assert(run() == false)
+		assert(stage == 1)
+	end
 
 	done()
 end
 
 do case "reschedule"
-	local stage = 0
-	spawn(function ()
-		assert(pause())
-		stage = 1
-		assert(pause())
-		stage = 2
-	end)
-	assert(stage == 0)
+	for i = 1, 3 do
+		local delay = args[i]
+		local stage = 0
+		spawn(function ()
+			assert(pause(delay))
+			stage = 1
+			assert(pause(delay))
+			stage = 2
+		end)
+		assert(stage == 0)
 
-	gc()
-	assert(run("step") == true)
-	assert(stage == 1)
+		gc()
+		assert(run("step") == true)
+		assert(stage == 1)
 
-	gc()
-	assert(run() == false)
-	assert(stage == 2)
+		gc()
+		if delay ~= nil and delay > 0 then
+			assert(run("ready") == true)
+		else
+			assert(run("step") == false)
+		end
+
+		gc()
+		assert(run() == false)
+		assert(stage == 2)
+	end
 
 	done()
 end
 
 do case "cancel schedule"
-	local stage = 0
-	spawn(function (...)
-		garbage.coro = coroutine.running()
-		local ok, a,b,c = pause()
-		assert(ok == false)
-		assert(a == true)
-		assert(b == nil)
-		assert(c == 3)
-		stage = 1
-		coroutine.yield()
-		stage = 2
-	end)
-	assert(stage == 0)
+	for i = 1, 3 do
+		local delay = args[i]
+		local stage = 0
+		spawn(function (...)
+			garbage.coro = coroutine.running()
+			local ok, a,b,c = pause(delay)
+			assert(ok == false)
+			assert(a == true)
+			assert(b == nil)
+			assert(c == 3)
+			stage = 1
+			coroutine.yield()
+			stage = 2
+		end)
+		assert(stage == 0)
 
-	coroutine.resume(garbage.coro, true,nil,3)
-	assert(stage == 1)
+		coroutine.resume(garbage.coro, true,nil,3)
+		assert(stage == 1)
 
-	gc()
-	assert(run() == false)
-	assert(stage == 1)
+		gc()
+		assert(run() == false)
+		assert(stage == 1)
+	end
 
 	done()
 end
 
 do case "ignore errors"
 
-	local stage = 0
-	pspawn(function (errmsg)
-		assert(pause())
-		stage = 1
-		error(errmsg)
-	end, "oops!")
-	assert(stage == 0)
+	for i = 1, 3 do
+		local delay = args[i]
+		local stage = 0
+		pspawn(function (errmsg)
+			assert(pause(delay))
+			stage = 1
+			error(errmsg)
+		end, "oops!")
+		assert(stage == 0)
 
-	gc()
-	assert(run() == false)
-	assert(stage == 1)
+		gc()
+		assert(run() == false)
+		assert(stage == 1)
+	end
 
 	done()
 end
@@ -218,11 +254,10 @@ end
 
 do case "yield values"
 	local stage = 0
-	local ok, a,b,c,d,e = spawn(function (...)
+	local a,b,c,d,e = spawn(function (...)
 		assert(awaitsig("user1", ...))
 		stage = 1
 	end, "testing", 1, 2, 3)
-	assert(ok == true)
 	assert(a == "testing")
 	assert(b == 1)
 	assert(c == 2)
