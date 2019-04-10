@@ -43,6 +43,7 @@ LUALIB_API void luaL_printstack(lua_State *L)
 #define COS_COREGISTRY	lua_upvalueindex(2)
 #define cosL_toloop(L)	(uv_loop_t *)lua_touserdata(L, lua_upvalueindex(1))
 #define cosL_error(L,e)	luaL_error(L, uv_strerror(e))
+#define cosL_yieldk(L,n,c,f,h) ((h)->data = L, lua_yieldk(L, n, c, f))
 
 static uv_handle_t *cosL_tohandle (lua_State *L) {
 	uv_handle_t *h;
@@ -76,13 +77,6 @@ static void cosL_checkerr (lua_State *L, int err) {
 	if (err < 0) cosL_error(L, err);
 }
 
-static int cosL_yieldk (lua_State *L, int narg, lua_KContext ctx,
-                                                lua_KFunction func,
-                                                uv_handle_t *h) {
-	h->data = L;  /* mark as rescheduled */
-	return lua_yieldk(L, narg, ctx, func);
-}
-
 
 /* Function 'run' (uv_loop_t) */
 
@@ -110,6 +104,18 @@ static void cosB_onclosed (uv_handle_t *h) {
 	lua_State *co = (lua_State *)h->data;
 	if (co != NULL) cosL_resumehandle(h, co);
 	else cosL_unrefcoro(h);
+}
+
+static void cosL_checkinit (lua_State *L, uv_handle_t *h, int err) {
+	cosL_checkerr(L, err);
+	cosL_refcoro(h, L);
+}
+
+static void cosL_checkstart (lua_State *L, uv_handle_t *h, int err) {
+	if (err < 0) {
+		uv_close(h, cosB_onclosed);
+		cosL_error(L, err);  /* never returns */
+	}
 }
 
 static void cosL_resumehandle (uv_handle_t *h, lua_State *co) {
@@ -153,28 +159,52 @@ static int cosK_checkcancelled (lua_State *L, int status, lua_KContext ctx) {
 /* Function 'pause' (uv_idle_t) */
 
 static void cosB_onidle (uv_idle_t *h) {
-	cos_assert(h->data != NULL);
 	cosL_resumehandle((uv_handle_t *)h, (lua_State *)h->data);
 }
 
-static int cosK_setasidle (lua_State *L, int status, lua_KContext ctx) {
+static int cosK_setupidle (lua_State *L, int status, lua_KContext ctx) {
 	uv_loop_t *loop = cosL_toloop(L);
-	uv_idle_t *h = (uv_idle_t *)cosL_tohandle(L);
-	int err;
-	cosL_checkerr(L, uv_idle_init(loop, h));
-	cosL_refcoro((uv_handle_t *)h, L);
-	err = uv_idle_start(h, cosB_onidle);
-	if (err < 0) {
-		uv_close((uv_handle_t *)h, cosB_onclosed);
-		return cosL_error(L, err);
-	}
-	return cosL_yieldk(L, lua_gettop(L), 0, cosK_checkcancelled,
-	                   (uv_handle_t *)h);
+	uv_handle_t *h = cosL_tohandle(L);
+	uv_idle_t *idle = (uv_idle_t *)h;
+	cosL_checkinit(L, h, uv_idle_init(loop, idle));
+	cosL_checkstart(L, h, uv_idle_start(idle, cosB_onidle));
+	lua_remove(L, 1);
+	return cosL_yieldk(L, lua_gettop(L), 0, cosK_checkcancelled, h);
+}
+
+static void cosB_ontimer (uv_timer_t *h) {
+	cosL_resumehandle((uv_handle_t *)h, (lua_State *)h->data);
+}
+
+static int cosK_setuptimer (lua_State *L, int status, lua_KContext ctx) {
+	uv_loop_t *loop = cosL_toloop(L);
+	uv_handle_t *h = cosL_tohandle(L);
+	uv_timer_t *timer = (uv_timer_t *)h;
+	uint64_t msecs = (uint64_t)ctx;
+	cosL_checkinit(L, h, uv_timer_init(loop, timer));
+	cosL_checkstart(L, h, uv_timer_start(timer, cosB_ontimer, msecs, msecs));
+	lua_remove(L, 1);
+	return cosL_yieldk(L, lua_gettop(L), 0, cosK_checkcancelled, h);
 }
 
 static int cosM_pause (lua_State *L) {
+	lua_Number delay;
+	uv_handle_t *h;
 	int narg = lua_gettop(L);
-	uv_handle_t *h = cosL_resethandlek(L, UV_IDLE, narg, 0, cosK_setasidle);
+	if (narg == 0) lua_settop(L, 1);
+	delay = luaL_optnumber(L, 1, 0);
+	if (delay > 0) {
+		uint64_t msecs = (uint64_t)(delay*1000);
+		uv_timer_t *timer;
+		h = cosL_resethandlek(L, UV_TIMER, narg, (lua_KContext)msecs, cosK_setuptimer);
+		timer = (uv_timer_t *)h;
+		if (uv_timer_get_repeat(timer) != msecs) {
+			cosL_checkerr(L, uv_timer_stop(timer));
+			cosL_checkstart(L, h, uv_timer_start(timer, cosB_ontimer, msecs, msecs));
+		}
+	}
+	else h = cosL_resethandlek(L, UV_IDLE, narg, 0, cosK_setupidle);
+	lua_remove(L, 1);
 	return cosL_yieldk(L, narg, 0, cosK_checkcancelled, h);
 }
 
@@ -248,35 +278,28 @@ static void cosB_onsignal (uv_signal_t *h, int signum) {
 	cosL_resumehandle((uv_handle_t *)h, co);
 }
 
-static void cosL_startsignal (lua_State *L, uv_signal_t *h, int signal) {
-	int err = uv_signal_start(h, cosB_onsignal, signal);
-	if (err < 0) {
-		uv_close((uv_handle_t *)h, cosB_onclosed);
-		cosL_error(L, err);  /* never returns */
-	}
-}
-
-static int cosK_setonsignal (lua_State *L, int status, lua_KContext ctx) {
+static int cosK_setupsignal (lua_State *L, int status, lua_KContext ctx) {
 	uv_loop_t *loop = cosL_toloop(L);
-	uv_signal_t *h = (uv_signal_t *)cosL_tohandle(L);
-	int signal = (int)ctx;
-	cosL_checkerr(L, uv_signal_init(loop, h));
-	cosL_refcoro((uv_handle_t *)h, L);
-	cosL_startsignal(L, h, signal);
-	return cosL_yieldk(L, lua_gettop(L)-1, 1, cosK_checkcancelled, 
-	                   (uv_handle_t *)h);
+	uv_handle_t *h = cosL_tohandle(L);
+	uv_signal_t *signal = (uv_signal_t *)h;
+	int signum = (int)ctx;
+	cosL_checkinit(L, h, uv_signal_init(loop, signal));
+	cosL_checkstart(L, h, uv_signal_start(signal, cosB_onsignal, signum));
+	lua_remove(L, 1);
+	return cosL_yieldk(L, lua_gettop(L), 0, cosK_checkcancelled, h);
 }
 
 static int cosM_awaitsig (lua_State *L) {
-	int signal = cosL_checksignal(L, 1, NULL);
+	int signum = cosL_checksignal(L, 1, NULL);
 	int narg = lua_gettop(L)-1;
-	uv_signal_t *h = (uv_signal_t *)cosL_resethandlek(L, UV_SIGNAL, narg,
-		(lua_KContext)signal, cosK_setonsignal);
-	if (h->signum != signal) {
-		cosL_checkerr(L, uv_signal_stop(h));
-		cosL_startsignal(L, h, signal);
+	uv_handle_t *h = cosL_resethandlek(L, UV_SIGNAL, narg, (lua_KContext)signum, cosK_setupsignal);
+	uv_signal_t *signal = (uv_signal_t *)h;
+	if (signal->signum != signum) {
+		cosL_checkerr(L, uv_signal_stop(signal));
+		cosL_checkstart(L, h, uv_signal_start(signal, cosB_onsignal, signum));
 	}
-	return cosL_yieldk(L, narg, 1, cosK_checkcancelled, (uv_handle_t *)h);
+	lua_remove(L, 1);
+	return cosL_yieldk(L, narg, 0, cosK_checkcancelled, h);
 }
 
 
