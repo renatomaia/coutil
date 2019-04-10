@@ -49,7 +49,7 @@ do
 	end
 
 	function spawn(f, ...)
-		return pspawn(xpcall, f, catcherr, ...)
+		return select(2, assert(pspawn(xpcall, f, catcherr, ...)))
 	end
 end
 
