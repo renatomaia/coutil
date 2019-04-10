@@ -31,9 +31,9 @@ Index
 	- [`spawn.catch`](#spawncatch-h-f-)
 	- [`spawn.trap`](#spawntrap-h-f-)
 - [`coutil.scheduler`](#scheduler)
-	- [`scheduler.run`](#pending--schedulerrun-mode)
-	- [`scheduler.pause`](#scheduled---schedulerpause-)
-	- [`scheduler.awaitsig`](#scheduled---schedulerawaitsig-signal-)
+	- [`scheduler.run`](#schedulerrun-mode)
+	- [`scheduler.pause`](#schedulerpause-)
+	- [`scheduler.awaitsig`](#schedulerawaitsig-signal-)
 
 Contents
 ========
@@ -221,7 +221,7 @@ Scheduler
 
 Module `coutil.scheduler` provides functions to suspend coroutines and schedule them to be resumed when they are ready according to a system condition.
 
-### `pending = scheduler.run ([mode])`
+### `scheduler.run ([mode])`
 
 Resumes scheduled coroutines that becomes ready according to its corresponding system condition.
 
@@ -233,16 +233,16 @@ Resumes scheduled coroutines that becomes ready according to its corresponding s
 
 `run` returns `true` if there are scheduled coroutines, or `false` otherwise.
 
-### `scheduled, ... = scheduler.pause (...)`
+### `scheduler.pause (...)`
 
 Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it as ready to be resumed.
 Any arguments to `pause` are passed as extra results to [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
 
-`pause` returns `true` if the calling coroutine is effectively resumed by [`run`](#pending--schedulerrun-mode).
+`pause` returns `true` if the calling coroutine is effectively resumed by [`run`](#schedulerrun-mode).
 Otherwise it returns like [`event.await`](#eventawait-e).
 In any case, the coroutine is not scheduled to be resumed anymore after `pause` returns.
 
-### `scheduled, ... = scheduler.awaitsig (signal, ...)`
+### `scheduler.awaitsig (signal, ...)`
 
 Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it to be resumed when the process receives signal indicated by string `signal`, as listed below:
 
@@ -280,4 +280,4 @@ Suspends the execution of the calling coroutine (like [`coroutine.yield`](http:/
 
 Any additional arguments to `awaitsig` are passed as extra results to [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
 
-`awaitsig` returns like [`pause`](#scheduled---schedulerpause-).
+`awaitsig` returns like [`pause`](#schedulerpause-).
