@@ -21,7 +21,7 @@ end
 do case "nested call"
 	local stage = 0
 	spawn(function (...)
-		pause(...)
+		pause(nil, ...)
 		asserterr("already running", pcall(run))
 		stage = 1
 	end)
@@ -97,6 +97,7 @@ end
 newtest "pause" ----------------------------------------------------------------
 
 do case "error messages"
+	asserterr("number expected", pcall(pause, false))
 	asserterr("unable to yield", pcall(pause))
 
 	done()
@@ -105,7 +106,7 @@ end
 do case "yield values"
 	local stage = 0
 	local ok, a,b,c,d,e = spawn(function (...)
-		assert(pause(...))
+		assert(pause(nil, ...))
 		stage = 1
 	end, "testing", 1, 2, 3)
 	assert(ok == true)

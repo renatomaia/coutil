@@ -32,7 +32,7 @@ Index
 	- [`spawn.trap`](#spawntrap-h-f-)
 - [`coutil.scheduler`](#scheduler)
 	- [`scheduler.run`](#schedulerrun-mode)
-	- [`scheduler.pause`](#schedulerpause-)
+	- [`scheduler.pause`](#schedulerpause-delay-)
 	- [`scheduler.awaitsig`](#schedulerawaitsig-signal-)
 
 Contents
@@ -233,10 +233,13 @@ Resumes scheduled coroutines that becomes ready according to its corresponding s
 
 `run` returns `true` if there are scheduled coroutines, or `false` otherwise.
 
-### `scheduler.pause (...)`
+### `scheduler.pause ([delay, ...])`
 
-Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it as ready to be resumed.
+Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it to be resumed after `delay` seconds have passed since the coroutine was last resumed.
 Any arguments to `pause` are passed as extra results to [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
+
+If `delay` is not provided or is `nil`, the coroutine is scheduled as ready, so it will be resumed as soon as possible.
+The same is applies when `delay` is zero or negative.
 
 `pause` returns `true` if the calling coroutine is effectively resumed by [`run`](#schedulerrun-mode).
 Otherwise it returns like [`event.await`](#eventawait-e).
