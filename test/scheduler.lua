@@ -48,7 +48,7 @@ do case "run step|ready"
 
 		for i = 1, n do
 			gc()
-			assert(run("step") == (i < n))
+			assert(run(mode) == (i < n))
 			for j = 1, n do
 				assert(stage[j] == (j < i and j or i))
 			end
