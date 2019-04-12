@@ -8,7 +8,7 @@ LUA_BIN= $(LUA_HOME)/bin
 LUA_VER= 5.3
 
 LIB_A=	libluacoutil.a
-SCH_M=	scheduler.so
+COS_M=	scheduler.so
 
 LD= ld
 CC= gcc -std=gnu89
@@ -31,11 +31,11 @@ MYOBJS=
 
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 
-SCH_O=	lscheduv.o
+OSM_O=	lmodaux.o lhndlaux.o lscheduf.o ltimef.o lsignalf.o lschemod.o
 
-ALL_O=	$(SCH_O) $(MYOBJS)
+ALL_O=	$(OSM_O) $(MYOBJS)
 ALL_A= $(LIB_A)
-ALL_M= $(SCH_M)
+ALL_M= $(COS_M)
 ALL_T= $(ALL_A) $(ALL_M)
 
 # Targets start here.
@@ -49,7 +49,7 @@ a:	$(ALL_A)
 
 m:	$(ALL_M)
 
-$(SCH_M): $(SCH_O)
+$(COS_M): $(OSM_O)
 	$(LD) -o $@ $(LDFLAGS) $^ $(LIBS)
 
 $(LIB_A): $(ALL_O)
