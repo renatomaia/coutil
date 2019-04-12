@@ -6,36 +6,37 @@
 
 
 static const struct { const char *name; int value; } signals[] = {
+
 	{ "abort", SIGABRT },
-	{ "continue", SIGCONT },
-	{ "hangup", SIGHUP },
-	{ "interrupt", SIGINT },
-	{ "quit", SIGQUIT },
-	{ "stop", SIGTSTP },
-	{ "terminate", SIGTERM },
-	{ "loosepipe", SIGPIPE },
 	{ "bgread", SIGTTIN },
 	{ "bgwrite", SIGTTOU },
-	{ "cpulimit", SIGXCPU },
-	{ "filelimit", SIGXFSZ },
 	{ "child", SIGCHLD },
 	{ "clocktime", SIGALRM },
-	{ "debug", SIGTRAP },
-	{ "urgsock", SIGURG },
-	{ "user1", SIGUSR1 },
-	{ "user2", SIGUSR2 },
+	{ "continue", SIGCONT },
+	{ "cpulimit", SIGXCPU },
 #ifdef SIGPROF
 	{ "cputimall", SIGPROF },
 #endif
 #ifdef SIGVTALRM
 	{ "cputimprc", SIGVTALRM },
 #endif
+	{ "debug", SIGTRAP },
+	{ "filelimit", SIGXFSZ },
+	{ "hangup", SIGHUP },
+	{ "interrupt", SIGINT },
+	{ "loosepipe", SIGPIPE },
 #ifdef SIGPOLL
 	{ "polling", SIGPOLL },
 #endif
+	{ "quit", SIGQUIT },
+	{ "stop", SIGTSTP },
 #ifdef SIGSYS
 	{ "sysargerr", SIGSYS },
 #endif
+	{ "terminate", SIGTERM },
+	{ "urgsock", SIGURG },
+	{ "user1", SIGUSR1 },
+	{ "user2", SIGUSR2 },
 #ifdef SIGWINCH
 	{ "winresize", SIGWINCH },
 #endif
