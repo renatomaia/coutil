@@ -22,13 +22,13 @@ LCULIB_API uv_handle_t *lcu_tohandle (lua_State *L) {
 }
 
 
-static void lcu_refcoro (uv_handle_t *h, lua_State *L) {
+static void savehdlcoro (uv_handle_t *h, lua_State *L) {
 	lua_pushlightuserdata(L, h);
 	lua_pushthread(L);
 	lua_settable(L, LCU_COREGISTRY);
 }
 
-static void lcu_unrefcoro (uv_handle_t *h) {
+static void discardhdlcoro (uv_handle_t *h) {
 	lua_State *L = (lua_State *)h->loop->data;
 	lua_pushlightuserdata(L, h);
 	lua_pushnil(L);
@@ -38,16 +38,16 @@ static void lcu_unrefcoro (uv_handle_t *h) {
 static void lcuB_onclosed (uv_handle_t *h) {
 	h->type = UV_UNKNOWN_HANDLE;
 	lua_State *co = (lua_State *)h->data;
-	if (co != NULL) lcu_resumehandle(h, co);
-	else lcu_unrefcoro(h);
+	if (co != NULL) lcu_resumehdl(h, co);
+	else discardhdlcoro(h);
 }
 
-LCULIB_API void lcu_checkinit (lua_State *L, uv_handle_t *h, int err) {
-	lcu_checkerr(L, err);
-	lcu_refcoro(h, L);
+LCULIB_API void lcu_chkinithdl (lua_State *L, uv_handle_t *h, int err) {
+	lcu_chkerror(L, err);
+	savehdlcoro(h, L);
 }
 
-LCULIB_API void lcu_checkstart (lua_State *L, uv_handle_t *h, int err) {
+LCULIB_API void lcu_chkstarthdl (lua_State *L, uv_handle_t *h, int err) {
 	if (err < 0) {
 		uv_close(h, lcuB_onclosed);
 		lcu_error(L, err);  /* never returns */
@@ -55,9 +55,9 @@ LCULIB_API void lcu_checkstart (lua_State *L, uv_handle_t *h, int err) {
 }
 
 
-#define lcu_yieldk(L,n,c,f,h) ((h)->data = L, lua_yieldk(L, n, c, f))
+#define lcu_yieldhdl(L,n,c,f,h) ((h)->data = L, lua_yieldk(L, n, c, f))
 
-LCULIB_API void lcu_resumehandle (uv_handle_t *h, lua_State *co) {
+LCULIB_API void lcu_resumehdl (uv_handle_t *h, lua_State *co) {
 	lua_State *L = (lua_State *)h->loop->data;
 	int status;
 	h->data = NULL;  /* mark as not rescheduled */
@@ -68,7 +68,7 @@ LCULIB_API void lcu_resumehandle (uv_handle_t *h, lua_State *co) {
 	     !uv_is_closing(h) ) uv_close(h, lcuB_onclosed);
 }
 
-LCULIB_API uv_handle_t *lcu_resethandle (lua_State *L, uv_handle_type t, int narg,
+LCULIB_API uv_handle_t *lcu_resethdl (lua_State *L, uv_handle_type t, int narg,
                                          lua_KContext ctx, lua_KFunction func) {
 	uv_handle_t *h = lcu_tohandle(L);
 	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
@@ -76,12 +76,12 @@ LCULIB_API uv_handle_t *lcu_resethandle (lua_State *L, uv_handle_type t, int nar
 		func(L, LUA_YIELD, ctx);  /* never returns */
 	} else if ( h->type != t || uv_is_closing(h) ) {
 		if (!uv_is_closing(h)) uv_close(h, lcuB_onclosed);
-		lcu_yieldk(L, narg, ctx, func, h);  /* never returns */
+		lcu_yieldhdl(L, narg, ctx, func, h);  /* never returns */
 	}
 	return h;
 }
 
-LCULIB_API int lcuK_checkcancel (lua_State *L, int status, lua_KContext ctx) {
+LCULIB_API int lcuK_chkcancelhdl (lua_State *L, int status, lua_KContext ctx) {
 	uv_loop_t *loop = lcu_toloop(L);
 	uv_handle_t *h = lcu_tohandle(L);
 	int narg = (int)ctx;

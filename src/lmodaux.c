@@ -1,20 +1,9 @@
 #include "lmodaux.h"
 
 
-#if !defined(lcu_assert)
-#define lcu_assert(X)	((void)(X))
-#endif
-
-
-#define lcu_error(L,e)	luaL_error(L, uv_strerror(e))
-
-LCULIB_API void lcu_checkerr (lua_State *L, int err) {
+LCULIB_API void lcu_chkerror (lua_State *L, int err) {
 	if (err < 0) lcu_error(L, err);
 }
-
-
-#define lcu_toloop(L)	(uv_loop_t *)lua_touserdata(L, lua_upvalueindex(1))
-#define LCU_MODUPVS	3
 
 
 static void pushhandlemap (lua_State *L) {
@@ -35,7 +24,7 @@ static void pushhandlemap (lua_State *L) {
 LCULIB_API void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
 	if (uv) lua_pushlightuserdata(L, uv);
 	else uv = (uv_loop_t *)lua_newuserdata(L, sizeof(uv_loop_t));
-	lcu_checkerr(L, uv_loop_init(uv));
+	lcu_chkerror(L, uv_loop_init(uv));
 	lua_newtable(L);  /* LCU_COREGISTRY */
 	pushhandlemap(L);  /* LCU_HANDLEMAP */
 }
