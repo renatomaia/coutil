@@ -9,14 +9,9 @@
 #include <lauxlib.h>
 
 
-#if !defined(lcu_assert)
-#define lcu_assert(X)	((void)(X))
-#endif
-
-
 #define lcu_error(L,e)	luaL_error(L, uv_strerror(e))
 
-LCULIB_API void lcu_checkerr (lua_State *L, int err);
+LCULIB_API void lcu_chkerror (lua_State *L, int err);
 
 
 #define lcu_toloop(L)	(uv_loop_t *)lua_touserdata(L, lua_upvalueindex(1))
