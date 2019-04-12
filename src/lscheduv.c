@@ -211,7 +211,7 @@ static int cosM_pause (lua_State *L) {
 
 /* Function 'signal' (uv_signal_t) */
 
-static const struct { const char * const name; const int value; } signals[] = {
+static const struct { const char *name; int value; } signals[] = {
 	{ "abort", SIGABRT },
 	{ "continue", SIGCONT },
 	{ "hangup", SIGHUP },
@@ -219,7 +219,7 @@ static const struct { const char * const name; const int value; } signals[] = {
 	{ "quit", SIGQUIT },
 	{ "stop", SIGTSTP },
 	{ "terminate", SIGTERM },
-	{ "badpipe", SIGPIPE },
+	{ "loosepipe", SIGPIPE },
 	{ "bgread", SIGTTIN },
 	{ "bgwrite", SIGTTOU },
 	{ "cpulimit", SIGXCPU },
@@ -240,7 +240,7 @@ static const struct { const char * const name; const int value; } signals[] = {
 	{ "polling", SIGPOLL },
 #endif
 #ifdef SIGSYS
-	{ "syscall", SIGSYS },
+	{ "sysargerr", SIGSYS },
 #endif
 #ifdef SIGWINCH
 	{ "winresize", SIGWINCH },

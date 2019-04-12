@@ -261,12 +261,12 @@ Suspends the execution of the calling coroutine (like [`coroutine.yield`](http:/
 
 | Condition     | UNIX Name | Description |
 | ------------- | --------- | ----------- |
-| `"badpipe"`   | SIGPIPE   | Write on a pipe with no one to read it |
 | `"bgread"`    | SIGTTIN   | Attempt to read while in background |
 | `"bgwrite"`   | SIGTTOU   | Attempt to write while in background |
 | `"cpulimit"`  | SIGXCPU   | CPU time limit exceeded |
 | `"filelimit"` | SIGXFSZ   | File size limit exceeded |
-| `"syscall"`   | SIGSYS    | Bad system call |
+| `"loosepipe"` | SIGPIPE   | Write on a pipe with no one to read it |
+| `"sysargerr"` | SIGSYS    | Bad system call |
 
 | Event         | UNIX Name | Description |
 | ------------- | --------- | ----------- |
