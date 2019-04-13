@@ -1,7 +1,7 @@
-local scheduler = require "coutil.scheduler"
-local run = scheduler.run
-local pause = scheduler.pause
-local awaitsig = scheduler.awaitsig
+local system = require "coutil.system"
+local run = system.run
+local pause = system.pause
+local awaitsig = system.awaitsig
 
 newtest "run" ------------------------------------------------------------------
 
@@ -13,7 +13,7 @@ do case "error messages"
 end
 
 do case "empty call"
-	assert(scheduler.run() == false)
+	assert(run() == false)
 
 	done()
 end

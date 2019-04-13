@@ -76,6 +76,6 @@ dofile "queued.lua"
 dofile "promise.lua"
 dofile "mutex.lua"
 dofile "spawn.lua"
-dofile "scheduler.lua"
+dofile "system.lua"
 
 print "\nSuceess!\n"
