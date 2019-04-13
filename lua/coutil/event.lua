@@ -123,20 +123,6 @@ do
 	end
 end
 
-function module.awaitall(...)
-	local thread = yieldablecaller()
-	local count = 0
-	for index = 1, countargs(...) do
-		local event = select(index, ...)
-		if event ~= nil and addthread(event, thread) ~= nil then
-			count = count+1
-		end
-	end
-	for _ = 1, count do
-		yield()
-	end
-end
-
 do
 	local function cancel(thread, regsz, ...)
 		for index = 1, regsz, 2 do
