@@ -30,10 +30,10 @@ Index
 - [`coutil.spawn`](#spawn)
 	- [`spawn.catch`](#spawncatch-h-f-)
 	- [`spawn.trap`](#spawntrap-h-f-)
-- [`coutil.scheduler`](#scheduler)
-	- [`scheduler.run`](#schedulerrun-mode)
-	- [`scheduler.pause`](#schedulerpause-delay-)
-	- [`scheduler.awaitsig`](#schedulerawaitsig-signal-)
+- [`coutil.system`](#system)
+	- [`system.run`](#systemrun-mode)
+	- [`system.pause`](#systempause-delay-)
+	- [`system.awaitsig`](#systemawaitsig-signal-)
 
 Contents
 ========
@@ -216,12 +216,12 @@ If `f` executes without any error, the coroutine executes function `h` passing a
 In case of any error, `h` is executed with arguments `false` and the error message.
 In the latter case, `h` is executed in the calling context of the raised error, just like a error message handler in `xpcall`.
 
-Scheduler
----------
+System
+------
 
-Module `coutil.scheduler` provides functions to suspend coroutines and schedule them to be resumed when they are ready according to a system condition.
+Module `coutil.system` provides functions to suspend coroutines and schedule them to be resumed when they are ready according to a system condition.
 
-### `scheduler.run ([mode])`
+### `system.run ([mode])`
 
 Resumes scheduled coroutines that becomes ready according to its corresponding system condition.
 
@@ -233,7 +233,7 @@ Resumes scheduled coroutines that becomes ready according to its corresponding s
 
 `run` returns `true` if there are scheduled coroutines, or `false` otherwise.
 
-### `scheduler.pause ([delay, ...])`
+### `system.pause ([delay, ...])`
 
 Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it to be resumed after `delay` seconds have passed since the coroutine was last resumed.
 Any arguments to `pause` are passed as extra results to [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
@@ -241,11 +241,11 @@ Any arguments to `pause` are passed as extra results to [`coroutine.resume`](htt
 If `delay` is not provided or is `nil`, the coroutine is scheduled as ready, so it will be resumed as soon as possible.
 The same is applies when `delay` is zero or negative.
 
-`pause` returns `true` if the calling coroutine is effectively resumed by [`run`](#schedulerrun-mode).
+`pause` returns `true` if the calling coroutine is effectively resumed by [`run`](#systemrun-mode).
 Otherwise it returns like [`event.await`](#eventawait-e).
 In any case, the coroutine is not scheduled to be resumed anymore after `pause` returns.
 
-### `scheduler.awaitsig (signal, ...)`
+### `system.awaitsig (signal, ...)`
 
 Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it to be resumed when the process receives signal indicated by string `signal`, as listed below:
 
@@ -289,4 +289,4 @@ Suspends the execution of the calling coroutine (like [`coroutine.yield`](http:/
 
 Any additional arguments to `awaitsig` are passed as extra results to [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
 
-`awaitsig` returns like [`pause`](#schedulerpause-).
+`awaitsig` returns like [`pause`](#systempause-).
