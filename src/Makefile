@@ -8,7 +8,7 @@ LUA_BIN= $(LUA_HOME)/bin
 LUA_VER= 5.3
 
 LIB_A=	libluacoutil.a
-COS_M=	scheduler.so
+COS_M=	system.so
 
 LD= ld
 CC= gcc -std=gnu89
@@ -31,7 +31,7 @@ MYOBJS=
 
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 
-OSM_O=	lmodaux.o lhndlaux.o lscheduf.o ltimef.o lsignalf.o lschemod.o
+OSM_O=	lmodaux.o lhndlaux.o lscheduf.o ltimef.o lsignalf.o lsysmod.o
 
 ALL_O=	$(OSM_O) $(MYOBJS)
 ALL_A= $(LIB_A)
