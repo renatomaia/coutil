@@ -1,19 +1,16 @@
 local system = require "coutil.system"
-local run = system.run
-local pause = system.pause
-local awaitsig = system.awaitsig
 
 newtest "run" ------------------------------------------------------------------
 
 do case "error messages"
-	asserterr("invalid option", pcall(run, "none"))
-	asserterr("string expected", pcall(run, coroutine.running()))
+	asserterr("invalid option", pcall(system.run, "none"))
+	asserterr("string expected", pcall(system.run, coroutine.running()))
 
 	done()
 end
 
 do case "empty call"
-	assert(run() == false)
+	assert(system.run() == false)
 
 	done()
 end
@@ -21,11 +18,11 @@ end
 do case "nested call"
 	local stage = 0
 	spawn(function ()
-		pause()
-		asserterr("already running", pcall(run))
+		system.pause()
+		asserterr("already running", pcall(system.run))
 		stage = 1
 	end)
-	assert(run() == false)
+	assert(system.run() == false)
 	assert(stage == 1)
 
 	done()
@@ -39,7 +36,7 @@ do case "run step|ready"
 			stage[i] = 0
 			spawn(function (c)
 				for j = 1, c do
-					pause()
+					system.pause()
 					stage[i] = j
 				end
 			end, i)
@@ -48,14 +45,14 @@ do case "run step|ready"
 
 		for i = 1, n do
 			gc()
-			assert(run(mode) == (i < n))
+			assert(system.run(mode) == (i < n))
 			for j = 1, n do
 				assert(stage[j] == (j < i and j or i))
 			end
 		end
 
 		gc()
-		assert(run() == false)
+		assert(system.run() == false)
 		for i = 1, n do
 			assert(stage[i] == i)
 		end
@@ -73,7 +70,7 @@ do case "run loop"
 			stage[i] = 0
 			spawn(function (c)
 				for j = 1, c do
-					pause()
+					system.pause()
 					stage[i] = j
 				end
 			end, i)
@@ -81,7 +78,7 @@ do case "run loop"
 		end
 
 		gc()
-		assert(run("loop") == false)
+		assert(system.run("loop") == false)
 		for i = 1, n do
 			assert(stage[i] == i)
 		end
@@ -97,8 +94,8 @@ end
 newtest "pause" ----------------------------------------------------------------
 
 do case "error messages"
-	asserterr("number expected", pcall(pause, false))
-	asserterr("unable to yield", pcall(pause))
+	asserterr("number expected", pcall(system.pause, false))
+	asserterr("unable to yield", pcall(system.pause))
 
 	done()
 end
@@ -110,7 +107,7 @@ do case "yield values"
 		local delay = args[i]
 		local stage = 0
 		local a,b,c = spawn(function ()
-			local res, extra = pause(delay, "testing", 1, 2, 3)
+			local res, extra = system.pause(delay, "testing", 1, 2, 3)
 			assert(res == true)
 			assert(extra == nil)
 			stage = 1
@@ -122,12 +119,12 @@ do case "yield values"
 		gc()
 
 		if delay ~= nil and delay > 0 then
-			assert(run("ready") == true)
+			assert(system.run("ready") == true)
 		else
-			assert(run("step") == false)
+			assert(system.run("step") == false)
 		end
 
-		assert(run() == false)
+		assert(system.run() == false)
 		assert(stage == 1)
 	end
 
@@ -139,7 +136,7 @@ do case "scheduled yield"
 		local delay = args[i]
 		local stage = 0
 		spawn(function ()
-			pause(delay)
+			system.pause(delay)
 			stage = 1
 			coroutine.yield()
 			stage = 2
@@ -148,12 +145,12 @@ do case "scheduled yield"
 		gc()
 
 		if delay ~= nil and delay > 0 then
-			assert(run("ready") == true)
+			assert(system.run("ready") == true)
 		else
-			assert(run("step") == false)
+			assert(system.run("step") == false)
 		end
 
-		assert(run() == false)
+		assert(system.run() == false)
 		assert(stage == 1)
 	end
 
@@ -165,11 +162,11 @@ do case "reschedule"
 		local delay = args[i]
 		local stage = 0
 		spawn(function ()
-			local res, extra = pause(delay)
+			local res, extra = system.pause(delay)
 			assert(res == true)
 			assert(extra == nil)
 			stage = 1
-			local res, extra = pause(delay)
+			local res, extra = system.pause(delay)
 			assert(res == true)
 			assert(extra == nil)
 			stage = 2
@@ -177,18 +174,18 @@ do case "reschedule"
 		assert(stage == 0)
 
 		gc()
-		assert(run("step") == true)
+		assert(system.run("step") == true)
 		assert(stage == 1)
 
 		gc()
 		if delay ~= nil and delay > 0 then
-			assert(run("ready") == true)
+			assert(system.run("ready") == true)
 		else
-			assert(run("step") == false)
+			assert(system.run("step") == false)
 		end
 
 		gc()
-		assert(run() == false)
+		assert(system.run() == false)
 		assert(stage == 2)
 	end
 
@@ -201,8 +198,7 @@ do case "cancel schedule"
 		local stage = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
-			local ok, a,b,c = pause(delay)
-			assert(ok == nil)
+			local a,b,c = system.pause(delay)
 			assert(a == true)
 			assert(b == nil)
 			assert(c == 3)
@@ -216,7 +212,7 @@ do case "cancel schedule"
 		assert(stage == 1)
 
 		gc()
-		assert(run() == false)
+		assert(system.run() == false)
 		assert(stage == 1)
 	end
 
@@ -229,11 +225,10 @@ do case "cancel and reschedule"
 		local stage = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
-			local ok, extra = pause(delay)
-			assert(ok == nil)
+			local extra = system.pause(delay)
 			assert(extra == nil)
 			stage = 1
-			assert(pause(delay) == true)
+			assert(system.pause(delay) == true)
 			stage = 2
 		end)
 		assert(stage == 0)
@@ -242,7 +237,7 @@ do case "cancel and reschedule"
 		assert(stage == 1)
 
 		gc()
-		assert(run() == false)
+		assert(system.run() == false)
 		assert(stage == 2)
 	end
 
@@ -255,10 +250,9 @@ do case "resume while closing"
 		local stage = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
-			assert(pause(delay) == nil)
+			assert(system.pause(delay) == nil)
 			stage = 1
-			local ok, a,b,c = pause(delay)
-			assert(ok == nil)
+			local a,b,c = system.pause(delay)
 			assert(a == 1)
 			assert(b == 22)
 			assert(c == 333)
@@ -267,7 +261,7 @@ do case "resume while closing"
 		assert(stage == 0)
 
 		spawn(function ()
-			pause()
+			system.pause()
 			coroutine.resume(garbage.coro, 1,22,333) -- while being closed.
 			assert(stage == 2)
 			stage = 3
@@ -277,7 +271,7 @@ do case "resume while closing"
 		assert(stage == 1)
 
 		gc()
-		assert(run() == false)
+		assert(system.run() == false)
 		assert(stage == 3)
 	end
 
@@ -290,14 +284,14 @@ do case "ignore errors"
 		local delay = args[i]
 		local stage = 0
 		pspawn(function (errmsg)
-			pause(delay)
+			system.pause(delay)
 			stage = 1
 			error(errmsg)
 		end, "oops!")
 		assert(stage == 0)
 
 		gc()
-		assert(run() == false)
+		assert(system.run() == false)
 		assert(stage == 1)
 	end
 
@@ -311,7 +305,7 @@ do case "ignore errors after cancel"
 		local stage = 0
 		pspawn(function (errmsg)
 			garbage.coro = coroutine.running()
-			pause(delay)
+			system.pause(delay)
 			stage = 1
 			error(errmsg)
 		end, "oops!")
@@ -321,7 +315,7 @@ do case "ignore errors after cancel"
 		assert(stage == 1)
 
 		gc()
-		assert(run() == false)
+		assert(system.run() == false)
 		assert(stage == 1)
 	end
 
@@ -335,8 +329,9 @@ local function sendsignal(name)
 end
 
 do case "error messages"
-	asserterr("invalid signal", pcall(awaitsig, "kill"))
-	asserterr("unable to yield", pcall(awaitsig, "user1"))
+	asserterr("unable to yield", pcall(system.awaitsig, "user1"))
+	asserterr("unable to yield", pcall(system.awaitsig, "kill"))
+	asserterr("invalid signal", pspawn(system.awaitsig, "kill"))
 
 	done()
 end
@@ -344,8 +339,8 @@ end
 do case "yield values"
 	local stage = 0
 	local a,b,c = spawn(function ()
-		local res, extra = awaitsig("user1", "testing", 1, 2, 3)
-		assert(res == true)
+		local res, extra = system.awaitsig("user1", "testing", 1, 2, 3)
+		assert(res == "user1")
 		assert(extra == nil)
 		stage = 1
 	end)
@@ -355,12 +350,12 @@ do case "yield values"
 	assert(stage == 0)
 
 	spawn(function ()
-		pause()
+		system.pause()
 		sendsignal("USR1")
 	end)
 
 	gc()
-	assert(run() == false)
+	assert(system.run() == false)
 	assert(stage == 1)
 
 	done()
@@ -369,7 +364,7 @@ end
 do case "scheduled yield"
 	local stage = 0
 	spawn(function ()
-		awaitsig("user1")
+		system.awaitsig("user1")
 		stage = 1
 		coroutine.yield()
 		stage = 2
@@ -377,12 +372,12 @@ do case "scheduled yield"
 	assert(stage == 0)
 
 	spawn(function ()
-		pause()
+		system.pause()
 		sendsignal("USR1")
 	end)
 
 	gc()
-	assert(run() == false)
+	assert(system.run() == false)
 	assert(stage == 1)
 
 	done()
@@ -391,26 +386,26 @@ end
 do case "reschedule same signal"
 	local stage = 0
 	spawn(function ()
-		awaitsig("user1")
+		system.awaitsig("user1")
 		stage = 1
-		awaitsig("user1")
+		system.awaitsig("user1")
 		stage = 2
 	end)
 	assert(stage == 0)
 
 	spawn(function ()
-		pause()
+		system.pause()
 		sendsignal("USR1")
-		pause()
+		system.pause()
 		sendsignal("USR1")
 	end)
 
 	gc()
-	assert(run("step") == true)
+	assert(system.run("step") == true)
 	assert(stage == 1)
 
 	gc()
-	assert(run() == false)
+	assert(system.run() == false)
 	assert(stage == 2)
 
 	done()
@@ -419,26 +414,26 @@ end
 do case "reschedule different signal"
 	local stage = 0
 	spawn(function ()
-		awaitsig("user1")
+		system.awaitsig("user1")
 		stage = 1
-		awaitsig("user2")
+		system.awaitsig("user2")
 		stage = 2
 	end)
 	assert(stage == 0)
 
 	spawn(function ()
-		pause()
+		system.pause()
 		sendsignal("USR1")
-		pause()
+		system.pause()
 		sendsignal("USR2")
 	end)
 
 	gc()
-	assert(run("step") == true)
+	assert(system.run("step") == true)
 	assert(stage == 1)
 
 	gc()
-	assert(run() == false)
+	assert(system.run() == false)
 	assert(stage == 2)
 
 	done()
@@ -448,8 +443,7 @@ do case "cancel schedule"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		local ok, a,b,c = awaitsig("user1")
-		assert(ok == nil)
+		local a,b,c = system.awaitsig("user1")
 		assert(a == true)
 		assert(b == nil)
 		assert(c == 3)
@@ -463,7 +457,7 @@ do case "cancel schedule"
 	assert(stage == 1)
 
 	gc()
-	assert(run() == false)
+	assert(system.run() == false)
 	assert(stage == 1)
 
 	done()
@@ -473,18 +467,17 @@ do case "cancel and reschedule"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		local ok, extra = awaitsig("user1")
-		assert(ok == nil)
+		local extra = system.awaitsig("user1")
 		assert(extra == nil)
 		stage = 1
-		assert(awaitsig("user1") == true)
+		assert(system.awaitsig("user1") == "user1")
 		stage = 2
 	end)
 	assert(stage == 0)
 
 	spawn(function ()
-		pause() -- the first signal handle is active.
-		pause() -- the first signal handle is being closed.
+		system.pause() -- the first signal handle is active.
+		system.pause() -- the first signal handle is being closed.
 		sendsignal("USR1") -- the second signal handle is active.
 	end)
 
@@ -492,7 +485,7 @@ do case "cancel and reschedule"
 	assert(stage == 1)
 
 	gc()
-	assert(run() == false)
+	assert(system.run() == false)
 	assert(stage == 2)
 
 	done()
@@ -502,10 +495,9 @@ do case "resume while closing"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		assert(awaitsig("user1") == nil)
+		assert(system.awaitsig("user1") == nil)
 		stage = 1
-		local ok, a,b,c = awaitsig("user1")
-		assert(ok == nil)
+		local a,b,c = system.awaitsig("user1")
 		assert(a == .1)
 		assert(b == 2.2)
 		assert(c == 33.3)
@@ -514,7 +506,7 @@ do case "resume while closing"
 	assert(stage == 0)
 
 	spawn(function ()
-		pause()
+		system.pause()
 		coroutine.resume(garbage.coro, .1, 2.2, 33.3) -- while being closed.
 		assert(stage == 2)
 		stage = 3
@@ -524,7 +516,7 @@ do case "resume while closing"
 	assert(stage == 1)
 
 	gc()
-	assert(run() == false)
+	assert(system.run() == false)
 	assert(stage == 3)
 
 	done()
@@ -534,19 +526,19 @@ do case "ignore errors"
 
 	local stage = 0
 	pspawn(function ()
-		assert(awaitsig("user1"))
+		assert(system.awaitsig("user1"))
 		stage = 1
 		error("oops!")
 	end)
 	assert(stage == 0)
 
 	spawn(function ()
-		pause()
+		system.pause()
 		sendsignal("USR1")
 	end)
 
 	gc()
-	assert(run() == false)
+	assert(system.run() == false)
 	assert(stage == 1)
 
 	done()
@@ -557,7 +549,7 @@ do case "ignore errors after cancel"
 	local stage = 0
 	pspawn(function ()
 		garbage.coro = coroutine.running()
-		awaitsig("user1")
+		system.awaitsig("user1")
 		stage = 1
 		error("oops!")
 	end)
@@ -567,8 +559,208 @@ do case "ignore errors after cancel"
 	assert(stage == 1)
 
 	gc()
-	assert(run() == false)
+	assert(system.run() == false)
 	assert(stage == 1)
+
+	done()
+end
+
+newtest "address" --------------------------------------------------------------
+
+do case "empty ipv4"
+	local a = system.address("ipv4")
+
+	assert(tostring(a) == "0.0.0.0:0")
+	assert(a.type == "ipv4")
+	assert(a.port == 0)
+	assert(a.literal == "0.0.0.0")
+	assert(a.binary == "\0\0\0\0")
+	assert(a == system.address("ipv4"))
+
+	done()
+end
+
+do case "empty ipv6"
+	local a = system.address("ipv6")
+
+	assert(tostring(a) == "[::]:0")
+	assert(a.type == "ipv6")
+	assert(a.port == 0)
+	assert(a.literal == "::")
+	assert(a.binary == string.rep("\0", 16))
+	assert(a == system.address("ipv6"))
+
+	done()
+end
+
+local cases = {
+	ipv4 = {
+		port = 8080,
+		literal = "192.168.0.1",
+		binary = "\192\168\000\001",
+		uri = "192.168.0.1:8080",
+		changes = {
+			port = 54321,
+			literal = "127.0.0.1",
+			binary = "byte",
+		},
+		equivalents = {
+			["10.20.30.40"] = "\10\20\30\40",
+			["40.30.20.10"] = "\40\30\20\10",
+		},
+	},
+	ipv6 = {
+		port = 8888,
+		literal = "::ffff:192.168.0.1",
+		binary = "\0\0\0\0\0\0\0\0\0\0\xff\xff\192\168\000\001",
+		uri = "[::ffff:192.168.0.1]:8888",
+		changes = {
+			port = 12345,
+			literal = "::1",
+			binary = "bytebytebytebyte",
+		},
+		equivalents = {
+			["1::f"] =
+				"\0\1\0\0\0\0\0\0\0\0\0\0\0\0\0\x0f",
+			["1:203:405:607:809:a0b:c0d:e0f"] =
+				"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f",
+			["123:4567:89ab:cdef:fedc:ba98:7654:3210"] =
+				"\x01\x23\x45\x67\x89\xab\xcd\xef\xfe\xdc\xba\x98\x76\x54\x32\x10",
+		},
+	},
+}
+for type, expected in pairs(cases) do
+	local addr = system.address(type, expected.uri)
+
+	local function checkaddr(a)
+		--assert(system.type(a) == "address")
+		assert(tostring(a) == expected.uri)
+		assert(a.type == type)
+		assert(a.port == expected.port)
+		assert(a.literal == expected.literal)
+		assert(a.binary == expected.binary)
+		assert(a == addr)
+	end
+
+	do case("create "..type)
+		checkaddr(addr)
+		checkaddr(system.address(type, expected.literal, expected.port))
+		checkaddr(system.address(type, expected.literal, expected.port, "t"))
+		checkaddr(system.address(type, expected.binary, expected.port, "b"))
+
+		done()
+	end
+
+	do case("change "..type)
+		for field, newval in pairs(expected.changes) do
+			local oldval = addr[field]
+			addr[field] = newval
+			assert(addr[field] == newval)
+			addr[field] = oldval
+			checkaddr(addr)
+		end
+
+		for literal, binary in pairs(expected.equivalents) do
+			addr.literal = literal
+			assert(addr.binary == binary)
+		end
+		for literal, binary in pairs(expected.equivalents) do
+			addr.binary = binary
+			assert(addr.literal == literal)
+		end
+
+		done()
+	end
+end
+
+do
+	for _, type in ipairs{ "ipv4", "ipv6" } do case("bad field "..type)
+		local a = system.address(type)
+		asserterr("bad argument #2 to '__index' (invalid option 'wrongfield')",
+			pcall(function () return a.wrongfield end))
+		asserterr("bad argument #2 to '__newindex' (invalid option 'wrongfield')",
+			pcall(function () a.wrongfield = true end))
+		asserterr("bad argument #2 to '__newindex' (invalid option 'type')",
+			pcall(function () a.type = true end))
+		if type == "file" then
+			asserterr("bad argument #2 to '__newindex' (invalid option 'port')",
+				pcall(function () a.port = 1234 end))
+		end
+
+		done()
+	end
+end
+
+do case "errors"
+	asserterr("bad argument #1 to 'coutil.system.address' (invalid option 'ip')",
+		pcall(system.address, "ip"))
+	asserterr("bad argument #2 to 'coutil.system.address' (string or memory expected, got boolean)",
+		pcall(system.address, "ipv4", true))
+	asserterr("bad argument #2 to 'coutil.system.address' (string or memory expected, got boolean)",
+		pcall(system.address, "ipv4", true, 8080))
+	asserterr("bad argument #2 to 'coutil.system.address' (string or memory expected, got boolean)",
+		pcall(system.address, "ipv4", true, 8080, "t"))
+	asserterr("bad argument #2 to 'coutil.system.address' (string or memory expected, got boolean)",
+		pcall(system.address, "ipv4", true, 8080, "b"))
+	asserterr("bad argument #2 to 'coutil.system.address' (string or memory expected, got nil)",
+		pcall(system.address, "ipv4", nil))
+	asserterr("bad argument #2 to 'coutil.system.address' (string or memory expected, got nil)",
+		pcall(system.address, "ipv4", nil, nil))
+	asserterr("bad argument #2 to 'coutil.system.address' (string or memory expected, got nil)",
+		pcall(system.address, "ipv4", nil, nil, nil))
+	asserterr("bad argument #2 to 'coutil.system.address' (string or memory expected, got nil)",
+		pcall(system.address, "ipv4", nil, 8080))
+	asserterr("bad argument #2 to 'coutil.system.address' (string or memory expected, got nil)",
+		pcall(system.address, "ipv4", nil, 8080, "t"))
+	asserterr("bad argument #2 to 'coutil.system.address' (string or memory expected, got nil)",
+		pcall(system.address, "ipv4", nil, 8080, "b"))
+	asserterr("bad argument #2 to 'coutil.system.address' (string or memory expected, got nil)",
+		pcall(system.address, "ipv4", nil, nil))
+	asserterr("bad argument #2 to 'coutil.system.address' (string or memory expected, got nil)",
+		pcall(system.address, "ipv4", nil, nil, "t"))
+	asserterr("bad argument #2 to 'coutil.system.address' (string or memory expected, got nil)",
+		pcall(system.address, "ipv4", nil, nil, "b"))
+	asserterr("bad argument #3 to 'coutil.system.address' (number expected, got nil)",
+		pcall(system.address, "ipv4", "192.168.0.1:8080", nil))
+	asserterr("bad argument #3 to 'coutil.system.address' (number expected, got nil)",
+		pcall(system.address, "ipv4", "192.168.0.1", nil, "t"))
+	asserterr("bad argument #3 to 'coutil.system.address' (number expected, got nil)",
+		pcall(system.address, "ipv4", "\192\168\0\1", nil, "b"))
+	asserterr("bad argument #3 to 'coutil.system.address' (number expected, got string)",
+		pcall(system.address, "ipv4", "192.168.0.1", "port"))
+	asserterr("bad argument #3 to 'coutil.system.address' (number expected, got string)",
+		pcall(system.address, "ipv4", "192.168.0.1", "port", "t"))
+	asserterr("bad argument #3 to 'coutil.system.address' (number expected, got string)",
+		pcall(system.address, "ipv4", "192.168.0.1", "port", "b"))
+	asserterr("bad argument #4 to 'coutil.system.address' (invalid mode)",
+		pcall(system.address, "ipv4", 3232235776, 8080, "n"))
+
+	asserterr("bad argument #2 to 'coutil.system.address' (invalid URI format)",
+		pcall(system.address, "ipv4", "192.168.0.1"))
+	asserterr("invalid argument",
+		pcall(system.address, "ipv4", "localhost:8080"))
+	asserterr("invalid argument",
+		pcall(system.address, "ipv4", "291.168.0.1:8080"))
+	asserterr("bad argument #2 to 'coutil.system.address' (invalid port)",
+		pcall(system.address, "ipv4", "192.168.0.1:65536"))
+	asserterr("bad argument #2 to 'coutil.system.address' (invalid port)",
+		pcall(system.address, "ipv4", "192.168.0.1:-8080"))
+	asserterr("bad argument #2 to 'coutil.system.address' (invalid port)",
+		pcall(system.address, "ipv4", "192.168.0.1:0x1f90"))
+
+	asserterr("invalid argument",
+		pcall(system.address, "ipv4", "localhost", 8080, "t"))
+	asserterr("invalid argument",
+		pcall(system.address, "ipv4", "291.168.0.1", 8080, "t"))
+
+	asserterr("bad argument #3 to 'coutil.system.address' (invalid port)",
+		pcall(system.address, "ipv4", "192.168.0.1", 65536, "t"))
+	asserterr("bad argument #3 to 'coutil.system.address' (invalid port)",
+		pcall(system.address, "ipv4", "192.168.0.1", -1, "t"))
+	asserterr("bad argument #3 to 'coutil.system.address' (invalid port)",
+		pcall(system.address, "ipv4", "\192\168\000\001", 65536, "b"))
+	asserterr("bad argument #3 to 'coutil.system.address' (invalid port)",
+		pcall(system.address, "ipv4", "\192\168\000\001", -1, "b"))
 
 	done()
 end

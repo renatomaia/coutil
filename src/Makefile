@@ -1,20 +1,28 @@
 # See ../doc/readme.md for installation and 
 # == CHANGE THE SETTINGS BELOW TO SUIT YOUR ENVIRONMENT =======================
 
+#LUA_HOME= /usr/local
 LUA_HOME= /home/maia/Work/lua/build/5.3
 LUA_INC= $(LUA_HOME)/include
 LUA_LIB= $(LUA_HOME)/lib
 LUA_BIN= $(LUA_HOME)/bin
 LUA_VER= 5.3
 
+#LUAMEM_HOME= $(LUA_HOME)
+#LUAMEM_INC= $(LUAMEM_HOME)/include
+#LUAMEM_LIB= $(LUAMEM_HOME)/lib
+LUAMEM_HOME= /home/maia/Work/lua/proj/memory/git/src
+LUAMEM_INC= $(LUAMEM_HOME)
+LUAMEM_LIB= $(LUAMEM_HOME)
+
 LIB_A=	libluacoutil.a
 COS_M=	system.so
 
 LD= ld
 CC= gcc -std=gnu89
-CFLAGS= -g -Wall -I. -I$(LUA_INC) $(SYSCFLAGS) $(MYCFLAGS)
-LDFLAGS= -L$(LUA_LIB) $(SYSLDFLAGS) $(MYLDFLAGS)
-LIBS= -luv $(SYSLIBS) $(MYLIBS)
+CFLAGS= -g -Wall -I. -I$(LUA_INC) -I$(LUAMEM_INC) $(SYSCFLAGS) $(MYCFLAGS)
+LDFLAGS= -L$(LUA_LIB) -L$(LUAMEM_LIB) $(SYSLDFLAGS) $(MYLDFLAGS)
+LIBS= -lluamemlib -luv $(SYSLIBS) $(MYLIBS)
 
 AR= ar rcu
 RANLIB= ranlib
@@ -31,7 +39,12 @@ MYOBJS=
 
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 
-OSM_O=	lmodaux.o loperaux.o lscheduf.o ltimef.o lsignalf.o lsysmod.o
+OSM_O=	looplib.o lmodaux.o loperaux.o \
+      	lscheduf.o \
+      	ltimef.o \
+      	lsignalf.o \
+      	lnetwaux.o ltcpf.o \
+      	lsysmod.o
 
 ALL_O=	$(OSM_O) $(MYOBJS)
 ALL_A= $(LIB_A)
