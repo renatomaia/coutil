@@ -5,55 +5,43 @@
 #include <signal.h>
 
 
-static const struct { const char *name; int value; } signals[] = {
-	{ "abort", SIGABRT },
-	{ "continue", SIGCONT },
-	{ "hangup", SIGHUP },
-	{ "interrupt", SIGINT },
-	{ "quit", SIGQUIT },
-	{ "stop", SIGTSTP },
-	{ "terminate", SIGTERM },
-	{ "loosepipe", SIGPIPE },
-	{ "bgread", SIGTTIN },
-	{ "bgwrite", SIGTTOU },
-	{ "cpulimit", SIGXCPU },
-	{ "filelimit", SIGXFSZ },
-	{ "child", SIGCHLD },
-	{ "clocktime", SIGALRM },
-	{ "debug", SIGTRAP },
-	{ "urgsock", SIGURG },
-	{ "user1", SIGUSR1 },
-	{ "user2", SIGUSR2 },
+static int checksignal (lua_State *L, int arg, const char *def) {
+	static const struct { const char *name; int value; } signals[] = {
+		{ "abort", SIGABRT },
+		{ "continue", SIGCONT },
+		{ "hangup", SIGHUP },
+		{ "interrupt", SIGINT },
+		{ "quit", SIGQUIT },
+		{ "stop", SIGTSTP },
+		{ "terminate", SIGTERM },
+		{ "loosepipe", SIGPIPE },
+		{ "bgread", SIGTTIN },
+		{ "bgwrite", SIGTTOU },
+		{ "cpulimit", SIGXCPU },
+		{ "filelimit", SIGXFSZ },
+		{ "child", SIGCHLD },
+		{ "clocktime", SIGALRM },
+		{ "debug", SIGTRAP },
+		{ "urgsock", SIGURG },
+		{ "user1", SIGUSR1 },
+		{ "user2", SIGUSR2 },
 #ifdef SIGPROF
-	{ "cputimall", SIGPROF },
+		{ "cputimall", SIGPROF },
 #endif
 #ifdef SIGVTALRM
-	{ "cputimprc", SIGVTALRM },
+		{ "cputimprc", SIGVTALRM },
 #endif
 #ifdef SIGPOLL
-	{ "polling", SIGPOLL },
+		{ "polling", SIGPOLL },
 #endif
 #ifdef SIGSYS
-	{ "sysargerr", SIGSYS },
+		{ "sysargerr", SIGSYS },
 #endif
 #ifdef SIGWINCH
-	{ "winresize", SIGWINCH },
+		{ "winresize", SIGWINCH },
 #endif
-	{ NULL, 0 },
-};
-
-static void pushsignal (lua_State *L, int signum) {
-	int i;
-	for (i=0; signals[i].name; i++) {
-		if (signals[i].value == signum) {
-			lua_pushstring(L, signals[i].name);
-			return;
-		}
-	}
-	lua_pushnil(L);
-}
-
-static int checksignal (lua_State *L, int arg, const char *def) {
+		{ NULL, 0 },
+	};
 	const char *name = (def) ? luaL_optstring(L, arg, def) :
 	                           luaL_checkstring(L, arg);
 	int i;
@@ -68,7 +56,7 @@ static void lcuB_onsignal (uv_signal_t *handle, int signum) {
 	lua_State *co = (lua_State *)handle->data;
 	lcu_assert(co != NULL);
 	lcu_PendingOp *op = (lcu_PendingOp *)handle;
-	pushsignal(co, signum);
+	lua_pushboolean(co, 1);
 	lcu_resumeop(op, co);
 }
 
