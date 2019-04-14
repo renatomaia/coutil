@@ -1,3 +1,8 @@
+#include "lmodaux.h"
+
+
+
+
 #ifndef lcuconf_h
 #define lcuconf_h
 
@@ -9,6 +14,11 @@
 #ifndef LCU_PREFIX
 #define LCU_PREFIX	"coutil:"
 #endif
+
+
+#include <assert.h>
+#define lcu_assert assert
+
 
 #if !defined(lcu_assert)
 #define lcu_assert(X)	((void)(X))

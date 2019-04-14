@@ -32,8 +32,22 @@ Index
 	- [`spawn.trap`](#spawntrap-h-f-)
 - [`coutil.system`](#system)
 	- [`system.run`](#systemrun-mode)
-	- [`system.pause`](#systempause-delay-)
-	- [`system.awaitsig`](#systemawaitsig-signal-)
+	- [`system.pause`](#systempause-delay)
+	- [`system.awaitsig`](#systemawaitsig-signal)
+	- [`system.address`](#systemaddress-type--data--port--mode)
+	- [`system.tcp`](#systemtcp-type--domain)
+	- [`tcp:close`](#tcpclose-)
+	- [`tcp:getdomain`](#tcpgetdomain-)
+	- [`tcp:bind`](#tcpbind-address)
+	- [`tcp:getaddress`](#tcpgetaddress-site--address)
+	- [`stream:setoption`](#streamsetoption-name-value)
+	- [`stream:getoption`](#streamgetoption-name)
+	- [`stream:connect`](#streamconnect-address)
+	- [`stream:send`](#streamsend-data--i--j)
+	- [`stream:receive`](#streamreceive-buffer--i--j)
+	- [`stream:shutdown`](#streamshutdown-)
+	- [`listen:listen`](#listenlisten-backlog)
+	- [`listen:accept`](#listenaccept-)
 
 Contents
 ========
@@ -144,7 +158,7 @@ Returns `true` if the exclusive ownership identified by value `e` belongs to the
 
 Releases from the current coroutine the exclusive ownership identified by value `e`.
 It also emits an event on `e` (see [`coutil.event`](#events)) to resume one of the coroutines awaiting to acquire this ownership.
-The resumed coroutine shall later emit an event on `e` to resume any remaning threads waiting for the onwership, which is automatically done by calling [`unlock`](#mutexunlock-e) after the call to [`lock`](#mutexlock-e) returns.
+The resumed coroutine shall later emit an event on `e` to resume any remaning threads waiting for the onwership.
 
 Promises
 --------
@@ -233,7 +247,7 @@ Resumes scheduled coroutines that becomes ready according to its corresponding s
 
 ### `system.pause ([delay])`
 
-Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it to be resumed after `delay` seconds have passed since the coroutine was last resumed.
+Suspends the execution of the calling coroutine, and schedules it to be resumed after `delay` seconds have passed since the coroutine was last resumed.
 
 If `delay` is not provided or is `nil`, the coroutine is scheduled as ready, so it will be resumed as soon as possible.
 The same is applies when `delay` is zero or negative.
@@ -242,7 +256,7 @@ The same is applies when `delay` is zero or negative.
 Otherwise it returns like [`event.await`](#eventawait-e).
 In any case, the coroutine is not scheduled to be resumed anymore after it returns.
 
-### `system.awaitsig (signal, ...)`
+### `system.awaitsig (signal)`
 
 Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it to be resumed when the process receives signal indicated by string `signal`, as listed below:
 
@@ -258,8 +272,8 @@ Suspends the execution of the calling coroutine (like [`coroutine.yield`](http:/
 
 | `signal`      | UNIX Name | Action    | Indication |
 | ------------- | --------- | --------- | ---------- |
-| `"bgread"`    | SIGTTIN   | stop      | Read from terminal while in background. |
-| `"bgwrite"`   | SIGTTOU   | stop      | Write to terminal while in background. |
+| `"bgread"`    | SIGTTIN   | stop      | **Read** from terminal while in **background**. |
+| `"bgwrite"`   | SIGTTOU   | stop      | **Write** to terminal while in **backgroun**d. |
 | `"hangup"`    | SIGHUP    | terminate | Terminal was closed. |
 | `"interrupt"` | SIGINT    | terminate | Terminal requests the process to terminate. (_e.g._ `Ctrl+C`) |
 | `"quit"`      | SIGQUIT   | core dump | Terminal requests the process to **quit** with a [core dump](https://en.wikipedia.org/wiki/Core_dump). |
@@ -272,18 +286,174 @@ Suspends the execution of the calling coroutine (like [`coroutine.yield`](http:/
 | ------------- | --------- | --------- | ---------- |
 | `"child"`     | SIGCHLD   | ignore    | **Child** process terminated, stopped, or continued. |
 | `"clocktime"` | SIGALRM   | terminate | Real or **clock time** elapsed. |
-| `"cpulimit"`  | SIGXCPU   | core dump | Defined CPU time limit exceeded. |
+| `"cpulimit"`  | SIGXCPU   | core dump | Defined **CPU** time **limit** exceeded. |
 | `"cputimall"` | SIGPROF   | terminate | **CPU time** used by the **process** and by the **system on behalf of the process** elapses. |
 | `"cputimprc"` | SIGVTALRM | terminate | **CPU time** used by the **process** elapsed.  |
 | `"debug"`     | SIGTRAP   | core dump | Exception or **debug** trap occurs. |
-| `"filelimit"` | SIGXFSZ   | core dump | Allowed file size limit exceeded. |
-| `"loosepipe"` | SIGPIPE   | terminate | Write on a pipe with no one to read it. |
+| `"filelimit"` | SIGXFSZ   | core dump | Allowed **file** size **limit** exceeded. |
+| `"loosepipe"` | SIGPIPE   | terminate | Write on a **pipe** with no one to read it. |
 | `"polling"`   | SIGPOLL   | terminate | Event occurred on [watched file descriptor](https://pubs.opengroup.org/onlinepubs/9699919799/functions/ioctl.html). |
 | `"sysargerr"` | SIGSYS    | core dump | System call with a bad argument. |
 | `"urgsock"`   | SIGURG    | core dump | High-bandwidth data is available at a socket. |
 | `"user1"`     | SIGUSR1   | terminate | User-defined conditions. |
 | `"user2"`     | SIGUSR2   | terminate | User-defined conditions. |
 
-Any additional arguments to `awaitsig` are passed as extra results to [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
-
 `awaitsig` returns like [`pause`](#systempause-).
+
+### `system.address (type [, data [, port [, mode]]])`
+
+Returns a new IP address structure.
+`type` is either the string `"ipv4"` or `"ipv6"`,
+to indicate the address to be created shall be a IPv4 or IPv6 address, respectively.
+
+If `data` is not provided the structure created is initilized with null data:
+`0.0.0.0:0` for `"ipv4"`, or `[::]:0` for `"ipv6"`.
+Otherwise, `data` is a string with the information to be stored in the structure created.
+
+If only `data` is provided, it must be a literal address as formatted inside a URI,
+like `"192.0.2.128:80"` (IPv4), or `"[::ffff:c000:0280]:80"` (IPv6).
+Moreover, if `port` is provided, `data` is a host address and `port` is a port number to be used to initialize the address structure.
+The string `mode` controls whether `data` is text (literal) or binary.
+It may be the string `"b"` (binary data), or `"t"` (text data).
+The default is `"t"`.
+
+The returned object provides the following fields:
+
+- `type`: is either the string `"ipv4"` or `"ipv6"`,
+to indicate the address is a IPv4 or IPv6 address, respectively.
+- `literal`: is the text (literal) representation of the address,
+like `"192.0.2.128"` (IPv4) or `"::ffff:c000:0280"` (IPv6).
+- `binary`: is the binary representation of the address,
+like `"\192\0\2\128"` (IPv4) or `"\0\0\0\0\0\0\0\0\0\0\xff\xff\xc0\x00\x02\x80"` (IPv6).
+- `port`: is the port number of the IPv4 and IPv6 address.
+
+Moreover, you can pass the object to the standard function `tostring` to obtain the address as a string inside a URI,
+like `"192.0.2.128:80"` (IPv4) or `[::ffff:c000:0280]:80` (IPv6).
+
+### `system.tcp ([type [, domain]])`
+
+Creates a TCP socket, of the type specified by `type`,
+which is either:
+
+- `"stream"` creates stream socket for data transfers.
+- `"listen"` creates socket to accept stream socket connections.
+
+The `domain` string defines the socket's address domain (or family),
+and can be  either `"ipv4"` or `"ipv6"`,
+to create socket on the IPv4 or IPv6 address domain.
+
+On success it returns a new socket,
+or `nil` plus an error message otherwise.
+
+### `tcp:close ()`
+
+Closes socket `tcp`.
+Note that sockets are automatically closed when their handles are garbage collected,
+but that takes an unpredictable amount of time to happen. 
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
+### `tcp:getdomain ()`
+
+Returns the address domain of `tcp`, which can be either `"ipv4"` `"ipv6"`.
+
+### `tcp:bind (address)`
+
+Binds socket `tcp` to the local address provided as `address`.
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
+### `tcp:getaddress ([site [, address]])`
+
+Returns the address associated with socket `tcp`, as indicated by `site`, which can be:
+
+- `"this"`: The socket's address (the default).
+- `"peer"`: The socket's peer address.
+
+If `address` is provided, it is the address structure used to store the result,
+otherwise a new `address` object is returned with the result data.
+
+In case of errors, it returns `nil` plus an error message.
+
+### `stream:setoption (name, value)`
+
+Sets the option `name` for socket `tcp`.
+The available options are the same as defined in operation [`socket:getoption`].
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
+### `stream:getoption (name)`
+
+Returns the value of option `name` of `socket`.
+There available options are:
+
+- `"keepalive"`: is a number of seconds of the initial delay of the periodic transmission of messages when the TCP keep-alive option is enabled for socket `tcp`,
+or `nil` otherwise.
+- `"nodelay"`: is `true` when coalescing of small segments shall be avoided in `socket`,
+or `false` otherwise.
+
+### `stream:connect (address)`
+
+Binds socket `stream` to the peer address provided as `address`.
+
+This operation is not available for sockets of type `listen`.
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
+### `stream:send (data [, i [, j]])`
+
+Sends the substring of `data` that starts at `i` and continues until `j`;
+`i` and `j` can be negative.
+If `j` is absent,
+it is assumed to be equal to -1 (which is the same as the string length).
+
+This operation is not available for sockets of type `listen`.
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
+__Note__: if `data` is a [memory](https://github.com/renatomaia/lua-memory), it is not converted to a Lua string prior to have its specified contents transfered.
+
+### `stream:receive (buffer [, i [, j]])`
+
+Receives from socket `stream` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`;
+`i` and `j` can be negative.
+If `j` is absent, it is assumed to be equal to -1
+(which is the same as the buffer size).
+
+This operation is not available for sockets of type `listen`.
+
+Returns the number of bytes actually received from `socket` in case of success.
+Otherwise it returns `nil` plus an error message.
+
+### `stream:shutdown ()`
+
+Shuts down the write side of socket `stream`.
+
+This operation is only available for `stream` sockets.
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
+### `listen:listen (backlog)`
+
+Starts listening for new connections on socket `listen`.
+`backlog` is a hint for the underlying system about the suggested number of outstanding connections that shall be kept in the socket's listen queue.
+
+This operation is only available for sockets of type `listen`.
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
+### `listen:accept ()`
+
+Accepts a new pending connection on socket `listen`.
+
+This operation is only available for sockets of type `listen`.
+
+Returns a new `stream` TCP socket for the accepted connection in case of success.
+Otherwise it returns `nil` plus an error message.
