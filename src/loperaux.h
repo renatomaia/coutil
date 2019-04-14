@@ -55,6 +55,8 @@ LCULIB_API lcu_PendingOp *lcu_resetop (lua_State *L, int req, int type,
 #define lcu_resethdl(L,T,C,F)  lcu_resetop(L, 0, T, C, F)
 #define lcu_resetreq(L,T,C,F)  lcu_resetop(L, 1, T, C, F)
 
+LCULIB_API int lcu_doresumed (lua_State *L, uv_loop_t *loop, lcu_PendingOp *op);
+
 LCULIB_API int lcuK_chkignoreop (lua_State *L, int status, lua_KContext ctx);
 
 
