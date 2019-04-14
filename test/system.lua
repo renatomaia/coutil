@@ -39,7 +39,7 @@ do case "run step|ready"
 			stage[i] = 0
 			spawn(function (c)
 				for j = 1, c do
-					assert(pause())
+					pause()
 					stage[i] = j
 				end
 			end, i)
@@ -73,7 +73,7 @@ do case "run loop"
 			stage[i] = 0
 			spawn(function (c)
 				for j = 1, c do
-					assert(pause())
+					pause()
 					stage[i] = j
 				end
 			end, i)
@@ -109,15 +109,15 @@ do case "yield values"
 	for i = 1, 3 do
 		local delay = args[i]
 		local stage = 0
-		local a,b,c,d,e = spawn(function (...)
-			assert(pause(delay, ...))
+		local a,b,c = spawn(function ()
+			local res, extra = pause(delay, "testing", 1, 2, 3)
+			assert(res == true)
+			assert(extra == nil)
 			stage = 1
-		end, "testing", 1, 2, 3)
-		assert(a == "testing")
-		assert(b == 1)
-		assert(c == 2)
-		assert(d == 3)
-		assert(e == nil)
+		end)
+		assert(a == nil)
+		assert(b == nil)
+		assert(c == nil)
 		assert(stage == 0)
 		gc()
 
@@ -139,7 +139,7 @@ do case "scheduled yield"
 		local delay = args[i]
 		local stage = 0
 		spawn(function ()
-			assert(pause(delay))
+			pause(delay)
 			stage = 1
 			coroutine.yield()
 			stage = 2
@@ -165,9 +165,13 @@ do case "reschedule"
 		local delay = args[i]
 		local stage = 0
 		spawn(function ()
-			assert(pause(delay))
+			local res, extra = pause(delay)
+			assert(res == true)
+			assert(extra == nil)
 			stage = 1
-			assert(pause(delay))
+			local res, extra = pause(delay)
+			assert(res == true)
+			assert(extra == nil)
 			stage = 2
 		end)
 		assert(stage == 0)
@@ -195,10 +199,11 @@ do case "cancel schedule"
 	for i = 1, 3 do
 		local delay = args[i]
 		local stage = 0
-		spawn(function (...)
+		spawn(function ()
 			garbage.coro = coroutine.running()
-			local ok, a,b,c = pause(delay)
-			assert(ok == false)
+			local ok, errmsg, a,b,c = pause(delay)
+			assert(ok == nil)
+			assert(errmsg == "interrupt")
 			assert(a == true)
 			assert(b == nil)
 			assert(c == 3)
@@ -219,17 +224,68 @@ do case "cancel schedule"
 	done()
 end
 
+do case "cancel and reschedule"
+	for i = 1, 3 do
+		local delay = args[i]
+		local stage = 0
+		spawn(function ()
+			garbage.coro = coroutine.running()
+			local ok, errmsg, extra = pause(delay)
+			assert(ok == nil)
+			assert(errmsg == "interrupt")
+			assert(extra == nil)
+			stage = 1
+			assert(pause(delay) == true)
+			stage = 2
+		end)
+		assert(stage == 0)
+
+		coroutine.resume(garbage.coro)
+		assert(stage == 1)
+
+		gc()
+		assert(run() == false)
+		assert(stage == 2)
+	end
+
+	done()
+end
+
 do case "ignore errors"
 
 	for i = 1, 3 do
 		local delay = args[i]
 		local stage = 0
 		pspawn(function (errmsg)
-			assert(pause(delay))
+			pause(delay)
 			stage = 1
 			error(errmsg)
 		end, "oops!")
 		assert(stage == 0)
+
+		gc()
+		assert(run() == false)
+		assert(stage == 1)
+	end
+
+	done()
+end
+
+do case "ignore errors after cancel"
+
+	for i = 1, 3 do
+		local delay = args[i]
+		local stage = 0
+		pspawn(function (errmsg)
+			garbage.coro = coroutine.running()
+			pause(delay)
+			stage = 1
+			error(errmsg)
+		end, "oops!")
+		assert(stage == 0)
+
+		coroutine.resume(garbage.coro)
+		assert(stage == 1)
 
 		gc()
 		assert(run() == false)
@@ -254,20 +310,18 @@ end
 
 do case "yield values"
 	local stage = 0
-	local a,b,c,d,e = spawn(function (...)
-		local res, signal = awaitsig("user1", ...)
-		assert(res == true)
-		assert(signal == "user1")
+	local a,b,c = spawn(function ()
+		local res, extra = awaitsig("user1", "testing", 1, 2, 3)
+		assert(res == "user1")
+		assert(extra == nil)
 		stage = 1
-	end, "testing", 1, 2, 3)
-	assert(a == "testing")
-	assert(b == 1)
-	assert(c == 2)
-	assert(d == 3)
-	assert(e == nil)
+	end)
+	assert(a == nil)
+	assert(b == nil)
+	assert(c == nil)
 	assert(stage == 0)
 
-	spawn(function (...)
+	spawn(function ()
 		pause()
 		sendsignal("USR1")
 	end)
@@ -282,14 +336,14 @@ end
 do case "scheduled yield"
 	local stage = 0
 	spawn(function ()
-		assert(awaitsig("user1"))
+		awaitsig("user1")
 		stage = 1
 		coroutine.yield()
 		stage = 2
 	end)
 	assert(stage == 0)
 
-	spawn(function (...)
+	spawn(function ()
 		pause()
 		sendsignal("USR1")
 	end)
@@ -304,14 +358,14 @@ end
 do case "reschedule same signal"
 	local stage = 0
 	spawn(function ()
-		assert(awaitsig("user1"))
+		awaitsig("user1")
 		stage = 1
-		assert(awaitsig("user1"))
+		awaitsig("user1")
 		stage = 2
 	end)
 	assert(stage == 0)
 
-	spawn(function (...)
+	spawn(function ()
 		pause()
 		sendsignal("USR1")
 		pause()
@@ -332,14 +386,14 @@ end
 do case "reschedule different signal"
 	local stage = 0
 	spawn(function ()
-		assert(awaitsig("user1"))
+		awaitsig("user1")
 		stage = 1
-		assert(awaitsig("user2"))
+		awaitsig("user2")
 		stage = 2
 	end)
 	assert(stage == 0)
 
-	spawn(function (...)
+	spawn(function ()
 		pause()
 		sendsignal("USR1")
 		pause()
@@ -359,10 +413,11 @@ end
 
 do case "cancel schedule"
 	local stage = 0
-	spawn(function (...)
+	spawn(function ()
 		garbage.coro = coroutine.running()
-		local ok, a,b,c = awaitsig("user1")
-		assert(ok == false)
+		local ok, errmsg, a,b,c = awaitsig("user1")
+		assert(ok == nil)
+		assert(errmsg == "interrupt")
 		assert(a == true)
 		assert(b == nil)
 		assert(c == 3)
@@ -382,6 +437,36 @@ do case "cancel schedule"
 	done()
 end
 
+do case "cancel and reschedule"
+	local stage = 0
+	spawn(function ()
+		garbage.coro = coroutine.running()
+		local ok, errmsg, extra = awaitsig("user1")
+		assert(ok == nil)
+		assert(errmsg == "interrupt")
+		assert(extra == nil)
+		stage = 1
+		assert(awaitsig("user1") == "user1")
+		stage = 2
+	end)
+	assert(stage == 0)
+
+	spawn(function ()
+		pause() -- the first signal handle is active.
+		pause() -- the first signal handle is being closed.
+		sendsignal("USR1") -- the second signal handle is active.
+	end)
+
+	coroutine.resume(garbage.coro)
+	assert(stage == 1)
+
+	gc()
+	assert(run() == false)
+	assert(stage == 2)
+
+	done()
+end
+
 do case "ignore errors"
 
 	local stage = 0
@@ -392,10 +477,31 @@ do case "ignore errors"
 	end)
 	assert(stage == 0)
 
-	spawn(function (...)
+	spawn(function ()
 		pause()
 		sendsignal("USR1")
 	end)
+
+	gc()
+	assert(run() == false)
+	assert(stage == 1)
+
+	done()
+end
+
+do case "ignore errors after cancel"
+
+	local stage = 0
+	pspawn(function ()
+		garbage.coro = coroutine.running()
+		awaitsig("user1")
+		stage = 1
+		error("oops!")
+	end)
+	assert(stage == 0)
+
+	coroutine.resume(garbage.coro)
+	assert(stage == 1)
 
 	gc()
 	assert(run() == false)
