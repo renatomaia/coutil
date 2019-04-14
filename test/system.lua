@@ -249,6 +249,41 @@ do case "cancel and reschedule"
 	done()
 end
 
+do case "resume while closing"
+	for i = 1, 3 do
+		local delay = args[i]
+		local stage = 0
+		spawn(function ()
+			garbage.coro = coroutine.running()
+			assert(pause(delay) == nil)
+			stage = 1
+			local ok, a,b,c = pause(delay)
+			assert(ok == nil)
+			assert(a == 1)
+			assert(b == 22)
+			assert(c == 333)
+			stage = 2
+		end)
+		assert(stage == 0)
+
+		spawn(function ()
+			pause()
+			coroutine.resume(garbage.coro, 1,22,333) -- while being closed.
+			assert(stage == 2)
+			stage = 3
+		end)
+
+		coroutine.resume(garbage.coro)
+		assert(stage == 1)
+
+		gc()
+		assert(run() == false)
+		assert(stage == 3)
+	end
+
+	done()
+end
+
 do case "ignore errors"
 
 	for i = 1, 3 do
@@ -459,6 +494,38 @@ do case "cancel and reschedule"
 	gc()
 	assert(run() == false)
 	assert(stage == 2)
+
+	done()
+end
+
+do case "resume while closing"
+	local stage = 0
+	spawn(function ()
+		garbage.coro = coroutine.running()
+		assert(awaitsig("user1") == nil)
+		stage = 1
+		local ok, a,b,c = awaitsig("user1")
+		assert(ok == nil)
+		assert(a == .1)
+		assert(b == 2.2)
+		assert(c == 33.3)
+		stage = 2
+	end)
+	assert(stage == 0)
+
+	spawn(function ()
+		pause()
+		coroutine.resume(garbage.coro, .1, 2.2, 33.3) -- while being closed.
+		assert(stage == 2)
+		stage = 3
+	end)
+
+	coroutine.resume(garbage.coro)
+	assert(stage == 1)
+
+	gc()
+	assert(run() == false)
+	assert(stage == 3)
 
 	done()
 end
