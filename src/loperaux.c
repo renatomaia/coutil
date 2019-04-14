@@ -94,6 +94,7 @@ LCULIB_API lcu_PendingOp *lcu_resetop (lua_State *L, int req, int type,
 		uv_handle_t *handle = lcu_tohandle(op);
 		if (handle->type == UV_UNKNOWN_HANDLE) {  /* unsued operation */
 			if (req) setrequestop(op);
+			lua_pushlightuserdata(L, lcu_toloop(L));  /* token to sign scheduled */
 			func(L, LUA_YIELD, ctx);  /* never returns */
 		} else if (!uv_is_closing(handle)) {
 			if (!req && handle->type == type) return op;
@@ -102,19 +103,12 @@ LCULIB_API lcu_PendingOp *lcu_resetop (lua_State *L, int req, int type,
 	}
 	if (req) setrequestop(op);
 	else sethandleop(op);
-
-// TODO: how about 'coroutine.resume' resumes 'func' instead of 'lcu_resumeop'?
-
 	lcu_yieldop(L, ctx, func, op);  /* never returns */
 	return NULL;
 }
 
-LCULIB_API int lcuK_chkignoreop (lua_State *L, int status, lua_KContext ctx) {
-	uv_loop_t *loop = lcu_toloop(L);
-	lcu_PendingOp *op = lcu_getopof(L);
-	int interrupt = lua_touserdata(L, -1) != loop;
-	lcu_assert(status == LUA_YIELD);
-	lcu_assert(!ctx);
+LCULIB_API int lcu_doresumed (lua_State *L, uv_loop_t *loop, lcu_PendingOp *op) {
+	int interrupt = lua_touserdata(L, -1) != loop;  /* check token */
 	if (!lcu_isrequestop(op)) {
 		uv_handle_t *handle = lcu_tohandle(op);
 		if (interrupt && !uv_is_closing(handle))
@@ -125,6 +119,11 @@ LCULIB_API int lcuK_chkignoreop (lua_State *L, int status, lua_KContext ctx) {
 		lua_pushnil(L);
 		lua_insert(L, 1);
 	}
-	else lua_pop(L, 1);
+	else lua_pop(L, 1);  /* discard token */
+	return !interrupt;
+}
+
+LCULIB_API int lcuK_chkignoreop (lua_State *L, int status, lua_KContext ctx) {
+	lcu_doresumed(L, lcu_toloop(L), lcu_getopof(L));
 	return lua_gettop(L);
 }
