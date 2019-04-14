@@ -69,7 +69,6 @@ static void lcuB_onsignal (uv_signal_t *handle, int signum) {
 	lua_State *co = (lua_State *)handle->data;
 	lcu_assert(co != NULL);
 	lcu_PendingOp *op = (lcu_PendingOp *)handle;
-	lua_settop(co, 0);
 	pushsignal(co, signum);
 	lcu_resumeop(op, co);
 }
@@ -80,25 +79,27 @@ static int lcuK_setupsignal (lua_State *L, int status, lua_KContext ctx) {
 	uv_handle_t *handle = lcu_tohandle(op);
 	uv_signal_t *signal = (uv_signal_t *)handle;
 	int signum = (int)ctx;
+	lua_settop(L, 0);  /* discard yield results */
 	lcu_chkinitop(L, op, loop, uv_signal_init(loop, signal));
 	lcu_chkstarthdl(L, handle, uv_signal_start(signal, lcuB_onsignal, signum));
-	lua_remove(L, 1);
-	return lcu_yieldop(L, lua_gettop(L), 0, lcuK_chkignoreop, op);
+	return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
 }
 
+/* succ [, errmsg, ...] = system.awaitsig(signal) */
 static int lcuM_awaitsig (lua_State *L) {
+	lcu_PendingOp *op;
+	uv_handle_t *handle;
+	uv_signal_t *signal;
 	int signum = checksignal(L, 1, NULL);
-	int narg = lua_gettop(L)-1;
-	lcu_PendingOp *op = lcu_resetop(L, 0, UV_SIGNAL, narg,
-	                                (lua_KContext)signum, lcuK_setupsignal);
-	uv_handle_t *handle = lcu_tohandle(op);
-	uv_signal_t *signal = (uv_signal_t *)handle;
+	lua_settop(L, 0);  /* discard all arguments */
+	op = lcu_resethdl(L, UV_SIGNAL, (lua_KContext)signum, lcuK_setupsignal);
+	handle = lcu_tohandle(op);
+	signal = (uv_signal_t *)handle;
 	if (signal->signum != signum) {
 		lcu_chkerror(L, uv_signal_stop(signal));
 		lcu_chkstarthdl(L, handle, uv_signal_start(signal, lcuB_onsignal, signum));
 	}
-	lua_remove(L, 1);
-	return lcu_yieldop(L, narg, 0, lcuK_chkignoreop, op);
+	return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
 }
 
 LCULIB_API void lcuM_addsignalf (lua_State *L) {

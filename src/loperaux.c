@@ -64,13 +64,12 @@ LCULIB_API void lcu_chkstarthdl (lua_State *L, uv_handle_t *h, int err) {
 #define sethandleop(O)  ((O)->flags &= ~LCU_OPFLAG_REQUEST)
 
 
-LCULIB_API int lcu_yieldop (lua_State *L, int narg,
-                            lua_KContext ctx, lua_KFunction func,
+LCULIB_API int lcu_yieldop (lua_State *L, lua_KContext ctx, lua_KFunction func,
                             lcu_PendingOp *op) {
 	if (lcu_isrequestop(op)) lcu_torequest(op)->data = (void *)L;
 	else lcu_tohandle(op)->data = (void *)L;
 	setpendingop(op);
-	return lua_yieldk(L, narg, ctx, func);
+	return lua_yieldk(L, 0, ctx, func);
 }
 
 LCULIB_API void lcu_resumeop (lcu_PendingOp *op, lua_State *co) {
@@ -79,7 +78,7 @@ LCULIB_API void lcu_resumeop (lcu_PendingOp *op, lua_State *co) {
 	int status;
 	setignoredop(op);  /* coroutine not interested anymore */
 	lua_pushlightuserdata(co, loop);  /* token to sign scheduler resume */
-	status = lua_resume(co, L, 1);
+	status = lua_resume(co, L, lua_gettop(L));
 	if (!lcu_isrequestop(op) && (status != LUA_YIELD || !lcu_ispendingop(op)) ) {
 		uv_handle_t *handle = lcu_tohandle(op);
 		if (handle->type != UV_UNKNOWN_HANDLE && !uv_is_closing(handle))
@@ -87,13 +86,13 @@ LCULIB_API void lcu_resumeop (lcu_PendingOp *op, lua_State *co) {
 	}
 }
 
-LCULIB_API lcu_PendingOp *lcu_resetop (lua_State *L, int req, int type, int narg,
+LCULIB_API lcu_PendingOp *lcu_resetop (lua_State *L, int req, int type,
                                        lua_KContext ctx, lua_KFunction func) {
 	lcu_PendingOp *op = lcu_getopof(L);
 	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
 	if (!lcu_isrequestop(op)) {
 		uv_handle_t *handle = lcu_tohandle(op);
-		if (handle->type == UV_UNKNOWN_HANDLE) {
+		if (handle->type == UV_UNKNOWN_HANDLE) {  /* unsued operation */
 			if (req) setrequestop(op);
 			func(L, LUA_YIELD, ctx);  /* never returns */
 		} else if (!uv_is_closing(handle)) {
@@ -103,22 +102,31 @@ LCULIB_API lcu_PendingOp *lcu_resetop (lua_State *L, int req, int type, int narg
 	}
 	if (req) setrequestop(op);
 	else sethandleop(op);
-	lcu_yieldop(L, narg, ctx, func, op);  /* never returns */
+
+// TODO: how about 'coroutine.resume' resumes 'func' instead of 'lcu_resumeop'?
+
+	lcu_yieldop(L, ctx, func, op);  /* never returns */
 	return NULL;
 }
 
 LCULIB_API int lcuK_chkignoreop (lua_State *L, int status, lua_KContext ctx) {
 	uv_loop_t *loop = lcu_toloop(L);
 	lcu_PendingOp *op = lcu_getopof(L);
-	int narg = (int)ctx;
-	int ignore = lua_touserdata(L, -1) != loop;
+	int interrupt = lua_touserdata(L, -1) != loop;
 	lcu_assert(status == LUA_YIELD);
+	lcu_assert(!ctx);
 	if (!lcu_isrequestop(op)) {
 		uv_handle_t *handle = lcu_tohandle(op);
-		if (ignore && !uv_is_closing(handle)) uv_close(handle, lcuB_onhandleclosed);
+		if (interrupt && !uv_is_closing(handle))
+			uv_close(handle, lcuB_onhandleclosed);
 	}
 	setignoredop(op);  /* mark as not rescheduled */
-	lua_pushboolean(L, !ignore);
-	lua_insert(L, narg+1);
-	return lua_gettop(L)-narg;
+	if (interrupt) {
+		lua_pushnil(L);
+		lua_insert(L, 1);
+		lua_pushliteral(L, "interrupt");
+		lua_insert(L, 2);
+	}
+	else lua_pop(L, 1);
+	return lua_gettop(L);
 }

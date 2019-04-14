@@ -442,12 +442,37 @@ static int lcuM_tcp_getoption (lua_State *L) {
 }
 
 
-/* succ [, errmsg] = tcp:connect(address) */
-static int lcuM_tcp_connect (lua_State *L) {
+static int lcuK_onconnected (uv_connect_t* request, int err) {
+	lua_State *co = (lua_State *)request->data;
+	lcu_assert(co != NULL);
+	lcu_PendingOp *op = (lcu_PendingOp *)request;
+
+// TODO: mark 'op' as free to be used again.
+
+	lua_settop(co, 0);
+	lcuL_doresults(co, 0, err);
+	lcu_resumeop(op, co);
+}
+
+static int lcuK_setupconnect (lua_State *L, int status, lua_KContext ctx) {
+	uv_loop_t *loop = lcu_toloop(L);
+	lcu_PendingOp *op = lcu_getopof(L);
+	uv_connect_t *request = (uv_connect_t *)lcu_torequest(op);
 	lcu_TcpSocket *tcp = livetcp(L, LCU_TCPTYPE_STREAM);
 	const struct sockaddr *addr = totcpaddr(L, 2, tcp);
-	int err = uv_tcp_connect(connect, &tcp->handle, addr, lcuK_onconnect);
-	return losiL_doresults(L, 0, err);
+	lcu_assert(status == LUA_YIELD);
+	lcu_assert(!ctx);
+	lcu_chkinitop(L, op, loop, uv_tcp_connect(request, &tcp->handle, addr,
+	                                          lcuK_onconnected));
+	return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
+}
+
+/* succ [, errmsg] = tcp:connect(address) */
+static int lcuM_tcp_connect (lua_State *L) {
+	totcpaddr(L, 2, livetcp(L, LCU_TCPTYPE_STREAM));  /* validate arguments */
+	lua_settop(L, 2);  /* discard extra arguments */
+	lcu_resetreq(L, UV_CONNECT, 0, lcuK_setupconnect);  /* never return */
+	return 0;
 }
 
 
