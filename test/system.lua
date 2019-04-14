@@ -20,8 +20,8 @@ end
 
 do case "nested call"
 	local stage = 0
-	spawn(function (...)
-		pause(nil, ...)
+	spawn(function ()
+		pause()
 		asserterr("already running", pcall(run))
 		stage = 1
 	end)
@@ -255,7 +255,9 @@ end
 do case "yield values"
 	local stage = 0
 	local a,b,c,d,e = spawn(function (...)
-		assert(awaitsig("user1", ...))
+		local res, signal = awaitsig("user1", ...)
+		assert(res == true)
+		assert(signal == "user1")
 		stage = 1
 	end, "testing", 1, 2, 3)
 	assert(a == "testing")
