@@ -5,7 +5,7 @@
 #include <signal.h>
 
 
-static int checksignal (lua_State *L, int arg, const char *def) {
+static int checksignal (lua_State *L, int arg) {
 	static const struct { const char *name; int value; } signals[] = {
 		{ "abort", SIGABRT },
 		{ "continue", SIGCONT },
@@ -42,8 +42,7 @@ static int checksignal (lua_State *L, int arg, const char *def) {
 #endif
 		{ NULL, 0 },
 	};
-	const char *name = (def) ? luaL_optstring(L, arg, def) :
-	                           luaL_checkstring(L, arg);
+	const char *name = luaL_checkstring(L, arg);
 	int i;
 	for (i=0; signals[i].name; i++)
 		if (strcmp(signals[i].name, name) == 0)
@@ -52,45 +51,36 @@ static int checksignal (lua_State *L, int arg, const char *def) {
 	                     lua_pushfstring(L, "invalid signal '%s'", name));
 }
 
-static void lcuB_onsignal (uv_signal_t *handle, int signum) {
-	lua_State *co = (lua_State *)handle->data;
-	lcu_assert(co != NULL);
-	lcu_PendingOp *op = (lcu_PendingOp *)handle;
-	lua_pushboolean(co, 1);
-	lcu_resumeop(op, co);
+static int returnsignal (lua_State *L) {
+	if (checksignal(L, 1) != lua_tonumber(L, -1)) {
+		lua_pushnil(L);
+		lua_pushliteral(L, "unexpected signal");
+		return 2;
+	}
+	lua_settop(L, 1);
+	return 1;
 }
 
-static int lcuK_setupsignal (lua_State *L, int status, lua_KContext ctx) {
-	uv_loop_t *loop = lcu_toloop(L);
-	lcu_PendingOp *op = lcu_getopof(L);
-	lcu_assert(status == LUA_YIELD);
-	if (lcu_doresumed(L, loop, op)) {
-		uv_handle_t *handle = lcu_tohandle(op);
-		uv_signal_t *signal = (uv_signal_t *)handle;
-		int signum = (int)ctx;
-		lua_settop(L, 0);  /* discard yield results */
-		lcu_chkinitop(L, op, loop, uv_signal_init(loop, signal));
-		lcu_chkstarthdl(L, handle, uv_signal_start(signal, lcuB_onsignal, signum));
-		return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
-	}
-	return lua_gettop(L);
+static void uv_onsignal (uv_signal_t *handle, int signum) {
+	lua_State *thread = (lua_State *)handle->data;
+	lua_pushinteger(thread, signum);
+	lcuU_resumethrop(thread, (uv_handle_t *)handle);
+}
+
+static int k_setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
+	uv_signal_t *signal = (uv_signal_t *)handle;
+	int signum = checksignal(L, 1);
+	int err = 0;
+	if (loop) err = lcuT_armthrop(L, uv_signal_init(loop, signal));
+	else if (signal->signum != signum) err = uv_signal_stop(signal);
+	else return 0;
+	if (err >= 0) err = uv_signal_start(signal, uv_onsignal, signum);
+	return err;
 }
 
 /* succ [, errmsg, ...] = system.awaitsig(signal) */
 static int lcuM_awaitsig (lua_State *L) {
-	lcu_PendingOp *op;
-	uv_handle_t *handle;
-	uv_signal_t *signal;
-	int signum = checksignal(L, 1, NULL);
-	lua_settop(L, 0);  /* discard all arguments */
-	op = lcu_resethdl(L, UV_SIGNAL, (lua_KContext)signum, lcuK_setupsignal);
-	handle = lcu_tohandle(op);
-	signal = (uv_signal_t *)handle;
-	if (signal->signum != signum) {
-		lcu_chkerror(L, uv_signal_stop(signal));
-		lcu_chkstarthdl(L, handle, uv_signal_start(signal, lcuB_onsignal, signum));
-	}
-	return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
+	return lcuT_resetthropk(L, UV_SIGNAL, k_setupsignal, returnsignal);
 }
 
 LCULIB_API void lcuM_addsignalf (lua_State *L) {
@@ -98,5 +88,5 @@ LCULIB_API void lcuM_addsignalf (lua_State *L) {
 		{"awaitsig", lcuM_awaitsig},
 		{NULL, NULL}
 	};
-	lcuM_addmodfunc(L, modf);
+	lcuM_setfuncs(L, modf, LCU_MODUPVS);
 }
