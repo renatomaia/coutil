@@ -31,7 +31,7 @@ MYOBJS=
 
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 
-OSM_O=	lmodaux.o lhndlaux.o lscheduf.o ltimef.o lsignalf.o lsysmod.o
+OSM_O=	lmodaux.o loperaux.o lscheduf.o ltimef.o lsignalf.o lsysmod.o
 
 ALL_O=	$(OSM_O) $(MYOBJS)
 ALL_A= $(LIB_A)
