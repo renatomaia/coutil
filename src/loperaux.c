@@ -124,8 +124,6 @@ LCULIB_API int lcuK_chkignoreop (lua_State *L, int status, lua_KContext ctx) {
 	if (interrupt) {
 		lua_pushnil(L);
 		lua_insert(L, 1);
-		lua_pushliteral(L, "interrupt");
-		lua_insert(L, 2);
 	}
 	else lua_pop(L, 1);
 	return lua_gettop(L);
