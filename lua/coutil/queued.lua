@@ -66,7 +66,7 @@ end
 function module.await(event)
 	local values = dequeue(event)
 	if values ~= nil then
-		return true, unpack(values)
+		return event, unpack(values)
 	end
 	return await(event)
 end
@@ -95,7 +95,7 @@ function module.awaitany(...)
 		local event = select(index, ...)
 		local values = dequeue(event)
 		if values ~= nil  then
-			return true, event, unpack(values)
+			return event, unpack(values)
 		end
 	end
 	return awaitany(...)

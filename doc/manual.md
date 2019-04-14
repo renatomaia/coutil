@@ -49,8 +49,8 @@ Coroutines might suspend awaiting for events on values, so they are resumed when
 
 Suspends the execution of the calling coroutine awaiting an event on value `e`.
 
-If it is resumed by [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-), it returns `true` followed by all the additional arguments passed to these functions.
-Otherwise it returns `false` followed by the values provided to the resume (_e.g._ [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume)).
+If it is resumed by [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-), it returns `e` followed by all the additional arguments passed to these functions.
+Otherwise it returns `nil` followed by the values provided to the resume (_e.g._ [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume)).
 
 ### `event.awaitall ([e1, ...])`
 
@@ -68,8 +68,7 @@ Suspends the execution of the calling coroutine awaiting an event on any of the 
 Any `nil` in `e1, ...` is ignored.
 At least one value in `e1, ...` must not be `nil`.
 
-If the calling coroutine is resumed due to an event emitted on any of values `e1, ...`, `awaitany` returns `true` followed by any additional values passed to [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-).
-Otherwise it returns like [`event.await`](#eventawait-e).
+It returns like [`event.await`](#eventawait-e).
 
 ### `event.emitall (e, ...)`
 
@@ -163,9 +162,8 @@ Otherwise it returns like [`event.await`](#eventawait-e).
 
 ### `promise.awaitany (p, ...)`
 
-Returns a fulfilled promise from promises `p, ...`.
 If there are no fulfilled promises in `p, ...`, it suspends the calling coroutine awaiting the fulfillment of any of the promises in `p, ...`.
-Returns `true` followed by the fulfilled promise in `p, ...`.
+If the calling coroutine is resumed by the fullfillment of a promise in `p, ...`, it returns the fulfilled promise.
 Otherwise it returns like [`event.await`](#eventawait-e).
 
 ### `promise.create ()`
@@ -233,17 +231,16 @@ Resumes scheduled coroutines that becomes ready according to its corresponding s
 
 `run` returns `true` if there are scheduled coroutines, or `false` otherwise.
 
-### `system.pause ([delay, ...])`
+### `system.pause ([delay])`
 
 Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it to be resumed after `delay` seconds have passed since the coroutine was last resumed.
-Any arguments to `pause` are passed as extra results to [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
 
 If `delay` is not provided or is `nil`, the coroutine is scheduled as ready, so it will be resumed as soon as possible.
 The same is applies when `delay` is zero or negative.
 
-`pause` returns `true` if the calling coroutine is effectively resumed by [`run`](#systemrun-mode).
+`pause` returns `true` if the calling coroutine is resumed as scheduled.
 Otherwise it returns like [`event.await`](#eventawait-e).
-In any case, the coroutine is not scheduled to be resumed anymore after `pause` returns.
+In any case, the coroutine is not scheduled to be resumed anymore after it returns.
 
 ### `system.awaitsig (signal, ...)`
 

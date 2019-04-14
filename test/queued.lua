@@ -223,9 +223,9 @@ do case "value types"
 		gc()
 		local a = 0
 		spawn(function ()
-			assert(await(e) == true)
+			assert(await(e) == e)
 			a = 1
-			assert(await(e) == true)
+			assert(await(e) == e)
 			a = 2
 		end)
 		assert(a == 1) -- first 'await' returned, second 'await' suspended
@@ -254,7 +254,7 @@ do case "direct resume"
 
 		coroutine.resume(garbage.co, 1,2,3)
 		assert(a == 1)
-		assert(res == false)
+		assert(res == nil)
 		assert(v1 == 1)
 		assert(v2 == 2)
 		assert(v3 == 3)
@@ -276,7 +276,7 @@ do case "extra values"
 		spawn(function ()
 			a1, a2, a3, a4 = await(e)
 		end)
-		assert(a1 == true)
+		assert(a1 == e)
 		assert(a2 == v)
 		assert(a3 == nil)
 		assert(a4 == nil)
@@ -285,7 +285,7 @@ do case "extra values"
 		spawn(function ()
 			b1, b2, b3, b4 = await(e)
 		end)
-		assert(b1 == true)
+		assert(b1 == e)
 		assert(b2 == v)
 		assert(b3 == e)
 		assert(b4 == nil)
@@ -294,25 +294,25 @@ do case "extra values"
 		spawn(function ()
 			c1, c2, c3, c4 = await(e)
 		end)
-		assert(c1 == true)
+		assert(c1 == e)
 		assert(c2 == v)
 		assert(c3 == e)
 		assert(c4 == e)
 	end
 
 	for _, e in ipairs(types) do
-		local a1, a2, a3
+		local ae, a1, a2, a3
 		spawn(function ()
 			for i = 1, 3 do
-				_, a1, a2, a3 = await(e)
+				ae, a1, a2, a3 = await(e)
 			end
 		end)
 		assert(a1 == nil)
 
-		local b1, b2, b3
+		local be, b1, b2, b3
 		spawn(function ()
 			for i = 1, 3 do
-				_, b1, b2, b3 = await(e)
+				be, b1, b2, b3 = await(e)
 			end
 		end)
 		assert(b1 == nil)
@@ -320,19 +320,22 @@ do case "extra values"
 		local c1, c2, c3
 		spawn(function ()
 			for i = 1, 3 do
-				_, c1, c2, c3 = await(e)
+				ce, c1, c2, c3 = await(e)
 			end
 		end)
 		assert(c1 == nil)
 
 		local v = {}
 		emitall(e, v)
+		assert(ae == e)
 		assert(a1 == v)
 		assert(a2 == nil)
 		assert(a3 == nil)
+		assert(be == e)
 		assert(b1 == v)
 		assert(b2 == nil)
 		assert(b3 == nil)
+		assert(ce == e)
 		assert(c1 == v)
 		assert(c2 == nil)
 		assert(c3 == nil)
@@ -392,33 +395,38 @@ do case "nested emission"
 	local e = "event"
 	local t1,t2,t3 = {},{},{}
 
-	local a1,a2,a3,a4,a5
+	local a1,a2,a3,a4,a5,a6,a7
 	spawn(function ()
-		_, a1 = await(e)
-		a2 = emitall(e, t2)
-		_, a3 = await(e)
-		_, a4 = await(e)
+		a1,a2 = await(e)
+		a3 = emitall(e, t2)
+		a4,a5 = await(e)
+		a6,a7 = await(e)
 	end)
 
-	local b1,b2
+	local b1,b2,b3
 	spawn(function ()
-		_, b1 = await(e)
-		b2 = emitall(e, t3)
+		b1, b2 = await(e)
+		b3 = emitall(e, t3)
 		coroutine.yield()
-		b1,b2 = nil
+		b2,b3 = nil
 	end)
 
 	emitall(e, t1)
-	assert(a1 == t1)
-	assert(a2 == false) -- after first 'await', 'b' is not waiting for 'e'
-	assert(a3 == t2)
-	assert(a4 == t3)
-	assert(b1 == t1)
-	assert(b2 == true) -- 'emitall' from 'b' resumes 'a'
+	assert(a1 == e)
+	assert(a2 == t1)
+	assert(a3 == false) -- after first 'await', 'b' is not waiting for 'e'
+	assert(a4 == e)
+	assert(a5 == t2)
+	assert(a6 == e)
+	assert(a7 == t3)
+	assert(b1 == e)
+	assert(b2 == t1)
+	assert(b3 == true) -- 'emitall' from 'b' resumes 'a'
 
 	emitall(e, {})
-	assert(b1 == t1)
-	assert(b2 == true)
+	assert(b1 == e)
+	assert(b2 == t1)
+	assert(b3 == true)
 
 	spawn(await, e)
 	assert(queued(e) == false)
@@ -488,7 +496,7 @@ do case "direct resume"
 	spawn(function ()
 		garbage.co = coroutine.running()
 		local res, v1,v2,v3 = awaitall(table.unpack(types))
-		assert(res == false)
+		assert(res == nil)
 		assert(v1 == 1)
 		assert(v2 == 2)
 		assert(v3 == 3)
@@ -518,7 +526,7 @@ do case "resumed after events"
 	spawn(function ()
 		garbage.co = coroutine.running()
 		local res, v1,v2,v3 = awaitall(extra, table.unpack(types))
-		assert(res == false)
+		assert(res == nil)
 		assert(v1 == 1)
 		assert(v2 == 2)
 		assert(v3 == 3)
@@ -854,7 +862,7 @@ do case "direct resume"
 		spawn(function ()
 			garbage.co = coroutine.running()
 			local res, v1,v2,v3 = awaitany(table.unpack(types))
-			assert(res == false)
+			assert(res == nil)
 			assert(v1 == 1)
 			assert(v2 == 2)
 			assert(v3 == 3)
@@ -931,28 +939,26 @@ end
 do case "different sets"
 	local e0,e1,e2,e3 = {},{},{},{}
 
-	local ae,ar,a1,a2,a3 = e0
+	local ae,a1,a2,a3 = e0
 	spawn(function ()
-		ar,ae,a1,a2,a3 = awaitany(e0,e1,e2,e3)
-		ar,ae,a1,a2,a3 = awaitany(e0,e1,e2,e3)
-		ar,ae,a1,a2,a3 = awaitany(e0,e1,e2,e3)
+		ae,a1,a2,a3 = awaitany(e0,e1,e2,e3)
+		ae,a1,a2,a3 = awaitany(e0,e1,e2,e3)
+		ae,a1,a2,a3 = awaitany(e0,e1,e2,e3)
 		coroutine.yield()
 		ae = nil
 	end)
 
-	local be,br,b1,b2,b3 = e0
+	local be,b1,b2,b3 = e0
 	spawn(function ()
-		br,be,b1,b2,b3 = awaitany(e1)
-		br,be,b1,b2,b3 = awaitany(e2,e3)
-		br,be,b1,b2,b3 = awaitany(e0,e1,e2)
+		be,b1,b2,b3 = awaitany(e1)
+		be,b1,b2,b3 = awaitany(e2,e3)
+		be,b1,b2,b3 = awaitany(e0,e1,e2)
 		coroutine.yield()
 		be = nil
 	end)
 
 	local t1,t2,t3 = {},{},{}
 	assert(emitall(e1, t1,t2,t3) == true)
-	assert(ar == true)
-	assert(br == true)
 	assert(ae == e1)
 	assert(be == e1)
 	assert(a1 == t1)
@@ -964,8 +970,6 @@ do case "different sets"
 
 	local t1,t2,t3 = {},{},{}
 	assert(emitall(e2, t1,t2,t3) == true)
-	assert(ar == true)
-	assert(br == true)
 	assert(ae == e2)
 	assert(be == e2)
 	assert(a1 == t1)
@@ -977,8 +981,6 @@ do case "different sets"
 
 	local t1,t2,t3 = {},{},{}
 	assert(emitall(e3, t1,t2,t3) == true)
-	assert(ar == true)
-	assert(br == true)
 	assert(ae == e3)
 	assert(be == e2)
 	assert(a1 == t1)
@@ -986,8 +988,6 @@ do case "different sets"
 	assert(a3 == t3)
 
 	assert(emitall(e3) == false)
-	assert(ar == true)
-	assert(br == true)
 	assert(ae == e3)
 	assert(be == e2)
 
@@ -1037,8 +1037,7 @@ do case "nested emission"
 	local b = {}
 
 	spawn(function ()
-		local ok, e = awaitany(e1,e2,e3)
-		assert(ok == true)
+		local e = awaitany(e1,e2,e3)
 		assert(e == e1) -- this time this is resumed first
 		assert(pending(e1) == false) -- other is awaiting: e1'|e2|e3
 		assert(#b == 0)
@@ -1048,8 +1047,7 @@ do case "nested emission"
 		assert(#b == 2 and b[2] == 2)
 		step(a) -- a[1] = 3
 
-		local ok, e = awaitany(e1,e2,e3)
-		assert(ok == true)
+		local e = awaitany(e1,e2,e3)
 		assert(e == e1) -- this time this is resumed last
 		assert(#b == 3 and b[3] == 4)
 		assert(emitall(e1) == true) -- resumes other (awaiting: e1|e2|e3)
@@ -1064,28 +1062,24 @@ do case "nested emission"
 	end)
 
 	spawn(function ()
-		local ok, e = awaitany(e1,e2,e3)
-		assert(ok == true)
+		local e = awaitany(e1,e2,e3)
 		assert(e == e2) -- emitted from the other coroutine
 		assert(pending(e1) == false)
 		assert(pending(e2) == false)
 		assert(pending(e3) == false)
 		step(b) -- b[1] = 1
-		local ok, e = awaitany(e1,e2,e3)
-		assert(ok == true)
+		local e = awaitany(e1,e2,e3)
 		assert(e == e1) -- emitted from the other coroutine
 		assert(pending(e1) == false)
 		assert(pending(e2) == false)
 		assert(pending(e3) == false)
 		step(b) -- b[2] = 2
 
-		local ok, e = awaitany(e1,e2,e3)
-		assert(ok == true)
+		local e = awaitany(e1,e2,e3)
 		assert(e == e1) -- this time this is resumed first
 		assert(pending(e1) == false) -- other is awaiting: e1'|e2|e3
 		step(b) -- b[3] = 4
-		local ok, e = awaitany(e1,e2,e3)
-		assert(ok == true)
+		local e = awaitany(e1,e2,e3)
 		assert(e == e1)
 		assert(pending(e1) == false)
 		assert(pending(e2) == false)

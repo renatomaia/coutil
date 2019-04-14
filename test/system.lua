@@ -201,9 +201,8 @@ do case "cancel schedule"
 		local stage = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
-			local ok, errmsg, a,b,c = pause(delay)
+			local ok, a,b,c = pause(delay)
 			assert(ok == nil)
-			assert(errmsg == "interrupt")
 			assert(a == true)
 			assert(b == nil)
 			assert(c == 3)
@@ -230,9 +229,8 @@ do case "cancel and reschedule"
 		local stage = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
-			local ok, errmsg, extra = pause(delay)
+			local ok, extra = pause(delay)
 			assert(ok == nil)
-			assert(errmsg == "interrupt")
 			assert(extra == nil)
 			stage = 1
 			assert(pause(delay) == true)
@@ -312,7 +310,7 @@ do case "yield values"
 	local stage = 0
 	local a,b,c = spawn(function ()
 		local res, extra = awaitsig("user1", "testing", 1, 2, 3)
-		assert(res == "user1")
+		assert(res == true)
 		assert(extra == nil)
 		stage = 1
 	end)
@@ -415,9 +413,8 @@ do case "cancel schedule"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		local ok, errmsg, a,b,c = awaitsig("user1")
+		local ok, a,b,c = awaitsig("user1")
 		assert(ok == nil)
-		assert(errmsg == "interrupt")
 		assert(a == true)
 		assert(b == nil)
 		assert(c == 3)
@@ -441,12 +438,11 @@ do case "cancel and reschedule"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		local ok, errmsg, extra = awaitsig("user1")
+		local ok, extra = awaitsig("user1")
 		assert(ok == nil)
-		assert(errmsg == "interrupt")
 		assert(extra == nil)
 		stage = 1
-		assert(awaitsig("user1") == "user1")
+		assert(awaitsig("user1") == true)
 		stage = 2
 	end)
 	assert(stage == 0)
