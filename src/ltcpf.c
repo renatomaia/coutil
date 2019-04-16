@@ -2,294 +2,6 @@
 #include "lhndlaux.h"
 
 
-/*
- * Addresses 
- */
-
-#ifndef LCU_ADDRBINSZ_IPV4
-#define LCU_ADDRBINSZ_IPV4 (4*sizeof(char))
-#endif
-
-#ifndef LCU_ADDRBINSZ_IPV6
-#define LCU_ADDRBINSZ_IPV6 (16*sizeof(char))
-#endif
-
-#ifndef LCU_ADDRMAXPORT
-#define LCU_ADDRMAXPORT 65535
-#endif
-
-#ifndef LCU_ADDRMAXLITERAL
-#define LCU_ADDRMAXLITERAL  47
-#endif
-
-
-static int mem2port (const char *s, const char *e, in_port_t *pn) {
-	lua_Unsigned n = 0;
-	do {
-		char d = *s - '0';
-		if (d < 0 || d > 9) return 0;  /* invalid digit */
-		n = n * 10 + d;
-		if (n > LCU_ADDRMAXPORT) return 0;  /* value too large */
-	} while (++s < e);
-	*pn = n;
-	return 1;
-}
-
-static in_port_t int2port (lua_State *L, lua_Integer n, int idx) {
-	luaL_argcheck(L, 0 <= n && n <= LCU_ADDRMAXPORT, idx, "invalid port");
-	return (in_port_t)n;
-}
-
-static void pushaddrtype (lua_State *L, int type) {
-	switch (type) {
-		case AF_INET: lua_pushliteral(L, "ipv4"); break;
-		case AF_INET6: lua_pushliteral(L, "ipv6"); break;
-		default: lua_pushliteral(L, "unsupported");
-	}
-}
-
-static void setaddrport (struct sockddr *address, in_port_t port) {
-	switch (address->sa_family) {
-		case AF_INET: {
-			struct sockaddr_in *addr = (struct sockaddr_in *)address;
-			addr->sin_port = htons(port);
-		} break;
-		case AF_INET6: {
-			struct sockaddr_in6 *addr = (struct sockaddr_in6 *)address;
-			addr->sin6_port = htons(port);
-		} break;
-	}
-}
-
-static in_port_t getaddrport (struct sockaddr *address) {
-	switch (address->sa_family) {
-		case AF_INET: {
-			struct sockaddr_in *addr = (struct sockaddr_in *)address;
-			return ntohs(addr->sin_port);
-		} break;
-		case AF_INET6: {
-			struct sockaddr_in6 *addr = (struct sockaddr_in6 *)address;
-			return ntohs(addr->sin6_port);
-		} break;
-	}
-	return 0;
-}
-
-static void setaddrbytes (struct sockaddr *address, const char *data) {
-	switch (address->sa_family) {
-		case AF_INET: {
-			struct sockaddr_in *addr = (struct sockaddr_in *)address;
-			memcpy(&(addr->sin_addr.s_addr), data, LOSI_ADDRBINSZ_IPV4);
-		} break;
-		case AF_INET6: {
-			struct sockaddr_in6 *addr = (struct sockaddr_in6 *)address;
-			memcpy(&addr->sin6_addr, data, LOSI_ADDRBINSZ_IPV6);
-		} break;
-	}
-}
-
-static const char *getaddrbytes (struct sockaddr *address, size_t *sz) {
-	switch (address->sa_family) {
-		case AF_INET: {
-			struct sockaddr_in *addr = (struct sockaddr_in *)address;
-			if (sz) *sz = LOSI_ADDRBINSZ_IPV4;
-			return (const void *)&(addr->sin_addr.s_addr);
-		} break;
-		case AF_INET6: {
-			struct sockaddr_in6 *addr = (struct sockaddr_in6 *)address;
-			if (sz) *sz = LOSI_ADDRBINSZ_IPV6;
-			return (const void *)&addr->sin6_addr;
-		} break;
-	}
-	if (sz) *sz = 0;
-	return NULL;
-}
-
-static int setaddrliteral (struct sockaddr *address, const char *data) {
-	int err;
-	void *bytes;
-	switch (address->sa_family) {
-		case AF_INET: {
-			struct sockaddr_in *addr = (struct sockaddr_in *)address;
-			bytes = (void *)&(addr->sin_addr.s_addr);
-		} break;
-		case AF_INET6: {
-			struct sockaddr_in6 *addr = (struct sockaddr_in6 *)address;
-			bytes = (void *)&addr->sin6_addr;
-		} break;
-		default: return UV_EAFNOSUPPORT;
-	}
-	return uv_inet_pton(address->sa_family, data, bytes);
-}
-
-static const char *getaddrliteral (struct sockaddr *address, char *data) {
-	const void *bytes;
-	switch (address->sa_family) {
-		case AF_INET: {
-			struct sockaddr_in *addr = (struct sockaddr_in *)address;
-			bytes = (const void *)&(addr->sin_addr.s_addr);
-		} break;
-		case AF_INET6: {
-			struct sockaddr_in6 *addr = (struct sockaddr_in6 *)address;
-			bytes = (const void *)&addr->sin6_addr;
-		} break;
-		default: return NULL;
-	}
-	return uv_inet_ntop(address->sa_family, bytes, data, LOSI_ADDRMAXLITERAL);
-}
-
-static const char *const AddrTypeName[] = { "ipv4", "ipv6", NULL };
-static const int AddrTypeId[] = { AF_INET, AF_INET6 };
-static const size_t AddrBinSz[] = { LCU_ADDRBINSZ_IPV4, LCU_ADDRBINSZ_IPV6 };
-
-/* address [, errmsg] = system.address(type, [data [, port [, format]]]) */
-static int lcuM_address (lua_State *L) {
-	int type = AddrTypeId[luaL_checkoption(L, 1, NULL, AddrTypeName)];
-	struct sockaddr *na = lcu_newaddress(L, type);
-	int n = lua_gettop(L);
-	lua_settop(L, 4);
-	na->sa_family = type;
-	if (n > 1) {
-		in_port_t port = 0;
-		size_t sz;
-		const char *data = luamem_checkstring(L, 2, &sz);
-		if (n == 2) {  /* URI format */
-			int err;
-			char literal[LCU_ADDRMAXLITERAL];
-			const char *c, *e = data+sz;
-			switch (type) {
-				case AF_INET: {
-					c = memchr(data, ':', sz - 1);  /* at least one port digit */
-					luaL_argcheck(L, c, 2, "invalid URI format");
-					sz = c-data;
-				} break;
-				case AF_INET6: {
-					c = memchr(++data, ']', sz - 3);  /* intial '[' and final ':?' */
-					luaL_argcheck(L, c && c[1] == ':', 2, "invalid URI format");
-					sz = (c++)-data;
-				} break;
-				default: return lcu_error(L, UV_EAFNOSUPPORT);
-			}
-			luaL_argcheck(L, sz < LCU_ADDRMAXLITERAL, 2, "invalid URI format");
-			luaL_argcheck(L, mem2port(c+1, e, &port), 2, "invalid port");
-			memcpy(literal, data, sz);
-			literal[sz] = '\0';
-			err = setaddrliteral(na, literal);
-			if (err) return lcu_error(L, err);
-		} else {
-			port = int2port(L, luaL_checkinteger(L, 3), 3);
-			const char *mode = luaL_optstring(L, 4, "t");
-			if (mode[0] == 'b' && mode[1] == '\0') {  /* binary format */
-				luaL_argcheck(L, sz == AddrBinSz[type], 2, "invalid binary address");
-				setaddrbytes(na, data);
-			} else if (mode[0] == 't' && mode[1] == '\0') {  /* literal format */
-				int err = setaddrliteral(na, data);
-				if (err) return lcu_error(L, err);
-			} else {
-				return luaL_argerror(L, 4, "invalid mode");
-			}
-		}
-		setaddrport(na, port);
-	}
-	return 1;
-}
-
-
-/* uri = tostring(address) */
-static int lcuM_addr_tostring (lua_State *L) {
-	struct sockaddr *na = lcu_chkaddress(L, 1);
-	char b[LCU_ADDRMAXLITERAL];
-	const char *s = getaddrliteral(na, b);
-	if (!s) lua_pushliteral(L, "unsupported address");
-	else {
-		in_port_t p = getaddrport(na);
-		lua_pushfstring(L, na->sa_family == AF_INET6 ? "[%s]:%d" : "%s:%d", s, p);
-	}
-	return 1;
-}
-
-
-/* addr1 == addr2 */
-static int lcuM_addr_eq (lua_State *L) {
-	struct sockaddr *a1 = lcu_toaddress(L, 1);
-	struct sockaddr *a2 = lcu_toaddress(L, 2);
-	if ( a1 && a2 && (getaddrtype(a1) == getaddrtype(a2)) &&
-	                 (getaddrport(a1) == getaddrport(a2)) ) {
-		size_t sz;
-		const char *b = getaddrbytes(a1, &sz);
-		lua_pushboolean(L, memcmp(b, getaddrbytes(a2, NULL), sz) == 0);
-	}
-	else lua_pushboolean(L, 0);
-	return 1;
-}
-
-
-/*
- * type = address.type
- * literal = address.literal
- * binary = address.binary
- * port = address.port
- */
-static int lcuM_addr_index (lua_State *L) {
-	static const char *const fields[] = {"port","binary","literal","type",NULL};
-	struct sockaddr *na = lcu_chkaddress(L, 1);
-	int field = luaL_checkoption(L, 2, NULL, fields);
-	switch (field) {
-		case 0: {  /* port */
-			lua_pushinteger(L, getaddrport(na));
-		} break;
-		case 1: {  /* binary */
-			size_t sz;
-			const char *s = getaddrbytes(na, &sz);
-			if (s) lua_pushlstring(L, s, sz);
-			else lua_pushnil(L);
-		} break;
-		case 2: {  /* literal */
-			char b[LCU_ADDRMAXLITERAL];
-			lua_pushstring(L, getaddrliteral(na, b));
-		} break;
-		case 3: {  /* type */
-			pushaddrtype(L, na->sa_family);
-		} break;
-	}
-	return 1;
-}
-
-
-/*
- * address.literal = literal
- * address.binary = binary
- * address.port = port
- */
-static int lcuM_addr_newindex (lua_State *L) {
-	static const char *const fields[] = { "port", "binary", "literal", NULL };
-	struct sockaddr *na = lcu_chkaddress(L, 1);
-	int field = luaL_checkoption(L, 2, NULL, fields);
-	switch (field) {
-		case 0: {  /* port */
-			setaddrport(na, int2port(L, luaL_checkinteger(L,3), 3));
-		} break;
-		case 1: {  /* binary */
-			size_t sz, esz = 0;
-			const char *data = luamem_checkstring(L, 3, &sz);
-			luaL_argcheck(L, sz == AddrBinSz[na->sa_family], 3, "wrong byte size");
-			setaddrbytes(na, data);
-		} break;
-		case 2: {  /* literal */
-			size_t sz;
-			const char *data = luaL_checklstring(L, 3, &sz);
-			int err = setaddrliteral(na, data);
-			if (err) return lcu_error(L, err);
-		} break;
-	}
-	return 0;
-}
-
-
-/*
- * Sockets
- */
-
 static const char *const TcpTypeName[] = { "stream", "listen", NULL };
 
 /* tcp [, errmsg] = system.tcp([type [, domain]]) */
@@ -442,13 +154,11 @@ static int lcuM_tcp_getoption (lua_State *L) {
 }
 
 
-static int lcuK_onconnected (uv_connect_t* request, int err) {
+static int lcuB_onconnected (uv_connect_t* request, int err) {
 	lua_State *co = (lua_State *)request->data;
 	lcu_assert(co != NULL);
 	lcu_PendingOp *op = (lcu_PendingOp *)request;
-
-// TODO: mark 'op' as free to be used again.
-
+	lcu_freereq(op);
 	lua_settop(co, 0);
 	lcuL_doresults(co, 0, err);
 	lcu_resumeop(op, co);
@@ -457,19 +167,21 @@ static int lcuK_onconnected (uv_connect_t* request, int err) {
 static int lcuK_setupconnect (lua_State *L, int status, lua_KContext ctx) {
 	uv_loop_t *loop = lcu_toloop(L);
 	lcu_PendingOp *op = lcu_getopof(L);
-	uv_connect_t *request = (uv_connect_t *)lcu_torequest(op);
-	lcu_TcpSocket *tcp = livetcp(L, LCU_TCPTYPE_STREAM);
-	const struct sockaddr *addr = totcpaddr(L, 2, tcp);
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
-	lcu_chkinitop(L, op, loop, uv_tcp_connect(request, &tcp->handle, addr,
-	                                          lcuK_onconnected));
-	return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
+	if (lcu_doresumed(L, loop, op)) {
+		uv_connect_t *request = (uv_connect_t *)lcu_torequest(op);
+		lcu_TcpSocket *tcp = livetcp(L, LCU_TCPTYPE_STREAM);
+		const struct sockaddr *addr = totcpaddr(L, 2, tcp);
+		lcu_chkinitop(L, op, loop, uv_tcp_connect(request, &tcp->handle, addr,
+		                                          lcuB_onconnected));
+		return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
+	}
+	return lua_gettop(L);
 }
 
 /* succ [, errmsg] = tcp:connect(address) */
 static int lcuM_tcp_connect (lua_State *L) {
-	totcpaddr(L, 2, livetcp(L, LCU_TCPTYPE_STREAM));  /* validate arguments */
 	lua_settop(L, 2);  /* discard extra arguments */
 	lcu_resetreq(L, UV_CONNECT, 0, lcuK_setupconnect);  /* never return */
 	return 0;
@@ -482,70 +194,110 @@ static size_t posrelat (ptrdiff_t pos, size_t len) {
 	else return len - ((size_t)-pos) + 1;
 }
 
-static int senddata(lua_State *L, losi_NetDriver *drv,
-                                  losi_Socket *socket,
-                                  const struct sockaddr *addr) {
-	size_t sz, sent;
-	const char *data = luamem_checkstring(L, 2, &sz);
-	size_t start = posrelat(luaL_optinteger(L, 3, 1), sz);
-	size_t end = posrelat(luaL_optinteger(L, 4, -1), sz);
-	int err;
-	if (start < 1) start = 1;
-	if (end > sz) end = sz;
-	sz = end - start + 1;
-	data += start - 1;
-	err = losiN_sendtosock(socket, data, sz, &sent, addr);
-	lua_pushinteger(L, sent);
-	return losiL_doresults(L, 1, err);
+static int lcuB_onwriten (uv_write_t* request, int err) {
+	lua_State *co = (lua_State *)request->data;
+	lcu_assert(co != NULL);
+	lcu_PendingOp *op = (lcu_PendingOp *)request;
+	lcu_freereq(op);
+	lua_settop(co, 0);
+	lcuL_doresults(co, 0, err);
+	lcu_resumeop(op, co);
 }
 
-/* sent [, errmsg] = socket:send(data [, i [, j]]) */
-static int stm_send (lua_State *L) {
-	losi_Socket *socket = tosock(L, LCU_SOCKTYPE_STRM);
-	return senddata(L, socket, NULL);
-}
-
-/* sent [, errmsg] = socket:send(data [, i [, j [, address]]]) */
-static int dgm_send (lua_State *L) {
-	losi_Socket *socket = tosock(L, LCU_SOCKTYPE_DGRM);
-	return senddata(L, socket, optaddr(L, 5, socket));
-}
-
-
-static int recvdata(lua_State *L, losi_NetDriver *drv,
-                                  losi_Socket *socket,
-                                  struct sockaddr *addr) {
-	size_t len, sz;
-	char *buf = luamem_tomemory(L, 2, &sz);
-	size_t start = posrelat(luaL_optinteger(L, 3, 1), sz);
-	size_t end = posrelat(luaL_optinteger(L, 4, -1), sz);
-	const char *mode = luaL_optstring(L, 5, "");
-	int err;
-	losi_SocketRecvFlag flags = 0;
-	for (; *mode; ++mode) switch (*mode) {
-		case 'p': flags |= LCU_SOCKRCV_PEEKONLY; break;
-		case 'a': flags |= LCU_SOCKRCV_WAITALL; break;
-		default: return luaL_error(L, "unknown mode char (got '%c')", *mode);
+static int lcuK_setupwrite (lua_State *L, int status, lua_KContext ctx) {
+	uv_loop_t *loop = lcu_toloop(L);
+	lcu_PendingOp *op = lcu_getopof(L);
+	lcu_assert(status == LUA_YIELD);
+	lcu_assert(!ctx);
+	if (lcu_doresumed(L, loop, op)) {
+		uv_write_t *request = (uv_write_t *)lcu_torequest(op);
+		lcu_TcpSocket *tcp = livetcp(L, LCU_TCPTYPE_STREAM);
+		size_t sz, sent;
+		const char *data = luamem_checkstring(L, 2, &sz);
+		size_t start = posrelat(luaL_optinteger(L, 3, 1), sz);
+		size_t end = posrelat(luaL_optinteger(L, 4, -1), sz);
+		uv_buf_t bufs[1];
+		int err;
+		if (start < 1) start = 1;
+		if (end > sz) end = sz;
+		bufs[0].len = end-start+1;
+		bufs[0].base = data+start-1;
+		err = uv_write(request, &tcp->handle, bufs, 1, lcuB_onwriten);
+		return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
 	}
-	if (start < 1) start = 1;
-	if (end > sz) end = sz;
-	sz = end - start + 1;
-	buf += start - 1;
-	err = losiN_recvfromsock(socket, flags, buf, sz, &len, addr);
-	if (!err) lua_pushinteger(L, len);
-	return losiL_doresults(L, 1, err);
+	return lua_gettop(L);
 }
 
-/* data [, errmsg] = socket:receive(size [, mode]) */
-static int stm_receive (lua_State *L) {
-	losi_Socket *socket = tosock(L, LCU_SOCKTYPE_STRM);
-	return recvdata(L, socket, NULL);
+/* sent [, errmsg] = tcp:send(data [, i [, j]]) */
+static int lcuM_tcp_send (lua_State *L) {
+	lua_settop(L, 4);  /* discard extra arguments */
+	lcu_resetreq(L, UV_WRITE, 0, lcuK_setupwrite);  /* never return */
+	return 0;
 }
 
-/* data [, errmsg] = socket:receive(size [, mode [, address]]) */
-static int dgm_receive (lua_State *L) {
-	losi_Socket *socket = tosock(L, LCU_SOCKTYPE_DGRM);
-	return recvdata(L, socket, optaddr(L, 6, socket));
+
+static void luaB_ontcpwbuf (uv_handle_t* handle,
+                            size_t suggested_size,
+                            uv_buf_t *bufref) {
+	lua_State *co = (lua_State *)handle->data;
+	lcu_assert(co);
+	lua_pushlightuserdata(co, bufref);
+	lcu_resumecoro(co, handle->loop);
+}
+
+static void luaB_ontcprecv (uv_stream_t* stream,
+                            ssize_t nread,
+                            const uv_buf_t* buf) {
+	lua_State *co = (lua_State *)handle->data;
+	lcu_assert(co);
+	lua_settop(L, 0);
+	if (nread >= 0) lua_pushinteger(co, nread);
+	else if (nread != UV_EOF) lcuL_doresults(co, 0, nread);
+	lcu_resumecoro(co, handle->loop);
+}
+
+static int lcuK_tcprecvdata (lua_State *L, int status, lua_KContext ctx) {
+	lcu_TcpSocket *tcp = livetcp(L, LCU_TCPTYPE_STREAM);
+	lcu_assert(status == LUA_YIELD);
+	lcu_assert(!ctx);
+	if (!lcu_doresumed(L, lcu_toloop(L)))
+		uv_read_stop((uv_stream_t*)&tcp->handle);
+	return lua_gettop(L);
+}
+
+static int lcuK_tcpgetbuffer (lua_State *L, int status, lua_KContext ctx) {
+	lcu_TcpSocket *tcp = livetcp(L, LCU_TCPTYPE_STREAM);
+	lcu_assert(status == LUA_YIELD);
+	lcu_assert(!ctx);
+	if (lcu_doresumed(L, lcu_toloop(L))) {
+		size_t len, sz;
+		char *buf = luamem_checkmemory(L, 2, &sz);
+		size_t start = posrelat(luaL_optinteger(L, 3, 1), sz);
+		size_t end = posrelat(luaL_optinteger(L, 4, -1), sz);
+		uv_buf_t *bufref = (uv_buf_t *)lua_touserdata(L, 5);
+		lcu_assert(!ctx);
+		lcu_assert(bufref);
+		if (start < 1) start = 1;
+		if (end > sz) end = sz;
+		bufref->base = buf+start-1
+		bufref->len = end-start+1;
+		return lcu_yieldhdl(L, 0, lcuK_tcprecvdata, &tcp->handle);
+	}
+	uv_read_stop((uv_stream_t*)&tcp->handle);
+	return lua_gettop(L);
+}
+
+/* bytes [, errmsg] = socket:receive(buffer [, i [, j]]) */
+static int lcuM_tcp_receive (lua_State *L) {
+	lcu_TcpSocket *tcp = livetcp(L, LCU_TCPTYPE_STREAM);
+	lcu_assert(!lcu_ispendingop(lcu_getopof(L)));
+	luaL_argcheck(L, !uv_is_active((uv_handle_t*)&tcp->handle), 1, "in use");
+	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
+	lua_settop(L, 4);
+	lcu_chkinithdl(L, &tcp->handle, uv_read_start((uv_stream_t*)&tcp->handle,
+	                                              luaB_ontcpwbuf,
+	                                              luaB_ontcprecv));
+	return lcu_yieldop(L, 0, lcuK_tcpgetbuffer, (uv_handle_t*)&tcp->handle);
 }
 
 
@@ -575,165 +327,6 @@ static int lst_listen (lua_State *L) {
 	losi_Socket *socket = tosock(L, LCU_SOCKTYPE_LSTN);
 	int backlog = luaL_optinteger(L, 2, 32);
 	int err = losiN_listensock(socket, backlog);
-	return losiL_doresults(L, 0, err);
-}
-
-
-/*****************************************************************************
- * Names *********************************************************************
- *****************************************************************************/
-
-
-#define LCU_NETADDRFOUNDCLS LCU_PREFIX"FoundNetworkAddress"
-
-#define tofound(L) ((losi_AddressFound *)luaL_checkudata(L, 1, \
-                                         LCU_NETADDRFOUNDCLS))
-
-/* [address, socktype, more =] next([address]) */
-static int fnd_next (lua_State *L) {
-	losi_AddressFound *found = tofound(L);
-	struct sockaddr *addr = losi_toaddress(L, 2);
-	int domain;
-	SocketType type;
-	int i;
-	if (!losiN_getaddrtypefound(found, &domain)) return 0;
-	if (addr) {
-		chkaddrdom(L, 2, addr, domain);
-		lua_settop(L, 2);
-	} else {
-		lua_settop(L, 1);
-		addr = losi_newaddress(L, domain);
-		losiN_initaddr(addr, domain);
-	}
-	losiN_getaddrfound(found, addr, &type);
-	for (i = 0; SockTypeName[i] && SockTypeId[i] != type; ++i);
-	lua_pushstring(L, SockTypeName[i]);
-	return 2;
-}
-
-/* domain = next.domain */
-static int fnd_index (lua_State *L) {
-	static const char *const fields[] = {"domain",NULL};
-	losi_AddressFound *found = tofound(L);
-	int field = luaL_checkoption(L, 2, NULL, fields);
-	switch (field) {
-		case 0: {  /* domain */
-			int type;
-			if (losiN_getaddrtypefound(found, &type)) {
-				switch (type) {
-					case AF_INET: lua_pushliteral(L, "ipv4"); break;
-					case AF_INET6: lua_pushliteral(L, "ipv6"); break;
-					default: lua_pushnil(L);
-				}
-			}
-			else lua_pushnil(L);
-		} break;
-	}
-	return 1;
-}
-
-static int fnd_gc (lua_State *L) {
-	losi_AddressFound *found = tofound(L);
-	losiN_freeaddrfound(found);
-	return 0;
-}
-
-/* next [, errmsg] = network.resolve (name [, service [, mode]]) */
-static int net_resolve (lua_State *L) {
-	const char *nodename = luaL_optstring(L, 1, NULL);
-	const char *servname = luaL_optstring(L, 2, NULL);
-	const char *mode = luaL_optstring(L, 3, "");
-	losi_AddressFindFlag flags = 0;
-	losi_AddressFound *found;
-	int err;
-	if (nodename) {
-		if (nodename[0] == '*' && nodename[1] == '\0') {
-			luaL_argcheck(L, servname, 2, "service must be provided for '*'");
-			flags |= LCU_ADDRFIND_LSTN;
-			nodename = NULL;
-		}
-	}
-	else luaL_argcheck(L, servname, 1, "name or service must be provided");
-	for (; *mode; ++mode) switch (*mode) {
-		case '4': flags |= LCU_ADDRFIND_IPV4; break;
-		case '6': flags |= LCU_ADDRFIND_IPV6; break;
-		case 'm': flags |= LCU_ADDRFIND_MAP4; break;
-		case 'd': flags |= LCU_ADDRFIND_DGRM; break;
-		case 's': flags |= LCU_ADDRFIND_STRM; break;
-		default: return luaL_error(L, "unknown mode char (got '%c')", *mode);
-	}
-	found = (losi_AddressFound *)lua_newuserdata(L, sizeof(losi_AddressFound));
-	err = losiN_resolveaddr(found, flags, nodename, servname);
-	if (!err) luaL_setmetatable(L, LCU_NETADDRFOUNDCLS);
-	return losiL_doresults(L, 1, err);
-}
-
-static char *incbuf (lua_State *L, size_t *sz) {
-	lua_pop(L, 1);  /* remove old buffer */
-	*sz += LCU_NETNAMEBUFSZ;
-	return (char *)lua_newuserdata(L, *sz);
-}
-
-/* name [, service] = network.getname (data [, mode]) */
-static int net_getname (lua_State *L) {
-	char buffer[LCU_NETNAMEBUFSZ];
-	size_t sz = LCU_NETNAMEBUFSZ;
-	char *buf = buffer;
-	int err;
-	int ltype = lua_type(L, 1);
-	lua_settop(L, 2);  /* discard any extra parameters */
-	lua_pushnil(L);  /* simulate the initial buffer on the stack */
-	if (ltype == LUA_TSTRING) {
-		do {
-			err = losiN_getcanonical(lua_tostring(L, 1), buf, sz);
-			if (!err) {
-				lua_pushstring(L, buf);
-				return 1;
-			} else if ((err == LCU_ERRTOOMUCH) && (buf = incbuf(L, &sz))) {
-				err = 0;
-			}
-		} while (!err);
-	} else {
-		struct sockaddr *na;
-		losi_AddressNameFlag flags = 0;
-		const char *mode = luaL_optstring(L, 2, "");
-		for (; *mode; ++mode) switch (*mode) {
-			case 'l': flags |= LCU_ADDRNAME_LOCAL; break;
-			case 'd': flags |= LCU_ADDRNAME_DGRM; break;
-			default: return luaL_error(L, "unknown mode char (got '%c')", *mode);
-		}
-		if (ltype == LUA_TNUMBER) {
-			in_port_t port = int2port(L, luaL_checkinteger(L, 1), 1);
-			na = losi_newaddress(L, AF_INET);
-			if ( !(err = losiN_initaddr(na, AF_INET)) &&
-			     !(err = losiN_setaddrport(na, port)) ) {
-				do {
-					err = losiN_getaddrnames(na, flags, NULL, 0, buf, sz);
-					if (!err) {
-						lua_pushstring(L, buf);
-						return 1;
-					} else if ((err == LCU_ERRTOOMUCH) && (buf = incbuf(L, &sz))) {
-						err = 0;
-					}
-				} while (!err);
-			}
-		} else {
-			na = toaddr(L, 1);
-			do {
-				size_t ssz = sz/4;
-				size_t nsz = sz-ssz;
-				char *sbuf = buf+nsz;
-				err = losiN_getaddrnames(na, flags, buf, nsz, sbuf, ssz);
-				if (!err) {
-					lua_pushstring(L, buf);
-					lua_pushstring(L, sbuf);
-					return 2;
-				} else if ((err == LCU_ERRTOOMUCH) && (buf = incbuf(L, &sz))) {
-					err = 0;
-				}
-			} while (!err);
-		}
-	}
 	return losiL_doresults(L, 0, err);
 }
 

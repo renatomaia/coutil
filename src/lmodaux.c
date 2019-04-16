@@ -5,6 +5,16 @@ LCULIB_API void lcu_chkerror (lua_State *L, int err) {
 	if (err < 0) lcu_error(L, err);
 }
 
+LCULIB_API void lcuL_doresults (lua_State *L, int n, int err) {
+	if (err < 0) {
+		lua_pop(L, n);
+		lua_pushnil(L);
+		lua_pusherror(L, err);
+		return 2;
+	}
+	return n;
+}
+
 
 static void pushhandlemap (lua_State *L) {
 	lua_pushlightuserdata(L, pushhandlemap);
