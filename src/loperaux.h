@@ -41,6 +41,8 @@ LCULIB_API lcu_PendingOp *lcu_getopof (lua_State *L);
 LCULIB_API void lcu_chkinitop (lua_State *L, lcu_PendingOp *op,
                                uv_loop_t *loop, int err);
 
+LCULIB_API void lcu_freereq (lcu_PendingOp *op);
+
 LCULIB_API void lcu_chkstarthdl (lua_State *L, uv_handle_t *h, int err);
 
 
