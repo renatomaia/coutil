@@ -6,6 +6,27 @@
 #define LCU_OPERATIONS	lua_upvalueindex(3)
 
 
+LCULIB_API lua_State *lcu_getopcoro(lcu_PendingOp *op) {
+	void *data = NULL;
+	switch (lcu_getoptype(op)) {
+		case LCU_OPTYPE_GLOBAL: data = lcu_toglobalop(op)->data; break;
+		case LCU_OPTYPE_OBJECT: data = lcu_toobjectop(op)->data; break;
+		case LCU_OPTYPE_REQUEST: data = lcu_torequestop(op)->data; break;
+		default: lcu_assert(0);
+	}
+	return (lua_State *)data;
+}
+
+LCULIB_API uv_loop_t *lcu_getoploop(lcu_PendingOp *op) {
+	switch (lcu_getoptype(op)) {
+		case LCU_OPTYPE_GLOBAL: return lcu_toglobalop(op)->loop;
+		case LCU_OPTYPE_OBJECT: return lcu_toobjectop(op)->loop;
+		case LCU_OPTYPE_REQUEST: return (op)->kind.request.loop;
+	}
+	lcu_assert(0);
+	return NULL;
+}
+
 LCULIB_API lcu_PendingOp *lcu_getopof (lua_State *L) {
 	lcu_PendingOp *op;
 	lua_pushthread(L);
@@ -22,60 +43,39 @@ LCULIB_API lcu_PendingOp *lcu_getopof (lua_State *L) {
 }
 
 
-static void savehdlcoro (uv_handle_t *handle, lua_State *L) {
-	lua_pushlightuserdata(L, handle);
+static void saveopcoro (lcu_PendingOp *op, lua_State *L) {
+	lua_pushlightuserdata(L, op);
 	lua_pushthread(L);
 	lua_settable(L, LCU_COREGISTRY);
 }
 
-static void freehdlcoro (uv_handle_t *handle) {
-	lua_State *L = (lua_State *)handle->data;
+static void freeopcoro (lcu_PendingOp *op) {
+	lua_State *L = (lua_State *)lcu_getoploop(op)->data;
 	lua_pushlightuserdata(L, handle);
 	lua_pushnil(L);
 	lua_settable(L, LCU_COREGISTRY);
 }
 
-static void savereqcoro (uv_req_t *request, lua_State *L) {
-	lua_pushlightuserdata(L, request);
-	lua_pushthread(L);
-	lua_settable(L, LCU_COREGISTRY);
-}
-
-static void freeopcoro (uv_req_t *request) {
-	lua_State *L = (lua_State *)request->data;
-	lua_pushlightuserdata(L, request);
-	lua_pushnil(L);
-	lua_settable(L, LCU_COREGISTRY);
-}
-
-LCULIB_API void lcu_chkinithdl (lua_State *L,
-                                uv_handle_t *handle,
-                                int err) {
+LCULIB_API void lcu_chkinitop (lua_State *L,
+                               lcu_PendingOp *op,
+                               uv_loop_t * loop,
+                               int err) {
 	lcu_chkerror(L, err);
-	savehdlcoro(handle, L);
-}
-
-LCULIB_API void lcu_chkinitreq (lua_State *L,
-                                lcu_PendingOp *op,
-                                uv_loop_t * loop,
-                                int err) {
-	lcu_assert(lcu_isrequestop(op));
-	lcu_chkerror(L, err);
-	op->kind.request.loop = loop;
 	saveopcoro(op, L);
+	if (lcu_getoptype(op) == LCU_OPTYPE_REQUEST) op->kind.request.loop = loop;
 }
 
-LCULIB_API void lcu_freereq (lcu_PendingOp *op) {
-	lcu_assert(lcu_isrequestop(op));
+LCULIB_API void lcu_freeop (lcu_PendingOp *op) {
 	freeopcoro(op);
 	op->flags = 0;
-	lcu_tohandle(op)->type = UV_UNKNOWN_HANDLE;
+	lcu_toglobalop(op)->type = UV_UNKNOWN_HANDLE;
 }
 
 static void lcuB_onhandleclosed (uv_handle_t *handle) {
 	handle->type = UV_UNKNOWN_HANDLE;
 	lua_State *co = (lua_State *)handle->data;
-	lcu_PendingOp *op = (lcu_PendingOp *)handle;
+	lcu_PendingOp *op = (lcu_PendingOp *)handle;  // TODO: not valid for object ops!
+	lcu_assert(lcu_getoptype(op) == LCU_OPTYPE_GLOBAL);
 	if (lcu_ispendingop(op)) lcu_resumeop(op, co);
 	else freeopcoro(op);
 }

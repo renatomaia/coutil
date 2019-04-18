@@ -11,6 +11,7 @@
 typedef struct lcu_PendingOp {
 	union {
 		union uv_any_handle handle;
+		uv_handle_t *object;
 		struct {
 			union uv_any_req value;
 			uv_loop_t *loop;
@@ -19,22 +20,20 @@ typedef struct lcu_PendingOp {
 	int flags;
 } lcu_PendingOp;
 
-#define LCU_OPFLAG_REQUEST  0x01
-#define LCU_OPFLAG_PENDING  0x02
 
-#define lcu_isrequestop(O)  (O->flags&LCU_OPFLAG_REQUEST)
+#define LCU_OPTYPE_GLOBAL  0x00
+#define LCU_OPTYPE_OBJECT  0x01
+#define LCU_OPTYPE_REQUEST  0x02
+
+#define LCU_OPFLAG_TYPE  0x03
+#define LCU_OPFLAG_PENDING  0x04
+
+#define lcu_getoptype(O)  (O->flags&LCU_OPFLAG_TYPE)
 #define lcu_ispendingop(O)  (O->flags&LCU_OPFLAG_PENDING)
 
-#define lcu_tohandle(O) ((uv_handle_t *)&((O)->kind.handle))
-#define lcu_torequest(O) ((uv_req_t *)&((O)->kind.request.value))
-
-#define lcu_getopcoro(O) (lua_State *)(lcu_isrequestop(O) \
-                                       ? lcu_torequest(O)->data \
-                                       : lcu_tohandle(O)->data)
-
-#define lcu_getoploop(O) (uv_loop_t *)(lcu_isrequestop(O) \
-                                       ? (O)->kind.request.loop \
-                                       : lcu_tohandle(O)->loop)
+#define lcu_toglobalop(O)  ((uv_handle_t *)&((O)->kind.handle))
+#define lcu_toobjectop(O)  ((O)->kind.object)
+#define lcu_torequestop(O)  ((uv_req_t *)&((O)->kind.request.value))
 
 LCULIB_API lcu_PendingOp *lcu_getopof (lua_State *L);
 
