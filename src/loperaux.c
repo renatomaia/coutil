@@ -9,7 +9,7 @@
 LCULIB_API lcu_PendingOp *lcu_getopof (lua_State *L) {
 	lcu_PendingOp *op;
 	lua_pushthread(L);
-	if (lua_gettable(L, LCU_OPERATIONS) == LUA_TNIL) { printf("%s: %d newopof\n", __FILE__, __LINE__);
+	if (lua_gettable(L, LCU_OPERATIONS) == LUA_TNIL) {
 		lua_pushthread(L);
 		op = (lcu_PendingOp *)lua_newuserdata(L, sizeof(lcu_PendingOp));
 		op->flags = 0;

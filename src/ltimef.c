@@ -84,5 +84,5 @@ LCULIB_API void lcuM_addtimef (lua_State *L) {
 		{"pause", lcuM_pause},
 		{NULL, NULL}
 	};
-	lcuM_addmodfunc(L, modf);
+	lcuM_setfuncs(L, modf, LCU_MODUPVS);
 }

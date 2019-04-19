@@ -57,12 +57,13 @@ LCULIB_API void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
 	pushhandlemap(L);  /* LCU_HANDLEMAP */
 }
 
-LCULIB_API void lcuM_addmodfunc (lua_State *L, const luaL_Reg *l) {
-	for (; l->name; l++) {  /* fill the table with given functions */
+LCULIB_API void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
+	luaL_checkstack(L, nup, "too many upvalues");
+	for (; l->name != NULL; l++) {  /* fill the table with given functions */
 		int i;
-		for (i = 0; i < LCU_MODUPVS; i++)  /* copy upvalues to the top */
-			lua_pushvalue(L, -(LCU_MODUPVS+1));
-		lua_pushcclosure(L, l->func, LCU_MODUPVS);  /* closure with upvalues */
-		lua_setfield(L, -2, l->name);
+		for (i = 0; i < nup; i++)  /* copy upvalues to the top */
+			lua_pushvalue(L, -nup);
+		lua_pushcclosure(L, l->func, nup);  /* closure with those upvalues */
+		lua_setfield(L, -(nup + 2), l->name);
 	}
 }

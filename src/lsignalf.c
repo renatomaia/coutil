@@ -101,5 +101,5 @@ LCULIB_API void lcuM_addsignalf (lua_State *L) {
 		{"awaitsig", lcuM_awaitsig},
 		{NULL, NULL}
 	};
-	lcuM_addmodfunc(L, modf);
+	lcuM_setfuncs(L, modf, LCU_MODUPVS);
 }
