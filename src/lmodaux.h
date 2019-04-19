@@ -1,10 +1,3 @@
-#include <stdio.h>
-
-
-
-
-
-
 #ifndef lmodaux_h
 #define lmodaux_h
 
@@ -32,7 +25,7 @@ LCULIB_API int lcuL_doresults (lua_State *L, int n, int err);
 
 LCULIB_API void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv);
 
-LCULIB_API void lcuM_addmodfunc (lua_State *L, const luaL_Reg *l);
+LCULIB_API void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup);
 
 
 #endif

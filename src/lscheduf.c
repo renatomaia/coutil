@@ -20,5 +20,5 @@ LCULIB_API void lcuM_addscheduf (lua_State *L) {
 		{"run", lcuM_run},
 		{NULL, NULL}
 	};
-	lcuM_addmodfunc(L, modf);
+	lcuM_setfuncs(L, modf, LCU_MODUPVS);
 }

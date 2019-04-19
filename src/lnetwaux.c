@@ -1,5 +1,7 @@
 #include "lnetwaux.h"
 
+#include <string.h>
+
 
 LCULIB_API struct sockaddr *lcu_newaddress (lua_State *L, int type) {
 	struct sockaddr *na;
@@ -15,34 +17,31 @@ LCULIB_API struct sockaddr *lcu_newaddress (lua_State *L, int type) {
 	return na;
 }
 
-LCULIB_API lcu_TcpSocket *lcu_createtcp (lua_State *L, int domain, int class) {
+LCULIB_API lcu_TcpSocket *lcu_newtcp (lua_State *L, int domain, int class) {
 	lcu_TcpSocket *tcp = (lcu_TcpSocket *)lua_newuserdata(L, sizeof(lcu_TcpSocket));
-	tcp->flags = domain == AF_INET6 ? LCU_TCPIPV6DOMAIN_FLAG : 0;
+	tcp->flags = domain == AF_INET6 ? LCU_TCPFLAG_IPV6DOM : 0;
 	tcp->ka_delay = 0;
 	tcp->handle.data = (void *)LUA_REFNIL;  /* mark as closed */
-	luaL_setmetatable(L, lcu_SocketClasses[class]);
+	luaL_setmetatable(L, lcu_TcpSockCls[class]);
 	return tcp;
 }
 
 LCULIB_API void lcu_enabletcp (lua_State *L, int idx) {
-	lcu_TcpSocket *tcp = lcu_totcp(L, idx);
-	tcp->flags = domain == AF_INET6 ? LCU_TCPIPV6DOMAIN_FLAG : 0;
-	tcp->ka_delay = 0;
+	lcu_TcpSocket *tcp = lcu_totcp(L, idx, LCU_TCPTYPE_SOCKET);
+	lcu_assert(tcp);
 	tcp->handle.data = (void *)LUA_NOREF;  /* mark as not closed */
-	luaL_setmetatable(L, lcu_SocketClasses[class]);
-	return tcp;
 }
 
 static void lcuB_ontcpclosed (uv_handle_t *h) {
 	lua_State *L = (lua_State *)h->loop->data;
-	luaL_unref(L, (int)h->data);  /* let it become garbage */
+	luaL_unref(L, LUA_REGISTRYINDEX, (intptr_t)h->data);  /* becomes garbage */
 }
 
 LCULIB_API int lcu_closetcp (lua_State *L, int idx) {
-	lcu_TcpSocket *tcp = lcu_totcp(L, idx);
+	lcu_TcpSocket *tcp = lcu_totcp(L, idx, LCU_TCPTYPE_SOCKET);
 	if (tcp && lcu_islivetcp(tcp)) {
-		tcp->handle.data = (void *)luaL_ref(L, idx);  /* save and mark as closed */
-		uv_close(&tcp->handle, lcuB_ontcpclosed);
+		tcp->handle.data = (void *)(intptr_t)luaL_ref(L, LUA_REGISTRYINDEX);
+		uv_close((uv_handle_t *)&tcp->handle, lcuB_ontcpclosed);
 		return 1;
 	}
 	return 0;

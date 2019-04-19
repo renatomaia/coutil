@@ -78,4 +78,4 @@ dofile "mutex.lua"
 dofile "spawn.lua"
 dofile "system.lua"
 
-print "\nSuceess!\n"
+print "\nSuccess!\n"

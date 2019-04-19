@@ -34,6 +34,7 @@ Index
 	- [`system.run`](#systemrun-mode)
 	- [`system.pause`](#systempause-delay-)
 	- [`system.awaitsig`](#systemawaitsig-signal-)
+	- [`system.address`](#systemaddress-type--data--port--mode)
 
 Contents
 ========
@@ -287,3 +288,33 @@ Suspends the execution of the calling coroutine (like [`coroutine.yield`](http:/
 Any additional arguments to `awaitsig` are passed as extra results to [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
 
 `awaitsig` returns like [`pause`](#systempause-).
+
+### `system.address (type [, data [, port [, mode]]])`
+
+Returns a new IP address structure family defined by `type`,
+which is either the string `"ipv4"` or `"ipv6"`,
+to indicate the address to be created shall be a IPv4 or IPv6 address, respectively.
+
+If `data` is not provided the structure created is initilized with null data:
+`0.0.0.0:0` for `"ipv4"`, or `[::]:0` for `"ipv6"`.
+Otherwise, `data` is a string with the information to be stored in the structure created.
+
+If only `data` is provided, it must be a literal address as formatted inside a URI,
+like `"192.0.2.128:80"` (IPv4), or `"[::ffff:c000:0280]:80"` (IPv6).
+Moreover, if `port` is provided, `data` is a host address and `port` is a port number to be used to initialize the address structure.
+The string `mode` controls whether `data` is text (literal) or binary.
+It may be the string `"b"` (binary data), or `"t"` (text data).
+The default is `"t"`.
+
+The returned object provides the following fields:
+
+- `type`: is either the string `"ipv4"` or `"ipv6"`,
+to indicate the address is a IPv4 or IPv6 address, respectively.
+- `literal`: is the text (literal) representation of the address,
+like `"192.0.2.128"` (IPv4) or `"::ffff:c000:0280"` (IPv6).
+- `binary`: is the binary representation of the address,
+like `"\192\0\2\128"` (IPv4) or `"\0\0\0\0\0\0\0\0\0\0\xff\xff\xc0\x00\x02\x80"` (IPv6).
+- `port`: is the port number of the IPv4 and IPv6 address.
+
+Moreover, you can pass the object to the standard function `tostring` to obtain the address as a string inside a URI,
+like `"192.0.2.128:80"` (IPv4) or `[::ffff:c000:0280]:80` (IPv6).

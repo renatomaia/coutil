@@ -6,9 +6,12 @@
 
 #include <lua.h>
 #include <lauxlib.h>
+#include <uv.h>
+#include <netinet/in.h>  /* network addresses */
+#include <arpa/inet.h>  /* IP addresses */
 
 
-#define LCU_NETADDRCLS LCU_PREFIX"NetworkAddress"
+#define LCU_NETADDRCLS LCU_PREFIX"NetAddress"
 
 #define lcu_chkaddress(L,i)	((struct sockaddr *)luaL_checkudata(L, i, \
                            	LCU_NETADDRCLS))
@@ -22,43 +25,41 @@ LCULIB_API struct sockaddr *lcu_newaddress (lua_State *L, int type);
 
 
 /* superclasses used only in Lua */
-typedef enum lcu_SocketType {
-	LCU_SOCKTYPE_LISTEN = 0,
-	LCU_SOCKTYPE_STREAM,
-	LCU_SOCKTYPE_DGRM
-} losi_SocketType;
-#define LCU_SOCKTYPE_TRSP 3
-#define LCU_SOCKTYPE_SOCK 4
+typedef enum lcu_TcpSockType {
+	LCU_TCPTYPE_LISTEN = 0,
+	LCU_TCPTYPE_STREAM,
+} losi_TcpSockType;
+#define LCU_TCPTYPE_SOCKET 2
 
-static const char *const lcu_SocketClasses[] = {
-	LCU_PREFIX"ListenSocket",
-	LCU_PREFIX"StreamSocket",
-	LCU_PREFIX"DatagramSocket",
-	LCU_PREFIX"TransportSocket",
-	LCU_PREFIX"NetworkSocket"
+static const char *const lcu_TcpSockCls[] = {
+	LCU_PREFIX"TcpListen",
+	LCU_PREFIX"TcpStream",
+	LCU_PREFIX"TcpSocket"
 };
 
-#define LCU_TCPKEEPALIVE_FLAG 0x01
-#define LCU_TCPNODELAY_FLAG 0x02
-#define LCU_TCPIPV6DOM_FLAG 0x04
+#define LCU_TCPFLAG_KEEPALIVE 0x01
+#define LCU_TCPFLAG_NODELAY 0x02
+#define LCU_TCPFLAG_IPV6DOM 0x04
 
-typedef struct lcu_Socket {
-	uv_os_sock_t socket;
+typedef struct lcu_TcpSocket {
+	uv_tcp_t handle;
 	int flags;
 	int ka_delay;
-} lcu_Socket;
+} lcu_TcpSocket;
 
-LCULIB_API lcu_Socket *lcu_newsocket (lua_State *L, int class);
+LCULIB_API lcu_TcpSocket *lcu_newtcp (lua_State *L, int domain, int class);
+
+LCULIB_API void lcu_enabletcp (lua_State *L, int idx);
 
 #define lcu_islivetcp(p)	((p)->handle.data != (void *)LUA_NOREF)
 
-#define lcu_gettcpdom(p)	((p)->flags&LCU_TCPIPV6DOM_FLAG : AF_INET6 : AF_INET)
+#define lcu_gettcpdom(p)	((p)->flags&LCU_TCPFLAG_IPV6DOM : AF_INET6 : AF_INET)
 
 #define lcu_chktcp(L,i,c)	((lcu_TcpSocket *)luaL_testudata(L, i, \
-                         	lcu_TcpClasses[c]))
+                         	lcu_TcpSockCls[c]))
 
 #define lcu_totcp(L,i,c)	((lcu_TcpSocket *)luaL_testudata(L, i, \
-                        	lcu_TcpClasses[c]))
+                        	lcu_TcpSockCls[c]))
 
 #define lcu_istcp(L,i,c)	(lcu_totcp(L, i, c) != NULL)
 

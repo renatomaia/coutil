@@ -1,5 +1,10 @@
+#include "looplib.h"
 #include "lmodaux.h"
-#include "lhndlaux.h"
+#include "loperaux.h"
+#include "lnetwaux.h"
+
+#include <string.h>
+#include <lmemlib.h>
 
 
 /*
@@ -48,7 +53,7 @@ static void pushaddrtype (lua_State *L, int type) {
 	}
 }
 
-static void setaddrport (struct sockddr *address, in_port_t port) {
+static void setaddrport (struct sockaddr *address, in_port_t port) {
 	switch (address->sa_family) {
 		case AF_INET: {
 			struct sockaddr_in *addr = (struct sockaddr_in *)address;
@@ -79,11 +84,11 @@ static void setaddrbytes (struct sockaddr *address, const char *data) {
 	switch (address->sa_family) {
 		case AF_INET: {
 			struct sockaddr_in *addr = (struct sockaddr_in *)address;
-			memcpy(&(addr->sin_addr.s_addr), data, LOSI_ADDRBINSZ_IPV4);
+			memcpy(&(addr->sin_addr.s_addr), data, LCU_ADDRBINSZ_IPV4);
 		} break;
 		case AF_INET6: {
 			struct sockaddr_in6 *addr = (struct sockaddr_in6 *)address;
-			memcpy(&addr->sin6_addr, data, LOSI_ADDRBINSZ_IPV6);
+			memcpy(&addr->sin6_addr, data, LCU_ADDRBINSZ_IPV6);
 		} break;
 	}
 }
@@ -92,12 +97,12 @@ static const char *getaddrbytes (struct sockaddr *address, size_t *sz) {
 	switch (address->sa_family) {
 		case AF_INET: {
 			struct sockaddr_in *addr = (struct sockaddr_in *)address;
-			if (sz) *sz = LOSI_ADDRBINSZ_IPV4;
+			if (sz) *sz = LCU_ADDRBINSZ_IPV4;
 			return (const void *)&(addr->sin_addr.s_addr);
 		} break;
 		case AF_INET6: {
 			struct sockaddr_in6 *addr = (struct sockaddr_in6 *)address;
-			if (sz) *sz = LOSI_ADDRBINSZ_IPV6;
+			if (sz) *sz = LCU_ADDRBINSZ_IPV6;
 			return (const void *)&addr->sin6_addr;
 		} break;
 	}
@@ -106,7 +111,6 @@ static const char *getaddrbytes (struct sockaddr *address, size_t *sz) {
 }
 
 static int setaddrliteral (struct sockaddr *address, const char *data) {
-	int err;
 	void *bytes;
 	switch (address->sa_family) {
 		case AF_INET: {
@@ -122,7 +126,7 @@ static int setaddrliteral (struct sockaddr *address, const char *data) {
 	return uv_inet_pton(address->sa_family, data, bytes);
 }
 
-static const char *getaddrliteral (struct sockaddr *address, char *data) {
+static int getaddrliteral (struct sockaddr *address, char *data) {
 	const void *bytes;
 	switch (address->sa_family) {
 		case AF_INET: {
@@ -133,21 +137,24 @@ static const char *getaddrliteral (struct sockaddr *address, char *data) {
 			struct sockaddr_in6 *addr = (struct sockaddr_in6 *)address;
 			bytes = (const void *)&addr->sin6_addr;
 		} break;
-		default: return NULL;
+		default: return UV_EAI_ADDRFAMILY;
 	}
-	return uv_inet_ntop(address->sa_family, bytes, data, LOSI_ADDRMAXLITERAL);
+	return uv_inet_ntop(address->sa_family, bytes, data, LCU_ADDRMAXLITERAL);
 }
+
+#define addrbinsz(T) (T == AF_INET ? LCU_ADDRBINSZ_IPV4 : LCU_ADDRBINSZ_IPV6)
 
 static const char *const AddrTypeName[] = { "ipv4", "ipv6", NULL };
 static const int AddrTypeId[] = { AF_INET, AF_INET6 };
-static const size_t AddrBinSz[] = { LCU_ADDRBINSZ_IPV4, LCU_ADDRBINSZ_IPV6 };
 
 /* address [, errmsg] = system.address(type, [data [, port [, format]]]) */
 static int lcuM_address (lua_State *L) {
 	int type = AddrTypeId[luaL_checkoption(L, 1, NULL, AddrTypeName)];
-	struct sockaddr *na = lcu_newaddress(L, type);
 	int n = lua_gettop(L);
+	struct sockaddr *na;
 	lua_settop(L, 4);
+	na = lcu_newaddress(L, type);
+	lcu_assert(na);
 	na->sa_family = type;
 	if (n > 1) {
 		in_port_t port = 0;
@@ -180,7 +187,7 @@ static int lcuM_address (lua_State *L) {
 			port = int2port(L, luaL_checkinteger(L, 3), 3);
 			const char *mode = luaL_optstring(L, 4, "t");
 			if (mode[0] == 'b' && mode[1] == '\0') {  /* binary format */
-				luaL_argcheck(L, sz == AddrBinSz[type], 2, "invalid binary address");
+				luaL_argcheck(L, sz == addrbinsz(type), 2, "invalid binary address");
 				setaddrbytes(na, data);
 			} else if (mode[0] == 't' && mode[1] == '\0') {  /* literal format */
 				int err = setaddrliteral(na, data);
@@ -198,9 +205,9 @@ static int lcuM_address (lua_State *L) {
 /* uri = tostring(address) */
 static int lcuM_addr_tostring (lua_State *L) {
 	struct sockaddr *na = lcu_chkaddress(L, 1);
-	char b[LCU_ADDRMAXLITERAL];
-	const char *s = getaddrliteral(na, b);
-	if (!s) lua_pushliteral(L, "unsupported address");
+	char s[LCU_ADDRMAXLITERAL];
+	int err = getaddrliteral(na, s);
+	if (err) lcu_pusherror(L, err);
 	else {
 		in_port_t p = getaddrport(na);
 		lua_pushfstring(L, na->sa_family == AF_INET6 ? "[%s]:%d" : "%s:%d", s, p);
@@ -213,7 +220,7 @@ static int lcuM_addr_tostring (lua_State *L) {
 static int lcuM_addr_eq (lua_State *L) {
 	struct sockaddr *a1 = lcu_toaddress(L, 1);
 	struct sockaddr *a2 = lcu_toaddress(L, 2);
-	if ( a1 && a2 && (getaddrtype(a1) == getaddrtype(a2)) &&
+	if ( a1 && a2 && (a1->sa_family == a2->sa_family) &&
 	                 (getaddrport(a1) == getaddrport(a2)) ) {
 		size_t sz;
 		const char *b = getaddrbytes(a1, &sz);
@@ -245,8 +252,9 @@ static int lcuM_addr_index (lua_State *L) {
 			else lua_pushnil(L);
 		} break;
 		case 2: {  /* literal */
-			char b[LCU_ADDRMAXLITERAL];
-			lua_pushstring(L, getaddrliteral(na, b));
+			char s[LCU_ADDRMAXLITERAL];
+			getaddrliteral(na, s);
+			lua_pushstring(L, s);
 		} break;
 		case 3: {  /* type */
 			pushaddrtype(L, na->sa_family);
@@ -270,9 +278,9 @@ static int lcuM_addr_newindex (lua_State *L) {
 			setaddrport(na, int2port(L, luaL_checkinteger(L,3), 3));
 		} break;
 		case 1: {  /* binary */
-			size_t sz, esz = 0;
+			size_t sz;
 			const char *data = luamem_checkstring(L, 3, &sz);
-			luaL_argcheck(L, sz == AddrBinSz[na->sa_family], 3, "wrong byte size");
+			luaL_argcheck(L, sz == addrbinsz(na->sa_family), 3, "wrong byte size");
 			setaddrbytes(na, data);
 		} break;
 		case 2: {  /* literal */
@@ -294,10 +302,14 @@ static const luaL_Reg addr[] = {
 	{NULL, NULL}
 };
 
+static const luaL_Reg modf[] = {
+	{"address", lcuM_address},
+	{NULL, NULL}
+};
+
 LCULIB_API void lcuM_addnetadrf (lua_State *L) {
-	static const luaL_Reg modf[] = {
-		{"address", lcuM_address},
-		{NULL, NULL}
-	};
-	lcuM_addmodfunc(L, modf);
+	lcuM_setfuncs(L, modf, LCU_MODUPVS);
+	loopL_newclass(L, LCU_NETADDRCLS, NULL);
+	luaL_setfuncs(L, addr, 0);
+	lua_pop(L, 1);
 }
