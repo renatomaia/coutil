@@ -19,17 +19,19 @@ LCULIB_API struct sockaddr *lcu_newaddress (lua_State *L, int type) {
 
 LCULIB_API lcu_TcpSocket *lcu_newtcp (lua_State *L, int domain, int class) {
 	lcu_TcpSocket *tcp = (lcu_TcpSocket *)lua_newuserdata(L, sizeof(lcu_TcpSocket));
-	tcp->flags = domain == AF_INET6 ? LCU_TCPFLAG_IPV6DOM : 0;
+	tcp->flags = LCU_TCPFLAG_CLOSING|(domain==AF_INET6 ? LCU_TCPFLAG_IPV6DOM : 0);
 	tcp->ka_delay = 0;
-	tcp->handle.data = (void *)LUA_REFNIL;  /* mark as closed */
+	tcp->handle.data = (void *)LUA_REFNIL;  /* mark as not closed */
 	luaL_setmetatable(L, lcu_TcpSockCls[class]);
 	return tcp;
 }
 
 LCULIB_API void lcu_enabletcp (lua_State *L, int idx) {
 	lcu_TcpSocket *tcp = lcu_totcp(L, idx, LCU_TCPTYPE_SOCKET);
-	lcu_assert(tcp);
-	tcp->handle.data = (void *)LUA_NOREF;  /* mark as not closed */
+	lcu_assert(tcp && tcp->flags&LCU_TCPFLAG_CLOSING &&
+	                  tcp->handle.data == (void *)LUA_REFNIL);
+	tcp->flags &= ~LCU_TCPFLAG_CLOSING;
+	tcp->handle.data = NULL;  /* mark as not in use */
 }
 
 static void lcuB_ontcpclosed (uv_handle_t *h) {
@@ -40,7 +42,9 @@ static void lcuB_ontcpclosed (uv_handle_t *h) {
 LCULIB_API int lcu_closetcp (lua_State *L, int idx) {
 	lcu_TcpSocket *tcp = lcu_totcp(L, idx, LCU_TCPTYPE_SOCKET);
 	if (tcp && lcu_islivetcp(tcp)) {
+		lua_pushvalue(L, idx);
 		tcp->handle.data = (void *)(intptr_t)luaL_ref(L, LUA_REGISTRYINDEX);
+		tcp->flags |= LCU_TCPFLAG_CLOSING;
 		uv_close((uv_handle_t *)&tcp->handle, lcuB_ontcpclosed);
 		return 1;
 	}

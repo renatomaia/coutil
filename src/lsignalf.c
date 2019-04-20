@@ -53,11 +53,11 @@ static int checksignal (lua_State *L, int arg, const char *def) {
 }
 
 static void lcuB_onsignal (uv_signal_t *handle, int signum) {
+	lcu_PendingOp *op = (lcu_PendingOp *)handle;
 	lua_State *co = (lua_State *)handle->data;
 	lcu_assert(co != NULL);
-	lcu_PendingOp *op = (lcu_PendingOp *)handle;
 	lua_pushboolean(co, 1);
-	lcu_resumeop(op, co);
+	lcu_resumeop(op, handle->loop, co);
 }
 
 static int lcuK_setupsignal (lua_State *L, int status, lua_KContext ctx) {

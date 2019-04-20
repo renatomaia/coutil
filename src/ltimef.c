@@ -3,11 +3,11 @@
 
 
 static void lcuB_oncallback (uv_handle_t *handle) {
+	lcu_PendingOp *op = (lcu_PendingOp *)handle;
 	lua_State *co = (lua_State *)handle->data;
 	lcu_assert(co != NULL);
-	lcu_PendingOp *op = (lcu_PendingOp *)handle;
 	lua_pushboolean(co, 1);
-	lcu_resumeop(op, co);
+	lcu_resumeop(op, handle->loop, co);
 }
 
 static void lcuB_onidle (uv_idle_t *h) {

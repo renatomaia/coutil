@@ -43,7 +43,7 @@ OSM_O=	looplib.o lmodaux.o loperaux.o \
       	lscheduf.o \
       	ltimef.o \
       	lsignalf.o \
-      	lnetwaux.o lnetadrf.o \
+      	lnetwaux.o ltcpf.o \
       	lsysmod.o
 
 ALL_O=	$(OSM_O) $(MYOBJS)

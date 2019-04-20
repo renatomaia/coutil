@@ -1,3 +1,4 @@
+#include "lmodaux.h"
 #include "looplib.h"
 
 
@@ -8,7 +9,35 @@ LOOPLIB_API void loop_setmethods (lua_State *L, const luaL_Reg *meth, int nup) {
 }
 
 LOOPLIB_API void loop_makesubclass (lua_State *L, int superidx) {
-	static const char *const metameth[] = {"__gc", "__tostring", NULL};
+	static const char *const metameth[] = {
+		"__add",
+		"__sub",
+		"__mul",
+		"__div",
+		"__mod",
+		"__pow",
+		"__unm",
+		"__idiv",
+		"__band",
+		"__bor",
+		"__bxor",
+		"__bnot",
+		"__shl",
+		"__shr",
+		"__concat",
+		"__len",
+		"__eq",
+		"__lt",
+		"__le",
+		"__index",
+		"__newindex",
+		"__call",
+		"__mode",
+		"__gc",
+		"__tostring",
+		"__pairs",
+		NULL
+	};
 	int i;
 	lua_pushvalue(L, superidx);
 	for (i = 0; metameth[i]; ++i) {
@@ -18,14 +47,15 @@ LOOPLIB_API void loop_makesubclass (lua_State *L, int superidx) {
 		}
 		lua_pop(L, 1);  /* remove metamethod */
 	}
-	lua_setmetatable(L, -1);
+	lua_setmetatable(L, -2);
 }
 
-LOOPLIB_API int loop_issubclass (lua_State *L, int superidx) {
+LOOPLIB_API int loop_issubclass (lua_State *L, int idx) {
 	int found = 0;
-	lua_pushvalue(L, superidx);
-	while (!(found = lua_rawequal(L, -1, -2)) && lua_getmetatable(L, -1))
+	lua_pushvalue(L, idx);
+	while (!(found = lua_rawequal(L, -1, -2)) && lua_getmetatable(L, -1)){
 		lua_remove(L, -2);  /* remove previous metatable */
+	}
 	lua_pop(L, 1);  /* remove last metatable */
 	return found;
 }

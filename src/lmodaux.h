@@ -27,5 +27,10 @@ LCULIB_API void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv);
 
 LCULIB_API void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup);
 
+LCULIB_API void lcuM_newclass (lua_State *L, const luaL_Reg *l, int nup,
+                               const char *name, const char *super);
+
+LCULIB_API void lcuL_printstack (lua_State *L, const char *file, int line,
+                                               const char *func);
 
 #endif

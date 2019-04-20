@@ -29,7 +29,7 @@ end
 
 function asserterr(expected, ok, ...)
 	local actual = ...
-	assert(ok == false, "error was expected")
+	assert(not ok, "error was expected")
 	assert(string.find(actual, expected, 1, true), "wrong error, got "..actual)
 end
 
@@ -77,5 +77,6 @@ dofile "promise.lua"
 dofile "mutex.lua"
 dofile "spawn.lua"
 dofile "system.lua"
+dofile "tcp.lua"
 
 print "\nSuccess!\n"
