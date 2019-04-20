@@ -34,9 +34,14 @@ static void freecoro (lua_State *L, void *key) {
 	lua_settable(L, LCU_COREGISTRY);
 }
 
-LCULIB_API void lcu_freereq (lcu_PendingOp *op) {
+LCULIB_API void lcu_freehdl (lua_State *L, uv_handle_t *handle) {
+	handle->data = NULL;  /* mark as not pending */
+	freecoro(L, (void *)handle);
+}
+
+LCULIB_API void lcu_freereq (lua_State *L, lcu_PendingOp *op) {
 	lcu_assert(lcu_isrequestop(op));
-	freecoro((lua_State *)lcu_torequest(op)->data, (void *)op);
+	freecoro(L, (void *)op);
 	op->flags = 0;
 	lcu_tohandle(op)->type = UV_UNKNOWN_HANDLE;
 }
@@ -46,19 +51,11 @@ LCULIB_API void lcu_chkinitiated (lua_State *L, void *key, int err) {
 	savecoro(L, key);
 }
 
-LCULIB_API void lcu_chkinitreq (lua_State *L,
-                                lcu_PendingOp *op,
-                                uv_loop_t * loop,
-                                int err) {
-	lcu_assert(lcu_isrequestop(op));
-	lcu_chkinitiated(L, (void *)&op->kind.request, err);
-	op->kind.request.loop = loop;
-}
-
 static void lcuB_onhandleclosed (uv_handle_t *handle) {
 	handle->type = UV_UNKNOWN_HANDLE;
 	lcu_PendingOp *op = (lcu_PendingOp *)handle;
-	if (lcu_ispendingop(op)) lcu_resumeop(op, (lua_State *)handle->data);
+	if (lcu_ispendingop(op))
+		lcu_resumeop(op, handle->loop, (lua_State *)handle->data);
 	else freecoro((lua_State *)handle->loop->data, (void *)handle);
 }
 
@@ -100,8 +97,7 @@ LCULIB_API int lcu_resumecoro (lua_State *co, uv_loop_t *loop) {
 	return lua_resume(co, L, lua_gettop(L));
 }
 
-LCULIB_API void lcu_resumeop (lcu_PendingOp *op, lua_State *co) {
-	uv_loop_t *loop = lcu_getoploop(op);
+LCULIB_API void lcu_resumeop (lcu_PendingOp *op, uv_loop_t *loop, lua_State *co) {
 	int status;
 	setignoredop(op);  /* coroutine not interested anymore */
 	status = lcu_resumecoro(co, loop);

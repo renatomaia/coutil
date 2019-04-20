@@ -1,3 +1,4 @@
+#include "looplib.h"
 #include "lmodaux.h"
 
 
@@ -11,6 +12,9 @@ LCULIB_API int lcuL_doresults (lua_State *L, int n, int err) {
 		lua_pushnil(L);
 		lcu_pusherror(L, err);
 		return 2;
+	} else if (n == 0) {
+		lua_pushboolean(L, 1);
+		return 1;
 	}
 	return n;
 }
@@ -34,10 +38,18 @@ static void pushhandlemap (lua_State *L) {
 #define LCU_UVLOOPCLS	LCU_PREFIX"EventLoop"
 
 static int terminateloop (lua_State *L) {
-	uv_loop_t *uv = (uv_loop_t *)luaL_checkudata(L, 1, LCU_UVLOOPCLS);
-	int err = uv_loop_close(uv);
-	if (err == UV_EBUSY && uv_run(uv, UV_RUN_NOWAIT) == 0)
-		err = uv_loop_close(uv);
+	uv_loop_t *loop = (uv_loop_t *)luaL_checkudata(L, 1, LCU_UVLOOPCLS);
+	int err = uv_loop_close(loop);
+	if (err == UV_EBUSY) {
+		loop->data = (void *)L;
+
+printf("WARN: still pending UV handles\n");
+uv_print_all_handles(loop, stderr);
+
+		err = uv_run(loop, UV_RUN_NOWAIT);
+		if (!err) err = uv_loop_close(loop);
+		loop->data = NULL;
+	}
 	lcu_assert(!err);
 	return 0;
 }
@@ -66,4 +78,51 @@ LCULIB_API void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
 		lua_pushcclosure(L, l->func, nup);  /* closure with those upvalues */
 		lua_setfield(L, -(nup + 2), l->name);
 	}
+}
+
+LCULIB_API void lcuM_newclass (lua_State *L, const luaL_Reg *l, int nup,
+                               const char *name, const char *super) {
+	loopL_newclass(L, name, super);
+	lua_pushvalue(L, -1);
+	lua_setfield(L, -2, "__index");
+	lua_insert(L, -(nup+1));
+	lcuM_setfuncs(L, l, nup);
+	lua_remove(L, -(nup+1));
+}
+
+
+LCULIB_API void lcuL_printstack (lua_State *L, const char *file, int line,
+                                               const char *func) {
+	int i;
+	printf("%s:%d: function '%s'\n", file, line, func);
+	for(i = 1; i <= lua_gettop(L); ++i) {
+		const char *typename = NULL;
+		printf("\t[%d] = ", i);
+		switch (lua_type(L, i)) {
+			case LUA_TNUMBER:
+				printf("%g", lua_tonumber(L, i));
+				break;
+			case LUA_TSTRING:
+				printf("\"%s\"", lua_tostring(L, i));
+				break;
+			case LUA_TBOOLEAN:
+				printf(lua_toboolean(L, i) ? "true" : "false");
+				break;
+			case LUA_TNIL:
+				printf("nil");
+				break;
+			case LUA_TUSERDATA:
+				if (lua_getmetatable(L, i)) {
+					lua_getfield(L, -1, "__name");
+					typename = lua_tostring(L, -1);
+					lua_pop(L, 2);
+				}
+			default:
+				printf("%s: %p", typename ? typename : luaL_typename(L, i),
+				                 lua_topointer(L, i));
+				break;
+		}
+		printf("\n");
+	}
+	printf("\n");
 }
