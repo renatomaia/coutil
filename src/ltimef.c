@@ -17,12 +17,9 @@ static void lcuB_onidle (uv_idle_t *h) {
 static int lcuK_setupidle (lua_State *L, int status, lua_KContext ctx) {
 	uv_loop_t *loop = lcu_toloop(L);
 	lcu_PendingOp *op = lcu_getopof(L);
-	int scheduled;
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
-	scheduled = lcu_doresumed(L, loop);
-	lcu_ignoreop(op, scheduled);
-	if (scheduled) {
+	if (lcu_doresumed(L, loop, op)) {
 		uv_handle_t *handle = lcu_tohandle(op);
 		uv_idle_t *idle = (uv_idle_t *)handle;
 		lua_settop(L, 0);  /* discard yield results */
@@ -40,11 +37,8 @@ static void lcuB_ontimer (uv_timer_t *h) {
 static int lcuK_setuptimer (lua_State *L, int status, lua_KContext ctx) {
 	uv_loop_t *loop = lcu_toloop(L);
 	lcu_PendingOp *op = lcu_getopof(L);
-	int scheduled;
 	lcu_assert(status == LUA_YIELD);
-	scheduled = lcu_doresumed(L, loop);
-	lcu_ignoreop(op, scheduled);
-	if (scheduled) {
+	if (lcu_doresumed(L, loop, op)) {
 		uv_handle_t *handle = lcu_tohandle(op);
 		uv_timer_t *timer = (uv_timer_t *)handle;
 		uint64_t msecs = (uint64_t)(ctx);
