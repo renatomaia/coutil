@@ -470,20 +470,16 @@ static void lcuB_onconnected (uv_connect_t* request, int err) {
 	lcu_assert(L != NULL);
 	lcu_assert(co != NULL);
 	lcu_assert(lua_gettop(co) == 0);
-	lcu_freereq(L, op);
 	lcuL_doresults(co, 0, err);
 	lcu_resumeop(op, loop, co);
 }
 
 static int lcuK_setupconnect (lua_State *L, int status, lua_KContext ctx) {
 	uv_loop_t *loop = lcu_toloop(L);
-	lcu_PendingOp *op = lcu_getopof(L);
-	int scheduled;
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
-	scheduled = lcu_doresumed(L, loop);
-	lcu_ignoreop(op, scheduled);
-	if (scheduled) {
+	if (lcu_doresumed(L, loop, NULL)) {
+		lcu_PendingOp *op = lcu_getopof(L);
 		uv_connect_t *request = (uv_connect_t *)lcu_torequest(op);
 		lcu_TcpSocket *tcp = ownedtcp(L, loop, LCU_TCPTYPE_STREAM);
 		const struct sockaddr *addr = totcpaddr(L, 2, tcp);
@@ -516,7 +512,6 @@ static void lcuB_onwriten (uv_write_t* request, int err) {
 	lcu_assert(L != NULL);
 	lcu_assert(co != NULL);
 	lcu_assert(lua_gettop(co) == 0);
-	lcu_freereq(L, op);
 	lcuL_doresults(co, 0, err);
 	lcu_resumeop(op, loop, co);
 }
@@ -524,12 +519,9 @@ static void lcuB_onwriten (uv_write_t* request, int err) {
 static int lcuK_setupwrite (lua_State *L, int status, lua_KContext ctx) {
 	uv_loop_t *loop = lcu_toloop(L);
 	lcu_PendingOp *op = lcu_getopof(L);
-	int scheduled;
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
-	scheduled = lcu_doresumed(L, loop);
-	lcu_ignoreop(op, scheduled);
-	if (scheduled) {
+	if (lcu_doresumed(L, loop, NULL)) {
 		uv_write_t *request = (uv_write_t *)lcu_torequest(op);
 		lcu_TcpSocket *tcp = ownedtcp(L, loop, LCU_TCPTYPE_STREAM);
 		uv_stream_t *stream = (uv_stream_t *)&tcp->handle;
@@ -578,7 +570,8 @@ static void luaB_ontcprecv (uv_stream_t* stream,
 
 static int stopread (lua_State *L, uv_stream_t *stream) {
 	int err = uv_read_stop(stream);
-	lcu_freehdl(L, (uv_handle_t *)stream);
+	stream->data = NULL;
+	lcu_freecoro(L, (void *)stream);
 	return lcuL_doresults(L, lua_gettop(L), err);
 }
 
@@ -587,7 +580,7 @@ static int lcuK_tcprecvdata (lua_State *L, int status, lua_KContext ctx) {
 	uv_stream_t *handle = (uv_stream_t *)&tcp->handle;
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
-	if (!lcu_doresumed(L, handle->loop)) return stopread(L, handle);
+	if (!lcu_doresumed(L, handle->loop, NULL)) return stopread(L, handle);
 	return lua_gettop(L);
 }
 
@@ -596,7 +589,7 @@ static int lcuK_tcpgetbuffer (lua_State *L, int status, lua_KContext ctx) {
 	uv_tcp_t *handle = &tcp->handle;
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
-	if (lcu_doresumed(L, handle->loop)) {
+	if (lcu_doresumed(L, handle->loop, NULL)) {
 		size_t sz;
 		char *buf = luamem_checkmemory(L, 2, &sz);
 		size_t start = posrelat(luaL_optinteger(L, 3, 1), sz);
@@ -635,7 +628,6 @@ static void lcuB_onshutdown (uv_shutdown_t* request, int err) {
 	lcu_assert(L != NULL);
 	lcu_assert(co != NULL);
 	lcu_assert(lua_gettop(co) == 0);
-	lcu_freereq(L, op);
 	lcuL_doresults(co, 0, err);
 	lcu_resumeop(op, loop, co);
 }
@@ -643,12 +635,9 @@ static void lcuB_onshutdown (uv_shutdown_t* request, int err) {
 static int lcuK_setupshutdown (lua_State *L, int status, lua_KContext ctx) {
 	uv_loop_t *loop = lcu_toloop(L);
 	lcu_PendingOp *op = lcu_getopof(L);
-	int scheduled;
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
-	scheduled = lcu_doresumed(L, loop);
-	lcu_ignoreop(op, scheduled);
-	if (scheduled) {
+	if (lcu_doresumed(L, loop, NULL)) {
 		lcu_TcpSocket *tcp = ownedtcp(L, loop, LCU_TCPTYPE_STREAM);
 		uv_shutdown_t *request = (uv_shutdown_t *)lcu_torequest(op);
 		uv_stream_t *stream = (uv_stream_t *)&tcp->handle;
@@ -671,14 +660,13 @@ static int lcuM_tcp_shutdown (lua_State *L) {
 static int lcuK_accepttcp (lua_State *L, int status, lua_KContext ctx) {
 	lcu_TcpSocket *tcp = livetcp(L, LCU_TCPTYPE_LISTEN);
 	uv_stream_t *stream = (uv_stream_t *)&tcp->handle;
-
-	void *backup = stream->data;
-	lcu_freehdl(L, (uv_handle_t *)stream); /* freecoro(L, (void *)stream); */
-	stream->data = backup;
-
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
-	if (lcu_doresumed(L, stream->loop)) {
+	if (stream->data == (void *)L) {
+		stream->data = LCU_TCPTOKEN_WAITCONN;
+		lcu_freecoro(L, (void *)stream);
+	}
+	if (lcu_doresumed(L, stream->loop, NULL)) {
 		int domain = lcu_gettcpdom(tcp);
 		lcu_TcpSocket *newtcp = lcu_newtcp(L, domain, LCU_TCPTYPE_STREAM);
 		uv_tcp_t *newhdl = &newtcp->handle;
@@ -690,7 +678,7 @@ static int lcuK_accepttcp (lua_State *L, int status, lua_KContext ctx) {
 		return lcuL_doresults(L, 1, err);
 	}
 	uv_unref((uv_handle_t *)stream); /* uv_listen_stop */
-	return lua_gettop(L);
+	return lua_gettop(L)-1;
 }
 
 static void luaB_onconection (uv_stream_t* stream, int status) {
@@ -703,9 +691,10 @@ static void luaB_onconection (uv_stream_t* stream, int status) {
 		lua_State *co = (lua_State *)stream->data;
 		lcu_assert(co);
 		lcu_assert(lua_gettop(co) == 0);
-		stream->data = LCU_TCPTOKEN_WAITCONN;
 		lcu_resumecoro(co, stream->loop);
+		// TODO: code below is wrong
 		if (stream->data != (void *)co) uv_unref((uv_handle_t *)stream);
+		// FIXED: if (stream->data == LCU_TCPTOKEN_WAITCONN) uv_unref((uv_handle_t *)stream);
 	}
 }
 
@@ -719,23 +708,30 @@ static int lcuM_tcp_accept (lua_State *L) {
 		else handle->data = LCU_TCPTOKEN_WAITCONN;  /* no pending accepts */
 		lua_pushlightuserdata(L, loop);  /* token to sign scheduled */
 		return lcuK_accepttcp(L, LUA_YIELD, 0);
+	} else if (handle->data != LCU_TCPTOKEN_WAITCONN) {
+		lua_pushnil(L);
+		lua_pushliteral(L, "unavailable");
+		return 2;
 	}
 	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
-	luaL_argcheck(L, handle->data == LCU_TCPTOKEN_WAITCONN, 1, "not listening");
 	lua_settop(L, 1);
 	if (!uv_has_ref(handle)) uv_ref(handle); /* uv_listen_start */
 	lcu_chkinitiated(L, (void *)handle, 0);  /* savecoro */
 	return lcu_yieldhdl(L, 0, lcuK_accepttcp, handle);
 }
 
-/* succ [, errmsg] = socket:listen([backlog]) */
+/* succ [, errmsg] = socket:listen(backlog) */
 static int lcuM_tcp_listen (lua_State *L) {
 	lcu_TcpSocket *tcp = ownedtcp(L, lcu_toloop(L), LCU_TCPTYPE_LISTEN);
 	uv_stream_t *stream = (uv_stream_t *)&tcp->handle;
-	int err, backlog = (int)luaL_optinteger(L, 2, 32);
-	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
-	luaL_argcheck(L, stream->data == NULL, 1, "already listening");
-	luaL_argcheck(L, backlog < INT_MAX/LCU_TCPFLAG_ACCEPTINC, 2, "too much");
+	int err, backlog = (int)luaL_checkinteger(L, 2);
+	luaL_argcheck(L, 0 <= backlog && backlog < INT_MAX/LCU_TCPFLAG_ACCEPTINC, 2,
+	                 "invalid backlog value");
+	if (stream->data != NULL) {
+		lua_pushnil(L);
+		lua_pushliteral(L, "already listening");
+		return 2;
+	}
 	lua_settop(L, 1);
 	err = uv_listen(stream, backlog, luaB_onconection);
 	if (!err) stream->data = LCU_TCPTOKEN_WAITCONN;

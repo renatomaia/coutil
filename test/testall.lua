@@ -6,6 +6,10 @@ local spawnerr
 
 local test
 
+function newgroup(title)
+	print("\n--- "..title.." "..string.rep("-", 65-#title))
+end
+
 function newtest(title)
 	test = title
 	print()
