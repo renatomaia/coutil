@@ -122,13 +122,8 @@ LCULIB_API int lcu_doresumed (lua_State *L, uv_loop_t *loop, lcu_PendingOp *op) 
 	if (scheduled) lua_pop(L, 1);  /* discard token */
 	if (op) {
 		uv_handle_t *handle = lcu_tohandle(op);
-		if (lcu_isrequestop(op)) {
-			lcu_freecoro(L, (void *)handle);
-			op->flags = 0;
-			handle->type = UV_UNKNOWN_HANDLE;
-		} else if (!scheduled && !uv_is_closing(handle)) {
+		if (!lcu_isrequestop(op) && !scheduled && !uv_is_closing(handle))
 			uv_close(handle, lcuB_onhandleclosed);
-		}
 		setignoredop(op);  /* mark as not rescheduled */
 	}
 	return scheduled;
@@ -136,7 +131,21 @@ LCULIB_API int lcu_doresumed (lua_State *L, uv_loop_t *loop, lcu_PendingOp *op) 
 
 LCULIB_API int lcuK_chkignoreop (lua_State *L, int status, lua_KContext ctx) {
 	lcu_assert(status == LUA_YIELD);
-	lcu_assert(!ctx);
 	lcu_doresumed(L, lcu_toloop(L), lcu_getopof(L));
-	return lua_gettop(L);
+	return lua_gettop(L)-(int)ctx;
+}
+
+LCULIB_API void lcu_dorequest (uv_req_t *request, uv_loop_t *loop, int err) {
+	lua_State *co = (lua_State *)request->data;
+	lcu_PendingOp *op = (lcu_PendingOp *)request;
+	int pending = lcu_ispendingop(op);
+	lcu_freecoro((lua_State *)loop->data, (void *)request);
+	op->flags = 0;
+	lcu_tohandle(op)->type = UV_UNKNOWN_HANDLE;
+	if (pending) {
+		lcu_assert(co != NULL);
+		lcu_assert(lua_gettop(co) == 0);
+		lcuL_doresults(co, 0, err);
+		lcu_resumeop(op, loop, co);
+	}
 }

@@ -62,5 +62,7 @@ LCULIB_API int lcu_doresumed (lua_State *L, uv_loop_t *loop, lcu_PendingOp *op);
 
 LCULIB_API int lcuK_chkignoreop (lua_State *L, int status, lua_KContext ctx);
 
+LCULIB_API void lcu_dorequest (uv_req_t *request, uv_loop_t *loop, int err);
+
 
 #endif
