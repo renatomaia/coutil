@@ -15,9 +15,16 @@ static int lcuM_run (lua_State *L) {
 	return 1;
 }
 
+static int lcuM_printall (lua_State *L) {
+	uv_loop_t *loop = lcu_toloop(L);
+	uv_print_all_handles(loop, stderr);
+	return 0;
+}
+
 LCULIB_API void lcuM_addscheduf (lua_State *L) {
 	static const luaL_Reg modf[] = {
 		{"run", lcuM_run},
+		{"printall", lcuM_printall},
 		{NULL, NULL}
 	};
 	lcuM_setfuncs(L, modf, LCU_MODUPVS);

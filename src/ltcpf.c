@@ -710,7 +710,10 @@ static int lcuM_tcp_listen (lua_State *L) {
 	}
 	lua_settop(L, 1);
 	err = uv_listen(stream, backlog, luaB_onconection);
-	if (!err) stream->data = LCU_TCPTOKEN_WAITCONN;
+	if (!err) {
+		stream->data = LCU_TCPTOKEN_WAITCONN;
+		uv_unref((uv_handle_t *)stream); /* uv_listen_stop */
+	}
 	return lcuL_doresults(L, 0, err);
 }
 
