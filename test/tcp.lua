@@ -175,6 +175,13 @@ for _, domain in ipairs{"ipv4", "ipv6"} do
 	end
 
 	do case "canceled listen"
+		do
+			local server = system.tcp("listen", domain)
+			assert(server:bind(ipaddr[domain].localaddress))
+			assert(server:listen(backlog))
+		end
+		gc()
+
 		local server = system.tcp("listen", domain)
 		assert(server:bind(ipaddr[domain].localaddress))
 		assert(server:listen(backlog))
@@ -669,7 +676,7 @@ for _, domain in ipairs{"ipv4", "ipv6"} do
 		local stage = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
-			stream = system.tcp("stream", domain)
+			local stream = system.tcp("stream", domain)
 			assert(stream:connect(ipaddr[domain].localaddress) == nil)
 			stage = 1
 			local a,b,c = stream:connect(ipaddr[domain].localaddress)
@@ -684,7 +691,6 @@ for _, domain in ipairs{"ipv4", "ipv6"} do
 			system.pause()
 			coroutine.resume(garbage.coro, .1, 2.2, 33.3) -- while being closed.
 			assert(stage == 2)
-			assert(server:close())
 			stage = 3
 		end)
 
