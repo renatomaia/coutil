@@ -545,6 +545,15 @@ for _, domain in ipairs{"ipv4", "ipv6"} do
 
 	newtest "connect"
 
+	do case "errors"
+		local stream = system.tcp("stream", domain)
+
+		assert(stream.listen == nil)
+		assert(stream.accept == nil)
+
+		done()
+	end
+
 	do case "successful connection"
 		local connected
 		spawn(function ()
@@ -590,39 +599,110 @@ for _, domain in ipairs{"ipv4", "ipv6"} do
 		done()
 	end
 
+	do case "cancel schedule"
+		local stage = 0
+		spawn(function ()
+			garbage.coro = coroutine.running()
+			local stream = system.tcp("stream", domain)
+			local a,b,c = stream:connect(ipaddr[domain].localaddress)
+			assert(a == true)
+			assert(b == nil)
+			assert(c == 3)
+			stage = 1
+			coroutine.yield()
+			stage = 2
+		end)
+		assert(stage == 0)
+
+		coroutine.resume(garbage.coro, true,nil,3)
+		assert(stage == 1)
+
+		gc()
+		assert(system.run() == false)
+		assert(stage == 1)
+
+		done()
+	end
+
+	do case "cancel and reschedule"
+		local server = system.tcp("listen", domain)
+		assert(server:bind(ipaddr[domain].localaddress))
+		assert(server:listen(backlog))
+
+		local stage = 0
+		spawn(function ()
+			garbage.coro = coroutine.running()
+			local stream = system.tcp("stream", domain)
+			local a,b = stream:connect(ipaddr[domain].localaddress)
+			assert(a == nil)
+			assert(b == nil)
+			stage = 1
+			assert(stream:connect(ipaddr[domain].localaddress))
+			stage = 2
+		end)
+		assert(stage == 0)
+
+		coroutine.resume(garbage.coro)
+		assert(stage == 1)
+
+		local connected
+		spawn(function ()
+			assert(server:accept())
+			connected = true
+		end)
+		assert(connected == nil)
+
+		gc()
+		assert(system.run() == false)
+		assert(stage == 2)
+
+		server:close()
+
+		done()
+	end
+
+	do case "resume while closing"
+		local server = system.tcp("listen", domain)
+		assert(server:bind(ipaddr[domain].localaddress))
+		assert(server:listen(backlog))
+
+		local stage = 0
+		spawn(function ()
+			garbage.coro = coroutine.running()
+			stream = system.tcp("stream", domain)
+			assert(stream:connect(ipaddr[domain].localaddress) == nil)
+			stage = 1
+			local a,b,c = stream:connect(ipaddr[domain].localaddress)
+			assert(a == .1)
+			assert(b == 2.2)
+			assert(c == 33.3)
+			stage = 2
+		end)
+		assert(stage == 0)
+
+		spawn(function ()
+			system.pause()
+			coroutine.resume(garbage.coro, .1, 2.2, 33.3) -- while being closed.
+			assert(stage == 2)
+			assert(server:close())
+			stage = 3
+		end)
+
+		coroutine.resume(garbage.coro)
+		assert(stage == 1)
+
+		gc()
+		assert(system.run() == false)
+		assert(stage == 3)
+
+		done()
+	end
+
 end
 
 do return end
 
 --[=====================================[
-do case "reschedule same signal"
-	local stage = 0
-	spawn(function ()
-		awaitsig("user1")
-		stage = 1
-		awaitsig("user1")
-		stage = 2
-	end)
-	assert(stage == 0)
-
-	spawn(function ()
-		pause()
-		sendsignal("USR1")
-		pause()
-		sendsignal("USR1")
-	end)
-
-	gc()
-	assert(run("step") == true)
-	assert(stage == 1)
-
-	gc()
-	assert(run() == false)
-	assert(stage == 2)
-
-	done()
-end
-
 do case "reschedule different signal"
 	local stage = 0
 	spawn(function ()

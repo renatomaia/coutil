@@ -462,16 +462,8 @@ static int lcuM_tcp_getoption (lua_State *L) {
 }
 
 
-static void lcuB_onconnected (uv_connect_t* request, int err) {
-	uv_loop_t *loop = request->handle->loop;
-	lua_State *L = (lua_State *)loop->data;
-	lua_State *co = (lua_State *)request->data;
-	lcu_PendingOp *op = (lcu_PendingOp *)request;
-	lcu_assert(L != NULL);
-	lcu_assert(co != NULL);
-	lcu_assert(lua_gettop(co) == 0);
-	lcuL_doresults(co, 0, err);
-	lcu_resumeop(op, loop, co);
+static void lcuB_onconnected (uv_connect_t *request, int err) {
+	lcu_dorequest((uv_req_t *)request, request->handle->loop, err);
 }
 
 static int lcuK_setupconnect (lua_State *L, int status, lua_KContext ctx) {
@@ -485,9 +477,9 @@ static int lcuK_setupconnect (lua_State *L, int status, lua_KContext ctx) {
 		const struct sockaddr *addr = totcpaddr(L, 2, tcp);
 		lcu_chkinitiated(L, op, uv_tcp_connect(request, &tcp->handle, addr,
 		                                       lcuB_onconnected));
-		return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
+		return lcu_yieldop(L, (lua_KContext)2, lcuK_chkignoreop, op);
 	}
-	return lua_gettop(L);
+	return lua_gettop(L)-2;
 }
 
 /* succ [, errmsg] = tcp:connect(address) */
@@ -504,16 +496,8 @@ static size_t posrelat (ptrdiff_t pos, size_t len) {
 	else return len - ((size_t)-pos) + 1;
 }
 
-static void lcuB_onwriten (uv_write_t* request, int err) {
-	uv_loop_t *loop = request->handle->loop;
-	lua_State *L = (lua_State *)loop->data;
-	lua_State *co = (lua_State *)request->data;
-	lcu_PendingOp *op = (lcu_PendingOp *)request;
-	lcu_assert(L != NULL);
-	lcu_assert(co != NULL);
-	lcu_assert(lua_gettop(co) == 0);
-	lcuL_doresults(co, 0, err);
-	lcu_resumeop(op, loop, co);
+static void lcuB_onwriten (uv_write_t *request, int err) {
+	lcu_dorequest((uv_req_t *)request, request->handle->loop, err);
 }
 
 static int lcuK_setupwrite (lua_State *L, int status, lua_KContext ctx) {
@@ -535,9 +519,9 @@ static int lcuK_setupwrite (lua_State *L, int status, lua_KContext ctx) {
 		bufs[0].len = end-start+1;
 		bufs[0].base = (char *)(data+start-1);
 		lcu_chkinitiated(L, op, uv_write(request, stream, bufs, 1, lcuB_onwriten));
-		return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
+		return lcu_yieldop(L, (lua_KContext)4, lcuK_chkignoreop, op);
 	}
-	return lua_gettop(L);
+	return lua_gettop(L)-4;
 }
 
 /* sent [, errmsg] = tcp:send(data [, i [, j]]) */
@@ -620,16 +604,8 @@ static int lcuM_tcp_receive (lua_State *L) {
 }
 
 
-static void lcuB_onshutdown (uv_shutdown_t* request, int err) {
-	uv_loop_t *loop = request->handle->loop;
-	lua_State *L = (lua_State *)loop->data;
-	lua_State *co = (lua_State *)request->data;
-	lcu_PendingOp *op = (lcu_PendingOp *)request;
-	lcu_assert(L != NULL);
-	lcu_assert(co != NULL);
-	lcu_assert(lua_gettop(co) == 0);
-	lcuL_doresults(co, 0, err);
-	lcu_resumeop(op, loop, co);
+static void lcuB_onshutdown (uv_shutdown_t *request, int err) {
+	lcu_dorequest((uv_req_t *)request, request->handle->loop, err);
 }
 
 static int lcuK_setupshutdown (lua_State *L, int status, lua_KContext ctx) {
@@ -642,14 +618,14 @@ static int lcuK_setupshutdown (lua_State *L, int status, lua_KContext ctx) {
 		uv_shutdown_t *request = (uv_shutdown_t *)lcu_torequest(op);
 		uv_stream_t *stream = (uv_stream_t *)&tcp->handle;
 		lcu_chkinitiated(L, op, uv_shutdown(request, stream, lcuB_onshutdown));
-		return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
+		return lcu_yieldop(L, (lua_KContext)1, lcuK_chkignoreop, op);
 	}
-	return lua_gettop(L);
+	return lua_gettop(L)-1;
 }
 
 /* succ [, errmsg] = socket:shutdown() */
 static int lcuM_tcp_shutdown (lua_State *L) {
-	lua_settop(L, 2);  /* discard extra arguments */
+	lua_settop(L, 1);  /* discard extra arguments */
 	lcu_resetreq(L, UV_SHUTDOWN, 0, lcuK_setupshutdown);  /* never return */
 	return 0;
 }
