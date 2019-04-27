@@ -145,7 +145,7 @@ Returns `true` if the exclusive ownership identified by value `e` belongs to the
 
 Releases from the current coroutine the exclusive ownership identified by value `e`.
 It also emits an event on `e` (see [`coutil.event`](#events)) to resume one of the coroutines awaiting to acquire this ownership.
-The resumed coroutine shall later emit an event on `e` to resume any remaning threads waiting for the onwership, which is automatically done by calling [`unlock`](#mutexunlock-e) after the call to [`lock`](#mutexlock-e) returns.
+The resumed coroutine shall later emit an event on `e` to resume any remaning threads waiting for the onwership.
 
 Promises
 --------
@@ -234,7 +234,7 @@ Resumes scheduled coroutines that becomes ready according to its corresponding s
 
 ### `system.pause ([delay])`
 
-Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it to be resumed after `delay` seconds have passed since the coroutine was last resumed.
+Suspends the execution of the calling coroutine, and schedules it to be resumed after `delay` seconds have passed since the coroutine was last resumed.
 
 If `delay` is not provided or is `nil`, the coroutine is scheduled as ready, so it will be resumed as soon as possible.
 The same is applies when `delay` is zero or negative.
@@ -259,8 +259,8 @@ Suspends the execution of the calling coroutine (like [`coroutine.yield`](http:/
 
 | `signal`      | UNIX Name | Action    | Indication |
 | ------------- | --------- | --------- | ---------- |
-| `"bgread"`    | SIGTTIN   | stop      | Read from terminal while in background. |
-| `"bgwrite"`   | SIGTTOU   | stop      | Write to terminal while in background. |
+| `"bgread"`    | SIGTTIN   | stop      | **Read** from terminal while in **background**. |
+| `"bgwrite"`   | SIGTTOU   | stop      | **Write** to terminal while in **backgroun**d. |
 | `"hangup"`    | SIGHUP    | terminate | Terminal was closed. |
 | `"interrupt"` | SIGINT    | terminate | Terminal requests the process to terminate. (_e.g._ `Ctrl+C`) |
 | `"quit"`      | SIGQUIT   | core dump | Terminal requests the process to **quit** with a [core dump](https://en.wikipedia.org/wiki/Core_dump). |
@@ -273,12 +273,12 @@ Suspends the execution of the calling coroutine (like [`coroutine.yield`](http:/
 | ------------- | --------- | --------- | ---------- |
 | `"child"`     | SIGCHLD   | ignore    | **Child** process terminated, stopped, or continued. |
 | `"clocktime"` | SIGALRM   | terminate | Real or **clock time** elapsed. |
-| `"cpulimit"`  | SIGXCPU   | core dump | Defined CPU time limit exceeded. |
+| `"cpulimit"`  | SIGXCPU   | core dump | Defined **CPU** time **limit** exceeded. |
 | `"cputimall"` | SIGPROF   | terminate | **CPU time** used by the **process** and by the **system on behalf of the process** elapses. |
 | `"cputimprc"` | SIGVTALRM | terminate | **CPU time** used by the **process** elapsed.  |
 | `"debug"`     | SIGTRAP   | core dump | Exception or **debug** trap occurs. |
-| `"filelimit"` | SIGXFSZ   | core dump | Allowed file size limit exceeded. |
-| `"loosepipe"` | SIGPIPE   | terminate | Write on a pipe with no one to read it. |
+| `"filelimit"` | SIGXFSZ   | core dump | Allowed **file** size **limit** exceeded. |
+| `"loosepipe"` | SIGPIPE   | terminate | Write on a **pipe** with no one to read it. |
 | `"polling"`   | SIGPOLL   | terminate | Event occurred on [watched file descriptor](https://pubs.opengroup.org/onlinepubs/9699919799/functions/ioctl.html). |
 | `"sysargerr"` | SIGSYS    | core dump | System call with a bad argument. |
 | `"urgsock"`   | SIGURG    | core dump | High-bandwidth data is available at a socket. |
@@ -291,8 +291,8 @@ Any additional arguments to `awaitsig` are passed as extra results to [`coroutin
 
 ### `system.address (type [, data [, port [, mode]]])`
 
-Returns a new IP address structure family defined by `type`,
-which is either the string `"ipv4"` or `"ipv6"`,
+Returns a new IP address structure.
+`type` is either the string `"ipv4"` or `"ipv6"`,
 to indicate the address to be created shall be a IPv4 or IPv6 address, respectively.
 
 If `data` is not provided the structure created is initilized with null data:
@@ -318,3 +318,29 @@ like `"\192\0\2\128"` (IPv4) or `"\0\0\0\0\0\0\0\0\0\0\xff\xff\xc0\x00\x02\x80"`
 
 Moreover, you can pass the object to the standard function `tostring` to obtain the address as a string inside a URI,
 like `"192.0.2.128:80"` (IPv4) or `[::ffff:c000:0280]:80` (IPv6).
+
+### `system.tcp ([type [, domain]])`
+
+### `tcp:close ()`
+
+### `tcp:getdomain ()`
+
+### `tcp:getaddress ([site [, address]])`
+
+### `tcp:bind (address)`
+
+### `stream:setoption (name, value)`
+
+### `stream:getoption (name)`
+
+### `stream:connect (address)`
+
+### `stream:send (data [, i [, j]])`
+
+### `stream:receive (buffer [, i [, j]])`
+
+### `stream:shutdown ()`
+
+### `listen:listen (backlog)`
+
+### `listen:accept ()`

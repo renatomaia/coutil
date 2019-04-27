@@ -82,7 +82,7 @@ LCULIB_API int lcu_yieldop (lua_State *L,
 LCULIB_API int lcu_resumecoro (lua_State *co, uv_loop_t *loop) {
 	lua_State *L = (lua_State *)loop->data;
 	lua_pushlightuserdata(co, loop);  /* token to sign scheduler resume */
-	return lua_resume(co, L, lua_gettop(L));
+	return lua_resume(co, L, lua_gettop(co));
 }
 
 LCULIB_API void lcu_resumeop (lcu_PendingOp *op, uv_loop_t *loop, lua_State *co) {

@@ -538,12 +538,18 @@ static void luaB_ontcpwbuf (uv_handle_t* handle,
 	lua_State *co = (lua_State *)handle->data;
 	lcu_assert(co);
 	lua_pushlightuserdata(co, bufref);
+
+printf("lcu_resumecoro\n");
+
 	lcu_resumecoro(co, handle->loop);
 }
 
 static void luaB_ontcprecv (uv_stream_t* stream,
                             ssize_t nread,
                             const uv_buf_t* buf) {
+
+printf("luaB_ontcprecv\n");
+
 	lua_State *co = (lua_State *)stream->data;
 	lcu_assert(co);
 	lua_settop(co, 0);
@@ -560,6 +566,9 @@ static int stopread (lua_State *L, uv_stream_t *stream) {
 }
 
 static int lcuK_tcprecvdata (lua_State *L, int status, lua_KContext ctx) {
+
+printf("lcuK_tcprecvdata\n");
+
 	lcu_TcpSocket *tcp = livetcp(L, LCU_TCPTYPE_STREAM);
 	uv_stream_t *handle = (uv_stream_t *)&tcp->handle;
 	lcu_assert(status == LUA_YIELD);
@@ -569,11 +578,17 @@ static int lcuK_tcprecvdata (lua_State *L, int status, lua_KContext ctx) {
 }
 
 static int lcuK_tcpgetbuffer (lua_State *L, int status, lua_KContext ctx) {
+
+printf("lcuK_tcpgetbuffer\n");
+
 	lcu_TcpSocket *tcp = livetcp(L, LCU_TCPTYPE_STREAM);
 	uv_tcp_t *handle = &tcp->handle;
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
 	if (lcu_doresumed(L, handle->loop, NULL)) {
+
+lcuL_printstack(L, __FILE__, __LINE__, __func__);
+
 		size_t sz;
 		char *buf = luamem_checkmemory(L, 2, &sz);
 		size_t start = posrelat(luaL_optinteger(L, 3, 1), sz);
@@ -691,7 +706,7 @@ static int lcuM_tcp_accept (lua_State *L) {
 	}
 	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
 	lua_settop(L, 1);
-	if (!uv_has_ref(handle)) uv_ref(handle); /* uv_listen_start */
+	uv_ref(handle); /* uv_listen_start */
 	lcu_chkinitiated(L, (void *)handle, 0);  /* savecoro */
 	return lcu_yieldhdl(L, 0, lcuK_accepttcp, handle);
 }

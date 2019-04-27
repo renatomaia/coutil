@@ -12,7 +12,7 @@
 #include <arpa/inet.h>  /* IP addresses */
 
 
-#define LCU_NETADDRCLS LCU_PREFIX"NetAddress"
+#define LCU_NETADDRCLS LCU_PREFIX"netaddress"
 
 #define lcu_chkaddress(L,i)	((struct sockaddr *) \
                            	 luaL_checkudata(L, i, LCU_NETADDRCLS))
@@ -33,9 +33,9 @@ typedef enum lcu_TcpSockType {
 #define LCU_TCPTYPE_SOCKET 2
 
 static const char *const lcu_TcpSockCls[] = {
-	LCU_PREFIX"TcpStream",
-	LCU_PREFIX"TcpListen",
-	LCU_PREFIX"TcpSocket"
+	LCU_PREFIX"tcpstream",
+	LCU_PREFIX"tcplisten",
+	LCU_PREFIX"tcpsocket"
 };
 
 #define LCU_TCPFLAG_KEEPALIVE 0x01
