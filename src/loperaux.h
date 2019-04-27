@@ -25,10 +25,6 @@ typedef struct lcu_PendingOp {
 #define lcu_tohandle(O) ((uv_handle_t *)&((O)->kind.handle))
 #define lcu_torequest(O) ((uv_req_t *)&((O)->kind.request))
 
-#define lcu_getopcoro(O) (lua_State *)(lcu_isrequestop(O) \
-                                       ? lcu_torequest(O)->data \
-                                       : lcu_tohandle(O)->data)
-
 LCULIB_API lcu_PendingOp *lcu_getopof (lua_State *L);
 
 LCULIB_API void lcu_freecoro (lua_State *L, void *key);
