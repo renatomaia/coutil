@@ -20,8 +20,8 @@ LCULIB_API struct sockaddr *lcu_newaddress (lua_State *L, int type) {
 LCULIB_API lcu_TcpSocket *lcu_newtcp (lua_State *L, int domain, int class) {
 	lcu_TcpSocket *tcp = (lcu_TcpSocket *)lua_newuserdata(L, sizeof(lcu_TcpSocket));
 	tcp->flags = LCU_TCPFLAG_CLOSING|(domain==AF_INET6 ? LCU_TCPFLAG_IPV6DOM : 0);
+	tcp->handle.data = (void *)LUA_REFNIL;  /* not stored in registry */
 	tcp->ka_delay = 0;
-	tcp->handle.data = (void *)LUA_REFNIL;  /* mark as not closed */
 	luaL_setmetatable(L, lcu_TcpSockCls[class]);
 	return tcp;
 }
