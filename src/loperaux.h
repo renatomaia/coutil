@@ -19,26 +19,33 @@
 
 typedef struct lcu_Operation {
 	union {
-		union uv_any_handle handle;
 		union uv_any_req request;
+		union uv_any_handle handle;
 	} kind;
 	int flags;
+	lua_CFunction results;
 } lcu_Operation;
 
-#define lcu_tohandle(O) ((uv_handle_t *)&((O)->kind.handle))
+#define lcu_ispending(O) ((O)->results)
+#define lcu_isrequest(O) lcuL_testflag(O, LCU_OPFLAG_REQUEST)
 #define lcu_torequest(O) ((uv_req_t *)&((O)->kind.request))
+#define lcu_tohandle(O) ((uv_handle_t *)&((O)->kind.handle))
 
 LCULIB_API void lcu_freethrop (lcu_Operation *op);
 
-LCULIB_API int lcuU_endthrop (lua_State *thread, uv_handle_t *handle);
+LCULIB_API void lcuL_checkthrop (lua_State *L, lcu_Operation *op, int err);
 
-LCULIB_API int lcuU_endreqop (uv_loop_t *loop, uv_req_t *request, int err);
+LCULIB_API lcu_Operation *lcuT_tothrop (lua_State *L);
+
+LCULIB_API int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle);
+
+LCULIB_API int lcuU_resumereqop (uv_loop_t *loop, uv_req_t *request, int err);
 
 LCULIB_API int lcuT_doneop (lua_State *L, uv_loop_t *loop);
 
-LCULIB_API int lcuT_donethrop (lua_State *L,
-                               uv_loop_t *loop,
-                               lcu_Operation *op);
+LCULIB_API int lcuK_donethrop (lua_State *L,
+                               int status,
+                               lua_KContext kctx);
 
 LCULIB_API void lcuT_armthrop (lua_State *L, lcu_Operation *op);
 
@@ -59,7 +66,7 @@ LCULIB_API void lcu_closeobj (lua_State *L, int idx, uv_handle_t *handle);
 
 LCULIB_API void lcu_releaseobj (lua_State *L, uv_handle_t *handle);
 
-LCULIB_API int lcuU_endobjop (lua_State *thread, uv_handle_t *handle);
+LCULIB_API int lcuU_resumeobjop (lua_State *thread, uv_handle_t *handle);
 
 LCULIB_API int lcuT_awaitobjk (lua_State *L,
                                uv_handle_t *handle,
