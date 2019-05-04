@@ -2,16 +2,13 @@
 #include "lmodaux.h"
 
 
-LCULIB_API void lcu_chkerror (lua_State *L, int err) {
-	if (err < 0) lcu_error(L, err);
-}
-
-LCULIB_API int lcuL_doresults (lua_State *L, int n, int err) {
+LCULIB_API int lcuL_pushresults (lua_State *L, int n, int err) {
 	if (err < 0) {
 		lua_pop(L, n);
 		lua_pushnil(L);
 		lcu_pusherror(L, err);
-		return 2;
+		lua_pushinteger(L, -err);
+		return 3;
 	} else if (n == 0) {
 		lua_pushboolean(L, 1);
 		return 1;
@@ -55,6 +52,7 @@ uv_print_all_handles(loop, stderr);
 }
 
 LCULIB_API void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
+	int err;
 	if (uv) lua_pushlightuserdata(L, uv);
 	else {
 		uv = (uv_loop_t *)lua_newuserdata(L, sizeof(uv_loop_t));
@@ -64,7 +62,8 @@ LCULIB_API void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
 		}
 		lua_setmetatable(L, -2);
 	}
-	lcu_chkerror(L, uv_loop_init(uv));
+	err = uv_loop_init(uv);
+	if (err < 0) lcu_error(L, err);
 	lua_newtable(L);  /* LCU_COREGISTRY */
 	pushhandlemap(L);  /* LCU_HANDLEMAP */
 }

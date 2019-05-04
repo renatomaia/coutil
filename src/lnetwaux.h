@@ -14,13 +14,13 @@
 
 #define LCU_NETADDRCLS LCU_PREFIX"netaddress"
 
-#define lcu_chkaddress(L,i)	((struct sockaddr *) \
-                           	 luaL_checkudata(L, i, LCU_NETADDRCLS))
+#define lcu_checkaddress(L,i)  ((struct sockaddr *) \
+                                luaL_checkudata(L, i, LCU_NETADDRCLS))
 
-#define lcu_toaddress(L,i)	((struct sockaddr *) \
-                          	 luaL_testudata(L, i, LCU_NETADDRCLS))
+#define lcu_toaddress(L,i)  ((struct sockaddr *) \
+                             luaL_testudata(L, i, LCU_NETADDRCLS))
 
-#define lcu_isaddress(L,i)	(lcu_toaddress(L, i) != NULL)
+#define lcu_isaddress(L,i)  (lcu_toaddress(L, i) != NULL)
 
 LCULIB_API struct sockaddr *lcu_newaddress (lua_State *L, int type);
 
@@ -29,8 +29,8 @@ LCULIB_API struct sockaddr *lcu_newaddress (lua_State *L, int type);
 typedef enum lcu_TcpSockType {
 	LCU_TCPTYPE_STREAM = 0,
 	LCU_TCPTYPE_LISTEN,
+	LCU_TCPTYPE_SOCKET
 } losi_TcpSockType;
-#define LCU_TCPTYPE_SOCKET 2
 
 static const char *const lcu_TcpSockCls[] = {
 	LCU_PREFIX"tcpstream",
@@ -38,21 +38,7 @@ static const char *const lcu_TcpSockCls[] = {
 	LCU_PREFIX"tcpsocket"
 };
 
-#define LCU_TCPFLAG_KEEPALIVE 0x01
-#define LCU_TCPFLAG_NODELAY 0x02
-#define LCU_TCPFLAG_IPV6DOM 0x04
-#define LCU_TCPFLAG_CLOSING 0x08
-#define LCU_TCPFLAG_FLAGMASK 0x0f
-
-typedef struct lcu_TcpSocket {
-	uv_tcp_t handle;
-	int flags;
-	int ka_delay;
-} lcu_TcpSocket;
-
-#define lcu_islivetcp(p)	!((p)->flags&LCU_TCPFLAG_CLOSING)
-
-#define lcu_gettcpdom(p)	((p)->flags&LCU_TCPFLAG_IPV6DOM ? AF_INET6 : AF_INET)
+typedef struct lcu_TcpSocket lcu_TcpSocket;
 
 #define lcu_checktcp(L,i,c)	((lcu_TcpSocket *) \
                            	 loopL_checkinstance(L, i, lcu_TcpSockCls[c]))
@@ -62,9 +48,23 @@ typedef struct lcu_TcpSocket {
 
 #define lcu_istcp(L,i,c)	(lcu_totcp(L, i, c) != NULL)
 
+LCULIB_API uv_tcp_t *lcu_totcphandle (lcu_TcpSocket *tcp);
+
 LCULIB_API lcu_TcpSocket *lcu_newtcp (lua_State *L, int domain, int class);
 
 LCULIB_API void lcu_enabletcp (lua_State *L, int idx);
+
+LCULIB_API int lcu_islivetcp (lcu_TcpSocket *tcp);
+
+LCULIB_API int lcu_gettcpaddrfam (lcu_TcpSocket *tcp);
+
+LCULIB_API int lcu_gettcpnodelay (lcu_TcpSocket *tcp);
+
+LCULIB_API void lcu_settcpnodelay (lcu_TcpSocket *tcp, int on);
+
+LCULIB_API int lcu_gettcpkeepalive (lcu_TcpSocket *tcp);
+
+LCULIB_API void lcu_settcpkeepalive (lcu_TcpSocket *tcp, int delay);
 
 LCULIB_API int lcu_closetcp (lua_State *L, int idx);
 
