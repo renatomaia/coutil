@@ -60,25 +60,23 @@ static int endsignal (lua_State *L) {
 static void onsignal (uv_signal_t *handle, int signum) {
 	lua_State *thread = (lua_State *)handle->data;
 	lua_pushinteger(thread, signum);
-	lcuU_resumethrop(thread, handle);
+	lcuU_resumethrop(thread, (uv_handle_t *)handle);
 }
 
-static int setupsignal (lua_State *L,
-                        lcu_Operation *op,
-                        uv_handle_t *handle,
-                        uv_loop_t *loop) {
-	int signum = checksignal(L, 1);
+static int setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_signal_t *signal = (uv_signal_t *)handle;
+	int signum = checksignal(L, 1);
 	int err = 0;
-	if (loop) err = lcuT_armthrop(L, op, uv_signal_init(loop, signal));
+	if (loop) err = lcuT_armthrop(L, uv_signal_init(loop, signal));
 	else if (signal->signum != signum) err = uv_signal_stop(signal);
-	if (err < 0) return err;
-	return uv_signal_start(signal, onsignal, signum);
+	else return 0;
+	if (err >= 0) err = uv_signal_start(signal, onsignal, signum);
+	return err;
 }
 
 /* succ [, errmsg, ...] = system.awaitsig(signal) */
 static int lcuM_awaitsig (lua_State *L) {
-	return lcuT_resetopk(L, LCU_OPKIND_REQ, UV_SIGNAL, setupsignal, endsingal);
+	return lcuT_resetopk(L, LCU_THROP, UV_SIGNAL, setupsignal, endsingal);
 }
 
 LCULIB_API void lcuM_addsignalf (lua_State *L) {
