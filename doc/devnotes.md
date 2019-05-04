@@ -93,24 +93,24 @@ Thread
 |  # |  P | S | Action | Condition |
 | -- | -- | - | ------ | --------- |
 |  1 |    | T | `lcuT_resetopk` | UV request started |
-|  1 |  7 | T | `???` | UV request reused |
-|  1 |  8 | T | `???` | UV handle used as UV request |
+|  1 |  7 | T | `resetop` | UV request reused |
+|  1 |  8 | T | `resetop` | UV handle used as UV request |
 |  2 |    | T | `lcuT_resetopk+lcuT_armthrop` | UV handle initialized |
-|  2 |  7 | T | `???` | UV request used as UV handle |
-|  2 |  8 | T | `???` | UV handle reused |
+|  2 |  7 | T | `resetop` | UV request used as UV handle |
+|  2 |  8 | T | `resetop` | UV handle reused |
 |  3 |    | U | `lcuU_resumereqop+endop` | resumed by UV request callback |
 |  4 |    | T | `endop` | resumed by `coroutine.resume` |
-|  5 |  2 | T | `lcu_cancelthrop` | thread operation setup failed |
-|  5 | 10 | T | `endop+lcu_cancelthrop` | resumed by `coroutine.resume` |
+|  5 |  2 | T | `cancelthrop` | thread operation setup failed |
+|  5 | 10 | T | `endop+cancelthrop` | resumed by `coroutine.resume` |
 |  6 |    | U | `lcuU_resumethrop+endop` | resumed by UV handle callback |
 |  7 |    | U | `endop` | UV request concluded |
-|  8 |    | U | `lcuB_closedhdl` | UV handle closed |
-|  9 |  6 | U | `lcu_cancelthrop` | coroutine suspended or terminated |
+|  8 |    | U | `closedhdl` | UV handle closed |
+|  9 |  6 | U | `cancelthrop` | coroutine suspended or terminated |
 |  9 |  6 | T | `lcuT_resetopk+uv_close` | different UV handle is active |
 | 10 |  6 | T | `lcuT_resetopk` | coroutine repeats operation |
 _______________________
 - P = Previous transition
-- S = Call scope (T = Thread; U = UV loop)
+- S = Call scope (T = thread; U = UV loop)
 
 ### Resources
 
@@ -215,7 +215,7 @@ Object
 | - | - | - | ------ | --------- |
 | 1 |   | T | `lcu_closeobj` | object closed or collected |
 | 2 |   | T | `lcuT_awaitobjk` | UV handle started |
-| 3 |   | U | `lcuU_closedobj` | UV handle closed |
+| 3 |   | U | `closedobj` | UV handle closed |
 | 4 |   | T | `!lcuT_doneop && lcu_releaseobj` | resumed by `coroutine.resume` |
 | 5 |   | T | `lcu_closeobj` | object closed or collected |
 | 6 |   | U | `lcuU_resumeobjop` | resumed by UV handle callback |

@@ -2,74 +2,47 @@
 #include "loperaux.h"
 
 
-static void lcuB_oncallback (uv_handle_t *handle) {
-	lcu_PendingOp *op = (lcu_PendingOp *)handle;
-	lua_State *co = (lua_State *)handle->data;
-	lcu_assert(co != NULL);
-	lua_pushboolean(co, 1);
-	lcu_resumeop(op, handle->loop, co);
+static int returntrue (lua_State *L) {
+	lua_pushboolean(L, 1);
+	return 1;
 }
 
-static void lcuB_onidle (uv_idle_t *h) {
-	lcuB_oncallback((uv_handle_t *)h);
+static void onidle (uv_idle_t *handle) {
+	lcuU_resumethrop((lua_State *)handle->data, (uv_handle_t *)handle);
 }
 
-static int lcuK_setupidle (lua_State *L, int status, lua_KContext ctx) {
-	uv_loop_t *loop = lcu_toloop(L);
-	lcu_PendingOp *op = lcu_getopof(L);
-	lcu_assert(status == LUA_YIELD);
-	lcu_assert(!ctx);
-	if (lcu_doresumed(L, loop, op)) {
-		uv_handle_t *handle = lcu_tohandle(op);
-		uv_idle_t *idle = (uv_idle_t *)handle;
-		lua_settop(L, 0);  /* discard yield results */
-		lcu_chkinitiated(L, (void *)op, uv_idle_init(loop, idle));
-		lcu_chkstarthdl(L, handle, uv_idle_start(idle, lcuB_onidle));
-		return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
+static int setupidle (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
+	uv_idle_t *idle = (uv_idle_t *)handle;
+	int err = 0;
+	if (loop) {
+		err = lcuT_armthrop(L, uv_idle_init(loop, idle));
+		if (err >= 0) err = uv_idle_start(idle, onidle);
 	}
-	return lua_gettop(L);
+	return err;
 }
 
-static void lcuB_ontimer (uv_timer_t *h) {
-	lcuB_oncallback((uv_handle_t *)h);
+static void ontimer (uv_timer_t *handle) {
+	lcuU_resumethrop((lua_State *)handle->data, (uv_handle_t *)handle);
 }
 
-static int lcuK_setuptimer (lua_State *L, int status, lua_KContext ctx) {
-	uv_loop_t *loop = lcu_toloop(L);
-	lcu_PendingOp *op = lcu_getopof(L);
-	lcu_assert(status == LUA_YIELD);
-	if (lcu_doresumed(L, loop, op)) {
-		uv_handle_t *handle = lcu_tohandle(op);
-		uv_timer_t *timer = (uv_timer_t *)handle;
-		uint64_t msecs = (uint64_t)(ctx);
-		lua_settop(L, 0);  /* discard yield results */
-		lcu_chkinitiated(L, (void *)op, uv_timer_init(loop, timer));
-		lcu_chkstarthdl(L, handle, uv_timer_start(timer, lcuB_ontimer, msecs, msecs));
-		return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
-	}
-	return lua_gettop(L);
+static int setuptimer (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
+	uv_timer_t *timer = (uv_timer_t *)handle;
+	uint64_t msecs = (uint64_t)(lua_tonumber(L, 1)*1000);
+	int err = 0;
+	if (loop) err = lcuT_armthrop(L, uv_timer_init(loop, timer));
+	else if (uv_timer_get_repeat(timer) != msecs) err = uv_timer_stop(timer);
+	else return 0;
+	if (err >= 0) err = uv_timer_start(timer, ontimer, msecs, msecs);
+	return err;
 }
 
 /* succ [, errmsg, ...] = system.pause([delay]) */
 static int lcuM_pause (lua_State *L) {
-	lcu_PendingOp *op;
 	lua_Number delay = luaL_optnumber(L, 1, 0);
-	lua_settop(L, 0);  /* discard all arguments */
-	if (delay > 0) {
-		uv_handle_t *handle;
-		uv_timer_t *timer;
-		uint64_t msecs = (uint64_t)(delay*1000);
-		op = lcu_resethdl(L, UV_TIMER, (lua_KContext)msecs, lcuK_setuptimer);
-		handle = lcu_tohandle(op);
-		timer = (uv_timer_t *)handle;
-		if (uv_timer_get_repeat(timer) != msecs) {
-			lcu_chkerror(L, uv_timer_stop(timer));
-			lcu_chkstarthdl(L, handle, uv_timer_start(timer, lcuB_ontimer, msecs,
-			                                                               msecs));
-		}
-	}
-	else op = lcu_resethdl(L, UV_IDLE, 0, lcuK_setupidle);
-	return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
+	if (delay > 0)
+		return lcuT_resetopk(L, LCU_THROP, UV_TIMER, setuptimer, returntrue);
+	else
+		return lcuT_resetopk(L, LCU_THROP, UV_IDLE, setupidle, returntrue);
 }
 
 
