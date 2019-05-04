@@ -12,15 +12,6 @@
 #define setflag(V,B) ((V)->flags |= (B))
 #define clearflag(V,B) ((V)->flags &= ~(F))
 
-typedef struct lcu_Operation {
-	union {
-		union uv_any_req request;
-		union uv_any_handle handle;
-	} kind;
-	int flags;
-	lua_CFunction results;
-} lcu_Operation;
-
 #define torequest(O) ((uv_req_t *)&((O)->kind.request))
 #define tohandle(O) ((uv_handle_t *)&((O)->kind.handle))
 
@@ -42,58 +33,6 @@ static int resumethread (lua_State *thread, lua_State *L, uv_loop_t *loop) {
 	return lua_resume(thread, L, 0);
 }
 
-
-/*
- * Thread Operation
- */
-
-static void closedhdl (uv_handle_t *handle) {
-	lcu_Operation *op = (lcu_Operation *)handle;
-	uv_loop_t *loop = handle->loop;
-	lua_State *L = (lua_State *)loop->data;
-	lua_State *thread = (lua_State *)handle->data;
-	uv_req_t *request = torequest(op);
-	lcu_assert(!hasflag(op, FLAG_REQUEST));
-	freethread(L, (void *)handle);
-	setflag(op, FLAG_REQUEST);
-	request->type = UV_UNKNOWN_REQ;
-	request->data = (void *)thread;
-	if (hasflag(op, FLAG_PENDING)) resumethread(thread, L, loop);
-}
-
-static void cancelthrop (lcu_Operation *op) {
-	uv_handle_t *handle = tohandle(op);
-	lcu_assert(!hasflag(op, FLAG_REQUEST));
-	if (!uv_is_closing(handle)) uv_close(handle, closedhdl);
-}
-
-
-LCULIB_API int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle) {
-	uv_loop_t *loop = handle->loop;
-	lua_State *L = (lua_State *)loop->data;
-	lcu_Operation *op = (lcu_Operation *)handle;
-	int status;
-	lcu_assert(!hasflag(op, FLAG_REQUEST));
-	lcu_assert(hasflag(op, FLAG_PENDING));
-	status = resumethread(thread, L, loop)
-	if (status != LUA_YIELD || !hasflag(op, FLAG_PENDING))
-		cancelthrop(L, op);
-	return status;
-}
-
-LCULIB_API void lcuU_resumereqop (uv_loop_t *loop, uv_req_t *request, int err) {
-	lua_State *L = (lua_State *)loop->data;
-	lcu_Operation *op = (lcu_Operation *)request;
-	lcu_assert(hasflag(op, FLAG_REQUEST));
-	freethread(L, (void *)request);
-	request->type = UV_UNKNOWN_REQ;
-	if (hasflag(op, FLAG_PENDING)) {
-		lua_State *thread = (lua_State *)request->data;
-		lcuL_doresults(thread, 0, err);
-		resumethread(thread, L, loop);
-	}
-}
-
 static int haltedop (lua_State *L, uv_loop_t *loop) {
 	if (lua_touserdata(L, -1) == loop) {
 		lua_pop(L, 1);  /* discard token */
@@ -102,27 +41,36 @@ static int haltedop (lua_State *L, uv_loop_t *loop) {
 	return 1;
 }
 
-static lcu_Operation *tothrop (lua_State *L) {
-	lcu_Operation *op;
+typedef struct Operation {
+	union {
+		union uv_any_req request;
+		union uv_any_handle handle;
+	} kind;
+	int flags;
+	lua_CFunction results;
+} Operation;
+
+static Operation *tothrop (lua_State *L) {
+	Operation *op;
 	lua_pushthread(L);
 	if (lua_gettable(L, LCU_OPERATIONS) == LUA_TNIL) {
 		uv_req_t *request;
 		lua_pushthread(L);
-		op = (lcu_Operation *)lua_newuserdata(L, sizeof(lcu_Operation));
+		op = (Operation *)lua_newuserdata(L, sizeof(Operation));
 		lua_settable(L, LCU_OPERATIONS);
 		op->flags = FLAG_REQUEST;
 		request = torequest(op);
 		request->type = UV_UNKNOWN_REQ;
 		request->data = (void *)L;
 	}
-	else op = (lcu_Operation *)lua_touserdata(L, -1);
+	else op = (Operation *)lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	return op;
 }
 
 static int endop (lua_State *L, int status, lua_KContext kctx) {
 	uv_loop_t *loop = toloop(L);
-	lcu_Operation *op = tothrop(L);
+	Operation *op = tothrop(L);
 	int narg = (int)kctx;
 	clearflag(op, FLAG_PENDING);
 	if (haltedop(L, loop)) {
@@ -132,7 +80,7 @@ static int endop (lua_State *L, int status, lua_KContext kctx) {
 	return op->results(L);
 }
 
-static int startop (lua_State *L, lcu_Operation *op, int err) {
+static int startop (lua_State *L, Operation *op, int err) {
 	if (err >= 0) {
 		int narg = lua_gettop(L);
 		lcu_assert(!hasflag(op, FLAG_PENDING));
@@ -146,54 +94,130 @@ static int startop (lua_State *L, lcu_Operation *op, int err) {
 	return lcuL_pusherror(L, err);
 }
 
-typedef int (*lcu_HandleSetup) (lua_State *L, uv_handle_t *h, uv_loop_t *l);
-typedef int (*lcu_RequestSetup) (lua_State *L, uv_req_t *r);
+#define startreqop(L,O,S) startop(L, O, (S)(L, torequest(O)));
 
-#define startreqop(L,O,S) (startop(L, O, ((lcu_RequestSetup)S)(L, torequest(O))));
-#define startthrop(L,O,S,I) (startop(L, O, ((lcu_HandleSetup)S)(L, tohandle(O), I)));
+#define startthrop(L,O,S,I) startop(L, O, (S)(L, tohandle(O), I));
 
 static int resetop (lua_State *L, int status, lua_KContext kctx) {
 	uv_loop_t *loop = toloop(L);
-	lcu_Operation *op = tothrop(L);
+	Operation *op = tothrop(L);
 	int narg = (int)kctx;
-	void *setup = lua_touserdata(L, narg-1);
-	int mkreq = lua_toboolean(L, narg);
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(hasflag(op, FLAG_PENDING));
 	clearflag(op, FLAG_PENDING);
-	if (haltedop(L, loop)) return lua_gettop(L)-narg; /* return yield */
-	lcu_assert(hasflag(op, FLAG_REQUEST));
-	lcu_assert(torequest(op)->type == UV_UNKNOWN_REQ);
-	lua_settop(L, narg-2);  /* discard yield, 'setup' and 'mkreq' */
-	return mkreq ? startreqop(L, op, setup) : startthrop(L, op, setup, loop);
+	if (!haltedop(L, loop)) {
+		int mkreq = lua_toboolean(L, narg-1);
+		lcu_assert(hasflag(op, FLAG_REQUEST));
+		lcu_assert(torequest(op)->type == UV_UNKNOWN_REQ);
+		if (mkreq) {
+			lcu_RequestSetup setup = (lcu_RequestSetup)lua_touserdata(L, narg);
+			lua_settop(L, narg-2);  /* discard yield, 'setup' and 'mkreq' */
+			return startreqop(L, op, setup);
+		} else {
+			lcu_HandleSetup setup = (lcu_HandleSetup)lua_touserdata(L, narg);
+			lua_settop(L, narg-2);  /* discard yield, 'setup' and 'mkreq' */
+			return startthrop(L, op, setup, loop);
+		}
+	}
+	return lua_gettop(L)-narg; /* return yield */
 }
 
-LCULIB_API int lcuT_resetopk (lua_State *L,
-                              int mkreq,
-                              int kind,
-                              void *setup,
-                              lua_CFunction results) {
-	if (lua_isyieldable(L)) {
-		lcu_Operation *op = tothrop(L);
-		op->results = results;
-		if (hasflag(op, FLAG_REQUEST)) {
-			uv_req_t *request = torequest(op);
-			if (request->type == UV_UNKNOWN_REQ)  /* free operation */
-				return mkreq ? startreqop(L, op, setup)
-				             : startthrop(L, op, setup, toloop(L));
-		} else {
-			uv_handle_t *handle = tohandle(op);
-			if (!uv_is_closing(handle)) {
-				if (!mkreq && handle->type == type)
-					return startthrop(L, op, setup, NULL);
-				uv_close(handle, closedhdl);
-			}
+static int yieldreset (lua_State *L, Operation *op, int mkreq, void *setup) {
+	lcu_assert(!hasflag(op, FLAG_PENDING));
+	lua_pushboolean(L, mkreq);
+	lua_pushlightuserdata(L, (void *)setup);
+	setflag(op, FLAG_PENDING);
+	return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), resetop);
+}
+
+typedef enum { FREEOP, SAMEOP, WAITOP } opstatus;
+
+static opstatus checkreset (Operation *op, int type) {
+	if (hasflag(op, FLAG_REQUEST)) {
+		uv_req_t *request = torequest(op);
+		if (request->type == UV_UNKNOWN_REQ) return FREEOP;
+	} else {
+		uv_handle_t *handle = tohandle(op);
+		if (!uv_is_closing(handle)) {
+			if (type && handle->type == type) return SAMEOP;
+			uv_close(handle, closedhdl);
 		}
-		lua_pushlightuserdata(L, setup);
-		lua_pushboolean(L, mkreq);
-		lcu_assert(!hasflag(op, FLAG_PENDING));
-		setflag(op, FLAG_PENDING);
-		return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), resetop);
+	}
+	return WAITOP;
+}
+
+
+/*
+ * request operation
+ */
+
+LCULIB_API int lcuT_resetreqopk (lua_State *L,
+                                 lcu_RequestSetup setup,
+                                 lua_CFunction results) {
+	if (lua_isyieldable(L)) {
+		Operation *op = tothrop(L);
+		op->results = results;
+		switch (checkreset(op, 0)) {
+			case FREEOP: return startreqop(L, op, setup);
+			case WAITOP: return yieldreset(L, op, 1, (void *)setup);
+		}
+	}
+	return luaL_error(L, "unable to yield");
+}
+
+LCULIB_API void lcuU_resumereqop (uv_loop_t *loop, uv_req_t *request, int err) {
+	lua_State *L = (lua_State *)loop->data;
+	Operation *op = (Operation *)request;
+	lcu_assert(hasflag(op, FLAG_REQUEST));
+	freethread(L, (void *)request);
+	request->type = UV_UNKNOWN_REQ;
+	if (hasflag(op, FLAG_PENDING)) {
+		lua_State *thread = (lua_State *)request->data;
+		lcuL_doresults(thread, 0, err);
+		resumethread(thread, L, loop);
+	}
+}
+
+
+/*
+ * thread operation
+ */
+
+static void closedhdl (uv_handle_t *handle) {
+	Operation *op = (Operation *)handle;
+	uv_loop_t *loop = handle->loop;
+	lua_State *L = (lua_State *)loop->data;
+	lua_State *thread = (lua_State *)handle->data;
+	uv_req_t *request = torequest(op);
+	lcu_assert(!hasflag(op, FLAG_REQUEST));
+	freethread(L, (void *)handle);
+	setflag(op, FLAG_REQUEST);
+	request->type = UV_UNKNOWN_REQ;
+	request->data = (void *)thread;
+	if (hasflag(op, FLAG_PENDING)) resumethread(thread, L, loop);
+}
+
+static void cancelthrop (Operation *op) {
+	uv_handle_t *handle = tohandle(op);
+	lcu_assert(!hasflag(op, FLAG_REQUEST));
+	if (!uv_is_closing(handle)) uv_close(handle, closedhdl);
+}
+
+
+LCULIB_API int lcuT_resetthropk (lua_State *L,
+                                 uv_handle_type type,
+                                 lcu_HandleSetup setup,
+                                 lua_CFunction results) {
+	if (lua_isyieldable(L)) {
+		Operation *op = tothrop(L);
+		uv_loop_t *loop = NULL;
+		op->results = results;
+		lcu_assert(type);
+		switch (checkreset(op, type)) {
+			case FREEOP: loop = toloop(L);
+			case SAMEOP: return startthrop(L, op, setup, loop);
+			case WAITOP: return yieldreset(L, op, 0, (void *)setup);
+		}
 	}
 	return luaL_error(L, "unable to yield");
 }
@@ -202,7 +226,7 @@ LCULIB_API int lcuT_armthrop (lua_State *L, int err) {
 	lcu_assert(hasflag(tothrop(L), FLAG_REQUEST));
 	lcu_assert(tohandle(tothrop(L))->type != UV_UNKNOWN_HANDLE);
 	if (err >= 0) {
-		lcu_Operation *op = tothrop(L);
+		Operation *op = tothrop(L);
 		uv_handle_t *handle = tohandle(op);
 		savethread(L, (void *)op);
 		handle->data = (void *)L;
@@ -212,9 +236,22 @@ LCULIB_API int lcuT_armthrop (lua_State *L, int err) {
 	return err;
 }
 
+LCULIB_API int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle) {
+	uv_loop_t *loop = handle->loop;
+	lua_State *L = (lua_State *)loop->data;
+	Operation *op = (Operation *)handle;
+	int status;
+	lcu_assert(!hasflag(op, FLAG_REQUEST));
+	lcu_assert(hasflag(op, FLAG_PENDING));
+	status = resumethread(thread, L, loop)
+	if (status != LUA_YIELD || !hasflag(op, FLAG_PENDING))
+		cancelthrop(L, op);
+	return status;
+}
+
 
 /*
- * Object Operation
+ * object operation
  */
 
 static void closedobj (uv_handle_t *handle) {

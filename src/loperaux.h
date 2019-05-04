@@ -8,20 +8,28 @@
 #include <lua.h>
 
 
-#define LCU_THROP 0
-#define LCU_REQOP 1
+/* request operations */
 
-LCULIB_API int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle);
+typedef int (*lcu_RequestSetup) (lua_State *L, uv_req_t *r);
+
+LCULIB_API int lcuT_resetreqopk (lua_State *L,
+                                 lcu_RequestSetup setup,
+                                 lua_CFunction results)
 
 LCULIB_API void lcuU_resumereqop (uv_loop_t *loop, uv_req_t *request, int err);
 
-LCULIB_API int lcuT_resetopk (lua_State *L,
-                              int mkreq,
-                              int kind,
-                              void *setup,
-                              lua_CFunction results);
+/* thread operations */
+
+typedef int (*lcu_HandleSetup) (lua_State *L, uv_handle_t *h, uv_loop_t *l);
+
+LCULIB_API int lcuT_resetthropk (lua_State *L,
+                                 uv_handle_type type,
+                                 lcu_HandleSetup setup,
+                                 lua_CFunction results);
 
 LCULIB_API int lcuT_armthrop (lua_State *L, int err)
+
+LCULIB_API int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle);
 
 /* object operations */
 
