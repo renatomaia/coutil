@@ -10,7 +10,7 @@
 
 /* request operations */
 
-typedef int (*lcu_RequestSetup) (lua_State *L, uv_req_t *r);
+typedef int (*lcu_RequestSetup) (lua_State *L, uv_req_t *r, uv_loop_t *l);
 
 LCULIB_API int lcuT_resetreqopk (lua_State *L,
                                  lcu_RequestSetup setup,
