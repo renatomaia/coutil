@@ -52,7 +52,8 @@ static int checksignal (lua_State *L, int arg, const char *def) {
 }
 
 static int endsignal (lua_State *L) {
-	if (!lua_equal(L, 2, -1)) return lcuL_pusherror(L, "unexpected signal");
+	if (checksignal(L, 1) != lua_tonumber(L, -1))
+		return lcuL_pusherror(L, "unexpected signal");
 	lua_settop(L, 1);
 	return 1;
 }
@@ -76,7 +77,7 @@ static int setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 
 /* succ [, errmsg, ...] = system.awaitsig(signal) */
 static int lcuM_awaitsig (lua_State *L) {
-	return lcuT_resetopk(L, LCU_THROP, UV_SIGNAL, setupsignal, endsingal);
+	return lcuT_resetthropk(L, UV_SIGNAL, setupsignal, endsingal);
 }
 
 LCULIB_API void lcuM_addsignalf (lua_State *L) {
