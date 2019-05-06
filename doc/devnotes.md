@@ -76,8 +76,8 @@ Functions
 | `lcuL_` | `prefix` | API with utilility Lua functions |
 | `lcuT_` | `prefix` | API for thread operations (**require module upvalues**). |
 | `lcuU_` | `prefix` | API for UV callbacks (**require module upvalues**). |
-| `lcuB_` | `prefix` | UV callback function. |
-| `lcuK_` | `prefix` | Lua continuation function. |
+| `uv_on` | `prefix` | UV callback function. |
+| `k_` | `prefix` | Lua continuation function. |
 | `k` | `suffix` | Function that yields with a continuation. |
 
 States
@@ -92,10 +92,10 @@ Thread
 
 |  # |  P | S | Action | Condition |
 | -- | -- | - | ------ | --------- |
-|  1 |    | T | `lcuT_resetopk` | UV request started |
+|  1 |    | T | `lcuT_resetreqopk` | UV request started |
 |  1 |  7 | T | `resetop` | UV request reused |
 |  1 |  8 | T | `resetop` | UV handle used as UV request |
-|  2 |    | T | `lcuT_resetopk+lcuT_armthrop` | UV handle initialized |
+|  2 |    | T | `lcuT_resetthropk+lcuT_armthrop` | UV handle initialized |
 |  2 |  7 | T | `resetop` | UV request used as UV handle |
 |  2 |  8 | T | `resetop` | UV handle reused |
 |  3 |    | U | `lcuU_resumereqop+endop` | resumed by UV request callback |
@@ -214,14 +214,14 @@ Object
 | # | P | S | Action | Condition |
 | - | - | - | ------ | --------- |
 | 1 |   | T | `lcu_closeobj` | object closed or collected |
-| 2 |   | T | `lcuT_awaitobjk` | UV handle started |
+| 2 |   | T | `lcuT_awaitobj` | UV handle started |
 | 3 |   | U | `closedobj` | UV handle closed |
-| 4 |   | T | `!lcuT_doneop && lcu_releaseobj` | resumed by `coroutine.resume` |
+| 4 |   | T | `lcuT_haltedobjop` | resumed by `coroutine.resume` |
 | 5 |   | T | `lcu_closeobj` | object closed or collected |
 | 6 |   | U | `lcuU_resumeobjop` | resumed by UV handle callback |
-| 7 | 6 | U | `lcu_releaseobj` | coroutine suspended or terminated |
+| 7 | 6 | U | `freethread` | coroutine suspended or terminated |
 | 8 | 6 | T | `lcu_closeobj` | object closed or collected |
-| 9 | 6 | T | `lcuT_awaitobjk` | coroutine repeated operation |
+| 9 | 6 | T | `lcuT_awaitobj` | coroutine repeated operation |
 _______________________
 - P = Previous transition
 - S = Call scope (T = Thread; U = UV loop)

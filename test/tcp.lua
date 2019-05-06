@@ -828,10 +828,15 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 		spawn(function ()
 			stage1 = 1
 			accepted = assert(server:accept())
-			asserterr("memory expected", pcall(accepted.receive, accepted))
 			stage1 = 2
-			assert(accepted:receive(buffer))
+			asserterr("memory expected", pcall(accepted.receive, accepted))
+			asserterr("number has no integer representation",
+				pcall(accepted.receive, accepted, buffer, 1.1))
+			asserterr("number has no integer representation",
+				pcall(accepted.receive, accepted, buffer, nil, 2.2))
 			stage1 = 3
+			assert(accepted:receive(buffer) == 64)
+			stage1 = 4
 		end)
 		assert(stage1 == 1)
 
@@ -843,20 +848,20 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 			stage2 = 2
 			asserterr("already in use", pcall(accepted.receive, accepted, buffer))
 			stage2 = 3
-			assert(stream:send(string.rep("x", 64)))
+			assert(stream:send(string.rep("x", 64)) == true)
 			stage2 = 4
 		end)
 		assert(stage2 == 1)
 
 		assert(system.run("step") == true)
-		assert(stage1 == 1)
+		assert(stage1 == 2)
 		assert(stage2 == 3)
 
-		asserterr("unable to yield", pcall(accepted.receive, stream, buffer))
+		asserterr("unable to yield", pcall(accepted.receive, accepted, buffer))
 
 		gc()
 		assert(system.run() == false)
-		assert(stage1 == 3)
+		assert(stage1 == 4)
 		assert(stage2 == 4)
 
 		done()
