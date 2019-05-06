@@ -546,6 +546,7 @@ static int k_getbuffer (lua_State *L, int status, lua_KContext ctx) {
 		size_t end = posrelat(luaL_optinteger(L, 4, -1), sz);
 		uv_buf_t *bufref = (uv_buf_t *)lua_touserdata(L, -1);
 		lcu_assert(bufref);
+		lua_pop(L, 1);  /* discard 'bufref' */
 		if (start < 1) start = 1;
 		if (end > sz) end = sz;
 		bufref->base = buf+start-1;
