@@ -54,6 +54,8 @@ LCULIB_API lcu_TcpSocket *lcu_newtcp (lua_State *L, int domain, int class);
 
 LCULIB_API void lcu_enabletcp (lua_State *L, int idx);
 
+LCULIB_API int lcu_closetcp (lua_State *L, int idx);
+
 LCULIB_API int lcu_islivetcp (lcu_TcpSocket *tcp);
 
 LCULIB_API int lcu_gettcpaddrfam (lcu_TcpSocket *tcp);
@@ -66,6 +68,12 @@ LCULIB_API int lcu_gettcpkeepalive (lcu_TcpSocket *tcp);
 
 LCULIB_API void lcu_settcpkeepalive (lcu_TcpSocket *tcp, int delay);
 
-LCULIB_API int lcu_closetcp (lua_State *L, int idx);
+LCULIB_API void lcu_addtcplisten (lcu_TcpSocket *tcp);
+
+LCULIB_API int lcu_picktcplisten (lcu_TcpSocket *tcp);
+
+LCULIB_API int lcu_istcplisten (lcu_TcpSocket *tcp);
+
+LCULIB_API void lcu_marktcplisten (lcu_TcpSocket *tcp);
 
 #endif

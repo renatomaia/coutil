@@ -163,13 +163,12 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 		assert(listen.receive == nil)
 		assert(listen.shutdown == nil)
 
-		asserterr("unavailable", listen:accept())
+		asserterr("not listening", pspawn(listen.accept, listen))
 		asserterr("number expected, got no value", pcall(listen.listen, listen))
-		asserterr("invalid backlog value", pcall(listen.listen, listen, -1))
-		asserterr("invalid backlog value", pcall(listen.listen, listen, 1<<31))
-		asserterr("invalid backlog value", pcall(listen.listen, listen, 1<<31-1))
+		asserterr("large backlog", pcall(listen.listen, listen, -1))
+		asserterr("large backlog", pcall(listen.listen, listen, 1<<31))
 		assert(listen:listen(backlog))
-		asserterr("already listening", listen:listen(backlog))
+		asserterr("already listening", pcall(listen.listen, listen, backlog))
 		asserterr("unable to yield", pcall(listen.accept, listen))
 
 		done()
@@ -235,7 +234,7 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 		done()
 	end
 
-	do case "accept tranfer"
+	do case "accept transfer"
 		local server = system.tcp("listen", domain)
 		assert(server:bind(ipaddr[domain].localaddress))
 		assert(server:listen(backlog))
@@ -249,7 +248,7 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 
 		local complete = false
 		spawn(function ()
-			asserterr("unavailable", server:accept())
+			asserterr("already used", pcall(server.accept, server))
 			thread = coroutine.running()
 			coroutine.yield()
 			local stream = assert(server:accept())
@@ -564,7 +563,7 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 			system.pause()
 			local stream = system.tcp("stream", domain)
 			stage = 1
-			asserterr("netaddress expected, got nil", pcall(stream.connect, stream))
+			asserterr("netaddress expected", pcall(stream.connect, stream))
 			stage = 2
 		end)
 		assert(stage == 0)
@@ -811,11 +810,11 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 
 
 
-
-
 	newtest "receive"
 
 	local memory = require "memory"
+
+	local backlog = 3
 
 	do case "errors"
 		local server = system.tcp("listen", domain)
@@ -824,39 +823,48 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 
 		local buffer = memory.create(64)
 
-		local stage = 0
+		local stage1 = 0
 		local accepted, stream
 		spawn(function ()
-			stage = 1
+			stage1 = 1
 			accepted = assert(server:accept())
 			asserterr("memory expected", pcall(accepted.receive, accepted))
-			stage = 4
+			stage1 = 2
 			assert(accepted:receive(buffer))
-			stage = 5
+			stage1 = 3
 		end)
-		assert(stage == 1)
+		assert(stage1 == 1)
 
+		local stage2 = 0
 		spawn(function ()
 			stream = system.tcp("stream", domain)
-			stage = 2
+			stage2 = 1
 			assert(stream:connect(ipaddr[domain].localaddress))
+			stage2 = 2
 			asserterr("already in use", pcall(accepted.receive, accepted, buffer))
-			stage = 3
+			stage2 = 3
 			assert(stream:send(string.rep("x", 64)))
+			stage2 = 4
 		end)
-		assert(stage == 2)
+		assert(stage2 == 1)
 
 		assert(system.run("step") == true)
-		assert(stage == 3)
+		assert(stage1 == 1)
+		assert(stage2 == 3)
 
 		asserterr("unable to yield", pcall(accepted.receive, stream, buffer))
 
 		gc()
 		assert(system.run() == false)
-		assert(stage == 5)
+		assert(stage1 == 3)
+		assert(stage2 == 4)
 
 		done()
 	end
+
+do return end
+
+-- TODO: close socket while during operation (receive or send)
 
 	do case "canceled listen"
 		do
@@ -918,7 +926,7 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 		done()
 	end
 
-	do case "accept tranfer"
+	do case "accept transfer"
 		local server = system.tcp("listen", domain)
 		assert(server:bind(ipaddr[domain].localaddress))
 		assert(server:listen(backlog))
