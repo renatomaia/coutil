@@ -5,7 +5,7 @@
 #include <signal.h>
 
 
-static int checksignal (lua_State *L, int arg, const char *def) {
+static int checksignal (lua_State *L, int arg) {
 	static const struct { const char *name; int value; } signals[] = {
 		{ "abort", SIGABRT },
 		{ "continue", SIGCONT },
@@ -52,8 +52,11 @@ static int checksignal (lua_State *L, int arg, const char *def) {
 }
 
 static int endsignal (lua_State *L) {
-	if (checksignal(L, 1) != lua_tonumber(L, -1))
-		return lcuL_pusherror(L, "unexpected signal");
+	if (checksignal(L, 1) != lua_tonumber(L, -1)) {
+		lua_pushnil(L);
+		lua_pushliteral(L, "unexpected signal");
+		return 2;
+	}
 	lua_settop(L, 1);
 	return 1;
 }
@@ -77,7 +80,7 @@ static int setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 
 /* succ [, errmsg, ...] = system.awaitsig(signal) */
 static int lcuM_awaitsig (lua_State *L) {
-	return lcuT_resetthropk(L, UV_SIGNAL, setupsignal, endsingal);
+	return lcuT_resetthropk(L, UV_SIGNAL, setupsignal, endsignal);
 }
 
 LCULIB_API void lcuM_addsignalf (lua_State *L) {
