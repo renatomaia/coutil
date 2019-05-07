@@ -399,6 +399,36 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 		done()
 	end
 
+	do case "close in accept"
+		local server = system.tcp("listen", domain)
+		assert(server:bind(ipaddr[domain].localaddress))
+		assert(server:listen(backlog))
+
+		local stage1 = 0
+		spawn(function ()
+			garbage.coro = coroutine.running()
+			asserterr("closed", server:accept())
+			stage1 = 1
+		end)
+		assert(stage1 == 0)
+
+		local stage2 = 0
+		spawn(function ()
+			system.pause()
+			stage2 = 1
+			assert(server:close())
+			stage2 = 2
+		end)
+		assert(stage2 == 0)
+
+		gc()
+		assert(system.run() == false)
+		assert(stage1 == 1)
+		assert(stage2 == 2)
+
+		done()
+	end
+
 	do case "cancel schedule"
 		local stage = 0
 		spawn(function ()
@@ -837,6 +867,10 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 			stage1 = 3
 			assert(accepted:receive(buffer) == 64)
 			stage1 = 4
+			assert(stream:close() == true)
+			stage1 = 5
+			asserterr("operation canceled", accepted:send(string.rep("x", 1<<24)))
+			stage1 = 6
 		end)
 		assert(stage1 == 1)
 
@@ -850,6 +884,11 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 			stage2 = 3
 			assert(stream:send(string.rep("x", 64)) == true)
 			stage2 = 4
+			asserterr("closed", stream:receive(buffer))
+			stage2 = 5
+			system.pause()
+			assert(accepted:close() == true)
+			stage2 = 6
 		end)
 		assert(stage2 == 1)
 
@@ -861,111 +900,101 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 
 		gc()
 		assert(system.run() == false)
-		assert(stage1 == 4)
-		assert(stage2 == 4)
+		assert(stage1 == 6)
+		assert(stage2 == 6)
+
+		assert(server:close() == true)
 
 		done()
 	end
 
-do return end
-
--- TODO: close socket while during operation (receive or send)
-
-	do case "canceled listen"
-		do
-			local server = system.tcp("listen", domain)
-			assert(server:bind(ipaddr[domain].localaddress))
-			assert(server:listen(backlog))
-		end
-		gc()
-
-		local server = system.tcp("listen", domain)
-		assert(server:bind(ipaddr[domain].localaddress))
-		assert(server:listen(backlog))
-		assert(server:close())
-
-		garbage.server = system.tcp("listen", domain)
-		assert(garbage.server:bind(ipaddr[domain].localaddress))
-		assert(garbage.server:listen(backlog))
-
-		done()
-	end
-
-	do case "successful connections"
+	do case "successful transmissions"
 		local server = system.tcp("listen", domain)
 		assert(server:bind(ipaddr[domain].localaddress))
 		assert(server:listen(backlog))
 
-		local stage = 0
+		local data = string.rep("a", 64)
+		           ..string.rep("b", 32)
+		           ..string.rep("c", 32)
+
+		local done1
 		spawn(function ()
-			for i = 1, 3 do
-				local stream = assert(server:accept())
-				assert(stream:close())
-				stage = i
-			end
+			local stream = assert(server:accept())
+			assert(server:close())
+			local buffer = memory.create(128)
+			assert(stream:receive(buffer) == 64)
+			assert(memory.diff(buffer, string.sub(data, 1, 64)..string.rep("\0", 64)) == nil)
+			assert(stream:receive(buffer, 65, 96) == 32)
+			assert(memory.diff(buffer, string.sub(data, 1, 96)..string.rep("\0", 32)) == nil)
+			assert(stream:receive(buffer, 97) == 32)
+			assert(memory.diff(buffer, data) == nil)
+			assert(stream:close())
+			done1 = true
 		end)
-		assert(stage == 0)
+		assert(done1 == nil)
 
-		local connected = {}
-		for i = 1, 3 do
-			spawn(function ()
-				local stream = system.tcp("stream", domain)
-				assert(stream:connect(ipaddr[domain].localaddress))
-				assert(stream:close())
-				connected[i] = true
-			end)
-		end
-		assert(stage == 0)
-		for i = 1, 3 do
-			assert(connected[i] == nil)
-		end
+		local done2
+		spawn(function ()
+			local stream = system.tcp("stream", domain)
+			assert(stream:connect(ipaddr[domain].localaddress))
+			assert(stream:send(data, 1, 64))
+			system.pause()
+			assert(stream:send(data, 65, 128))
+			assert(stream:close())
+			done2 = true
+		end)
+		assert(done2 == nil)
 
 		gc()
 		assert(system.run() == false)
-		assert(stage == 3)
-		for i = 1, 3 do
-			assert(connected[i] == true)
-		end
-		assert(server:close())
+		assert(done1 == true)
+		assert(done2 == true)
 
 		done()
 	end
 
-	do case "accept transfer"
+	do case "receive transfer"
 		local server = system.tcp("listen", domain)
 		assert(server:bind(ipaddr[domain].localaddress))
 		assert(server:listen(backlog))
 
-		local thread
+		local size = 32
+		local buffer = memory.create(size)
+
+		local stream, thread
 		spawn(function ()
-			local stream = assert(server:accept())
-			assert(stream:close())
+			stream = assert(server:accept())
+			assert(server:close())
+			assert(stream:receive(buffer) == size)
+			assert(memory.diff(buffer, string.rep("a", size)) == nil)
 			coroutine.resume(thread)
 		end)
 
 		local complete = false
 		spawn(function ()
-			asserterr("unavailable", server:accept())
 			thread = coroutine.running()
 			coroutine.yield()
-			local stream = assert(server:accept())
+			asserterr("already in use", pcall(stream.receive, stream))
+			coroutine.yield()
+			assert(stream:receive(buffer) == size)
+			assert(memory.diff(buffer, string.rep("b", size)) == nil)
 			assert(stream:close())
 			complete = true
 		end)
 
 		spawn(function ()
-			for i = 1, 2 do
-				local stream = system.tcp("stream", domain)
-				assert(stream:connect(ipaddr[domain].localaddress))
-				assert(stream:close())
-			end
+			local stream = system.tcp("stream", domain)
+			assert(stream:connect(ipaddr[domain].localaddress))
+			coroutine.resume(thread)
+			print(stream:send(string.rep("a", size)))
+			assert(stream:send(string.rep("b", size)))
+			assert(stream:close())
 		end)
 
 		gc()
 		assert(complete == false)
 		assert(system.run() == false)
 		assert(complete == true)
-		assert(server:close())
 		thread = nil
 
 		done()
