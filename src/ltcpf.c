@@ -361,9 +361,7 @@ static int lcuM_tcp_gc (lua_State *L) {
 static int lcuM_tcp_close (lua_State *L) {
 	lcu_TcpSocket *tcp = totcp(L, LCU_TCPTYPE_SOCKET);
 	if (lcu_islivetcp(tcp)) {
-		int closed;
-		luaL_argcheck(L, lcu_totcphandle(tcp)->data == NULL, 1, "still in use");
-		closed = lcu_closetcp(L, 1);
+		int closed = lcu_closetcp(L, 1);
 		lcu_assert(closed);
 		lua_pushboolean(L, closed);
 	}
