@@ -986,7 +986,7 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 			local stream = system.tcp("stream", domain)
 			assert(stream:connect(ipaddr[domain].localaddress))
 			coroutine.resume(thread)
-			print(stream:send(string.rep("a", size)))
+			assert(stream:send(string.rep("a", size)))
 			assert(stream:send(string.rep("b", size)))
 			assert(stream:close())
 		end)
@@ -1000,130 +1000,48 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 		done()
 	end
 
-	do case "accumulated connects"
-		local server = system.tcp("listen", domain)
-		assert(server:bind(ipaddr[domain].localaddress))
-		assert(server:listen(backlog))
-
-		local stage = {}
-		for i = 1, 3 do
-			spawn(function ()
-				local stream = assert(system.tcp("stream", domain))
-				stage[i] = 0
-				assert(stream:connect(ipaddr[domain].localaddress))
-				stage[i] = 1
-				assert(stream:close())
-				stage[i] = 2
-			end)
-			assert(stage[i] == 0)
-		end
-
-		local accepted = false
-		spawn(function ()
-			for i = 1, 3 do
-				local stream = assert(server:accept())
-				assert(stream:close())
-				for j = 1, 3 do
-					assert(stage[j] == 0)
-				end
-			end
-			assert(server:close())
-			accepted = true
-		end)
-		assert(accepted == false)
-
-		gc()
-		assert(system.run() == false)
-		assert(accepted == true)
-		for i = 1, 3 do
-			assert(stage[i] == 2)
-		end
-
-		done()
-	end
-
-	do case "accumulated transfers"
-		local server = system.tcp("listen", domain)
-		assert(server:bind(ipaddr[domain].localaddress))
-		assert(server:listen(backlog))
-
-		local stage = {}
-		for i = 1, 3 do
-			spawn(function ()
-				local stream = assert(system.tcp("stream", domain))
-				stage[i] = 0
-				assert(stream:connect(ipaddr[domain].localaddress))
-				stage[i] = 1
-				assert(stream:close())
-				stage[i] = 2
-			end)
-			assert(stage[i] == 0)
-		end
-
-		local accepted = false
-		local function acceptor(count)
-			if count > 0 then
-				local stream = assert(server:accept())
-				assert(stream:close())
-				for j = 1, 3 do
-					assert(stage[j] == 0)
-				end
-				spawn(acceptor, count-1)
-			else
-				assert(server:close())
-				accepted = true
-			end
-		end
-		spawn(acceptor, 3)
-		assert(accepted == false)
-
-		gc()
-		assert(system.run() == false)
-		assert(accepted == true)
-		for i = 1, 3 do
-			assert(stage[i] == 2)
-		end
-
-		done()
-	end
-
-	do case "different accepts"
-		local complete = false
-		spawn(function ()
-			local server1 = system.tcp("listen", domain)
-			assert(server1:bind(ipaddr[domain].localaddress))
-			assert(server1:listen(backlog))
-
-			local server2 = system.tcp("listen", domain)
-			assert(server2:bind(ipaddr[domain].freeaddress))
-			assert(server2:listen(backlog))
-
-			local stream = assert(server1:accept())
-			assert(stream:close())
-
-			local stream = assert(server2:accept())
-			assert(stream:close())
-
-			assert(server1:close())
-			assert(server2:close())
-			complete = true
-		end)
-		assert(complete == false)
-
+	do case "multiple threads"
+		local complete = {}
 		for i, addrname in ipairs{"localaddress", "freeaddress"} do
+			spawn(function ()
+				local server = system.tcp("listen", domain)
+				assert(server:bind(ipaddr[domain][addrname]))
+				assert(server:listen(backlog))
+
+				local stream = assert(server:accept())
+				spawn(function ()
+					local buffer = memory.create(64)
+					assert(stream:receive(buffer) == 32)
+					memory.fill(buffer, buffer, 33, 64)
+					assert(stream:send(buffer))
+					assert(stream:close())
+				end)
+
+				assert(server:close())
+			end)
+
 			spawn(function ()
 				local stream = system.tcp("stream", domain)
 				assert(stream:connect(ipaddr[domain][addrname]))
+				assert(stream:send(string.rep("x", 32)))
+				local buffer = memory.create(64)
+				assert(stream:receive(buffer) == 64)
 				assert(stream:close())
+				assert(memory.diff(buffer, string.rep("x", 64)) == nil)
+				complete[i] = true
 			end)
+			assert(complete[i] == nil)
 		end
 
 		gc()
 		assert(system.run() == false)
-		assert(complete == true)
+		assert(complete[1] == true)
+		assert(complete[2] == true)
 
 		done()
 	end
+
+do return end -- TODO: adapt the test below over 'receive'
 
 	do case "cancel schedule"
 		local stage = 0
