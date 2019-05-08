@@ -321,26 +321,128 @@ like `"192.0.2.128:80"` (IPv4) or `[::ffff:c000:0280]:80` (IPv6).
 
 ### `system.tcp ([type [, domain]])`
 
+Creates a TCP socket, of the type specified by `type`,
+which is either:
+
+- `"stream"` creates stream socket for data transfers.
+- `"listen"` creates socket to accept stream socket connections.
+
+The `domain` string defines the socket's address domain (or family),
+and can be  either `"ipv4"` or `"ipv6"`,
+to create socket on the IPv4 or IPv6 address domain.
+
+On success it returns a new socket,
+or `nil` plus an error message otherwise.
+
 ### `tcp:close ()`
+
+Closes socket `tcp`.
+Note that sockets are automatically closed when their handles are garbage collected,
+but that takes an unpredictable amount of time to happen. 
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
 
 ### `tcp:getdomain ()`
 
-### `tcp:getaddress ([site [, address]])`
+Returns the address domain of `tcp`, which can be either `"ipv4"` `"ipv6"`.
 
 ### `tcp:bind (address)`
 
+Binds socket `tcp` to the local address provided as `address`.
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
+### `tcp:getaddress ([site [, address]])`
+
+Returns the address associated with socket `tcp`, as indicated by `site`, which can be:
+
+- `"this"`: The socket's address (the default).
+- `"peer"`: The socket's peer address.
+
+If `address` is provided, it is the address structure used to store the result,
+otherwise a new `address` object is returned with the result data.
+
+In case of errors, it returns `nil` plus an error message.
+
 ### `stream:setoption (name, value)`
+
+Sets the option `name` for socket `tcp`.
+The available options are the same as defined in operation [`socket:getoption`].
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
 
 ### `stream:getoption (name)`
 
+Returns the value of option `name` of `socket`.
+There available options are:
+
+- `"keepalive"`: is a number of seconds of the initial delay of the periodic transmission of messages when the TCP keep-alive option is enabled for socket `tcp`,
+or `nil` otherwise.
+- `"nodelay"`: is `true` when coalescing of small segments shall be avoided in `socket`,
+or `false` otherwise.
+
 ### `stream:connect (address)`
+
+Binds socket `stream` to the peer address provided as `address`.
+
+This operation is not available for sockets of type `listen`.
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
 
 ### `stream:send (data [, i [, j]])`
 
+Sends the substring of `data` that starts at `i` and continues until `j`;
+`i` and `j` can be negative.
+If `j` is absent,
+it is assumed to be equal to -1 (which is the same as the string length).
+
+This operation is not available for sockets of type `listen`.
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
+__Note__: if `data` is a [memory](https://github.com/renatomaia/lua-memory), it is not converted to a Lua string prior to have its specified contents transfered.
+
 ### `stream:receive (buffer [, i [, j]])`
+
+Receives from socket `stream` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`;
+`i` and `j` can be negative.
+If `j` is absent, it is assumed to be equal to -1
+(which is the same as the buffer size).
+
+This operation is not available for sockets of type `listen`.
+
+Returns the number of bytes actually received from `socket` in case of success.
+Otherwise it returns `nil` plus an error message.
 
 ### `stream:shutdown ()`
 
+Shuts down the write side of socket `stream`.
+
+This operation is only available for `stream` sockets.
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
 ### `listen:listen (backlog)`
 
+Starts listening for new connections on socket `listen`.
+`backlog` is a hint for the underlying system about the suggested number of outstanding connections that shall be kept in the socket's listen queue.
+
+This operation is only available for sockets of type `listen`.
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
 ### `listen:accept ()`
+
+Accepts a new pending connection on socket `listen`.
+
+This operation is only available for sockets of type `listen`.
+
+Returns a new `stream` TCP socket for the accepted connection in case of success.
+Otherwise it returns `nil` plus an error message.
