@@ -32,9 +32,22 @@ Index
 	- [`spawn.trap`](#spawntrap-h-f-)
 - [`coutil.system`](#system)
 	- [`system.run`](#systemrun-mode)
-	- [`system.pause`](#systempause-delay-)
-	- [`system.awaitsig`](#systemawaitsig-signal-)
+	- [`system.pause`](#systempause-delay)
+	- [`system.awaitsig`](#systemawaitsig-signal)
 	- [`system.address`](#systemaddress-type--data--port--mode)
+	- [`system.tcp`](#systemtcp-type--domain)
+	- [`tcp:close`](#tcpclose-)
+	- [`tcp:getdomain`](#tcpgetdomain-)
+	- [`tcp:bind`](#tcpbind-address)
+	- [`tcp:getaddress`](#tcpgetaddress-site--address)
+	- [`stream:setoption`](#streamsetoption-name-value)
+	- [`stream:getoption`](#streamgetoption-name)
+	- [`stream:connect`](#streamconnect-address)
+	- [`stream:send`](#streamsend-data--i--j)
+	- [`stream:receive`](#streamreceive-buffer--i--j)
+	- [`stream:shutdown`](#streamshutdown-)
+	- [`listen:listen`](#listenlisten-backlog)
+	- [`listen:accept`](#listenaccept-)
 
 Contents
 ========
@@ -243,7 +256,7 @@ The same is applies when `delay` is zero or negative.
 Otherwise it returns like [`event.await`](#eventawait-e).
 In any case, the coroutine is not scheduled to be resumed anymore after it returns.
 
-### `system.awaitsig (signal, ...)`
+### `system.awaitsig (signal)`
 
 Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it to be resumed when the process receives signal indicated by string `signal`, as listed below:
 
@@ -284,8 +297,6 @@ Suspends the execution of the calling coroutine (like [`coroutine.yield`](http:/
 | `"urgsock"`   | SIGURG    | core dump | High-bandwidth data is available at a socket. |
 | `"user1"`     | SIGUSR1   | terminate | User-defined conditions. |
 | `"user2"`     | SIGUSR2   | terminate | User-defined conditions. |
-
-Any additional arguments to `awaitsig` are passed as extra results to [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
 
 `awaitsig` returns like [`pause`](#systempause-).
 
