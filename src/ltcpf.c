@@ -529,8 +529,11 @@ static int k_recvdata (lua_State *L, int status, lua_KContext ctx) {
 	uv_stream_t *stream = (uv_stream_t *)lcu_totcphandle(tcp);
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
-	if (lcuT_haltedobjop(L, (uv_handle_t *)stream)) return lua_gettop(L);
-	else return lcuL_pushresults(L, lua_gettop(L)-4, stopread(stream));
+	if (lcuT_haltedobjop(L, (uv_handle_t *)stream)) {
+		int err = stopread(stream);
+		if (err < 0) return lcuL_pushresults(L, 0, err);
+	}
+	return lua_gettop(L)-4;
 }
 static int k_getbuffer (lua_State *L, int status, lua_KContext ctx) {
 	lcu_TcpSocket *tcp = livetcp(L, LCU_TCPTYPE_STREAM);
@@ -551,8 +554,11 @@ static int k_getbuffer (lua_State *L, int status, lua_KContext ctx) {
 		bufref->len = end-start+1;
 		lcuT_awaitobj(L, (uv_handle_t *)stream);
 		return lua_yieldk(L, 0, 0, k_recvdata);
+	} else {
+		int err = stopread(stream);
+		if (err < 0) return lcuL_pushresults(L, 0, err);
 	}
-	return lcuL_pushresults(L, lua_gettop(L)-4, stopread(stream));
+	return lua_gettop(L)-4;
 }
 static void uv_onrecvdata (uv_stream_t *stream,
                            ssize_t nread,
