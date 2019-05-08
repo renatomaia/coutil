@@ -802,44 +802,6 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 		done()
 	end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 	newtest "receive"
 
 	local memory = require "memory"
@@ -1041,17 +1003,17 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 		done()
 	end
 
-do return end -- TODO: adapt the test below over 'receive'
-
 	do case "cancel schedule"
+
 		local stage = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
 			local server = system.tcp("listen", domain)
 			assert(server:bind(ipaddr[domain].localaddress))
 			assert(server:listen(backlog))
-			local stream, a,b,c = server:accept()
-			assert(stream == garbage)
+			local stream = assert(server:accept())
+			local res, a,b,c = stream:receive(memory.create(10))
+			assert(res == garbage)
 			assert(a == true)
 			assert(b == nil)
 			assert(c == 3)
@@ -1059,10 +1021,14 @@ do return end -- TODO: adapt the test below over 'receive'
 			coroutine.yield()
 			stage = 2
 		end)
-		assert(stage == 0)
 
-		coroutine.resume(garbage.coro, garbage, true,nil,3)
-		assert(stage == 1)
+		spawn(function ()
+			local stream = system.tcp("stream", domain)
+			assert(stream:connect(ipaddr[domain].localaddress))
+			system.pause()
+			coroutine.resume(garbage.coro, garbage, true,nil,3)
+		end)
+		assert(stage == 0)
 
 		gc()
 		assert(system.run() == false)
@@ -1079,23 +1045,27 @@ do return end -- TODO: adapt the test below over 'receive'
 			assert(server:bind(ipaddr[domain].localaddress))
 			assert(server:listen(backlog))
 			stage = 1
-			local stream, extra = server:accept()
-			assert(stream == nil)
-			assert(extra == nil)
-			stage = 2
 			local stream = assert(server:accept())
+			local buffer = memory.create("9876543210")
+			local bytes, extra = stream:receive(buffer)
+			assert(bytes == nil)
+			assert(extra == nil)
+			assert(memory.diff(buffer, "9876543210") == nil)
+			stage = 2
+			assert(stream:receive(buffer) == 10)
+			assert(memory.diff(buffer, "0123456789") == nil)
 			assert(stream:close())
 			stage = 3
 		end)
 		assert(stage == 1)
 
-		coroutine.resume(garbage.coro)
-		assert(stage == 2)
-
 		spawn(function ()
 			local stream = system.tcp("stream", domain)
 			assert(stream:connect(ipaddr[domain].localaddress))
-			assert(stream:close())
+			system.pause()
+			coroutine.resume(garbage.coro)
+			assert(stage == 2)
+			assert(stream:send("0123456789"))
 		end)
 
 		gc()
@@ -1106,34 +1076,39 @@ do return end -- TODO: adapt the test below over 'receive'
 	end
 
 	do case "double cancel"
+
 		local stage = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
 			local server = system.tcp("listen", domain)
 			assert(server:bind(ipaddr[domain].localaddress))
 			assert(server:listen(backlog))
+			local stream = assert(server:accept())
+			local buffer = memory.create("9876543210")
 			stage = 1
-			local stream, extra = server:accept()
-			assert(stream == nil)
+			local bytes, extra = stream:receive(buffer)
+			assert(bytes == nil)
 			assert(extra == nil)
 			stage = 2
-			local a,b,c = server:accept()
+			local a,b,c = stream:receive(buffer)
 			assert(a == .1)
 			assert(b == 2.2)
 			assert(c == 33.3)
 			stage = 3
 		end)
-		assert(stage == 1)
 
 		spawn(function ()
+			local stream = system.tcp("stream", domain)
+			assert(stream:connect(ipaddr[domain].localaddress))
+			system.pause()
+			coroutine.resume(garbage.coro)
+			assert(stage == 2)
 			system.pause()
 			coroutine.resume(garbage.coro, .1, 2.2, 33.3)
 			assert(stage == 3)
 			stage = 4
 		end)
-
-		coroutine.resume(garbage.coro)
-		assert(stage == 2)
+		assert(stage == 0)
 
 		gc()
 		assert(system.run() == false)
@@ -1151,7 +1126,9 @@ do return end -- TODO: adapt the test below over 'receive'
 			assert(server:listen(backlog))
 			stage = 1
 			local stream = assert(server:accept())
-			assert(stream:close())
+			local buffer = memory.create("9876543210")
+			assert(stream:receive(buffer) == 10)
+			assert(memory.diff(buffer, "0123456789") == nil)
 			stage = 2
 			error("oops!")
 		end)
@@ -1160,7 +1137,7 @@ do return end -- TODO: adapt the test below over 'receive'
 		spawn(function ()
 			local stream = assert(system.tcp("stream", domain))
 			assert(stream:connect(ipaddr[domain].localaddress))
-			assert(stream:close())
+			assert(stream:send("0123456789"))
 		end)
 
 		gc()
@@ -1179,225 +1156,23 @@ do return end -- TODO: adapt the test below over 'receive'
 			assert(server:bind(ipaddr[domain].localaddress))
 			assert(server:listen(backlog))
 			stage = 1
-			assert(server:accept() == garbage)
+			local stream = assert(server:accept())
+			assert(stream:receive(memory.create(10)) == garbage)
 			stage = 2
 			error("oops!")
 		end)
-		assert(stage == 1)
 
-		coroutine.resume(garbage.coro, garbage)
-		assert(stage == 2)
-
-		gc()
-		assert(system.run() == false)
-
-		done()
-	end
-
-	newtest "connect"
-
-	do case "errors"
-		local stream = system.tcp("stream", domain)
-
-		assert(stream.listen == nil)
-		assert(stream.accept == nil)
-
-		done()
-	end
-
-	do case "successful connection"
-		local connected
-		spawn(function ()
-			local server = system.tcp("listen", domain)
-			assert(server:bind(ipaddr[domain].localaddress))
-			assert(server:listen(backlog))
-			connected = false
-			assert(server:accept())
-			connected = true
-		end)
-		assert(connected == false)
-
-		local stage = 0
 		spawn(function ()
 			local stream = system.tcp("stream", domain)
 			assert(stream:connect(ipaddr[domain].localaddress))
-			stage = 1
+			system.pause()
+			coroutine.resume(garbage.coro, garbage)
 		end)
-		assert(stage == 0)
-
-		gc()
-		assert(system.run() == false)
 		assert(stage == 1)
-		assert(connected == true)
-
-		done()
-	end
-
-	while false do case "connection refused"
-		local stage = 0
-		spawn(function ()
-			local stream = system.tcp("stream", domain)
-			asserterr("Connection refused", stream:connect(ipaddr[domain].deniedaddress))
-			assert(stream:close())
-			stage = 1
-		end)
-		assert(stage == 0)
-
-		gc()
-		assert(system.run() == false)
-		assert(stage == 1)
-
-		done()
-	end
-
-	do case "cancel schedule"
-		local stage = 0
-		spawn(function ()
-			garbage.coro = coroutine.running()
-			local stream = system.tcp("stream", domain)
-			local a,b,c = stream:connect(ipaddr[domain].localaddress)
-			assert(a == true)
-			assert(b == nil)
-			assert(c == 3)
-			stage = 1
-			coroutine.yield()
-			stage = 2
-		end)
-		assert(stage == 0)
-
-		coroutine.resume(garbage.coro, true,nil,3)
-		assert(stage == 1)
-
-		gc()
-		assert(system.run() == false)
-		assert(stage == 1)
-
-		done()
-	end
-
-	do case "cancel and reschedule"
-		local server = system.tcp("listen", domain)
-		assert(server:bind(ipaddr[domain].localaddress))
-		assert(server:listen(backlog))
-
-		local stage = 0
-		spawn(function ()
-			garbage.coro = coroutine.running()
-			local stream = system.tcp("stream", domain)
-			local a,b = stream:connect(ipaddr[domain].localaddress)
-			assert(a == nil)
-			assert(b == nil)
-			stage = 1
-			assert(stream:connect(ipaddr[domain].localaddress))
-			stage = 2
-		end)
-		assert(stage == 0)
-
-		coroutine.resume(garbage.coro)
-		assert(stage == 1)
-
-		local connected
-		spawn(function ()
-			assert(server:accept())
-			connected = true
-		end)
-		assert(connected == nil)
 
 		gc()
 		assert(system.run() == false)
 		assert(stage == 2)
-
-		server:close()
-
-		done()
-	end
-
-	do case "resume while closing"
-		local server = system.tcp("listen", domain)
-		assert(server:bind(ipaddr[domain].localaddress))
-		assert(server:listen(backlog))
-
-		local stage = 0
-		spawn(function ()
-			garbage.coro = coroutine.running()
-			local stream = system.tcp("stream", domain)
-			assert(stream:connect(ipaddr[domain].localaddress) == nil)
-			stage = 1
-			local a,b,c = stream:connect(ipaddr[domain].localaddress)
-			assert(a == .1)
-			assert(b == 2.2)
-			assert(c == 33.3)
-			stage = 2
-		end)
-		assert(stage == 0)
-
-		spawn(function ()
-			system.pause()
-			coroutine.resume(garbage.coro, .1, 2.2, 33.3) -- while being closed.
-			assert(stage == 2)
-			stage = 3
-		end)
-
-		coroutine.resume(garbage.coro)
-		assert(stage == 1)
-
-		gc()
-		assert(system.run() == false)
-		assert(stage == 3)
-		assert(server:close())
-
-		done()
-	end
-
-	do case "ignore errors"
-		local server = system.tcp("listen", domain)
-		assert(server:bind(ipaddr[domain].localaddress))
-		assert(server:listen(backlog))
-
-		local stage = 0
-		pspawn(function ()
-			local stream = system.tcp("stream", domain)
-			assert(stream:connect(ipaddr[domain].localaddress))
-			stage = 1
-			error("oops!")
-		end)
-		assert(stage == 0)
-
-		spawn(function ()
-			system.pause()
-			assert(server:accept())
-			assert(server:close())
-		end)
-
-		gc()
-		assert(system.run() == false)
-		assert(stage == 1)
-
-		done()
-	end
-
-	do case "ignore errors after cancel"
-		local server = system.tcp("listen", domain)
-		assert(server:bind(ipaddr[domain].localaddress))
-		assert(server:listen(backlog))
-
-		local stage = 0
-		pspawn(function ()
-			garbage.coro = coroutine.running()
-			local stream = system.tcp("stream", domain)
-			assert(stream:connect(ipaddr[domain].localaddress) == nil)
-			stage = 1
-			error("oops!")
-		end)
-		assert(stage == 0)
-
-		coroutine.resume(garbage.coro)
-		assert(stage == 1)
-
-		gc()
-		assert(system.run() == false)
-		assert(stage == 1)
-		assert(server:close())
 
 		done()
 	end
