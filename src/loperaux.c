@@ -78,10 +78,14 @@ static void closedhdl (uv_handle_t *handle) {
 	if (lcuL_hasflag(op, FLAG_PENDING)) resumethread(thread, L, loop);
 }
 
-static void cancelthrop (Operation *op) {
-	uv_handle_t *handle = tohandle(op);
-	lcu_assert(!lcuL_hasflag(op, FLAG_REQUEST));
-	if (!uv_is_closing(handle)) uv_close(handle, closedhdl);
+static void cancelop (Operation *op) {
+	if (lcuL_hasflag(op, FLAG_REQUEST)) {
+		uv_req_t *request = torequest(op);
+		uv_cancel(request);
+	} else {
+		uv_handle_t *handle = tohandle(op);
+		if (!uv_is_closing(handle)) uv_close(handle, closedhdl);
+	}
 }
 
 static int endop (lua_State *L, int status, lua_KContext kctx) {
@@ -89,11 +93,8 @@ static int endop (lua_State *L, int status, lua_KContext kctx) {
 	Operation *op = tothrop(L);
 	int narg = (int)kctx;
 	lcuL_clearflag(op, FLAG_PENDING);
-	if (haltedop(L, loop)) {
-		if (!lcuL_hasflag(op, FLAG_REQUEST)) cancelthrop(op);
-	} else if (op->results) {
-		return op->results(L);
-	}
+	if (haltedop(L, loop)) cancelop(op);
+	else if (op->results) return op->results(L);
 	return lua_gettop(L)-narg; /* return yield */
 }
 
@@ -103,9 +104,8 @@ static int startedop (lua_State *L, Operation *op, int err) {
 		lcuL_setflag(op, FLAG_PENDING);
 		if (lcuL_hasflag(op, FLAG_REQUEST)) savethread(L, (void *)op);
 		return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), endop);
-	} else if (!lcuL_hasflag(op, FLAG_REQUEST)) {
-		cancelthrop(op);
 	}
+	else cancelop(op);
 	return lcuL_pushresults(L, 0, err);
 }
 
@@ -239,7 +239,7 @@ LCULIB_API int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle) {
 	lcu_assert(!lcuL_hasflag(op, FLAG_REQUEST));
 	lcu_assert(lcuL_hasflag(op, FLAG_PENDING));
 	status = resumethread(thread, L, loop);
-	if (status != LUA_YIELD || !lcuL_hasflag(op, FLAG_PENDING)) cancelthrop(op);
+	if (status != LUA_YIELD || !lcuL_hasflag(op, FLAG_PENDING)) cancelop(op);
 	return status;
 }
 

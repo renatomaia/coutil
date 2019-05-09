@@ -890,7 +890,7 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 			assert(memory.diff(buffer, string.sub(data, 1, 96)..string.rep("\0", 32)) == nil)
 			assert(stream:receive(buffer, 97) == 32)
 			assert(memory.diff(buffer, data) == nil)
-			assert(stream:close())
+			--assert(stream:close())
 			done1 = true
 		end)
 		assert(done1 == nil)
@@ -902,7 +902,7 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 			assert(stream:send(data, 1, 64))
 			system.pause()
 			assert(stream:send(data, 65, 128))
-			assert(stream:close())
+			--assert(stream:close())
 			done2 = true
 		end)
 		assert(done2 == nil)
@@ -1167,6 +1167,249 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 			assert(stream:connect(ipaddr[domain].localaddress))
 			system.pause()
 			coroutine.resume(garbage.coro, garbage)
+		end)
+		assert(stage == 1)
+
+		gc()
+		assert(system.run() == false)
+		assert(stage == 2)
+
+		done()
+	end
+
+	newtest "send"
+
+	do case "errors"
+		local server = system.tcp("listen", domain)
+		assert(server:bind(ipaddr[domain].localaddress))
+		assert(server:listen(backlog))
+
+		local data = string.rep("x", 1<<24)
+
+		local stage1 = 0
+		local accepted, stream
+		spawn(function ()
+			stage1 = 1
+			accepted = assert(server:accept())
+			stage1 = 2
+			asserterr("memory expected", pcall(accepted.send, accepted))
+			asserterr("number has no integer representation",
+				pcall(accepted.send, accepted, data, 1.1))
+			asserterr("number has no integer representation",
+				pcall(accepted.send, accepted, data, nil, 2.2))
+			stage1 = 3
+			asserterr("connection reset by peer", accepted:send(data))
+			stage1 = 4
+		end)
+		assert(stage1 == 1)
+
+		local stage2 = 0
+		spawn(function ()
+			stream = system.tcp("stream", domain)
+			stage2 = 1
+			assert(stream:connect(ipaddr[domain].localaddress))
+			stage2 = 2
+			system.pause()
+			stage2 = 3
+			assert(stream:close())
+			stage2 = 4
+		end)
+		assert(stage2 == 1)
+
+		assert(system.run("step") == true)
+		assert(stage1 == 3)
+		assert(stage2 == 2)
+
+		asserterr("unable to yield", pcall(accepted.send, accepted, buffer))
+
+		gc()
+		assert(system.run() == false)
+		assert(stage1 == 4)
+		assert(stage2 == 4)
+
+		assert(server:close() == true)
+
+		done()
+	end
+
+	do case "cancel schedule"
+
+		local stage = 0
+		spawn(function ()
+			garbage.coro = coroutine.running()
+			local server = system.tcp("listen", domain)
+			assert(server:bind(ipaddr[domain].localaddress))
+			assert(server:listen(backlog))
+			local stream = assert(server:accept())
+			local res, a,b,c = stream:send(string.rep("x", 1<<24))
+			assert(res == garbage)
+			assert(a == true)
+			assert(b == nil)
+			assert(c == 3)
+			stage = 1
+			coroutine.yield()
+			stage = 2
+		end)
+
+		spawn(function ()
+			local stream = system.tcp("stream", domain)
+			assert(stream:connect(ipaddr[domain].localaddress))
+			system.pause()
+			coroutine.resume(garbage.coro, garbage, true,nil,3)
+
+			local bytes = 1<<24
+			local buffer = memory.create(1<<24)
+			repeat
+				bytes = bytes-stream:receive(buffer)
+			until bytes <= 0
+		end)
+		assert(stage == 0)
+
+		gc()
+		assert(system.run() == false)
+		assert(stage == 1)
+
+		done()
+	end
+
+	do case "cancel and reschedule"
+		local stage = 0
+		spawn(function ()
+			garbage.coro = coroutine.running()
+			local server = system.tcp("listen", domain)
+			assert(server:bind(ipaddr[domain].localaddress))
+			assert(server:listen(backlog))
+			stage = 1
+			local stream = assert(server:accept())
+			local ok, extra = stream:send(string.rep("x", 1<<24))
+			assert(ok == nil)
+			assert(extra == nil)
+			stage = 3
+			assert(stream:send(string.rep("x", 64)) == true)
+			stage = 4
+			assert(stream:close())
+			stage = 5
+		end)
+
+		spawn(function ()
+			local stream = system.tcp("stream", domain)
+			assert(stream:connect(ipaddr[domain].localaddress))
+			system.pause()
+			coroutine.resume(garbage.coro)
+			local bytes = (1<<24)+64
+			local buffer = memory.create(bytes)
+			repeat
+				bytes = bytes-stream:receive(buffer)
+			until bytes <= 0
+		end)
+		assert(stage == 1)
+
+		gc()
+		assert(system.run() == false)
+		assert(stage == 5)
+
+		done()
+	end
+
+	do case "double cancel"
+		local stage = 0
+		spawn(function ()
+			garbage.coro = coroutine.running()
+			local server = system.tcp("listen", domain)
+			assert(server:bind(ipaddr[domain].localaddress))
+			assert(server:listen(backlog))
+			stage = 1
+			local stream = assert(server:accept())
+			local ok, extra = stream:send(string.rep("x", 1<<24))
+			assert(ok == nil)
+			assert(extra == nil)
+			stage = 3
+			local res, a,b,c = stream:send(string.rep("x", 1<<24))
+			assert(res == garbage)
+			assert(a == true)
+			assert(b == nil)
+			assert(c == 3)
+			stage = 3
+
+			assert(stream:close())
+			stage = 4
+		end)
+
+		spawn(function ()
+			local stream = system.tcp("stream", domain)
+			assert(stream:connect(ipaddr[domain].localaddress))
+			system.pause()
+			coroutine.resume(garbage.coro)
+			local bytes = 1<<24
+			local buffer = memory.create(1<<24)
+			repeat
+				bytes = bytes-stream:receive(buffer)
+			until bytes <= 0
+			coroutine.resume(garbage.coro, garbage, true,nil,3)
+		end)
+		assert(stage == 1)
+
+		gc()
+		assert(system.run() == false)
+		assert(stage == 4)
+
+		done()
+	end
+
+	do case "ignore errors"
+
+		local stage = 0
+		pspawn(function ()
+			local server = assert(system.tcp("listen", domain))
+			assert(server:bind(ipaddr[domain].localaddress))
+			assert(server:listen(backlog))
+			stage = 1
+			local stream = assert(server:accept())
+			assert(stream:send("0123456789") == true)
+			stage = 2
+			error("oops!")
+		end)
+
+		spawn(function ()
+			local stream = assert(system.tcp("stream", domain))
+			assert(stream:connect(ipaddr[domain].localaddress))
+			local buffer = memory.create("9876543210")
+			assert(stream:receive(buffer) == 10)
+			assert(memory.diff(buffer, "0123456789") == nil)
+			assert(stage == 2)
+			stage = 3
+		end)
+		assert(stage == 1)
+
+		gc()
+		assert(system.run() == false)
+		assert(stage == 3)
+
+		done()
+	end
+
+	do case "ignore errors after cancel"
+
+		local stage = 0
+		pspawn(function ()
+			garbage.coro = coroutine.running()
+			local server = system.tcp("listen", domain)
+			assert(server:bind(ipaddr[domain].localaddress))
+			assert(server:listen(backlog))
+			stage = 1
+			local stream = assert(server:accept())
+			assert(stream:send(string.rep("x", 1<<24)) == garbage)
+			stage = 2
+			error("oops!")
+		end)
+
+		spawn(function ()
+			local stream = system.tcp("stream", domain)
+			assert(stream:connect(ipaddr[domain].localaddress))
+			system.pause()
+			coroutine.resume(garbage.coro, garbage)
+
+			assert(stream:close())
 		end)
 		assert(stage == 1)
 
