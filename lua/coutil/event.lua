@@ -113,7 +113,7 @@ do
 	local function cancel(event, thread, list, ...)
 		if ... == listof then return select(2, ...) end
 		removethread(event, thread, list)
-		return nil, ...
+		return ...
 	end
 
 	function module.await(event)
@@ -146,7 +146,7 @@ do
 
 	local function resumed(thread, regsz, count, ...)
 		if select(regsz+1, ...) ~= listof then
-			return nil, cancel(thread, regsz, ...)
+			return cancel(thread, regsz, ...)
 		elseif count == 0 then
 			return true
 		end
@@ -169,7 +169,7 @@ do
 		if ... == listof then
 			return select(2, ...)
 		end
-		return nil, ...
+		return ...
 	end
 
 	local function registered(thread, ...)
