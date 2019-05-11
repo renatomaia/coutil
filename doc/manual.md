@@ -64,7 +64,7 @@ Coroutines might suspend awaiting for events on values, so they are resumed when
 Suspends the execution of the calling coroutine awaiting an event on value `e`.
 
 If it is resumed by [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-), it returns `e` followed by all the additional arguments passed to these functions.
-Otherwise it returns `nil` followed by the values provided to the resume (_e.g._ [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume)).
+Otherwise it returns the values provided to the resume (_e.g._ [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume)).
 
 ### `event.awaitall ([e1, ...])`
 

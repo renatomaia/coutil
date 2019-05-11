@@ -252,9 +252,9 @@ do case "direct resume"
 		end)
 		assert(a == 0)
 
-		coroutine.resume(garbage.co, 1,2,3)
+		coroutine.resume(garbage.co, garbage,1,2,3)
 		assert(a == 1)
-		assert(res == nil)
+		assert(res == garbage)
 		assert(v1 == 1)
 		assert(v2 == 2)
 		assert(v3 == 3)
@@ -496,7 +496,7 @@ do case "direct resume"
 	spawn(function ()
 		garbage.co = coroutine.running()
 		local res, v1,v2,v3 = awaitall(table.unpack(types))
-		assert(res == nil)
+		assert(res == garbage)
 		assert(v1 == 1)
 		assert(v2 == 2)
 		assert(v3 == 3)
@@ -505,7 +505,7 @@ do case "direct resume"
 		a = 2
 	end)
 
-	coroutine.resume(garbage.co, 1,2,3)
+	coroutine.resume(garbage.co, garbage,1,2,3)
 	assert(a == 1)
 
 	for _, e in ipairs(types) do
@@ -526,7 +526,7 @@ do case "resumed after events"
 	spawn(function ()
 		garbage.co = coroutine.running()
 		local res, v1,v2,v3 = awaitall(extra, table.unpack(types))
-		assert(res == nil)
+		assert(res == garbage)
 		assert(v1 == 1)
 		assert(v2 == 2)
 		assert(v3 == 3)
@@ -541,7 +541,7 @@ do case "resumed after events"
 	end
 	assert(a == 0)
 
-	coroutine.resume(garbage.co, 1,2,3)
+	coroutine.resume(garbage.co, garbage,1,2,3)
 	assert(a == 1)
 
 	assert(pending(extra) == false)
@@ -862,7 +862,7 @@ do case "direct resume"
 		spawn(function ()
 			garbage.co = coroutine.running()
 			local res, v1,v2,v3 = awaitany(table.unpack(types))
-			assert(res == nil)
+			assert(res == garbage)
 			assert(v1 == 1)
 			assert(v2 == 2)
 			assert(v3 == 3)
@@ -872,7 +872,7 @@ do case "direct resume"
 		end)
 		assert(a == 0)
 
-		coroutine.resume(garbage.co, 1,2,3)
+		coroutine.resume(garbage.co, garbage,1,2,3)
 		assert(a == 1)
 
 		for _, e in ipairs(types) do
