@@ -35,16 +35,18 @@ Index
 	- [`system.pause`](#systempause-delay)
 	- [`system.awaitsig`](#systemawaitsig-signal)
 	- [`system.address`](#systemaddress-type--data--port--mode)
-	- [`system.tcp`](#systemtcp-type--domain)
-	- [`tcp:close`](#tcpclose-)
-	- [`tcp:getdomain`](#tcpgetdomain-)
-	- [`tcp:bind`](#tcpbind-address)
-	- [`tcp:getaddress`](#tcpgetaddress-site--address)
-	- [`stream:setoption`](#streamsetoption-name-value)
-	- [`stream:getoption`](#streamgetoption-name)
-	- [`stream:connect`](#streamconnect-address)
-	- [`stream:send`](#streamsend-data--i--j)
-	- [`stream:receive`](#streamreceive-buffer--i--j)
+	- [`system.socket`](#systemsocket-type--domain)
+	- [`socket:close`](#socketclose-)
+	- [`socket:getdomain`](#socketgetdomain-)
+	- [`socket:bind`](#socketbind-address)
+	- [`socket:connect`](#socketconnect-address)
+	- [`socket:getaddress`](#socketgetaddress-site--address)
+	- [`socket:setoption`](#socketsetoption-name-value)
+	- [`socket:getoption`](#socketgetoption-name)
+	- [`socket:send`](#socketsend-data--i--j--address)
+	- [`socket:receive`](#socketreceive-buffer--i--j--address)
+	- [`datagram:joingroup`](#datagramjoingroup-multicast--interface)
+	- [`datagram:leavegroup`](#datagramleavegroup-multicast--interface)
 	- [`stream:shutdown`](#streamshutdown-)
 	- [`listen:listen`](#listenlisten-backlog)
 	- [`listen:accept`](#listenaccept-)
@@ -330,13 +332,14 @@ like `"\192\0\2\128"` (IPv4) or `"\0\0\0\0\0\0\0\0\0\0\xff\xff\xc0\x00\x02\x80"`
 Moreover, you can pass the object to the standard function `tostring` to obtain the address as a string inside a URI,
 like `"192.0.2.128:80"` (IPv4) or `[::ffff:c000:0280]:80` (IPv6).
 
-### `system.tcp ([type [, domain]])`
+### `system.socket (type [, domain])`
 
-Creates a TCP socket, of the type specified by `type`,
+Creates a socket, of the type specified by `type`,
 which is either:
 
-- `"stream"` creates stream socket for data transfers.
-- `"listen"` creates socket to accept stream socket connections.
+- `"datagram"` creates UDP datagram socket for data transfers.
+- `"stream"` creates TCP stream socket for data transfers.
+- `"listen"` creates TCP listen socket to accept connected TCP stream sockets.
 
 The `domain` string defines the socket's address domain (or family),
 and can be  either `"ipv4"` or `"ipv6"`,
@@ -345,29 +348,43 @@ to create socket on the IPv4 or IPv6 address domain.
 On success it returns a new socket,
 or `nil` plus an error message otherwise.
 
-### `tcp:close ()`
+### `socket:close ()`
 
-Closes socket `tcp`.
+Closes socket `socket`.
 Note that sockets are automatically closed when their handles are garbage collected,
 but that takes an unpredictable amount of time to happen. 
 
 In case of success, this function returns `true`.
 Otherwise it returns `nil` plus an error message.
 
-### `tcp:getdomain ()`
+### `socket:getdomain ()`
 
-Returns the address domain of `tcp`, which can be either `"ipv4"` `"ipv6"`.
+Returns the address domain of `socket`, which can be either `"ipv4"` `"ipv6"`.
 
-### `tcp:bind (address)`
+### `socket:bind (address)`
 
-Binds socket `tcp` to the local address provided as `address`.
+Binds socket `socket` to the local address provided as `address`.
 
 In case of success, this function returns `true`.
 Otherwise it returns `nil` plus an error message.
 
-### `tcp:getaddress ([site [, address]])`
+### `socket:connect ([address])`
 
-Returns the address associated with socket `tcp`, as indicated by `site`, which can be:
+Binds socket `socket` to the peer address provided as `address`,
+thus any data send over the socket is targeted to that `address`.
+
+If `address` is not provided and `socket` is a UDP socket then it is unbinded from its previous binded peer address
+(_i.e._ it is disconnected).
+For TCP stream sockets argument `address` is mandatory,
+and it is necessary to bind the socket to a peer address before sending any data.
+This operation is not available for sockets of type `listen`.
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
+### `socket:getaddress ([site [, address]])`
+
+Returns the address associated with socket `socket`, as indicated by `site`, which can be:
 
 - `"this"`: The socket's address (the default).
 - `"peer"`: The socket's peer address.
@@ -377,40 +394,52 @@ otherwise a new `address` object is returned with the result data.
 
 In case of errors, it returns `nil` plus an error message.
 
-### `stream:setoption (name, value)`
+### `socket:setoption (name, value)`
 
-Sets the option `name` for socket `tcp`.
-The available options are the same as defined in operation [`socket:getoption`].
+Sets `value` as the value of option `name` for socket `socket`.
+This operation is not available for sockets of type `listen`.
+The available options are the same as defined in operation [`udp:getoption`].
 
 In case of success, this function returns `true`.
 Otherwise it returns `nil` plus an error message.
 
-### `stream:getoption (name)`
+### `socket:getoption (name)`
 
-Returns the value of option `name` of `socket`.
+Returns the value of option `name` of socket `socket`.
+This operation is not available for sockets of type `listen`.
 There available options are:
 
-- `"keepalive"`: is a number of seconds of the initial delay of the periodic transmission of messages when the TCP keep-alive option is enabled for socket `tcp`,
+#### `datagram` Socket Options
+
+- `"broadcast"`: is `true` when broadcast is enabled in `socket`,
+or `false` otherwise.
+- `"mcastloop"`: is `true` when loopback of outgoing multicast datagrams is enabled,
+or `false` otherwise.
+(default is `true`).
+- `"mcastttl"`: is a number from 1 to 255 of multicast time to live.
+(default is 1).
+- `"mcastiface"`: is the address of the interface for multicast,
+or `nil` is none is defined.
+
+#### `stream` Socket Options
+
+- `"keepalive"`: is a number of seconds of the initial delay of the periodic transmission of messages when the TCP keep-alive option is enabled,
 or `nil` otherwise.
-- `"nodelay"`: is `true` when coalescing of small segments shall be avoided in `socket`,
+- `"nodelay"`: is `true` when coalescing of small segments shall be avoided,
 or `false` otherwise.
 
-### `stream:connect (address)`
-
-Binds socket `stream` to the peer address provided as `address`.
-
-This operation is not available for sockets of type `listen`.
-
-In case of success, this function returns `true`.
-Otherwise it returns `nil` plus an error message.
-
-### `stream:send (data [, i [, j]])`
+### `socket:send (data [, i [, j [, address]]])`
 
 Sends the substring of `data` that starts at `i` and continues until `j`;
 `i` and `j` can be negative.
 If `j` is absent,
 it is assumed to be equal to -1 (which is the same as the string length).
 
+For unbinded sockets of type `datagram` `address` must be provided
+(_i.e._ disconnected UDP sockets),
+and it must be omitted for sockets of type `datagram` binded to a peer address
+(_i.e._ connected UDP sockets).
+For sockets of type `stream` `address` is ignored.
 This operation is not available for sockets of type `listen`.
 
 In case of success, this function returns `true`.
@@ -418,42 +447,68 @@ Otherwise it returns `nil` plus an error message.
 
 __Note__: if `data` is a [memory](https://github.com/renatomaia/lua-memory), it is not converted to a Lua string prior to have its specified contents transfered.
 
-### `stream:receive (buffer [, i [, j]])`
+### `socket:receive (buffer [, i [, j [, address]]])`
 
-Receives from socket `stream` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`;
+Receives from socket `socket` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`;
 `i` and `j` can be negative.
 If `j` is absent, it is assumed to be equal to -1
 (which is the same as the buffer size).
 
+For sockets of type `datagram`,
+if `address` is provided,
+it is used to store the peer address that sent the data.
+For sockets of type `stream`,
+`address` is ignored.
 This operation is not available for sockets of type `listen`.
 
-Returns the number of bytes actually received from `socket` in case of success.
+In case of success,
+returns the number of bytes copied to `buffer` and,
+for sockets of type `datagram`,
+a boolean indicating whether the copied data was truncated.
+Otherwise it returns `nil` plus an error message.
+
+### `datagram:joingroup (multicast [, interface])`
+
+Joins network interface with address `interface` in the multicast group of address `multicast`,
+thus datagrams targed to `multicast` address are delivered through address `interface`.
+If `ifaceaddr` is not provided the socket `datagram` binded local address is used.
+
+Both `multicast` and `interface` are string containing either textual (literal) or binary IP addresses
+(see [`system.address`](#systemaddress-type--data--port--mode)).
+
+This operation is only available for sockets of type `datagram`.
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
+### `datagram:leavegroup (multicast [, interface])`
+
+Removed network interface with address `interface` from the multicast group of address `multicast`
+(see [`datagram:joingroup`](#datagramjoingroup-multicast--interface)).
+
+This operation is only available for sockets of type `datagram`.
+
+In case of success, this function returns `true`.
 Otherwise it returns `nil` plus an error message.
 
 ### `stream:shutdown ()`
 
-Shuts down the write side of socket `stream`.
-
-This operation is only available for `stream` sockets.
+Shuts down the write side of TCP stream socket `stream`.
 
 In case of success, this function returns `true`.
 Otherwise it returns `nil` plus an error message.
 
 ### `listen:listen (backlog)`
 
-Starts listening for new connections on socket `listen`.
+Starts listening for new connections on TCP listen socket `listen`.
 `backlog` is a hint for the underlying system about the suggested number of outstanding connections that shall be kept in the socket's listen queue.
-
-This operation is only available for sockets of type `listen`.
 
 In case of success, this function returns `true`.
 Otherwise it returns `nil` plus an error message.
 
 ### `listen:accept ()`
 
-Accepts a new pending connection on socket `listen`.
+Accepts a new pending connection on TCP listen socket `listen`.
 
-This operation is only available for sockets of type `listen`.
-
-Returns a new `stream` TCP socket for the accepted connection in case of success.
+Returns a new `stream` socket for the accepted connection in case of success.
 Otherwise it returns `nil` plus an error message.
