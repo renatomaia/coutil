@@ -37,8 +37,6 @@ LCULIB_API void lcu_closeobj (lua_State *L, int idx, uv_handle_t *handle);
 
 LCULIB_API void lcuT_awaitobj (lua_State *L, uv_handle_t *handle);
 
-LCULIB_API void lcuT_releaseobj (lua_State *L, uv_handle_t *handle);
-
 LCULIB_API int lcuT_haltedobjop (lua_State *L, uv_handle_t *handle);
 
 LCULIB_API int lcuU_resumeobjop (lua_State *thread, uv_handle_t *handle);
