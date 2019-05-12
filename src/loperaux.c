@@ -7,6 +7,7 @@
 
 #define FLAG_REQUEST  0x01
 #define FLAG_PENDING  0x02
+#define FLAG_OBJOPON  0x04
 
 #define torequest(O) ((uv_req_t *)&((O)->kind.request))
 #define tohandle(O) ((uv_handle_t *)&((O)->kind.handle))
@@ -70,16 +71,16 @@ static void closedhdl (uv_handle_t *handle) {
 	lua_State *L = (lua_State *)loop->data;
 	lua_State *thread = (lua_State *)handle->data;
 	uv_req_t *request = torequest(op);
-	lcu_assert(!lcuL_hasflag(op, FLAG_REQUEST));
+	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST));
 	freethread(L, (void *)handle);
 	lcuL_setflag(op, FLAG_REQUEST);
 	request->type = UV_UNKNOWN_REQ;
 	request->data = (void *)thread;
-	if (lcuL_hasflag(op, FLAG_PENDING)) resumethread(thread, L, loop);
+	if (lcuL_maskflag(op, FLAG_PENDING)) resumethread(thread, L, loop);
 }
 
 static void cancelop (Operation *op) {
-	if (lcuL_hasflag(op, FLAG_REQUEST)) {
+	if (lcuL_maskflag(op, FLAG_REQUEST)) {
 		uv_req_t *request = torequest(op);
 		uv_cancel(request);
 	} else {
@@ -99,10 +100,10 @@ static int endop (lua_State *L, int status, lua_KContext kctx) {
 }
 
 static int startedop (lua_State *L, Operation *op, int err) {
-	lcu_assert(!lcuL_hasflag(op, FLAG_PENDING));
+	lcu_assert(!lcuL_maskflag(op, FLAG_PENDING));
 	if (err >= 0) {
 		lcuL_setflag(op, FLAG_PENDING);
-		if (lcuL_hasflag(op, FLAG_REQUEST)) savethread(L, (void *)op);
+		if (lcuL_maskflag(op, FLAG_REQUEST)) savethread(L, (void *)op);
 		return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), endop);
 	}
 	else cancelop(op);
@@ -117,11 +118,11 @@ static int resetop (lua_State *L, int status, lua_KContext kctx) {
 	Operation *op = tothrop(L);
 	int narg = (int)kctx;
 	lcu_assert(status == LUA_YIELD);
-	lcu_assert(lcuL_hasflag(op, FLAG_PENDING));
+	lcu_assert(lcuL_maskflag(op, FLAG_PENDING));
 	lcuL_clearflag(op, FLAG_PENDING);
 	if (!haltedop(L, loop)) {
 		int mkreq = lua_toboolean(L, narg-1);
-		lcu_assert(lcuL_hasflag(op, FLAG_REQUEST));
+		lcu_assert(lcuL_maskflag(op, FLAG_REQUEST));
 		lcu_assert(torequest(op)->type == UV_UNKNOWN_REQ);
 		if (mkreq) {
 			lcu_RequestSetup setup = (lcu_RequestSetup)lua_touserdata(L, narg);
@@ -137,7 +138,7 @@ static int resetop (lua_State *L, int status, lua_KContext kctx) {
 }
 
 static int yieldreset (lua_State *L, Operation *op, int mkreq, void *setup) {
-	lcu_assert(!lcuL_hasflag(op, FLAG_PENDING));
+	lcu_assert(!lcuL_maskflag(op, FLAG_PENDING));
 	lua_pushboolean(L, mkreq);
 	lua_pushlightuserdata(L, (void *)setup);
 	lcuL_setflag(op, FLAG_PENDING);
@@ -148,7 +149,7 @@ typedef enum { FREEOP, SAMEOP, WAITOP } opstatus;
 
 static opstatus checkreset (Operation *op, lua_CFunction results, int type) {
 	op->results = results;
-	if (lcuL_hasflag(op, FLAG_REQUEST)) {
+	if (lcuL_maskflag(op, FLAG_REQUEST)) {
 		uv_req_t *request = torequest(op);
 		if (request->type == UV_UNKNOWN_REQ) return FREEOP;
 	} else {
@@ -183,13 +184,13 @@ LCULIB_API int lcuT_resetreqopk (lua_State *L,
 LCULIB_API void lcuU_resumereqop (uv_loop_t *loop, uv_req_t *request, int err) {
 	lua_State *L = (lua_State *)loop->data;
 	Operation *op = (Operation *)request;
-	lcu_assert(lcuL_hasflag(op, FLAG_REQUEST));
+	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST));
 	request->type = UV_UNKNOWN_REQ;
-	if (lcuL_hasflag(op, FLAG_PENDING)) {
+	if (lcuL_maskflag(op, FLAG_PENDING)) {
 		lua_State *thread = (lua_State *)request->data;
 		lcuL_pushresults(thread, 0, err);
 		resumethread(thread, L, loop);
-		if (!lcuL_hasflag(op, FLAG_REQUEST) || request->type != UV_UNKNOWN_REQ)
+		if (!lcuL_maskflag(op, FLAG_REQUEST) || request->type != UV_UNKNOWN_REQ)
 			return;
 	}
 	freethread(L, (void *)request);
@@ -218,7 +219,7 @@ LCULIB_API int lcuT_resetthropk (lua_State *L,
 }
 
 LCULIB_API int lcuT_armthrop (lua_State *L, int err) {
-	lcu_assert(lcuL_hasflag(tothrop(L), FLAG_REQUEST));
+	lcu_assert(lcuL_maskflag(tothrop(L), FLAG_REQUEST));
 	lcu_assert(tohandle(tothrop(L))->type != UV_UNKNOWN_HANDLE);
 	if (err >= 0) {
 		Operation *op = tothrop(L);
@@ -236,10 +237,10 @@ LCULIB_API int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle) {
 	lua_State *L = (lua_State *)loop->data;
 	Operation *op = (Operation *)handle;
 	int status;
-	lcu_assert(!lcuL_hasflag(op, FLAG_REQUEST));
-	lcu_assert(lcuL_hasflag(op, FLAG_PENDING));
+	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST));
+	lcu_assert(lcuL_maskflag(op, FLAG_PENDING));
 	status = resumethread(thread, L, loop);
-	if (status != LUA_YIELD || !lcuL_hasflag(op, FLAG_PENDING)) cancelop(op);
+	if (status != LUA_YIELD || !lcuL_maskflag(op, FLAG_PENDING)) cancelop(op);
 	return status;
 }
 
@@ -290,14 +291,10 @@ LCULIB_API void lcuT_awaitobj (lua_State *L, uv_handle_t *handle) {
 	handle->data = (void *)L;
 }
 
-LCULIB_API void lcuT_releaseobj (lua_State *L, uv_handle_t *handle) {
-	freethread(L, (void *)handle);
-	handle->data = NULL;
-}
-
 LCULIB_API int lcuT_haltedobjop (lua_State *L, uv_handle_t *handle) {
 	if (!haltedop(L, handle->loop)) return 0;
-	lcuT_releaseobj(L, handle);
+	freethread(L, (void *)handle);
+	handle->data = NULL;
 	return 1;
 }
 
