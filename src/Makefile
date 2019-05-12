@@ -11,13 +11,17 @@ LUAMEM_HOME= $(LUA_HOME)
 LUAMEM_INC= $(LUAMEM_HOME)/include
 LUAMEM_LIB= $(LUAMEM_HOME)/lib
 
+LIBUV_HOME= $(LUA_HOME)
+LIBUV_INC= $(LIBUV_HOME)/include
+LIBUV_LIB= $(LIBUV_HOME)/lib
+
 LIB_A=	libluacoutil.a
 COS_M=	system.so
 
 LD= ld
 CC= gcc -std=gnu89
-CFLAGS= -g -Wall -I. -I$(LUA_INC) -I$(LUAMEM_INC) $(SYSCFLAGS) $(MYCFLAGS)
-LDFLAGS= -L$(LUA_LIB) -L$(LUAMEM_LIB) $(SYSLDFLAGS) $(MYLDFLAGS)
+CFLAGS= -g -Wall -I. -I$(LUA_INC) -I$(LUAMEM_INC) -I$(LIBUV_INC) $(SYSCFLAGS) $(MYCFLAGS)
+LDFLAGS= -L$(LUA_LIB) -L$(LUAMEM_LIB) -L$(LIBUV_LIB) $(SYSLDFLAGS) $(MYLDFLAGS)
 LIBS= -lluamemlib -luv $(SYSLIBS) $(MYLIBS)
 
 AR= ar rcu
@@ -35,11 +39,8 @@ MYOBJS=
 
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 
-OSM_O=	looplib.o lmodaux.o loperaux.o \
-      	lscheduf.o \
-      	ltimef.o \
-      	lsignalf.o \
-      	lnetwaux.o ltcpf.o \
+OSM_O=	looplib.o lmodaux.o loperaux.o lnetwaux.o \
+      	lscheduf.o ltimef.o lsignalf.o lnetwrkf.o \
       	lsysmod.o
 
 ALL_O=	$(OSM_O) $(MYOBJS)

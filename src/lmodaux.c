@@ -64,6 +64,7 @@ LCULIB_API void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
 	}
 	err = uv_loop_init(uv);
 	if (err < 0) lcu_error(L, err);
+	uv->data = NULL;
 	lua_newtable(L);  /* LCU_COREGISTRY */
 	pushhandlemap(L);  /* LCU_HANDLEMAP */
 }
