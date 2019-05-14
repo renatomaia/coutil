@@ -15,7 +15,7 @@
 
 LCULIB_API int lcuL_pushresults (lua_State *L, int n, int err);
 
-#define lcuL_hasflag(O,F) ((O)->flags&(F))
+#define lcuL_maskflag(O,F) ((O)->flags&(F))
 #define lcuL_setflag(O,F) ((O)->flags |= (F))
 #define lcuL_clearflag(O,F) ((O)->flags &= ~(F))
 

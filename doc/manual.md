@@ -478,7 +478,7 @@ Otherwise it returns `nil` plus an error message.
 ### `datagram:leavegroup (multicast [, interface])`
 
 Removed network interface with address `interface` from the multicast group of address `multicast`
-(see [`datagram:joingroup`](#datagramjoingroup-multicast--interface-)).
+(see [`datagram:joingroup`](#datagramjoingroup-multicast--interface)).
 
 This operation is only available for sockets of type `datagram`.
 
