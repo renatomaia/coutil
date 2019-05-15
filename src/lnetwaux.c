@@ -30,7 +30,7 @@ LCULIB_API struct sockaddr *lcu_newaddress (lua_State *L, int type) {
 #define FLAG_CONNECTED 0x04  /* only for datagram sockets */
 #define FLAG_BROADCAST 0x08  /* only for datagram sockets */
 #define FLAG_MCASTLOOP 0x10  /* only for datagram sockets */
-#define FLAG_MCASTTTL 0x1ff0  /* only for datagram sockets */
+#define FLAG_MCASTTTL 0x1fe0  /* only for datagram sockets */
 
 #define FLAG_LSTNMASK 0x07  /* only for listen sockets */
 #define FLAG_STRMMASK 0x0f  /* only for stream sockets */
@@ -54,20 +54,20 @@ struct lcu_TcpSocket {
 	int flags;
 };
 
-#define initsockobj(O,D) O->handle.data = NULL; \
-                         if (D == AF_INET) O->flags = FLAG_CLOSED; \
-                         else O->flags = FLAG_CLOSED|FLAG_IPV6DOM;
+#define initsockobj(O,D,F) O->handle.data = NULL; \
+                         if (D == AF_INET) O->flags = FLAG_CLOSED|(F); \
+                         else O->flags = FLAG_CLOSED|FLAG_IPV6DOM|(F);
 
 LCULIB_API lcu_UdpSocket *lcu_newudp (lua_State *L, int domain) {
 	lcu_UdpSocket *udp = (lcu_UdpSocket *)lua_newuserdata(L, sizeof(lcu_UdpSocket));
-	initsockobj(udp, domain);
+	initsockobj(udp, domain, 1<<MCASTTTL_SHIFT);
 	luaL_setmetatable(L, LCU_UDPSOCKCLS);
 	return udp;
 }
 
 LCULIB_API lcu_TcpSocket *lcu_newtcp (lua_State *L, int domain, int class) {
 	lcu_TcpSocket *tcp = (lcu_TcpSocket *)lua_newuserdata(L, sizeof(lcu_TcpSocket));
-	initsockobj(tcp, domain);
+	initsockobj(tcp, domain, 0);
 	luaL_setmetatable(L, lcu_TcpSockCls[class]);
 	return tcp;
 }

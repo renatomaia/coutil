@@ -1,6 +1,6 @@
 local system = require "coutil.system"
 
-newgroup "TCP" -----------------------------------------------------------------
+newgroup "Sockets" -----------------------------------------------------------------
 
 newtest "create" ---------------------------------------------------------------
 
@@ -40,21 +40,21 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 
 	newgroup(domain) -------------------------------------------------------------
 
-	for _, kind in ipairs{"stream", "listen"} do
+	for _, kind in ipairs{"datagram", "stream", "listen"} do
 
 		newtest(kind) --------------------------------------------------------------
 
 		do case "garbage generation"
-			garbage.tcp = assert(system.socket(kind, domain))
+			garbage.sock = assert(system.socket(kind, domain))
 
 			done()
 		end
 
 		do case "garbage collection"
-			garbage.tcp = assert(system.socket(kind, domain))
+			garbage.sock = assert(system.socket(kind, domain))
 
 			gc()
-			assert(garbage.tcp == nil)
+			assert(garbage.sock == nil)
 
 			assert(system.run() == false)
 
@@ -62,16 +62,18 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 		end
 
 		do case "close"
-			garbage.tcp = assert(system.socket(kind, domain))
+			garbage.sock = assert(system.socket(kind, domain))
 
-			assert(garbage.tcp:close() == true)
-			assert(tostring(garbage.tcp) == "tcp (closed)")
-			asserterr("closed tcp", pcall(garbage.tcp.getaddress, garbage.tcp))
+			assert(garbage.sock:close() == true)
 
-			assert(garbage.tcp:close() == false)
+			local protoname = kind == "datagram" and "udp" or "tcp"
+			assert(tostring(garbage.sock) == protoname.." (closed)")
+			asserterr("closed "..protoname, pcall(garbage.sock.getaddress, garbage.sock))
+
+			assert(garbage.sock:close() == false)
 
 			gc()
-			assert(garbage.tcp ~= nil)
+			assert(garbage.sock ~= nil)
 
 			assert(system.run() == false)
 
@@ -79,32 +81,36 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 		end
 
 		do case "getdomain"
-			local tcp = assert(system.socket(kind, domain))
-			assert(tcp:getdomain() == domain)
+			local sock = assert(system.socket(kind, domain))
+			assert(sock:getdomain() == domain)
 
 			done()
 		end
 
 		do case "getaddress"
-			local tcp = assert(system.socket(kind, domain))
+			local sock = assert(system.socket(kind, domain))
 
-			asserterr("wrong domain", pcall(tcp.bind, tcp, ipaddr[otherdomain].freeaddress))
-			assert(tcp:bind(ipaddr[domain].freeaddress) == true)
-			--asserterr("invalid operation", pcall(tcp.bind, tcp, ipaddr[domain].localaddress))
+			asserterr("wrong domain", pcall(sock.bind, sock, ipaddr[otherdomain].freeaddress))
+			assert(sock:bind(ipaddr[domain].freeaddress) == true)
+			--asserterr("invalid operation", pcall(sock.bind, sock, ipaddr[domain].localaddress))
 
-			local addr = tcp:getaddress()
+			local addr = sock:getaddress()
 			assert(addr == ipaddr[domain].freeaddress)
-			local addr = tcp:getaddress("this")
+			local addr = sock:getaddress("this")
 			assert(addr == ipaddr[domain].freeaddress)
-			asserterr("socket is not connected", tcp:getaddress("peer"))
+if kind ~= "datagram" then
+			asserterr("socket is not connected", sock:getaddress("peer"))
+end
 
-			local a = tcp:getaddress(nil, addr)
+			local a = sock:getaddress(nil, addr)
 			assert(rawequal(a, addr))
 			assert(a == ipaddr[domain].freeaddress)
-			local a = tcp:getaddress("this", addr)
+			local a = sock:getaddress("this", addr)
 			assert(rawequal(a, addr))
 			assert(a == ipaddr[domain].freeaddress)
-			asserterr("socket is not connected", tcp:getaddress("peer", addr))
+if kind ~= "datagram" then
+			asserterr("socket is not connected", sock:getaddress("peer", addr))
+end
 
 			done()
 		end
@@ -128,6 +134,38 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 		done()
 	end
 
+	local function testbooloption(kind, name)
+		local sock = assert(system.socket(kind, domain))
+		assert(sock:getoption(name) == false)
+		assert(sock:setoption(name, true) == true)
+		assert(sock:getoption(name) == true)
+		assert(sock:setoption(name, false) == true)
+	end
+
+	local sockoptions = {
+		datagram = {"broadcast", "mcastloop"},
+		stream = {"nodelay"},
+	}
+	for kind, options in pairs(sockoptions) do
+		for _, option in ipairs(options) do
+			do case(option)
+				testbooloption(kind, option)
+				done()
+			end
+		end
+	end
+
+	do case "mcastttl"
+		local stream = assert(system.socket("datagram", domain))
+		assert(stream:getoption("mcastttl") == 1)
+		assert(stream:setoption("mcastttl", 123) == true)
+		assert(stream:getoption("mcastttl") == 123)
+		assert(stream:setoption("mcastttl", 3) == true)
+		assert(stream:getoption("mcastttl") == 3)
+
+		done()
+	end
+
 	do case "keepalive"
 		local stream = assert(system.socket("stream", domain))
 		assert(stream:getoption("keepalive") == nil)
@@ -135,16 +173,6 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 		assert(stream:getoption("keepalive") == 123)
 		assert(stream:setoption("keepalive", false) == true)
 		assert(stream:getoption("keepalive") == nil)
-
-		done()
-	end
-
-	do case "nodelay"
-		local stream = assert(system.socket("stream", domain))
-		assert(stream:getoption("nodelay") == false)
-		assert(stream:setoption("nodelay", true) == true)
-		assert(stream:getoption("nodelay") == true)
-		assert(stream:setoption("nodelay", false) == true)
 
 		done()
 	end

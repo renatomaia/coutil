@@ -81,6 +81,6 @@ dofile "promise.lua"
 dofile "mutex.lua"
 dofile "spawn.lua"
 dofile "system.lua"
-dofile "tcp.lua"
+dofile "network.lua"
 
 print "\nSuccess!\n"
