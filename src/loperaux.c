@@ -7,6 +7,7 @@
 
 #define FLAG_REQUEST  0x01
 #define FLAG_PENDING  0x02
+#define FLAG_OBJOPON  0x04
 
 #define torequest(O) ((uv_req_t *)&((O)->kind.request))
 #define tohandle(O) ((uv_handle_t *)&((O)->kind.handle))
@@ -290,14 +291,10 @@ LCULIB_API void lcuT_awaitobj (lua_State *L, uv_handle_t *handle) {
 	handle->data = (void *)L;
 }
 
-LCULIB_API void lcuT_releaseobj (lua_State *L, uv_handle_t *handle) {
-	freethread(L, (void *)handle);
-	handle->data = NULL;
-}
-
 LCULIB_API int lcuT_haltedobjop (lua_State *L, uv_handle_t *handle) {
 	if (!haltedop(L, handle->loop)) return 0;
-	lcuT_releaseobj(L, handle);
+	freethread(L, (void *)handle);
+	handle->data = NULL;
 	return 1;
 }
 

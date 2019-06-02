@@ -350,15 +350,19 @@ static size_t posrelat (ptrdiff_t pos, size_t len) {
 	else return len - ((size_t)-pos) + 1;
 }
 
-static void getbufarg (lua_State *L, uv_buf_t *buf) {
+static int getbufarg (lua_State *L, uv_buf_t *buf) {
 	size_t sz;
 	const char *data = luamem_checkstring(L, 2, &sz);
-	size_t start = posrelat(luaL_optinteger(L, 3, 1), sz);
-	size_t end = posrelat(luaL_optinteger(L, 4, -1), sz);
-	if (start < 1) start = 1;
-	if (end > sz) end = sz;
-	buf->len = end-start+1;
-	buf->base = (char *)(data+start-1);
+	if (data) {
+		size_t start = posrelat(luaL_optinteger(L, 3, 1), sz);
+		size_t end = posrelat(luaL_optinteger(L, 4, -1), sz);
+		if (start < 1) start = 1;
+		if (end > sz) end = sz;
+		buf->len = end-start+1;
+		buf->base = (char *)(data+start-1);
+		return 1;
+	}
+	return 0;
 }
 
 
@@ -530,7 +534,6 @@ static int udp_getoption (lua_State *L) {
 
 
 /* succ [, errmsg] = udp:connect([address]) */
-#ifdef uv_udp_connect
 static int udp_connect (lua_State *L) {
 	lcu_UdpSocket *udp = openedudp(L);
 	const struct sockaddr *addr = lua_isnil(L, 2) ? NULL : toudpaddr(L, 2, udp);
@@ -538,7 +541,6 @@ static int udp_connect (lua_State *L) {
 	if (err >= 0) lcu_setudpconnected(udp, addr != NULL);
 	return lcuL_pushresults(L, 0, err);
 }
-#endif
 
 
 
@@ -568,6 +570,7 @@ static int stopudp (uv_udp_t *udp) {
 		lua_State *L = (lua_State *)udp->loop->data;
 		lcu_closeobj(L, 1, (uv_handle_t *)udp);
 	}
+	lcu_setudparmed((lcu_UdpSocket *)udp, 0);
 	return err;
 }
 static int k_udprecv (lua_State *L, int status, lua_KContext ctx) {
@@ -611,10 +614,10 @@ static int k_udpbuffer (lua_State *L, int status, lua_KContext ctx) {
 }
 static void uv_onudprecv (uv_udp_t *udp,
                           ssize_t nread,
-                          const uv_buf_t *bufref,
+                          const uv_buf_t *buf,
                           const struct sockaddr *addr,
                           unsigned int flags) {
-	if (bufref->base != (char *)bufref) {
+	if (buf->base != (char *)buf) {
 		lua_State *thread = (lua_State *)udp->data;
 		lcu_assert(thread);
 		if (nread >= 0) {
@@ -629,13 +632,15 @@ static void uv_onudprecv (uv_udp_t *udp,
 static void uv_ongetbuffer (uv_handle_t *handle,
                             size_t suggested_size,
                             uv_buf_t *buf) {
-	lua_State *thread = (lua_State *)handle->data;
-	lcu_assert(thread);
 	(void)suggested_size;
-	buf->base = (char *)buf;
-	buf->len = 0;
-	lua_pushlightuserdata(thread, buf);
-	lcuU_resumeobjop(thread, handle);
+	do {
+		lua_State *thread = (lua_State *)handle->data;
+		lcu_assert(thread);
+		buf->base = (char *)buf;
+		buf->len = 0;
+		lua_pushlightuserdata(thread, buf);
+		lcuU_resumeobjop(thread, handle);
+	} while (buf->base == (char *)buf && handle->data);
 }
 static int udp_receive (lua_State *L) {
 	lcu_UdpSocket *udp = ownedudp(L, lcu_toloop(L));
@@ -643,8 +648,11 @@ static int udp_receive (lua_State *L) {
 	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
 	if (handle->data) luaL_argcheck(L, handle->data == L, 1, "already in use");
 	else {
-		int err = uv_udp_recv_start(handle, uv_ongetbuffer, uv_onudprecv);
-		if (err < 0) return lcuL_pushresults(L, 0, err);
+		if (!lcu_getudparmed(udp)) {
+			int err = uv_udp_recv_start(handle, uv_ongetbuffer, uv_onudprecv);
+			if (err < 0) return lcuL_pushresults(L, 0, err);
+			lcu_setudparmed(udp, 1);
+		}
 		lcuT_awaitobj(L, (uv_handle_t *)handle);
 	}
 	lua_settop(L, 5);
@@ -831,13 +839,14 @@ static int tcp_send (lua_State *L) {
 }
 
 
-/* bytes [, errmsg] = socket:receive(buffer [, i [, j]]) */
+/* bytes [, errmsg] = tcp:receive(buffer [, i [, j]]) */
 static int stopread (uv_stream_t *stream) {
 	int err = uv_read_stop(stream);
 	if (err < 0) {
 		lua_State *L = (lua_State *)stream->loop->data;
 		lcu_closeobj(L, 1, (uv_handle_t *)stream);
 	}
+	lcu_settcparmed((lcu_TcpSocket *)stream, 0);
 	return err;
 }
 static int k_recvdata (lua_State *L, int status, lua_KContext ctx) {
@@ -871,8 +880,8 @@ static int k_getbuffer (lua_State *L, int status, lua_KContext ctx) {
 }
 static void uv_onrecvdata (uv_stream_t *stream,
                            ssize_t nread,
-                           const uv_buf_t *bufref) {
-	if (bufref->base != (char *)bufref) {
+                           const uv_buf_t *buf) {
+	if (buf->base != (char *)buf) {
 		lua_State *thread = (lua_State *)stream->data;
 		lcu_assert(thread);
 		if (nread >= 0) lua_pushinteger(thread, nread);
@@ -887,8 +896,11 @@ static int tcp_receive (lua_State *L) {
 	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
 	if (stream->data) luaL_argcheck(L, stream->data == L, 1, "already in use");
 	else {
-		int err = uv_read_start(stream, uv_ongetbuffer, uv_onrecvdata);
-		if (err < 0) return lcuL_pushresults(L, 0, err);
+		if (!lcu_gettcparmed(tcp)) {
+			int err = uv_read_start(stream, uv_ongetbuffer, uv_onrecvdata);
+			if (err < 0) return lcuL_pushresults(L, 0, err);
+			lcu_settcparmed(tcp, 1);
+		}
 		lcuT_awaitobj(L, (uv_handle_t *)stream);
 	}
 	lua_settop(L, 4);
@@ -977,9 +989,7 @@ static const luaL_Reg udp[] = {
 	{"bind", udp_bind},
 	{"getoption", udp_getoption},
 	{"setoption", udp_setoption},
-#ifdef uv_udp_connect
 	{"connect", udp_connect},
-#endif
 	{"send", udp_send},
 	{"receive", udp_receive},
 	{NULL, NULL}
