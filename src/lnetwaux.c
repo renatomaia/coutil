@@ -21,24 +21,25 @@ LCULIB_API struct sockaddr *lcu_newaddress (lua_State *L, int type) {
 
 #define FLAG_IPV6DOM 0x01
 #define FLAG_CLOSED 0x02
+#define FLAG_OBJOPON 0x04
 
-#define FLAG_LISTEN 0x04  /* only for listen sockets */
+#define FLAG_LISTEN 0x08  /* only for listen sockets */
 
-#define FLAG_NODELAY 0x04  /* only for stream sockets */
-#define FLAG_KEEPALIVE 0x08  /* only for stream sockets */
+#define FLAG_NODELAY 0x08  /* only for stream sockets */
+#define FLAG_KEEPALIVE 0x10  /* only for stream sockets */
 
-#define FLAG_CONNECTED 0x04  /* only for datagram sockets */
-#define FLAG_BROADCAST 0x08  /* only for datagram sockets */
-#define FLAG_MCASTLOOP 0x10  /* only for datagram sockets */
-#define FLAG_MCASTTTL 0x1fe0  /* only for datagram sockets */
+#define FLAG_CONNECTED 0x08  /* only for datagram sockets */
+#define FLAG_BROADCAST 0x10  /* only for datagram sockets */
+#define FLAG_MCASTLOOP 0x20  /* only for datagram sockets */
+#define FLAG_MCASTTTL 0x3fd0  /* only for datagram sockets */
 
-#define FLAG_LSTNMASK 0x07  /* only for listen sockets */
-#define FLAG_STRMMASK 0x0f  /* only for stream sockets */
-#define FLAG_DGRMMASK 0x1f  /* only for datagram sockets */
+#define FLAG_LSTNMASK 0x0f  /* only for listen sockets */
+#define FLAG_STRMMASK 0x1f  /* only for stream sockets */
+#define FLAG_DGRMMASK 0x3f  /* only for datagram sockets */
 
 #define LISTENCONN_UNIT (FLAG_LSTNMASK+1)
 #define KEEPALIVE_SHIFT 4
-#define MCASTTTL_SHIFT 5
+#define MCASTTTL_SHIFT 6
 
 struct lcu_UdpSocket {
 	uv_udp_t handle;
@@ -92,6 +93,24 @@ LCULIB_API uv_udp_t *lcu_toudphandle (lcu_UdpSocket *udp) {
 
 LCULIB_API uv_tcp_t *lcu_totcphandle (lcu_TcpSocket *tcp) {
 	return &tcp->handle;
+}
+
+LCULIB_API int lcu_getudparmed (lcu_UdpSocket *udp) {
+	return lcuL_maskflag(udp, FLAG_OBJOPON);
+}
+
+LCULIB_API void lcu_setudparmed (lcu_UdpSocket *udp, int value) {
+	if (value) lcuL_setflag(udp, FLAG_OBJOPON);
+	else lcuL_clearflag(udp, FLAG_OBJOPON);
+}
+
+LCULIB_API int lcu_gettcparmed (lcu_TcpSocket *tcp) {
+	return lcuL_maskflag(tcp, FLAG_OBJOPON);
+}
+
+LCULIB_API void lcu_settcparmed (lcu_TcpSocket *tcp, int value) {
+	if (value) lcuL_setflag(tcp, FLAG_OBJOPON);
+	else lcuL_clearflag(tcp, FLAG_OBJOPON);
 }
 
 LCULIB_API int lcu_isudpclosed (lcu_UdpSocket *udp) {

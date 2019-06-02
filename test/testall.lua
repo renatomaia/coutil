@@ -1,5 +1,7 @@
 package.path = "../lua/?.lua;"..package.path
 
+local vararg = require "vararg"
+
 garbage = setmetatable({ thread = nil }, { __mode = "v" })
 
 local spawnerr
@@ -33,7 +35,7 @@ end
 
 function asserterr(expected, ok, ...)
 	local actual = ...
-	assert(not ok, "error was expected")
+	assert(not ok, "error was expected, got "..table.concat({vararg.map(tostring, ...)}, ", "))
 	assert(string.find(actual, expected, 1, true), "wrong error, got "..actual)
 end
 

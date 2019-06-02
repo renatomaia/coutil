@@ -47,6 +47,10 @@ LCULIB_API int lcu_isudpclosed (lcu_UdpSocket *udp);
 
 LCULIB_API int lcu_closeudp (lua_State *L, int idx);
 
+LCULIB_API int lcu_getudparmed (lcu_UdpSocket *udp);
+
+LCULIB_API void lcu_setudparmed (lcu_UdpSocket *udp, int value);
+
 LCULIB_API int lcu_getudpaddrfam (lcu_UdpSocket *udp);
 
 LCULIB_API int lcu_getudpconnected (lcu_UdpSocket* udp);
@@ -101,6 +105,10 @@ LCULIB_API uv_tcp_t *lcu_totcphandle (lcu_TcpSocket *tcp);
 LCULIB_API int lcu_istcpclosed (lcu_TcpSocket *tcp);
 
 LCULIB_API int lcu_closetcp (lua_State *L, int idx);
+
+LCULIB_API int lcu_gettcparmed (lcu_TcpSocket *tcp);
+
+LCULIB_API void lcu_settcparmed (lcu_TcpSocket *tcp, int value);
 
 LCULIB_API int lcu_gettcpaddrfam (lcu_TcpSocket *tcp);
 

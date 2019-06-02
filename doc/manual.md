@@ -435,7 +435,7 @@ Sends the substring of `data` that starts at `i` and continues until `j`;
 If `j` is absent,
 it is assumed to be equal to -1 (which is the same as the string length).
 
-For sockets of type `datagram` not binded to a peer address `address` must be provided
+For unbinded sockets of type `datagram` `address` must be provided
 (_i.e._ disconnected UDP sockets),
 and it must be omitted for sockets of type `datagram` binded to a peer address
 (_i.e._ connected UDP sockets).
