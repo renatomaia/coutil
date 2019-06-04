@@ -573,6 +573,7 @@ static int stopudp (uv_udp_t *udp) {
 	lcu_setudparmed((lcu_UdpSocket *)udp, 0);
 	return err;
 }
+static int k_udpbuffer (lua_State *L, int status, lua_KContext ctx);
 static int k_udprecv (lua_State *L, int status, lua_KContext ctx) {
 	lcu_UdpSocket *udp = openedudp(L);
 	uv_udp_t *handle = lcu_toudphandle(udp);
@@ -582,15 +583,20 @@ static int k_udprecv (lua_State *L, int status, lua_KContext ctx) {
 		int err = stopudp(handle);
 		if (err < 0) return lcuL_pushresults(L, 0, err);
 	} else if (lua_isinteger(L, 6)) {
-		struct sockaddr *dst = lcu_toaddress(L, 5);
-		if (dst) {
-			const struct sockaddr *src =
-				(const struct sockaddr *)lua_touserdata(L, -1);
-			lcu_assert(src->sa_family == lcu_getudpaddrfam(udp));
-			memcpy(dst, src, src->sa_family == AF_INET ? sizeof(struct sockaddr_in)
-			                                           : sizeof(struct sockaddr_in6));
-		}
+		const struct sockaddr *src = (const struct sockaddr *)lua_touserdata(L, -1);
 		lua_pop(L, 1);  /* discard 'addr' lightuserdata */
+		if (src) {
+			struct sockaddr *dst = lcu_toaddress(L, 5);
+			if (dst) {
+				lcu_assert(src->sa_family == lcu_getudpaddrfam(udp));
+				memcpy(dst, src, src->sa_family == AF_INET ? sizeof(struct sockaddr_in)
+				                                           : sizeof(struct sockaddr_in6));
+			}
+		} else {  /* libuv indication of datagram end, just try again */
+			lcuT_awaitobj(L, (uv_handle_t *)handle);
+			lua_settop(L, 5);
+			return lua_yieldk(L, 0, 0, k_udpbuffer);
+		}
 	}
 	return lua_gettop(L)-5;
 }
