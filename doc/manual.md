@@ -454,11 +454,17 @@ Receives from socket `socket` at most the number of bytes necessary to fill [mem
 If `j` is absent, it is assumed to be equal to -1
 (which is the same as the buffer size).
 
-For sockets of type `datagram` `address` shall be provided to store the peer address that sent the data.
-For sockets of tyoe `stream` `address` is ignored.
+For sockets of type `datagram`,
+if `address` is provided,
+it is used to store the peer address that sent the data.
+For sockets of type `stream`,
+`address` is ignored.
 This operation is not available for sockets of type `listen`.
 
-Returns the number of bytes actually received from `socket` in case of success.
+In case of success,
+returns the number of bytes copied to `buffer` and,
+for sockets of type `datagram`,
+a boolean indicating whether the copied data was truncated.
 Otherwise it returns `nil` plus an error message.
 
 ### `datagram:joingroup (multicast [, interface])`
