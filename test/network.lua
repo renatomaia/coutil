@@ -927,8 +927,6 @@ end
 			done()
 		end
 
-do return end
-
 		do case "successful transmissions"
 			local server = create.listen(ipaddr[domain].localaddress)
 
@@ -943,10 +941,15 @@ do return end
 				local buffer = memory.create(128)
 				assert(stream:receive(buffer) == 64)
 				assert(memory.diff(buffer, string.sub(data, 1, 64)..string.rep("\0", 64)) == nil)
-				assert(stream:receive(buffer, 65, 96) == 32)
-				assert(memory.diff(buffer, string.sub(data, 1, 96)..string.rep("\0", 32)) == nil)
-				assert(stream:receive(buffer, 97) == 32)
-				assert(memory.diff(buffer, data) == nil)
+				if kind == "datagram" then
+					assert(stream:receive(buffer, 65, 128) == 64)
+					assert(memory.diff(buffer, data) == nil)
+				else
+					assert(stream:receive(buffer, 65, 96) == 32)
+					assert(memory.diff(buffer, string.sub(data, 1, 96)..string.rep("\0", 32)) == nil)
+					assert(stream:receive(buffer, 97) == 32)
+					assert(memory.diff(buffer, data) == nil)
+				end
 				--assert(stream:close())
 				done1 = true
 			end)
