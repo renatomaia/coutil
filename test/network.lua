@@ -936,32 +936,39 @@ end
 
 			local done1
 			spawn(function ()
-				local stream = create.accepted(server)
+				local accepted = create.accepted(server)
 				assert(server:close())
 				local buffer = memory.create(128)
-				assert(stream:receive(buffer) == 64)
-				assert(memory.diff(buffer, string.sub(data, 1, 64)..string.rep("\0", 64)) == nil)
+				local bytes, truncated = accepted:receive(buffer)
+				assert(bytes == 64)
 				if kind == "datagram" then
-					assert(stream:receive(buffer, 65, 128) == 64)
-					assert(memory.diff(buffer, data) == nil)
+					assert(truncated == false)
 				else
-					assert(stream:receive(buffer, 65, 96) == 32)
-					assert(memory.diff(buffer, string.sub(data, 1, 96)..string.rep("\0", 32)) == nil)
-					assert(stream:receive(buffer, 97) == 32)
+					assert(truncated == nil)
+				end
+				assert(memory.diff(buffer, string.sub(data, 1, 64)..string.rep("\0", 64)) == nil)
+				local bytes, truncated = accepted:receive(buffer, 65, 96)
+				assert(bytes == 32)
+				assert(memory.diff(buffer, string.sub(data, 1, 96)..string.rep("\0", 32)) == nil)
+				if kind == "datagram" then
+					assert(truncated == true)
+				else
+					assert(truncated == nil)
+					assert(accepted:receive(buffer, 97) == 32)
 					assert(memory.diff(buffer, data) == nil)
 				end
-				--assert(stream:close())
+				--assert(accepted:close())
 				done1 = true
 			end)
 			assert(done1 == nil)
 
 			local done2
 			spawn(function ()
-				local stream = create.connected(ipaddr[domain].localaddress)
-				assert(stream:send(data, 1, 64))
+				local connected = create.connected(ipaddr[domain].localaddress)
+				assert(connected:send(data, 1, 64))
 				system.pause()
-				assert(stream:send(data, 65, 128))
-				--assert(stream:close())
+				assert(connected:send(data, 65, 128))
+				--assert(connected:close())
 				done2 = true
 			end)
 			assert(done2 == nil)

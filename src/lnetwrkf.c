@@ -628,6 +628,7 @@ static void uv_onudprecv (uv_udp_t *udp,
 		lcu_assert(thread);
 		if (nread >= 0) {
 			lua_pushinteger(thread, nread);
+			lua_pushboolean(thread, flags&UV_UDP_PARTIAL);
 			lua_pushlightuserdata(thread, (void *)addr);
 		}
 		else if (nread != UV_EOF) lcuL_pushresults(thread, 0, nread);
