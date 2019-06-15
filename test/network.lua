@@ -1928,113 +1928,144 @@ end
 		done()
 	end
 
-do return end
-
 	do case "double cancel"
-		local stage = 0
+		local stage0 = 0
+		spawn(function ()
+			stage0 = 1
+			system.pause()
+			stage0 = 2
+			coroutine.resume(garbage.coro, garbage, true,nil,3)
+			stage0 = 3
+		end)
+		assert(stage0 == 1)
+
+		local stage1 = 0
+		spawn(function ()
+			stage1 = 1
+			local unconnected = assert(system.socket("datagram", domain))
+			assert(unconnected:bind(ipaddr[domain].localaddress))
+			local buffer = memory.create(128)
+			stage1 = 2
+			assert(unconnected:receive(buffer) == 128)
+			assert(memory.diff(buffer, string.rep("x", 128)) == nil)
+			--local buffer = memory.create(64)
+			--assert(unconnected:receive(buffer) == 64)
+			--assert(memory.diff(buffer, string.rep("x", 64)) == nil)
+			stage1 = 3
+		end)
+		assert(stage1 == 2)
+
+		local stage2 = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
-			local server = assert(system.socket("listen", domain))
-			assert(server:bind(ipaddr[domain].localaddress))
-			assert(server:listen(backlog))
-			stage = 1
-			local stream = assert(server:accept())
-			local ok, extra = stream:send(string.rep("x", 1<<24))
+			stage2 = 1
+			local connected = assert(system.socket("datagram", domain))
+			assert(connected:connect(ipaddr[domain].localaddress))
+			stage2 = 2
+			local ok, extra = connected:send(string.rep("x", 128))
 			assert(ok == nil)
 			assert(extra == nil)
-			stage = 3
-			local res, a,b,c = stream:send(string.rep("x", 1<<24))
+			stage2 = 3
+			local res, a,b,c = connected:send(string.rep("x", 64))
 			assert(res == garbage)
 			assert(a == true)
 			assert(b == nil)
 			assert(c == 3)
-			stage = 3
-
-			assert(stream:close())
-			stage = 4
+			stage2 = 4
+			assert(connected:close())
+			stage2 = 5
 		end)
+		assert(stage2 == 2)
 
-		spawn(function ()
-			local stream = assert(system.socket("stream", domain))
-			assert(stream:connect(ipaddr[domain].localaddress))
-			system.pause()
-			coroutine.resume(garbage.coro)
-			local bytes = 1<<24
-			local buffer = memory.create(1<<24)
-			repeat
-				bytes = bytes-stream:receive(buffer)
-			until bytes <= 0
-			coroutine.resume(garbage.coro, garbage, true,nil,3)
-		end)
-		assert(stage == 1)
+		coroutine.resume(garbage.coro)
+		assert(stage2 == 3)
 
 		gc()
 		assert(system.run() == false)
-		assert(stage == 4)
+		assert(stage0 == 3)
+		assert(stage1 == 3)
+		assert(stage2 == 5)
 
 		done()
 	end
 
 	do case "ignore errors"
 
-		local stage = 0
+		local stage1 = 0
 		pspawn(function ()
-			local server = assert(system.socket("listen", domain))
-			assert(server:bind(ipaddr[domain].localaddress))
-			assert(server:listen(backlog))
-			stage = 1
-			local stream = assert(server:accept())
-			assert(stream:send("0123456789") == true)
-			stage = 2
-			error("oops!")
-		end)
-
-		spawn(function ()
-			local stream = assert(system.socket("stream", domain))
-			assert(stream:connect(ipaddr[domain].localaddress))
-			local buffer = memory.create("9876543210")
-			assert(stream:receive(buffer) == 10)
+			local unconnected = assert(system.socket("datagram", domain))
+			assert(unconnected:bind(ipaddr[domain].localaddress))
+			local buffer = memory.create(10)
+			stage1 = 1
+			assert(unconnected:receive(buffer) == 10)
 			assert(memory.diff(buffer, "0123456789") == nil)
-			assert(stage == 2)
-			stage = 3
+			stage1 = 2
 		end)
-		assert(stage == 1)
+		assert(stage1 == 1)
+
+		local stage2 = 0
+		pspawn(function ()
+			local connected = assert(system.socket("datagram", domain))
+			assert(connected:connect(ipaddr[domain].localaddress))
+			stage2 = 1
+			assert(connected:send("0123456789"))
+			stage2 = 2
+			error("oops!")
+			stage2 = 3
+		end)
+		assert(stage1 == 1)
+		assert(stage2 == 1)
 
 		gc()
 		assert(system.run() == false)
-		assert(stage == 3)
+		assert(stage1 == 2)
+		assert(stage2 == 2)
 
 		done()
 	end
 
 	do case "ignore errors after cancel"
 
-		local stage = 0
+		local stage1 = 0
+		spawn(function ()
+			local unconnected = assert(system.socket("datagram", domain))
+			assert(unconnected:bind(ipaddr[domain].localaddress))
+			local buffer = memory.create(128)
+			assert(unconnected:receive(buffer) == 128)
+			assert(memory.diff(buffer, string.rep("x", 128)) == nil)
+			stage1 = 1
+		end)
+		assert(stage1 == 0)
+
+		local stage2 = 0
 		pspawn(function ()
 			garbage.coro = coroutine.running()
-			local server = assert(system.socket("listen", domain))
-			assert(server:bind(ipaddr[domain].localaddress))
-			assert(server:listen(backlog))
-			stage = 1
-			local stream = assert(server:accept())
-			assert(stream:send(string.rep("x", 1<<24)) == garbage)
-			stage = 2
+			local unconnected = assert(system.socket("datagram", domain))
+			stage2 = 1
+			local res, a,b,c = unconnected:send(string.rep("x", 128), nil, nil,
+			                                    ipaddr[domain].localaddress)
+			assert(res == garbage)
+			assert(a == true)
+			assert(b == nil)
+			assert(c == 3)
+			stage2 = 2
 			error("oops!")
+			stage2 = 3
 		end)
+		assert(stage1 == 0)
+		assert(stage2 == 1)
 
 		spawn(function ()
-			local stream = assert(system.socket("stream", domain))
-			assert(stream:connect(ipaddr[domain].localaddress))
-			system.pause()
-			coroutine.resume(garbage.coro, garbage)
-
-			assert(stream:close())
+			--system.pause()
+			coroutine.resume(garbage.coro, garbage, true,nil,3)
 		end)
-		assert(stage == 1)
+		assert(stage1 == 0)
+		assert(stage2 == 2)
 
 		gc()
 		assert(system.run() == false)
-		assert(stage == 2)
+		assert(stage1 == 1)
+		assert(stage2 == 2)
 
 		done()
 	end
