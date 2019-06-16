@@ -36,7 +36,7 @@ static int k_setuptimer (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	return err;
 }
 
-/* succ [, errmsg, ...] = system.pause([delay]) */
+/* succ [, errmsg] = system.pause([delay]) */
 static int lcuM_pause (lua_State *L) {
 	lua_Number delay = luaL_optnumber(L, 1, 0);
 	if (delay > 0) return lcuT_resetthropk(L, UV_TIMER, k_setuptimer, returntrue);

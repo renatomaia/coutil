@@ -2,6 +2,22 @@
 #include "lmodaux.h"
 
 
+LCULIB_API void *lcuL_allocmemo (lua_State *L, size_t size)
+{
+	void *userdata;
+	lua_Alloc alloc = lua_getallocf(L, &userdata);
+	return alloc(userdata, NULL, 0, size);
+}
+
+LCULIB_API void lcuL_freememo (lua_State *L, void *memo, size_t size)
+{
+	void *userdata;
+	lua_Alloc alloc = lua_getallocf(L, &userdata);
+	memo = alloc(userdata, memo, size, 0);
+	assert(memo == NULL);
+}
+
+
 LCULIB_API int lcuL_pushresults (lua_State *L, int n, int err) {
 	if (err < 0) {
 		lua_pop(L, n);
