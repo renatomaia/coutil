@@ -34,22 +34,23 @@ Index
 	- [`system.run`](#systemrun-mode)
 	- [`system.pause`](#systempause-delay)
 	- [`system.awaitsig`](#systemawaitsig-signal)
+	- [`system.execute`](#systemexecute-cmd-)
 	- [`system.address`](#systemaddress-type--data--port--mode)
 	- [`system.socket`](#systemsocket-type--domain)
-	- [`socket:close`](#socketclose-)
-	- [`socket:getdomain`](#socketgetdomain-)
-	- [`socket:bind`](#socketbind-address)
-	- [`socket:connect`](#socketconnect-address)
-	- [`socket:getaddress`](#socketgetaddress-site--address)
-	- [`socket:setoption`](#socketsetoption-name-value)
-	- [`socket:getoption`](#socketgetoption-name)
-	- [`socket:send`](#socketsend-data--i--j--address)
-	- [`socket:receive`](#socketreceive-buffer--i--j--address)
-	- [`datagram:joingroup`](#datagramjoingroup-multicast--interface)
-	- [`datagram:leavegroup`](#datagramleavegroup-multicast--interface)
-	- [`stream:shutdown`](#streamshutdown-)
-	- [`listen:listen`](#listenlisten-backlog)
-	- [`listen:accept`](#listenaccept-)
+		- [`socket:close`](#socketclose-)
+		- [`socket:getdomain`](#socketgetdomain-)
+		- [`socket:bind`](#socketbind-address)
+		- [`socket:connect`](#socketconnect-address)
+		- [`socket:getaddress`](#socketgetaddress-site--address)
+		- [`socket:setoption`](#socketsetoption-name-value)
+		- [`socket:getoption`](#socketgetoption-name)
+		- [`socket:send`](#socketsend-data--i--j--address)
+		- [`socket:receive`](#socketreceive-buffer--i--j--address)
+		- [`datagram:joingroup`](#datagramjoingroup-multicast--interface)
+		- [`datagram:leavegroup`](#datagramleavegroup-multicast--interface)
+		- [`stream:shutdown`](#streamshutdown-)
+		- [`listen:listen`](#listenlisten-backlog)
+		- [`listen:accept`](#listenaccept-)
 
 Contents
 ========
@@ -301,6 +302,57 @@ Suspends the execution of the calling coroutine (like [`coroutine.yield`](http:/
 | `"user2"`     | SIGUSR2   | terminate | User-defined conditions. |
 
 `awaitsig` returns like [`pause`](#systempause-).
+
+### `system.execute (cmd, ...)`
+
+Executes a new process,
+and suspends the execution of the calling coroutine until it terminates.
+`cmd` is the path of the executable image for the new process.
+Every other extra arguments are strings to be used as command-line arguments for the executable image of the new process.
+
+Alternatively, `cmd` can be a table with the fields described below.
+Unless stated otherwise, when one of these field are not defined in table `cmd`, or `cmd` is a string, the new process inherits the characteristics of the current process, like the current directory, the environment variables, or standard files.
+
+- `execfile`:
+path of the executable image for the new process.
+This field is required.
+
+- `runpath`:
+path of the current directory of the new process.
+
+- `stdin`:
+file to be set as the standard input of the new process.
+
+- `stdout`:
+file to be set as the standard output of the new process.
+
+- `stderr`:
+file to be set as the standard error output of the new process.
+
+- `arguments`:
+table with the sequence of command-line arguments for the executable image of the new process.
+When this field is not provided, the new process's executable image receives no arguments.
+
+- `environment`:
+table mapping environment variable names to the values they must assume for the new process.
+If this field is provided, only the variables defined will be available for the new process.
+
+If `cmd` is a table,
+the field `pid` is set with a number that identifies the new process
+(_e.g._ UNIX process identifier)
+before the calling coroutine is suspended.
+
+Returns a string when the new process terminates,
+or `nil` plus an error message otherwise.
+The returned string is followed by extra values, as follows:
+
+- `"exit"`: the process terminated normally;
+it is followed by a number of the exit status of the program.
+
+- `"signal"`: the process was terminated by a signal;
+it is followed by a string with the name of the signal that terminated the program,
+and the number of the signal.
+The strings that represent signals are described in [`system.awaitsig`](#systemawaitsig-signal).
 
 ### `system.address (type [, data [, port [, mode]]])`
 
