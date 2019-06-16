@@ -15,6 +15,9 @@
 #define LCU_PREFIX	"coutil:"
 #endif
 
+#ifndef LCU_EXECARGCOUNT
+#define LCU_EXECARGCOUNT	1023
+#endif
 
 #include <assert.h>
 #define lcu_assert assert
