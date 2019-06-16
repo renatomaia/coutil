@@ -13,6 +13,10 @@
 
 #define lcu_pusherror(L,e)	lua_pushstring(L, uv_strerror(e))
 
+LCULIB_API void *lcuL_allocmemo (lua_State *L, size_t size);
+
+LCULIB_API void lcuL_freememo (lua_State *L, void *memo, size_t size);
+
 LCULIB_API int lcuL_pushresults (lua_State *L, int n, int err);
 
 #define lcuL_maskflag(O,F) ((O)->flags&(F))
