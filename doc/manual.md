@@ -35,21 +35,22 @@ Index
 	- [`system.pause`](#systempause-delay)
 	- [`system.awaitsig`](#systemawaitsig-signal)
 	- [`system.address`](#systemaddress-type--data--port--mode)
+	- [`system.execute`](#systemexecute)
 	- [`system.socket`](#systemsocket-type--domain)
-	- [`socket:close`](#socketclose-)
-	- [`socket:getdomain`](#socketgetdomain-)
-	- [`socket:bind`](#socketbind-address)
-	- [`socket:connect`](#socketconnect-address)
-	- [`socket:getaddress`](#socketgetaddress-site--address)
-	- [`socket:setoption`](#socketsetoption-name-value)
-	- [`socket:getoption`](#socketgetoption-name)
-	- [`socket:send`](#socketsend-data--i--j--address)
-	- [`socket:receive`](#socketreceive-buffer--i--j--address)
-	- [`datagram:joingroup`](#datagramjoingroup-multicast--interface)
-	- [`datagram:leavegroup`](#datagramleavegroup-multicast--interface)
-	- [`stream:shutdown`](#streamshutdown-)
-	- [`listen:listen`](#listenlisten-backlog)
-	- [`listen:accept`](#listenaccept-)
+		- [`socket:close`](#socketclose-)
+		- [`socket:getdomain`](#socketgetdomain-)
+		- [`socket:bind`](#socketbind-address)
+		- [`socket:connect`](#socketconnect-address)
+		- [`socket:getaddress`](#socketgetaddress-site--address)
+		- [`socket:setoption`](#socketsetoption-name-value)
+		- [`socket:getoption`](#socketgetoption-name)
+		- [`socket:send`](#socketsend-data--i--j--address)
+		- [`socket:receive`](#socketreceive-buffer--i--j--address)
+		- [`datagram:joingroup`](#datagramjoingroup-multicast--interface)
+		- [`datagram:leavegroup`](#datagramleavegroup-multicast--interface)
+		- [`stream:shutdown`](#streamshutdown-)
+		- [`listen:listen`](#listenlisten-backlog)
+		- [`listen:accept`](#listenaccept-)
 
 Contents
 ========
@@ -301,6 +302,8 @@ Suspends the execution of the calling coroutine (like [`coroutine.yield`](http:/
 | `"user2"`     | SIGUSR2   | terminate | User-defined conditions. |
 
 `awaitsig` returns like [`pause`](#systempause-).
+
+### `system.execute (type [, data [, port [, mode]]])`
 
 ### `system.address (type [, data [, port [, mode]]])`
 
