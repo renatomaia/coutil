@@ -136,8 +136,8 @@ static int process_close (lua_State *L) {
 }
 
 
-/* status, ... = process:getstatus () */
-static int process_getstatus (lua_State *L) {
+/* status, ... = process:status () */
+static int process_status (lua_State *L) {
 	lcu_Process *process = toproc(L);
 	if (!lcu_isprocclosed(process)) {
 		int64_t exitval;
@@ -189,7 +189,7 @@ static void uv_procexited (uv_process_t *prochdl, int64_t exitval, int signum) {
 	if (thread) {
 		lua_pushinteger(thread, exitval);
 		pushsignal(thread, signum);
-		lcuU_resumethrop(thread, (uv_handle_t *)prochdl);
+		lcuU_resumeobjop(thread, (uv_handle_t *)prochdl);
 	}
 }
 static lua_Integer getlistlen (lua_State *L, int idx) {
@@ -210,6 +210,7 @@ static int system_execute (lua_State *L) {
 	int err;
 
 	procopts.exit_cb = uv_procexited;
+	procopts.flags = 0;
 	procopts.args = args;
 	procopts.stdio_count = 0;
 	procopts.stdio = streams;
@@ -217,7 +218,7 @@ static int system_execute (lua_State *L) {
 	if (lua_isstring(L, 1)) {
 		int i;
 		int argc = lua_gettop(L)-1;  /* ignore process userdata on top */
-		for (i = 0; i < argc; ++i) luaL_checkstring(L, i);
+		for (i = 1; i <= argc; ++i) luaL_checkstring(L, i);
 		if (argc > LCU_EXECARGCOUNT) {
 			argsz = (argc+1)*sizeof(char *);  /* arguments + NULL */
 			procopts.args = (char **)lcuL_allocmemo(L, argsz);
@@ -227,7 +228,6 @@ static int system_execute (lua_State *L) {
 		procopts.file = procopts.args[0];
 		procopts.env = NULL;
 		procopts.cwd = NULL;
-		procopts.flags = 0;
 	} else if (lua_istable(L, 1)) {
 		size_t argc = 0, envc = 0;
 
@@ -311,6 +311,7 @@ static int system_execute (lua_State *L) {
 		}
 		procopts.args[0] = (char *)procopts.file;
 		procopts.args[argc] = NULL;
+		lua_pushvalue(L, 2);
 	} else {
 		return luaL_argerror(L, 1, "table or string expected");
 	}
@@ -340,14 +341,16 @@ static int process_awaitexit (lua_State *L) {
 		lua_pushinteger(L, exitval);
 		pushsignal(L, signum);
 		return 3;
+	} else {
+		uv_process_t *prochdl = lcu_toprochandle(process);
+		luaL_argcheck(L, !lcu_isprocclosed(process), 1, "closed");
+		luaL_argcheck(L, prochdl->loop == lcu_toloop(L), 1, "foreign object");
+		if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
+		if (prochdl->data) luaL_argcheck(L, prochdl->data == L, 1, "already in use");
+		else lcuT_awaitobj(L, (uv_handle_t *)prochdl);
+		lua_settop(L, 1);
+		return lua_yieldk(L, 0, 0, k_procexited);
 	}
-	uv_process_t *prochdl = lcu_toprochandle(process);
-	luaL_argcheck(L, prochdl->loop == lcu_toloop(L), 1, "foreign object");
-	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
-	if (prochdl->data) luaL_argcheck(L, prochdl->data == L, 1, "already in use");
-	else lcuT_awaitobj(L, (uv_handle_t *)prochdl);
-	lua_settop(L, 1);
-	return lua_yieldk(L, 0, 0, k_procexited);
 }
 
 
@@ -355,7 +358,7 @@ static const luaL_Reg proc[] = {
 	{"__tostring", process_tostring},
 	{"__gc", process_gc},
 	{"close", process_close},
-	{"getstatus", process_getstatus},
+	{"status", process_status},
 	{"awaitexit", process_awaitexit},
 	{NULL, NULL}
 };
