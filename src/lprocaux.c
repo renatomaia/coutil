@@ -40,7 +40,6 @@ LCULIB_API int lcu_closeproc (lua_State *L, int idx) {
 	lcu_Process *process = lcu_toprocess(L, idx);
 	if (process && !lcu_isprocclosed(process)) {
 		lcu_closeobj(L, idx, (uv_handle_t *)&process->handle);
-		lcuL_clearflag(process, FLAG_EXITED);
 		lcuL_setflag(process, FLAG_CLOSED);
 		return 1;
 	}

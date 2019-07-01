@@ -169,19 +169,30 @@ static const char* getstrfield(lua_State *L, const char *field, int required) {
 	lua_pop(L, 1);
 	return value;
 }
-//static int optstreamfield(lua_State *L,
-//                          const char *field,
-//                          losi_ProcStream *stream) {
-//	int res = 0;
-//	lua_getfield(L, 1, field);
-//	if (!lua_isnil(L, -1)) {
-//		if (!losi_getprocstrm(L, -1, stream))
-//			luaL_error(L, "bad field "LUA_QS" (must be a stream)", field);
-//		res = 1;
-//	}
-//	lua_pop(L, 1); /* remove value */
-//	return res;
-//}
+static void optstreamfield(lua_State *L,
+                           const char *field,
+                           uv_stdio_container_t *stream,
+                           int deffd) {
+	if (lua_getfield(L, 1, field) == LUA_TNIL) {
+		stream->data.fd = deffd;
+		stream->flags = UV_INHERIT_FD;
+	} else {
+		stream->flags = UV_IGNORE;
+		if (lua_getmetatable(L, -1)) {
+			luaL_getmetatable(L, LUA_FILEHANDLE);
+			if (lua_rawequal(L, -1, -2)) {
+				luaL_Stream *lstream = (luaL_Stream *)lua_touserdata(L, -3);
+				stream->data.fd = fileno(lstream->f);
+				stream->flags = UV_INHERIT_FD;
+			}
+			lua_pop(L, 1); /* remove file handle metatable */
+		}
+		lua_pop(L, 1); /* remove value's metatable */
+		if (stream->flags == UV_IGNORE)
+			luaL_error(L, "bad field "LUA_QS" (must be a stream)", field);
+	}
+	lua_pop(L, 1); /* remove value */
+}
 static void uv_procexited (uv_process_t *prochdl, int64_t exitval, int signum) {
 	lcu_Process *process = (lcu_Process *)prochdl;
 	lua_State *thread = (lua_State *)prochdl->data;
@@ -204,7 +215,6 @@ static int system_execute (lua_State *L) {
 	lcu_Process *process = lcu_newprocess(L);
 	uv_process_t *prochdl = lcu_toprochandle(process);
 	uv_process_options_t procopts;
-	uv_stdio_container_t streams[3];
 	char *args[LCU_EXECARGCOUNT+1];  /* values + NULL */
 	size_t argsz = 0, envsz = 0;
 	int err;
@@ -213,7 +223,6 @@ static int system_execute (lua_State *L) {
 	procopts.flags = 0;
 	procopts.args = args;
 	procopts.stdio_count = 0;
-	procopts.stdio = streams;
 
 	if (lua_isstring(L, 1)) {
 		int i;
@@ -228,13 +237,21 @@ static int system_execute (lua_State *L) {
 		procopts.file = procopts.args[0];
 		procopts.env = NULL;
 		procopts.cwd = NULL;
+		procopts.stdio = NULL;
 	} else if (lua_istable(L, 1)) {
+		static const char *streamfields[] = { "stdin", "stdout", "stderr", NULL };
+		uv_stdio_container_t streams[3];
 		size_t argc = 0, envc = 0;
 
 		lua_replace(L, 2);  /* place userdata at index 2 */
 		lua_settop(L, 2);  /* discard all other arguments */
 		procopts.file = getstrfield(L, "execfile", 1);
 		procopts.cwd = getstrfield(L, "runpath", 0);
+		procopts.stdio = streams;
+		for (; streamfields[procopts.stdio_count]; ++procopts.stdio_count)
+			optstreamfield(L, streamfields[procopts.stdio_count],
+			                  streams+procopts.stdio_count,
+			                  procopts.stdio_count);
 		lua_getfield(L, 1, "arguments");
 		lua_getfield(L, 1, "environment");
 
@@ -323,6 +340,7 @@ static int system_execute (lua_State *L) {
 		prochdl->data = NULL;
 		lcu_enableproc(L, -1);
 	}
+	else uv_close((uv_handle_t *)prochdl, NULL);
 	return lcuL_pushresults(L, 1, err);
 }
 
