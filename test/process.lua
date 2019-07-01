@@ -146,181 +146,229 @@ do case "arguments"
 	done()
 end
 
-do return end
+do case "exit value"
+	spawn(function ()
+		for index, code in ipairs{ 0, 1, 2, 3, 127, 128, 255 } do
+			local script = "return "..code
+			startscript(script):assertexit(code)
+			startscript{ script = script }:assertexit(code)
+		end
+	end)
+	assert(system.run() == false)
 
-do
-	for index, code in ipairs{ 0, 1, 2, 3, 127, 128, 255 } do
-		local script = "return "..code
-		tests.startscript(script):assertexit(code)
-		tests.startscript{ script = script }:assertexit(code)
-	end
+	done()
 end
 
-do
-	tests.runscript(string.format('assert(os.getenv("HOME") == %q)', os.getenv("HOME")))
+do case "environment inherit"
+	spawn(function ()
+		runscript(string.format('assert(os.getenv("HOME") == %q)', os.getenv("HOME")))
+	end)
+	assert(system.run() == false)
 
-	tests.runscript{
-		script = [[
-			assert(os.getenv("ENV_VAR_01") == "environment variable 01")
-			assert(os.getenv("ENV_VAR_02") == "environment variable 02")
-			assert(os.getenv("ENV_VAR_03") == "environment variable 03")
-			assert(os.getenv("HOME") == nil)
-		]],
-		environment = {
-			ENV_VAR_01 = "environment variable 01",
-			ENV_VAR_02 = "environment variable 02",
-			ENV_VAR_03 = "environment variable 03",
-		},
-	}
-
-	tests.runscript{
-		script = [[
-			assert(string.match(os.getenv("ENV_VAR"), "^environment variable 0[123]$"))
-			assert(os.getenv("ENV_VAR_01") == nil)
-			assert(os.getenv("ENV_VAR_02") == nil)
-			assert(os.getenv("ENV_VAR_03") == nil)
-			assert(os.getenv("HOME") == nil)
-		]],
-		environment = {
-			["ENV_VAR\0_01"] = "environment variable 01",
-			["ENV_VAR\0_02"] = "environment variable 02",
-			["ENV_VAR\0_03"] = "environment variable 03",
-		},
-	}
-
-	tests.testerror(
-		"bad name '=ENV' in field 'environment' (must be a string without '=')",
-		process.create,
-		{ execfile = tests.luabin, environment = { ["=ENV"] = "illegal" } })
-
-	tests.runscript{
-		script = 'assert(os.getenv("HOME") == "My Home!")',
-		environment = { ["HOME"] = "My Home!" },
-	}
+	done()
 end
 
-do
-	local tempfile = os.tmpname()
-	local outcases = {
-		"Hello, World!",
-		"\0\1\2\3",
-		[[
-			one single line
-			another additional line
-			yet even another final line
-		]],
-	}
-	for _, case in ipairs(outcases) do
-		for _, output in ipairs{"stdout", "stderr"} do
-			local file = io.open(tempfile, "w")
-			tests.runscript{
-				script = string.format('io.%s:write(%q)', output, case),
-				[output] = file,
+do case "environment redefined"
+	spawn(function ()
+		runscript{
+			script = [[
+				assert(os.getenv("ENV_VAR_01") == "environment variable 01")
+				assert(os.getenv("ENV_VAR_02") == "environment variable 02")
+				assert(os.getenv("ENV_VAR_03") == "environment variable 03")
+				assert(os.getenv("HOME") == nil)
+			]],
+			environment = {
+				ENV_VAR_01 = "environment variable 01",
+				ENV_VAR_02 = "environment variable 02",
+				ENV_VAR_03 = "environment variable 03",
+			},
+		}
+	end)
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "environment ignored null"
+	spawn(function ()
+		runscript{
+			script = [[
+				assert(string.match(os.getenv("ENV_VAR"), "^environment variable 0[123]$"))
+				assert(os.getenv("ENV_VAR_01") == nil)
+				assert(os.getenv("ENV_VAR_02") == nil)
+				assert(os.getenv("ENV_VAR_03") == nil)
+				assert(os.getenv("HOME") == nil)
+			]],
+			environment = {
+				["ENV_VAR\0_01"] = "environment variable 01",
+				["ENV_VAR\0_02"] = "environment variable 02",
+				["ENV_VAR\0_03"] = "environment variable 03",
+			},
+		}
+	end)
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "environment illegal char"
+	spawn(function ()
+		asserterr(
+			"bad name '=ENV' in field 'environment' (must be a string without '=')",
+			pcall(system.execute, {
+				execfile = luabin,
+				environment = { ["=ENV"] = "illegal" },
+			})
+		)
+	end)
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "exit value"
+	spawn(function ()
+		runscript{
+			script = 'assert(os.getenv("HOME") == "My Home!")',
+			environment = { ["HOME"] = "My Home!" },
+		}
+	end)
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "relative run path"
+	spawn(function ()
+		runscript{
+			script = [[
+				local data = assert(io.open("testall.lua")):read("*a")
+				assert(string.find(data, 'print "\\nSuccess!\\n"', 1, true))
+			]],
+			runpath = "../test",
+		}
+	end)
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "absolute run path"
+	spawn(function ()
+		runscript{
+			script = 'assert(io.open("deleteme.tmp", "w")):write("Delete me now!")',
+			runpath = "/tmp",
+		}
+		assert(readfrom("/tmp/deleteme.tmp") == "Delete me now!")
+		os.remove("/tmp/deleteme.tmp")
+	end)
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "invalid run path"
+	spawn(function ()
+		asserterr("no such file or directory", system.execute{
+			execfile = luabin,
+			arguments = { "-e", "os.exit()" },
+			runpath = "nonexistent",
+		})
+	end)
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "invalid executable path"
+	spawn(function ()
+		asserterr("no such file or directory", system.execute("nonexistent"))
+	end)
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "redirected streams"
+	spawn(function ()
+		local tempfile = os.tmpname()
+		local outcases = {
+			"Hello, World!",
+			"\0\1\2\3",
+			[[
+				one single line
+				another additional line
+				yet even another final line
+			]],
+		}
+		for _, case in ipairs(outcases) do
+			for _, output in ipairs{"stdout", "stderr"} do
+				local file = io.open(tempfile, "w")
+				runscript{
+					script = string.format('io.%s:write(%q)', output, case),
+					[output] = file,
+				}
+				file:close()
+				assert(readfrom(tempfile) == case)
+				os.remove(tempfile)
+			end
+
+			writeto(tempfile, case)
+			local file = io.open(tempfile, "r")
+			runscript{
+				script = string.format('assert(io.stdin:read("*a") == %q)', case),
+				stdin = file,
 			}
 			file:close()
-			assert(tests.readfrom(tempfile) == case)
 			os.remove(tempfile)
 		end
+	end)
+	assert(system.run() == false)
 
-		tests.writeto(tempfile, case)
-		local file = io.open(tempfile, "r")
-		tests.runscript{
-			script = string.format('assert(io.stdin:read("*a") == %q)', case),
-			stdin = file,
-		}
-		file:close()
-		os.remove(tempfile)
-	end
+	done()
 end
 
-do
-	local function teststdfiles(info)
-		local infile = os.tmpname()
-		local outfile = os.tmpname()
-		local errfile = os.tmpname()
-		tests.writeto(infile, info.input)
-		local stderr = io.open(errfile, "w")
-		local stdout = io.open(outfile, "w")
-		local stdin = io.open(infile, "r")
-		tests.runscript{
-			script = info.script,
-			stdin = stdin,
-			stdout = stdout,
-			stderr = stderr,
-		}
-		stdin:close()
-		stdout:close()
-		stderr:close()
-		assert(tests.readfrom(outfile) == info.output)
-		assert(tests.readfrom(errfile) == info.errors)
-		os.remove(infile)
-		os.remove(outfile)
-		os.remove(errfile)
-	end
-
-	teststdfiles{
-		script = [[
-			assert(io.stdin:read("*a") == "stdin")
-			assert(io.stdout:write("stdout"))
-			assert(io.stderr:write("stderr"))
-		]],
-		input = "stdin",
-		output = "stdout",
-		errors = "stderr",
+local function teststdfiles(info)
+	local infile = os.tmpname()
+	local outfile = os.tmpname()
+	local errfile = os.tmpname()
+	if info.input == "r" then writeto(infile, "stdin") end
+	if info.output == "r" then writeto(outfile, "stdout") end
+	if info.error == "r" then writeto(errfile, "stderr") end
+	local stdin = io.open(infile, info.input)
+	local stdout = io.open(outfile, info.output)
+	local stderr = io.open(errfile, info.error)
+	runscript{
+		script = info.script,
+		stdin = stdin,
+		stdout = stdout,
+		stderr = stderr,
 	}
-
-	teststdfiles{
-		script = [[
-			local tests = require "test.process.utils"
-			tests.runscript{
-				script = [=[
-					assert(io.stdin:read("*a") == "stdin")
-					assert(io.stdout:write("stdout"))
-					assert(io.stderr:write("stderr"))
-				]=],
-				stdout = io.stderr,
-				stderr = io.stdout,
-			}
-		]],
-		input = "stdin",
-		output = "stderr",
-		errors = "stdout",
-	}
-
-	teststdfiles{
-		script = [[
-			local tests = require "test.process.utils"
-			tests.runscript{
-				script = [=[
-					assert(io.stdin:write("stdin") == nil)   -- bad file descriptor
-					local res = io.stdout:read("*a")
-					assert(res == nil or res == "stdout")
-					assert(io.stderr:write("stderr"))
-				]=],
-				stdin = io.stderr,
-				stdout = io.stdin,
-				stderr = io.stdout,
-			}
-		]],
-		input = "stdout",
-		output = "stderr",
-		errors = "", -- TODO: shouldn't be "stdin"?
-	}
+	stdin:close()
+	stdout:close()
+	stderr:close()
+	if info.input == "w" then assert(readfrom(infile) == "stdin") end
+	if info.output == "w" then assert(readfrom(outfile) == "stdout") end
+	if info.error == "w" then assert(readfrom(errfile) == "stderr") end
+	os.remove(infile)
+	os.remove(outfile)
+	os.remove(errfile)
 end
 
-do
-	tests.runscript{
-		script = [[
-			local data = assert(io.open("testall.lua")):read("*a")
-			assert(string.find(data, 'print("OK")', 1, true))
-		]],
-		runpath = "test",
-	}
+do case "redirect all streams"
+	spawn(function ()
+		teststdfiles{
+			script = [[
+				assert(io.stdin:read("a") == "stdin")
+				assert(io.stdout:write("stdout"))
+				assert(io.stderr:write("stderr"))
+			]],
+			input = "r",
+			output = "w",
+			error = "w",
+		}
+	end)
+	assert(system.run() == false)
 
-	tests.runscript{
-		script = 'assert(io.open("deleteme.tmp", "w")):write("Delete me now!")',
-		runpath = "/tmp",
-	}
-	assert(tests.readfrom("/tmp/deleteme.tmp") == "Delete me now!")
-	os.remove("/tmp/deleteme.tmp")
+	done()
 end
