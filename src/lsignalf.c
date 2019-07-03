@@ -158,7 +158,7 @@ static int process_status (lua_State *L) {
 
 
 /* process [, errmsg] = system.execute (command [, arguments...]) */
-static const char* getstrfield(lua_State *L, const char *field, int required) {
+static const char* getstrfield (lua_State *L, const char *field, int required) {
 	const char* value = NULL;
 	lua_getfield(L, 1, field);
 	if (required || !lua_isnil(L, -1)) {
@@ -169,10 +169,10 @@ static const char* getstrfield(lua_State *L, const char *field, int required) {
 	lua_pop(L, 1);
 	return value;
 }
-static void optstreamfield(lua_State *L,
-                           const char *field,
-                           uv_stdio_container_t *stream,
-                           int deffd) {
+static void getstreamfield (lua_State *L,
+                            const char *field,
+                            uv_stdio_container_t *stream,
+                            int deffd) {
 	if (lua_getfield(L, 1, field) == LUA_TNIL) {
 		stream->data.fd = deffd;
 		stream->flags = UV_INHERIT_FD;
@@ -193,77 +193,54 @@ static void optstreamfield(lua_State *L,
 	}
 	lua_pop(L, 1); /* remove value */
 }
-static void uv_procexited (uv_process_t *prochdl, int64_t exitval, int signum) {
-	lcu_Process *process = (lcu_Process *)prochdl;
-	lua_State *thread = (lua_State *)prochdl->data;
-	lcu_setprocexited(process, exitval, signum);
-	if (thread) {
-		lua_pushinteger(thread, exitval);
-		pushsignal(thread, signum);
-		lcuU_resumeobjop(thread, (uv_handle_t *)prochdl);
-	}
-}
-static lua_Integer getlistlen (lua_State *L, int idx) {
-	lua_Integer value;
-	lua_len(L, idx);
-	value = lua_tointeger(L, -1);
-	lua_pop(L, 1);
-	return value;
-}
-static int system_execute (lua_State *L) {
-	uv_loop_t *loop = lcu_toloop(L);
-	lcu_Process *process = lcu_newprocess(L);
-	uv_process_t *prochdl = lcu_toprochandle(process);
-	uv_process_options_t procopts;
-	char *args[LCU_EXECARGCOUNT+1];  /* values + NULL */
-	size_t argsz = 0, envsz = 0;
-	int err;
-
-	procopts.exit_cb = uv_procexited;
-	procopts.flags = 0;
-	procopts.args = args;
-	procopts.stdio_count = 0;
+static void getprocopts (lua_State *L, uv_process_options_t *procopts) {
+	procopts->flags = 0;
+	procopts->stdio_count = 0;
 
 	if (lua_isstring(L, 1)) {
 		int i;
 		int argc = lua_gettop(L)-1;  /* ignore process userdata on top */
-		for (i = 1; i <= argc; ++i) luaL_checkstring(L, i);
 		if (argc > LCU_EXECARGCOUNT) {
-			argsz = (argc+1)*sizeof(char *);  /* arguments + NULL */
-			procopts.args = (char **)lcuL_allocmemo(L, argsz);
+			size_t argsz = (argc+1)*sizeof(char *);  /* arguments + NULL */
+			procopts->args = (char **)lua_newuserdata(L, argsz);
 		}
-		for (i = 0; i < argc; ++i) procopts.args[i] = (char *)lua_tostring(L, i+1);
-		procopts.args[argc] = NULL;
-		procopts.file = procopts.args[0];
-		procopts.env = NULL;
-		procopts.cwd = NULL;
-		procopts.stdio = NULL;
+		for (i = 0; i < argc; ++i)
+			procopts->args[i] = (char *)luaL_checkstring(L, i+1);
+		procopts->args[argc] = NULL;
+		procopts->file = procopts->args[0];
+		procopts->env = NULL;
+		procopts->cwd = NULL;
+		procopts->stdio = NULL;
 	} else if (lua_istable(L, 1)) {
 		static const char *streamfields[] = { "stdin", "stdout", "stderr", NULL };
-		uv_stdio_container_t streams[3];
 		size_t argc = 0, envc = 0;
 
 		lua_replace(L, 2);  /* place userdata at index 2 */
 		lua_settop(L, 2);  /* discard all other arguments */
-		procopts.file = getstrfield(L, "execfile", 1);
-		procopts.cwd = getstrfield(L, "runpath", 0);
-		procopts.stdio = streams;
-		for (; streamfields[procopts.stdio_count]; ++procopts.stdio_count)
-			optstreamfield(L, streamfields[procopts.stdio_count],
-			                  streams+procopts.stdio_count,
-			                  procopts.stdio_count);
+		procopts->file = getstrfield(L, "execfile", 1);
+		procopts->cwd = getstrfield(L, "runpath", 0);
+		for (; streamfields[procopts->stdio_count]; ++procopts->stdio_count)
+			getstreamfield(L, streamfields[procopts->stdio_count],
+			                  procopts->stdio+procopts->stdio_count,
+			                  procopts->stdio_count);
 		lua_getfield(L, 1, "arguments");
 		lua_getfield(L, 1, "environment");
 
 		if (lua_istable(L, 3)) {
 			int i;
-			argc = 1+getlistlen(L, 3);  /* execfile + arguments */
-			/* check arguments are strings */
+			lua_len(L, 3);  /* push arguments count */
+			argc = 1+lua_tointeger(L, -1);  /* execfile + arguments */
+			lua_pop(L, 1);  /* pop arguments count */
+			if (argc > LCU_EXECARGCOUNT) {
+				size_t argsz = (argc+1)*sizeof(char *);  /* arguments + NULL */
+				procopts->args = (char **)lua_newuserdata(L, argsz);
+			}
 			for (i = 1; i < argc; ++i) {
 				lua_geti(L, 3, i);
-				if (!lua_isstring(L, -1)) luaL_error(L,
+				procopts->args[i] = (char *)lua_tostring(L, -1);
+				if (!procopts->args[i]) luaL_error(L,
 					"bad value #%d in field "LUA_QL("arguments")" (must be a string)", i);
-				lua_pop(L, 1); /* pop an argument string */
+				lua_pop(L, 1);
 			}
 		} else if (!lua_isnil(L, 3)) {
 			luaL_argerror(L, 1, "field "LUA_QL("arguments")" must be a table");
@@ -272,10 +249,10 @@ static int system_execute (lua_State *L) {
 		if (lua_istable(L, 4)) {
 			void *mem;
 			char **envl, *envv;
+			size_t envsz = sizeof(char *);
 			int i = 0;
 
 			/* check environment variables are strings */
-			envsz = sizeof(char *);
 			lua_pushnil(L);  /* first key */
 			while (lua_next(L, 4) != 0) {
 				const char *name = lua_tostring(L, -2);
@@ -288,8 +265,7 @@ static int system_execute (lua_State *L) {
 				lua_pop(L, 1);
 			}
 
-			mem = lcuL_allocmemo(L, envsz);
-			if (mem == NULL) luaL_error(L, "insuffient memory");
+			mem = lua_newuserdata(L, envsz);
 			envl = (char **)mem;
 			envv = (char *)(mem+(envc+1)*sizeof(char *));  /* variables + NULL */
 			lua_pushnil(L);  /* first key */
@@ -303,39 +279,45 @@ static int system_execute (lua_State *L) {
 				lua_pop(L, 1);
 			}
 			envl[i] = NULL; /* put NULL to mark the end of 'envl' array */
-			procopts.env = envl;
+			procopts->env = envl;
 		} else if (lua_isnil(L, 4)) {
-			procopts.env = NULL;
+			procopts->env = NULL;
 		} else {
 			luaL_argerror(L, 1, "field "LUA_QL("environment")" must be a table");
 		}
 
-		if (lua_istable(L, 3)) {
-			int i;
-			if (argc > LCU_EXECARGCOUNT) {
-				argsz = (argc+1)*sizeof(char *);  /* arguments + NULL */
-				procopts.args = (char **)lcuL_allocmemo(L, argsz);
-				if (procopts.args == NULL) {
-					if (procopts.env != NULL) lcuL_freememo(L, procopts.env, envsz);
-					luaL_error(L, "insuffient memory");
-				}
-			}
-			for (i = 1; i < argc; ++i) {
-				lua_geti(L, 3, i);
-				procopts.args[i] = (char *)lua_tostring(L, -1);
-				lua_pop(L, 1);
-			}
-		}
-		procopts.args[0] = (char *)procopts.file;
-		procopts.args[argc] = NULL;
+		procopts->args[0] = (char *)procopts->file;
+		procopts->args[argc] = NULL;
 		lua_pushvalue(L, 2);
 	} else {
-		return luaL_argerror(L, 1, "table or string expected");
+		luaL_argerror(L, 1, "table or string expected");
 	}
+}
+static void uv_procexited (uv_process_t *prochdl, int64_t exitval, int signum) {
+	lcu_Process *process = (lcu_Process *)prochdl;
+	lua_State *thread = (lua_State *)prochdl->data;
+	lcu_setprocexited(process, exitval, signum);
+	if (thread) {
+		lua_pushinteger(thread, exitval);
+		pushsignal(thread, signum);
+		lcuU_resumeobjop(thread, (uv_handle_t *)prochdl);
+	}
+}
+static int system_execute (lua_State *L) {
+	uv_loop_t *loop = lcu_toloop(L);
+	lcu_Process *process = lcu_newprocess(L);
+	uv_process_t *prochdl = lcu_toprochandle(process);
+	uv_process_options_t procopts;
+	uv_stdio_container_t streams[3];
+	char *args[LCU_EXECARGCOUNT+1];  /* values + NULL */
+	int err;
+
+	procopts.exit_cb = uv_procexited;
+	procopts.args = args;
+	procopts.stdio = streams;
+	getprocopts(L, &procopts);
 
 	err = uv_spawn(loop, prochdl, &procopts);
-	if (procopts.args != args) lcuL_freememo(L, procopts.args, argsz);
-	if (procopts.env != NULL) lcuL_freememo(L, procopts.env, envsz);
 	if (!err) {
 		prochdl->data = NULL;
 		lcu_enableproc(L, -1);
