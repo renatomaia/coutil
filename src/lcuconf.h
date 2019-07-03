@@ -16,7 +16,7 @@
 #endif
 
 #ifndef LCU_EXECARGCOUNT
-#define LCU_EXECARGCOUNT	15
+#define LCU_EXECARGCOUNT	1023
 #endif
 
 #include <assert.h>
