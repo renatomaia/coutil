@@ -24,7 +24,6 @@ function readfrom(path)
 	end
 end
 
-local startscript
 local runscript
 do
 	local scriptfile = os.tmpname()
@@ -41,7 +40,7 @@ do
 		return env
 	end
 
-	function startscript(info, ...)
+	function runscript(info, ...)
 		local command = luabin
 		local script = info
 		if type(info) == "table" then
@@ -70,25 +69,13 @@ do
 			assert(file:close())
 			os.exit(exitval)
 		]])
+		local ended, exitval = system.execute(command, scriptfile, ...)
+		assert(ended == "exit")
+		assert(type(command) ~= "table" or type(command.pid) == "number")
+		assert(readfrom(successfile) == "SUCCESS!")
+		assert(os.remove(scriptfile))
 		os.remove(successfile)
-		local process = assert(system.execute(command, scriptfile, ...))
-		return {
-			assertexit = function (_, expected)
-				if type(expected) == "string" then
-					asserterr(expected, process:awaitexit())
-				else
-					assert(process:awaitexit() == (expected or 0))
-					assert(readfrom(successfile) == "SUCCESS!")
-				end
-				assert(process:close())
-				assert(os.remove(scriptfile))
-				os.remove(successfile)
-			end
-		}
-	end
-
-	function runscript(...)
-		return startscript(...):assertexit()
+		return exitval
 	end
 end
 
@@ -150,8 +137,8 @@ do case "exit value"
 	spawn(function ()
 		for index, code in ipairs{ 0, 1, 2, 3, 127, 128, 255 } do
 			local script = "return "..code
-			startscript(script):assertexit(code)
-			startscript{ script = script }:assertexit(code)
+			assert(runscript(script) == code)
+			assert(runscript{ script = script } == code)
 		end
 	end)
 	assert(system.run() == false)
