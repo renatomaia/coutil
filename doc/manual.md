@@ -261,7 +261,8 @@ In any case, the coroutine is not scheduled to be resumed anymore after it retur
 
 ### `system.awaitsig (signal)`
 
-Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it to be resumed when the process receives signal indicated by string `signal`, as listed below:
+Suspends the execution of the calling coroutine,
+and schedules it to be resumed when the process receives signal indicated by string `signal`, as listed below:
 
 - Process Commands
 
@@ -411,7 +412,7 @@ Otherwise it returns `nil` plus an error message.
 
 ### `socket:getdomain ()`
 
-Returns the address domain of `socket`, which can be either `"ipv4"` `"ipv6"`.
+Returns the address domain of `socket`, which can be either `"ipv4"` or `"ipv6"`.
 
 ### `socket:bind (address)`
 
@@ -450,7 +451,7 @@ In case of errors, it returns `nil` plus an error message.
 
 Sets `value` as the value of option `name` for socket `socket`.
 This operation is not available for sockets of type `listen`.
-The available options are the same as defined in operation [`udp:getoption`].
+The available options are the same as defined in operation [`socket:getoption`](#socketgetoption-name).
 
 In case of success, this function returns `true`.
 Otherwise it returns `nil` plus an error message.
