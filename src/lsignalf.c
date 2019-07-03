@@ -1,6 +1,5 @@
 #include "lmodaux.h"
 #include "loperaux.h"
-#include "lprocaux.h"
 
 #include <string.h>
 #include <signal.h>
@@ -62,14 +61,9 @@ static int checksignal (lua_State *L, int arg) {
 }
 
 
-#define toproc(L)	lcu_checkprocess(L,1)
-
-
 /* success [, errmsg] = system.emitsig (process, signal) */
 static int system_emitsig (lua_State *L) {
-	int signum = checksignal(L, 2);
-	int err = lua_isinteger(L, 1) ? uv_kill(lua_tointeger(L, 1), signum)
-	                              : uv_process_kill(lcu_toprochandle(toproc(L)), signum);
+	int err = uv_kill(luaL_checkinteger(L, 1), checksignal(L, 2));
 	return lcuL_pushresults(L, 0, err);
 }
 
@@ -104,60 +98,7 @@ static int system_awaitsig (lua_State *L) {
 }
 
 
-/* string = tostring(process) */
-static int process_tostring (lua_State *L) {
-	lcu_Process *process = toproc(L);
-	if (!lcu_isprocclosed(process)) {
-		uv_pid_t pid = uv_process_get_pid(lcu_toprochandle(process));
-		lua_pushfstring(L, "process (%p)", pid);
-	}
-	else lua_pushliteral(L, "process (closed)");
-	return 1;
-}
-
-
-/* getmetatable(process).__gc(process) */
-static int process_gc (lua_State *L) {
-	lcu_closeproc(L, 1);
-	return 0;
-}
-
-
-/* succ [, errmsg] = process:close() */
-static int process_close (lua_State *L) {
-	lcu_Process *process = toproc(L);
-	if (!lcu_isprocclosed(process)) {
-		int closed = lcu_closeproc(L, 1);
-		lcu_assert(closed);
-		lua_pushboolean(L, closed);
-	}
-	else lua_pushboolean(L, 0);
-	return 1;
-}
-
-
-/* status, ... = process:status () */
-static int process_status (lua_State *L) {
-	lcu_Process *process = toproc(L);
-	if (!lcu_isprocclosed(process)) {
-		int64_t exitval;
-		int signum;
-		if (lcu_getprocexited(process, &exitval, &signum)) {
-			lua_pushliteral(L, "dead");
-			lua_pushinteger(L, exitval);
-			pushsignal(L, signum);
-			return 4;
-		}
-		lua_pushliteral(L, "running");
-		lua_pushinteger(L, uv_process_get_pid(lcu_toprochandle(process)));
-		return 2;
-	}
-	lua_pushliteral(L, "closed");
-	return 1;
-}
-
-
-/* process [, errmsg] = system.execute (command [, arguments...]) */
+/* ended [, errmsg] = system.execute (command [, arguments...]) */
 static const char* getstrfield (lua_State *L, const char *field, int required) {
 	const char* value = NULL;
 	lua_getfield(L, 1, field);
@@ -193,13 +134,13 @@ static void getstreamfield (lua_State *L,
 	}
 	lua_pop(L, 1); /* remove value */
 }
-static void getprocopts (lua_State *L, uv_process_options_t *procopts) {
+static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 	procopts->flags = 0;
 	procopts->stdio_count = 0;
 
 	if (lua_isstring(L, 1)) {
 		int i;
-		int argc = lua_gettop(L)-1;  /* ignore process userdata on top */
+		int argc = lua_gettop(L);
 		if (argc > LCU_EXECARGCOUNT) {
 			size_t argsz = (argc+1)*sizeof(char *);  /* arguments + NULL */
 			procopts->args = (char **)lua_newuserdata(L, argsz);
@@ -211,12 +152,13 @@ static void getprocopts (lua_State *L, uv_process_options_t *procopts) {
 		procopts->env = NULL;
 		procopts->cwd = NULL;
 		procopts->stdio = NULL;
+
+		return 0;
 	} else if (lua_istable(L, 1)) {
 		static const char *streamfields[] = { "stdin", "stdout", "stderr", NULL };
 		size_t argc = 0, envc = 0;
 
-		lua_replace(L, 2);  /* place userdata at index 2 */
-		lua_settop(L, 2);  /* discard all other arguments */
+		lua_settop(L, 1);  /* discard all other arguments */
 		procopts->file = getstrfield(L, "execfile", 1);
 		procopts->cwd = getstrfield(L, "runpath", 0);
 		for (; streamfields[procopts->stdio_count]; ++procopts->stdio_count)
@@ -226,9 +168,9 @@ static void getprocopts (lua_State *L, uv_process_options_t *procopts) {
 		lua_getfield(L, 1, "arguments");
 		lua_getfield(L, 1, "environment");
 
-		if (lua_istable(L, 3)) {
+		if (lua_istable(L, 2)) {
 			int i;
-			lua_len(L, 3);  /* push arguments count */
+			lua_len(L, 2);  /* push arguments count */
 			argc = 1+lua_tointeger(L, -1);  /* execfile + arguments */
 			lua_pop(L, 1);  /* pop arguments count */
 			if (argc > LCU_EXECARGCOUNT) {
@@ -236,17 +178,17 @@ static void getprocopts (lua_State *L, uv_process_options_t *procopts) {
 				procopts->args = (char **)lua_newuserdata(L, argsz);
 			}
 			for (i = 1; i < argc; ++i) {
-				lua_geti(L, 3, i);
+				lua_geti(L, 2, i);
 				procopts->args[i] = (char *)lua_tostring(L, -1);
-				if (!procopts->args[i]) luaL_error(L,
+				if (!procopts->args[i]) return luaL_error(L,
 					"bad value #%d in field "LUA_QL("arguments")" (must be a string)", i);
 				lua_pop(L, 1);
 			}
-		} else if (!lua_isnil(L, 3)) {
-			luaL_argerror(L, 1, "field "LUA_QL("arguments")" must be a table");
+		} else if (!lua_isnil(L, 2)) {
+			return luaL_argerror(L, 1, "field "LUA_QL("arguments")" must be a table");
 		}
 
-		if (lua_istable(L, 4)) {
+		if (lua_istable(L, 3)) {
 			void *mem;
 			char **envl, *envv;
 			size_t envsz = sizeof(char *);
@@ -254,12 +196,12 @@ static void getprocopts (lua_State *L, uv_process_options_t *procopts) {
 
 			/* check environment variables are strings */
 			lua_pushnil(L);  /* first key */
-			while (lua_next(L, 4) != 0) {
+			while (lua_next(L, 3) != 0) {
 				const char *name = lua_tostring(L, -2);
 				const char *value = lua_tostring(L, -1);
-				if (name && (value == NULL || strchr(name, '=')))
-					luaL_error(L, "bad name "LUA_QS" in field "LUA_QL("environment")
-					              " (must be a string without "LUA_QL("=")")", name);
+				if (name && (value == NULL || strchr(name, '='))) return luaL_error(L,
+					"bad name "LUA_QS" in field "LUA_QL("environment")
+					" (must be a string without "LUA_QL("=")")", name);
 				++envc;
 				envsz += sizeof(char *)+sizeof(char)*(strlen(name)+1+strlen(value)+1);
 				lua_pop(L, 1);
@@ -269,7 +211,7 @@ static void getprocopts (lua_State *L, uv_process_options_t *procopts) {
 			envl = (char **)mem;
 			envv = (char *)(mem+(envc+1)*sizeof(char *));  /* variables + NULL */
 			lua_pushnil(L);  /* first key */
-			while (lua_next(L, 4) != 0) {
+			while (lua_next(L, 3) != 0) {
 				const char *c = lua_tostring(L, -2);  /* variable name */
 				envl[i++] = envv; /* put string in 'envl' array */
 				while (*c) *envv++ = *c++; /* copy key to string, excluding '\0' */
@@ -280,77 +222,56 @@ static void getprocopts (lua_State *L, uv_process_options_t *procopts) {
 			}
 			envl[i] = NULL; /* put NULL to mark the end of 'envl' array */
 			procopts->env = envl;
-		} else if (lua_isnil(L, 4)) {
+		} else if (lua_isnil(L, 3)) {
 			procopts->env = NULL;
 		} else {
-			luaL_argerror(L, 1, "field "LUA_QL("environment")" must be a table");
+			return luaL_argerror(L, 1,
+				"field "LUA_QL("environment")" must be a table");
 		}
 
 		procopts->args[0] = (char *)procopts->file;
 		procopts->args[argc] = NULL;
-		lua_pushvalue(L, 2);
-	} else {
-		luaL_argerror(L, 1, "table or string expected");
+
+		return 1;
 	}
+	return luaL_argerror(L, 1, "table or string expected");
 }
-static void uv_procexited (uv_process_t *prochdl, int64_t exitval, int signum) {
-	lcu_Process *process = (lcu_Process *)prochdl;
-	lua_State *thread = (lua_State *)prochdl->data;
-	lcu_setprocexited(process, exitval, signum);
-	if (thread) {
-		lua_pushinteger(thread, exitval);
+static void uv_procexited (uv_process_t *process, int64_t exitval, int signum) {
+	lua_State *thread = (lua_State *)process->data;
+	if (signum) {
+		lua_pushliteral(thread, "signal");
 		pushsignal(thread, signum);
-		lcuU_resumeobjop(thread, (uv_handle_t *)prochdl);
+	} else {
+		lua_pushliteral(thread, "exit");
+		lua_pushinteger(thread, exitval);
 	}
+	lcuU_resumethrop(thread, (uv_handle_t *)process);
 }
-static int system_execute (lua_State *L) {
-	uv_loop_t *loop = lcu_toloop(L);
-	lcu_Process *process = lcu_newprocess(L);
-	uv_process_t *prochdl = lcu_toprochandle(process);
+static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
+	uv_process_t *process = (uv_process_t *)handle;
 	uv_process_options_t procopts;
 	uv_stdio_container_t streams[3];
 	char *args[LCU_EXECARGCOUNT+1];  /* values + NULL */
-	int err;
+	int err, tabarg;
+
+	lcu_assert(loop);  /* must be an uninitialized handler */
+	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
 
 	procopts.exit_cb = uv_procexited;
 	procopts.args = args;
 	procopts.stdio = streams;
-	getprocopts(L, &procopts);
+	tabarg = getprocopts(L, &procopts);
 
-	err = uv_spawn(loop, prochdl, &procopts);
-	if (!err) {
-		prochdl->data = NULL;
-		lcu_enableproc(L, -1);
+	err = uv_spawn(loop, process, &procopts);
+	lcuT_armthrop(L, 0);  /* 'uv_spawn' always arms the operation */
+	if (!err && tabarg) {
+		lua_pushinteger(L, uv_process_get_pid(process));
+		lua_setfield(L, 1, "pid");
 	}
-	else uv_close((uv_handle_t *)prochdl, NULL);
-	return lcuL_pushresults(L, 1, err);
+	return err;
 }
-
-
-/* exitval, signal = process:awaitexit () */
-static int k_procexited (lua_State *L, int status, lua_KContext ctx) {
-	lcu_assert(status == LUA_YIELD);
-	lcu_assert(!ctx);
-	return lua_gettop(L)-1;
-}
-static int process_awaitexit (lua_State *L) {
-	lcu_Process *process = toproc(L);
-	int64_t exitval;
-	int signum;
-	if (lcu_getprocexited(process, &exitval, &signum)) {
-		lua_pushinteger(L, exitval);
-		pushsignal(L, signum);
-		return 3;
-	} else {
-		uv_process_t *prochdl = lcu_toprochandle(process);
-		luaL_argcheck(L, !lcu_isprocclosed(process), 1, "closed");
-		luaL_argcheck(L, prochdl->loop == lcu_toloop(L), 1, "foreign object");
-		if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
-		if (prochdl->data) luaL_argcheck(L, prochdl->data == L, 1, "already in use");
-		else lcuT_awaitobj(L, (uv_handle_t *)prochdl);
-		lua_settop(L, 1);
-		return lua_yieldk(L, 0, 0, k_procexited);
-	}
+static int system_execute (lua_State *L) {
+	return lcuT_resetthropk(L, -1, k_setupproc, NULL);
 }
 
 
