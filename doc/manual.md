@@ -248,6 +248,10 @@ Resumes scheduled coroutines that becomes ready according to its corresponding s
 
 `run` returns `true` if there are scheduled coroutines, or `false` otherwise.
 
+### `system.halt ()`
+
+Causes [`system.run`](#systemrun-mode) to return as soon as possible.
+
 ### `system.pause ([delay])`
 
 Suspends the execution of the calling coroutine, and schedules it to be resumed after `delay` seconds have passed since the coroutine was last resumed.
