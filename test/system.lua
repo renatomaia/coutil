@@ -91,6 +91,26 @@ do case "run loop"
 	done()
 end
 
+do case "halt loop"
+	asserterr("not running", pcall(system.halt))
+
+	spawn(function ()
+		garbage.thread = coroutine.running()
+		system.pause(1000)
+	end)
+	spawn(function ()
+		system.pause()
+		system.halt()
+	end)
+	assert(system.run() == true)
+
+	coroutine.resume(garbage.thread)
+
+	assert(system.run() == false)
+
+	done()
+end
+
 newtest "pause" ----------------------------------------------------------------
 
 do case "error messages"
