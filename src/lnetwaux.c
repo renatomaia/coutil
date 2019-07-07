@@ -3,6 +3,20 @@
 
 #include <string.h>
 
+#define newbooloption(name, type, flag) \
+	LCULIB_API int lcu_get##name(type *obj) { \
+		return lcuL_maskflag(obj, flag); \
+	} \
+	\
+	LCULIB_API void lcu_set##name(type *obj, int enabled) { \
+		if (enabled) lcuL_setflag(obj, flag); \
+		else lcuL_clearflag(obj, flag); \
+	}
+
+
+/*
+ * Addresses
+ */
 
 LCULIB_API struct sockaddr *lcu_newaddress (lua_State *L, int type) {
 	struct sockaddr *na;
@@ -18,6 +32,56 @@ LCULIB_API struct sockaddr *lcu_newaddress (lua_State *L, int type) {
 	return na;
 }
 
+
+/*
+ * Names
+ */
+
+typedef struct lcu_AddressList {
+	struct addrinfo *start;
+	struct addrinfo *current;
+} lcu_AddressList;
+
+LCULIB_API lcu_AddressList *lcu_newaddrlist (lua_State *L) {
+	lcu_AddressList *l = (lcu_AddressList *)lua_newuserdata(L, sizeof(lcu_AddressList));
+	lcu_setaddrlist(l, NULL);
+	luaL_setmetatable(L, LCU_NETADDRLISTCLS);
+	return l;
+}
+
+static void findvalid (lcu_AddressList *l) {
+	for (; l->current; l->current = l->current->ai_next) {
+		switch (l->current->ai_socktype) {
+			case SOCK_DGRAM:
+			case SOCK_STREAM: return;
+		}
+	}
+}
+
+LCULIB_API void lcu_setaddrlist (lcu_AddressList *l, struct addrinfo *addrs) {
+	l->start = addrs;
+	l->current = addrs;
+	findvalid(l);
+}
+
+LCULIB_API struct addrinfo *lcu_getaddrlist (lcu_AddressList *l) {
+	return l->start;
+}
+
+LCULIB_API struct addrinfo *lcu_peekaddrlist (lcu_AddressList *l) {
+	return l->current;
+}
+
+LCULIB_API struct addrinfo *lcu_nextaddrlist (lcu_AddressList *l) {
+	l->current = l->current->ai_next;
+	findvalid(l);
+	return l->current;
+}
+
+
+/*
+ * Sockets
+ */
 
 #define FLAG_IPV6DOM 0x01
 #define FLAG_CLOSED 0x02
@@ -95,23 +159,6 @@ LCULIB_API uv_tcp_t *lcu_totcphandle (lcu_TcpSocket *tcp) {
 	return &tcp->handle;
 }
 
-LCULIB_API int lcu_getudparmed (lcu_UdpSocket *udp) {
-	return lcuL_maskflag(udp, FLAG_OBJOPON);
-}
-
-LCULIB_API void lcu_setudparmed (lcu_UdpSocket *udp, int value) {
-	if (value) lcuL_setflag(udp, FLAG_OBJOPON);
-	else lcuL_clearflag(udp, FLAG_OBJOPON);
-}
-
-LCULIB_API int lcu_gettcparmed (lcu_TcpSocket *tcp) {
-	return lcuL_maskflag(tcp, FLAG_OBJOPON);
-}
-
-LCULIB_API void lcu_settcparmed (lcu_TcpSocket *tcp, int value) {
-	if (value) lcuL_setflag(tcp, FLAG_OBJOPON);
-	else lcuL_clearflag(tcp, FLAG_OBJOPON);
-}
 
 LCULIB_API int lcu_isudpclosed (lcu_UdpSocket *udp) {
 	return lcuL_maskflag(udp, FLAG_CLOSED);
@@ -151,15 +198,8 @@ LCULIB_API int lcu_gettcpaddrfam (lcu_TcpSocket *tcp) {
 	return lcuL_maskflag(tcp, FLAG_IPV6DOM) ? AF_INET6 : AF_INET;
 }
 
-#define newbooloption(name, type, flag) \
-	LCULIB_API int lcu_get##name(type *obj) { \
-		return lcuL_maskflag(obj, flag); \
-	} \
-	\
-	LCULIB_API void lcu_set##name(type *obj, int enabled) { \
-		if (enabled) lcuL_setflag(obj, flag); \
-		else lcuL_clearflag(obj, flag); \
-	}
+newbooloption(udparmed, lcu_UdpSocket, FLAG_OBJOPON);
+newbooloption(tcparmed, lcu_TcpSocket, FLAG_OBJOPON);
 
 newbooloption(udpconnected, lcu_UdpSocket, FLAG_CONNECTED);
 newbooloption(udpbroadcast, lcu_UdpSocket, FLAG_BROADCAST);

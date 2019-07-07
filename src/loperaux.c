@@ -181,19 +181,26 @@ LCULIB_API int lcuT_resetreqopk (lua_State *L,
 	return luaL_error(L, "unable to yield");
 }
 
-LCULIB_API void lcuU_resumereqop (uv_loop_t *loop, uv_req_t *request, int err) {
+LCULIB_API lua_State *lcuU_endreqop (uv_loop_t *loop, uv_req_t *request) {
 	lua_State *L = (lua_State *)loop->data;
 	Operation *op = (Operation *)request;
 	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST));
 	request->type = UV_UNKNOWN_REQ;
-	if (lcuL_maskflag(op, FLAG_PENDING)) {
-		lua_State *thread = (lua_State *)request->data;
-		lcuL_pushresults(thread, 0, err);
-		resumethread(thread, L, loop);
-		if (!lcuL_maskflag(op, FLAG_REQUEST) || request->type != UV_UNKNOWN_REQ)
-			return;
-	}
+	if (lcuL_maskflag(op, FLAG_PENDING)) return (lua_State *)request->data;
 	freethread(L, (void *)request);
+	return NULL;
+}
+
+LCULIB_API void lcuU_resumereqop (lua_State *thread,
+                                  uv_loop_t *loop,
+                                  uv_req_t *request) {
+	lua_State *L = (lua_State *)loop->data;
+	Operation *op = (Operation *)request;
+	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST));
+	lcu_assert(lcuL_maskflag(op, FLAG_PENDING));
+	resumethread(thread, L, loop);
+	if (lcuL_maskflag(op, FLAG_REQUEST) && request->type == UV_UNKNOWN_REQ)
+		freethread(L, (void *)request);
 }
 
 
