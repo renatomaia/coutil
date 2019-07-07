@@ -299,7 +299,121 @@ static int addr_newindex (lua_State *L) {
 
 
 /*
- * Network
+ * Names
+ */
+
+#define tofound(L) ((losi_AddressFound *)luaL_checkudata(L, 1, \
+                                         LOSI_NETADDRFOUNDCLS))
+
+#define chkaddrdom(L,I,A,D) luaL_argcheck(L, (A)->sa_family == D, I, "wrong domain")
+
+/* [address, socktype, nextdomain =] resolved:next([address]) */
+static int resolved_next (lua_State *L) {
+	lcu_AddressList *list = lcu_checkaddrlist(L, 1);
+	struct addrinfo *found = lcu_peekaddrlist(list);
+	if (found) {
+		struct sockaddr *addr = lcu_toaddress(L, 2);
+		if (addr) {
+			chkaddrdom(L, 2, addr, found->ai_family);
+			lua_settop(L, 2);
+		} else {
+			lua_settop(L, 1);
+			addr = lcu_newaddress(L, found->ai_family);
+		}
+		memcpy(addr, found->ai_addr, found->ai_addrlen);
+		lua_pushstring(L, (found->ai_socktype == SOCK_DGRAM ? "datagram" :
+		                  (found->ai_flags&AI_PASSIVE ? "listen" : "stream" )));
+		found = lcu_nextaddrlist(list);
+		if (found) pushaddrtype(L, found->ai_family);
+		else lua_pushnil(L);
+		return 3;
+	}
+	return 0;
+}
+
+static int resolved_close (lua_State *L) {
+	lcu_AddressList *list = lcu_toaddrlist(L, 1);
+	if (list) {
+		struct addrinfo* results = lcu_getaddrlist(list);
+		if (results) {
+			freeaddrinfo(results);
+			lcu_setaddrlist(list, NULL);
+		}
+	}
+	return 0;
+}
+
+/* next, domain = system.resolveaddr (name [, service [, mode]]) */
+static void uv_onresolved (uv_getaddrinfo_t *addrreq,
+                           int err,
+                           struct addrinfo* results) {
+	uv_loop_t *loop = addrreq->loop;
+	uv_req_t *request = (uv_req_t *)addrreq;
+	lua_State *thread = lcuU_endreqop(loop, request);
+	if (thread) {
+		if (!err) {
+			lcu_AddressList *list = lcu_newaddrlist(thread);
+			lcu_setaddrlist(list, results);
+			pushaddrtype(thread, results->ai_family);
+		}
+		lcuL_pushresults(thread, 2, err);
+		lcuU_resumereqop(thread, loop, request);
+	}
+	else if (!err) freeaddrinfo(results);
+}
+static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_getaddrinfo_t *addrreq = (uv_getaddrinfo_t *)request;
+	const char *nodename = luaL_optstring(L, 1, NULL);
+	const char *servname = luaL_optstring(L, 2, NULL);
+	const char *mode = luaL_optstring(L, 3, "");
+	struct addrinfo hints;
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_flags = AI_ADDRCONFIG;
+	if (nodename) {
+		if (nodename[0] == '*' && nodename[1] == '\0') {
+			luaL_argcheck(L, servname, 2, "service must be provided for "LUA_QL("*"));
+			hints.ai_flags |= AI_PASSIVE;
+			nodename = NULL;
+		}
+	}
+	else luaL_argcheck(L, servname, 1, "name or service must be provided");
+	for (; *mode; ++mode) switch (*mode) {
+		case '4': hints.ai_family = AF_INET; goto aftercase6;
+		case '6': hints.ai_family = AF_INET6; aftercase6:
+			if (hints.ai_flags&AI_ADDRCONFIG)
+				hints.ai_flags &= ~AI_ADDRCONFIG;
+			else
+				hints.ai_family = AF_UNSPEC;
+			break;
+		case 's': hints.ai_socktype = SOCK_STREAM; goto aftercased;
+		case 'd': hints.ai_socktype = SOCK_DGRAM; aftercased:
+			if (hints.ai_protocol)
+				hints.ai_socktype = 0;
+			else
+				hints.ai_protocol = 1;
+			break;
+		case 'm':
+			hints.ai_flags |= AI_V4MAPPED;
+			break;
+		default:
+			return luaL_error(L, "unknown mode char (got "LUA_QL("%c")")", *mode);
+	}
+	if (hints.ai_flags&AI_V4MAPPED) {
+		luaL_argcheck(L, hints.ai_family != AF_INET, 3, LUA_QL("m")" is invalid for IPv4");
+		if (hints.ai_family == AF_UNSPEC) hints.ai_flags |= AI_ALL;
+		hints.ai_family = AF_INET6;
+	}
+	hints.ai_protocol = 0;  /* clear mark that 'ai_socktype' was defined above */
+	return uv_getaddrinfo(loop, addrreq, uv_onresolved, nodename, servname, &hints);
+}
+static int system_findaddr (lua_State *L) {
+	return lcuT_resetreqopk(L, k_setupfindaddr, NULL);
+}
+
+
+/*
+ * Sockets
  */
 
 /* socket [, errmsg] = system.socket(type [, domain]) */
@@ -326,8 +440,6 @@ static int system_socket (lua_State *L) {
 	}
 	return lcuL_pushresults(L, 1, err);
 }
-
-#define chkaddrdom(L,I,A,D) luaL_argcheck(L, (A)->sa_family == D, I, "wrong domain")
 
 static int getaddrarg (lua_State *L, int domain, struct sockaddr **addr, int *sz) {
 	static const char *const sites[] = {"this", "peer", NULL};
@@ -365,6 +477,13 @@ static int getbufarg (lua_State *L, uv_buf_t *buf) {
 	return 0;
 }
 
+static void completereqop (uv_loop_t *loop, uv_req_t *request, int err) {
+	lua_State *thread = lcuU_endreqop(loop, request);
+	if (thread) {
+		lcuL_pushresults(thread, 0, err);
+		lcuU_resumereqop(thread, loop, request);
+	}
+}
 
 
 /*
@@ -546,7 +665,7 @@ static int udp_connect (lua_State *L) {
 
 /* sent [, errmsg] = udp:send(data [, i [, j [, address]]]) */
 static void uv_onsent (uv_udp_send_t *request, int err) {
-	lcuU_resumereqop(request->handle->loop, (uv_req_t *)request, err);
+	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
 static int k_setupsend (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_UdpSocket *udp = ownedudp(L, loop);
@@ -801,7 +920,7 @@ static int tcp_getoption (lua_State *L) {
 
 /* succ [, errmsg] = tcp:connect(address) */
 static void uv_onconnected (uv_connect_t *request, int err) {
-	lcuU_resumereqop(request->handle->loop, (uv_req_t *)request, err);
+	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
 static int k_setupconnect (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_TcpSocket *tcp = ownedtcp(L, loop, LCU_TCPTYPE_STREAM);
@@ -816,7 +935,7 @@ static int tcp_connect (lua_State *L) {
 
 /* succ [, errmsg] = socket:shutdown() */
 static void uv_onshutdown (uv_shutdown_t *request, int err) {
-	lcuU_resumereqop(request->handle->loop, (uv_req_t *)request, err);
+	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
 static int k_setupshutdown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_TcpSocket *tcp = ownedtcp(L, loop, LCU_TCPTYPE_STREAM);
@@ -831,7 +950,7 @@ static int tcp_shutdown (lua_State *L) {
 
 /* sent [, errmsg] = tcp:send(data [, i [, j]]) */
 static void uv_onwritten (uv_write_t *request, int err) {
-	lcuU_resumereqop(request->handle->loop, (uv_req_t *)request, err);
+	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
 static int k_setupwrite (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_TcpSocket *tcp = ownedtcp(L, loop, LCU_TCPTYPE_STREAM);
@@ -987,6 +1106,12 @@ static const luaL_Reg addr[] = {
 	{NULL, NULL}
 };
 
+static const luaL_Reg list[] = {
+	{"__gc", resolved_close},
+	{"__call", resolved_next},
+	{NULL, NULL}
+};
+
 static const luaL_Reg udp[] = {
 	{"__tostring", udp_tostring},
 	{"__gc", udp_gc},
@@ -1030,12 +1155,14 @@ static const luaL_Reg lstn[] = {
 
 static const luaL_Reg modf[] = {
 	{"address", system_address},
+	{"findaddr", system_findaddr},
 	{"socket", system_socket},
 	{NULL, NULL}
 };
 
 LCULIB_API void lcuM_addtcpf (lua_State *L) {
 	lcuM_newclass(L, addr, 0, LCU_NETADDRCLS, NULL);
+	lcuM_newclass(L, list, 0, LCU_NETADDRLISTCLS, NULL);
 	lcuM_newclass(L, udp, LCU_MODUPVS, LCU_UDPSOCKCLS, NULL);
 	lcuM_newclass(L, tcp, LCU_MODUPVS, lcu_TcpSockCls[LCU_TCPTYPE_SOCKET], NULL);
 	lcuM_newclass(L, strm, LCU_MODUPVS, lcu_TcpSockCls[LCU_TCPTYPE_STREAM],

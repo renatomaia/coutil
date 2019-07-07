@@ -1,8 +1,159 @@
 local system = require "coutil.system"
 
-newgroup "Sockets" -----------------------------------------------------------------
+newtest "findaddr"
 
-newtest "create" ---------------------------------------------------------------
+local hosts = {
+	localhost = { ["127.0.0.1"] = "ipv4" },
+	["ip6-localhost"] = { ["::1"] = "ipv6" },
+	["*"] = {
+		["0.0.0.0"] = "ipv4",
+		["::"] = "ipv6",
+	},
+	[false] = {
+		["127.0.0.1"] = "ipv4",
+		["::1"] = "ipv6",
+	},
+}
+local servs = {
+	ssh = 22,
+	http = 80,
+	[false] = 0,
+	[54321] = 54321,
+}
+local scktypes = {
+	datagram = true,
+	stream = true,
+	listen = true,
+}
+local addrtypes = {
+	ipv4 = system.address("ipv4"),
+	ipv6 = system.address("ipv6"),
+}
+
+local function allexpected(ips, hostname, servport)
+	local stream = hostname == "*" and "listen" or "stream"
+	local missing = {}
+	for literal, domain in pairs(ips) do
+		missing[literal.." "..servport.." datagram"] = true
+		missing[literal.." "..servport.." "..stream] = true
+	end
+	return missing
+end
+
+local function clearexpected(missing, found, scktype)
+	missing[found.literal.." "..found.port.." "..scktype] = nil
+end
+
+do case "reusing addresses"
+	spawn(function ()
+		for hostname, ips in pairs(hosts) do
+			for servname, servport in pairs(servs) do
+				if servname or (hostname and hostname ~= "*") then
+					local missing = allexpected(ips, hostname, servport)
+					local getnext, last = assert(system.findaddr(hostname or nil, servname or nil))
+					repeat
+						local addr = assert(addrtypes[last])
+						local other = last == "ipv4" and addrtypes.ipv6 or addrtypes.ipv4
+						asserterr("wrong domain", pcall(getnext, other))
+						local found, scktype, domain = getnext(addr)
+						assert(rawequal(found, addr))
+						assert(ips[found.literal] == last)
+						assert(found.port == servport)
+						assert(scktypes[scktype] == true)
+						assert(domain == nil or addrtypes[domain] ~= nil)
+						clearexpected(missing, found, scktype)
+						last = domain
+					until last == nil
+					assert(_G.next(missing) == nil)
+				end
+			end
+		end
+	end)
+	assert(system.run() == false)
+	done()
+end
+
+do case "create addresses"
+	spawn(function ()
+		for hostname, ips in pairs(hosts) do
+			for servname, servport in pairs(servs) do
+				if servname or (hostname and hostname ~= "*") then
+					local missing = allexpected(ips, hostname, servport)
+					local getnext = assert(system.findaddr(hostname or nil, servname or nil))
+					repeat
+						local found, scktype, domain = assert(getnext())
+						assert(ips[found.literal] ~= nil)
+						assert(found.port == servport)
+						assert(scktypes[scktype] == true)
+						clearexpected(missing, found, scktype)
+					until domain == nil
+					assert(_G.next(missing) == nil)
+				end
+			end
+		end
+	end)
+	assert(system.run() == false)
+	done()
+end
+
+do case "for iteration"
+	spawn(function ()
+		for hostname, ips in pairs(hosts) do
+			for servname, servport in pairs(servs) do
+				if servname or (hostname and hostname ~= "*") then
+					local missing = allexpected(ips, hostname, servport)
+					for resaddr, scktype, domain in system.findaddr(hostname or nil, servname or nil) do
+						assert(ips[resaddr.literal] ~= nil)
+						assert(resaddr.port == servport)
+						assert(scktypes[scktype] == true)
+						clearexpected(missing, resaddr, scktype)
+					end
+					assert(_G.next(missing) == nil)
+				end
+			end
+		end
+	end)
+	assert(system.run() == false)
+	done()
+end
+
+do case "only first"
+	spawn(function ()
+		for hostname, ips in pairs(hosts) do
+			for servname, servport in pairs(servs) do
+				if servname or (hostname and hostname ~= "*") then
+					local resaddr, scktype, domain = assert(system.findaddr(hostname or nil, servname or nil))()
+					assert(ips[resaddr.literal] ~= nil)
+					assert(resaddr.port == servport)
+					assert(scktypes[scktype] == true)
+				end
+			end
+		end
+	end)
+	assert(system.run() == false)
+	done()
+end
+
+do case "error messages"
+	spawn(function ()
+		asserterr("name or service must be provided", pcall(system.findaddr))
+		asserterr("name or service must be provided", pcall(system.findaddr, nil))
+		asserterr("name or service must be provided", pcall(system.findaddr, nil, nil))
+
+		asserterr("service must be provided for '*'", pcall(system.findaddr, "*"))
+		asserterr("service must be provided for '*'", pcall(system.findaddr, "*"))
+		asserterr("service must be provided for '*'", pcall(system.findaddr, "*", nil))
+
+		asserterr("'m' is invalid for IPv4", pcall(system.findaddr, "localhost", 0, "m4"))
+		asserterr("unknown mode char (got 'i')", pcall(system.findaddr, "localhost", 0, "ipv6"))
+	end)
+
+	assert(system.run() == false)
+
+	done()
+end
+
+newtest "socket"
 
 do case "error messages"
 	for value in pairs(types) do
