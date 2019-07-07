@@ -32,6 +32,7 @@ Index
 	- [`spawn.trap`](#spawntrap-h-f-)
 - [`coutil.system`](#system)
 	- [`system.run`](#systemrun-mode)
+	- [`system.halt`](#systemhalt-)
 	- [`system.pause`](#systempause-delay)
 	- [`system.awaitsig`](#systemawaitsig-signal)
 	- [`system.execute`](#systemexecute-cmd-)
@@ -250,7 +251,7 @@ Resumes scheduled coroutines that becomes ready according to its corresponding s
 
 ### `system.halt ()`
 
-Causes [`system.run`](#systemrun-mode) to return as soon as possible.
+Causes [`system.run`](#systemrun-mode) to return prematurely.
 
 ### `system.pause ([delay])`
 
