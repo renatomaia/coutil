@@ -25,6 +25,29 @@
 LCULIB_API struct sockaddr *lcu_newaddress (lua_State *L, int type);
 
 
+#define LCU_NETADDRLISTCLS LCU_PREFIX"netaddrlist"
+
+typedef struct lcu_AddressList lcu_AddressList;
+
+#define lcu_checkaddrlist(L,i)  ((lcu_AddressList *) \
+                                luaL_checkudata(L, i, LCU_NETADDRLISTCLS))
+
+#define lcu_toaddrlist(L,i)  ((lcu_AddressList *) \
+                             luaL_testudata(L, i, LCU_NETADDRLISTCLS))
+
+#define lcu_isaddrlist(L,i)  (lcu_toaddrlist(L, i) != NULL)
+
+LCULIB_API lcu_AddressList *lcu_newaddrlist (lua_State *L);
+
+LCULIB_API void lcu_setaddrlist (lcu_AddressList *list, struct addrinfo *addrs);
+
+LCULIB_API struct addrinfo *lcu_getaddrlist (lcu_AddressList *list);
+
+LCULIB_API struct addrinfo *lcu_peekaddrlist (lcu_AddressList *list);
+
+LCULIB_API struct addrinfo *lcu_nextaddrlist (lcu_AddressList *list);
+
+
 #define LCU_UDPSOCKCLS LCU_PREFIX"udpsocket"
 
 typedef struct lcu_UdpSocket lcu_UdpSocket;

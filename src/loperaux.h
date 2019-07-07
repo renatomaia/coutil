@@ -16,7 +16,11 @@ LCULIB_API int lcuT_resetreqopk (lua_State *L,
                                  lcu_RequestSetup setup,
                                  lua_CFunction results);
 
-LCULIB_API void lcuU_resumereqop (uv_loop_t *loop, uv_req_t *request, int err);
+LCULIB_API lua_State *lcuU_endreqop (uv_loop_t *loop, uv_req_t *request);
+
+LCULIB_API void lcuU_resumereqop (lua_State *thread,
+                                  uv_loop_t *loop,
+                                  uv_req_t *request);
 
 /* thread operations */
 
