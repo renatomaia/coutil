@@ -37,6 +37,7 @@ Index
 	- [`system.awaitsig`](#systemawaitsig-signal)
 	- [`system.execute`](#systemexecute-cmd-)
 	- [`system.address`](#systemaddress-type--data--port--mode)
+	- [`system.findaddr`](#systemfindaddr-name--service--mode)
 	- [`system.socket`](#systemsocket-type--domain)
 		- [`socket:close`](#socketclose-)
 		- [`socket:getdomain`](#socketgetdomain-)
@@ -388,6 +389,74 @@ like `"\192\0\2\128"` (IPv4) or `"\0\0\0\0\0\0\0\0\0\0\xff\xff\xc0\x00\x02\x80"`
 
 Moreover, you can pass the object to the standard function `tostring` to obtain the address as a string inside a URI,
 like `"192.0.2.128:80"` (IPv4) or `[::ffff:c000:0280]:80` (IPv6).
+
+### `system.findaddr (name [, service [, mode]])`
+
+Searches for the addresses of network name `name`,
+and suspends the execution of the calling coroutine until it concludes.
+If `name` is `nil`, the loopback address is searched.
+If `name` is `"*"`, the wildcard address is searched.
+
+`service` indicates the port number or service name to be used to resolve the port number of the resulting addresses.
+When `service` is absent, the port zero is used in the results.
+The string `mode` defines the search domain. 
+It can contain any of the following characters:
+
+- `4`: for IPv4 addresses.
+- `6`: for IPv6 addresses.
+- `m`: for IPv4-mapped addresses.
+- `d`: for addresses for `datagram` sockets.
+- `s`: for addresses for `stream` or `listen` sockets.
+
+When neither `4` nor `6` are provided, the search only includes addresses of the same type configured in the local machine.
+When neither `d` nor `s` are provided, the search behaves as if both `d` and `s` were provided.
+By default, `mode` is the empty string.
+
+Returns `nil` plus an error message in case of errors.
+Otherwise, returns an iterator that have the following usage pattern:
+
+	[address, socktype, nextdomain =] getnext ([address])
+
+Each time the iterator is called, returns one address found for node with `name`,
+followed by the type of the socket to be used to connect to the address,
+and the type of the next address.
+If an address structure is provided as `address`, it is used to store the result;
+otherwise a new address structure is created.
+Therefore, `nextdomain` is `"ipv4"` if the next address id a IPv4 address, or `"ipv6"` if the next address id a IPv6 address, or `nil` if the next call will return no address.
+
+As an example, the following loop will iterate over all the addresses found for service named 'ssh' on node named `www.lua.org`, using the same IPv4 address object:
+
+```lua
+getnext = assert(system.findaddr("www.lua.org", "ssh", "4"))
+for addr, scktype in getnext, address.create("ipv4") do
+	print(addr, scktype)
+end
+```
+
+The next example gets only the first address found.
+
+```lua
+addr, scktype = system.findaddr("www.lua.org", "http", "s")()
+```
+
+Yet another example that collects all address found in new address objects.
+
+```lua
+list = {}
+for addr, scktype in system.findaddr("www.lua.org", "http", "s") do
+	list[#list+1] = addr
+end
+```
+
+Finally, an example that fills existing addreses objects with the results
+
+```lua
+address = { ipv4 = system.address("ipv4"), ipv6 = system.address("ipv6") }
+getnext, nextdomain = assert(system.findaddr("www.lua.org", "http", "s"))
+repeat
+	addr, scktype, nextdomain = getnext(address[nextdomain])
+until nextdomain == nil
+```
 
 ### `system.socket (type [, domain])`
 
