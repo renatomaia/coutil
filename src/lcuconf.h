@@ -19,6 +19,22 @@
 #define LCU_EXECARGCOUNT	1023
 #endif
 
+#ifndef LCU_NETHOSTNAMESZ
+#ifndef NI_MAXHOST
+#define LCU_NETHOSTNAMESZ	NI_MAXHOST
+#else
+#define LCU_NETHOSTNAMESZ	1025
+#endif
+#endif
+
+#ifndef LCU_NETSERVNAMESZ
+#ifndef NI_MAXSERT
+#define LCU_NETSERVNAMESZ	NI_MAXSERV
+#else
+#define LCU_NETSERVNAMESZ	32
+#endif
+#endif
+
 #include <assert.h>
 #define lcu_assert assert
 

@@ -115,6 +115,50 @@ do case "error messages"
 	done()
 end
 
+newtest "nameaddr"
+
+local hosts = {
+	localhost = { ipv4 = "127.0.0.1" },
+	["ip6-localhost"] = { ipv6 = "::1" },
+}
+local servs = {
+	ssh = 22,
+	http = 80,
+}
+local names = {
+	["www.tecgraf.puc-rio.br"] = "webserver.tecgraf.puc-rio.br",
+}
+
+do case "host and service"
+	spawn(function ()
+		for servname, port in pairs(servs) do
+			assert(system.nameaddr(port) == servname)
+			for hostname, ips in pairs(hosts) do
+				for domain, ip in pairs(ips) do
+					local addr = system.address(domain, ip, port)
+					local name, service = system.nameaddr(addr)
+					assert(name == hostname)
+					assert(service == servname)
+				end
+			end
+		end
+	end)
+
+	assert(system.run() == false)
+	done()
+end
+
+do case "cannonical name"
+	spawn(function ()
+		for name, cannonical in pairs(names) do
+			assert(system.nameaddr(name) == cannonical)
+		end
+	end)
+
+	assert(system.run() == false)
+	done()
+end
+
 newtest "socket"
 
 do case "error messages"

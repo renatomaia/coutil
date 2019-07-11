@@ -38,6 +38,7 @@ Index
 	- [`system.execute`](#systemexecute-cmd-)
 	- [`system.address`](#systemaddress-type--data--port--mode)
 	- [`system.findaddr`](#systemfindaddr-name--service--mode)
+	- [`system.nameaddr`](#systemnameaddr-address--mode)
 	- [`system.socket`](#systemsocket-type--domain)
 		- [`socket:close`](#socketclose-)
 		- [`socket:getdomain`](#socketgetdomain-)
@@ -457,6 +458,29 @@ repeat
 	addr, scktype, nextdomain = getnext(address[nextdomain])
 until nextdomain == nil
 ```
+
+### `system.nameaddr (address [, mode])`
+
+Searches for a network name for `address`,
+and suspends the execution of the calling coroutine until it concludes.
+If `address` is an address object,
+it returns a host name and a port service name for the address.
+If `address` is a number, it returns the service name for that port number.
+If `address` is a string, it returns a canonical name for that network name.
+
+The string `mode` can contain any of the following characters:
+
+- `l`: for local names instead of _Fully Qualified Domain Names_ (FQDN).
+- `d`: for names of datagram services instead of stream services.
+- `i`: for names the _Internationalized Domain Name_ (IDN) format.
+- `u`: allows unassigned Unicode code points
+(implies `i`).
+- `a`: checks host name is conforming to STD3
+(implies `i`).
+
+By default, `mode` is the empty string.
+
+In case of errors, it returns `nil` plus an error message.
 
 ### `system.socket (type [, domain])`
 
