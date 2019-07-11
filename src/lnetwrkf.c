@@ -411,6 +411,93 @@ static int system_findaddr (lua_State *L) {
 	return lcuT_resetreqopk(L, k_setupfindaddr, NULL);
 }
 
+/* name [, service] = system.nameaddr (address [, mode]) */
+static void uv_onaddrnamed (uv_getnameinfo_t *namereq,
+                            int err,
+                            const char *hostname,
+                            const char *servname) {
+	uv_loop_t *loop = namereq->loop;
+	uv_req_t *request = (uv_req_t *)namereq;
+	lua_State *thread = lcuU_endreqop(loop, request);
+	if (thread) {
+		if (!err) {
+			lua_pushstring(thread, hostname);
+			lua_pushstring(thread, servname);
+		}
+		lcuL_pushresults(thread, 2, err);
+		lcuU_resumereqop(thread, loop, request);
+	}
+}
+static void uv_onservnamed (uv_getnameinfo_t *namereq,
+                            int err,
+                            const char *hostname,
+                            const char *servname) {
+	uv_loop_t *loop = namereq->loop;
+	uv_req_t *request = (uv_req_t *)namereq;
+	lua_State *thread = lcuU_endreqop(loop, request);
+	if (thread) {
+		if (!err) lua_pushstring(thread, servname);
+		lcuL_pushresults(thread, 1, err);
+		lcuU_resumereqop(thread, loop, request);
+	}
+}
+static void uv_oncannonical (uv_getaddrinfo_t *addrreq,
+                             int err,
+                             struct addrinfo* results) {
+	uv_loop_t *loop = addrreq->loop;
+	uv_req_t *request = (uv_req_t *)addrreq;
+	lua_State *thread = lcuU_endreqop(loop, request);
+	if (thread) {
+		if (!err) lua_pushstring(thread, results->ai_canonname);
+		lcuL_pushresults(thread, 1, err);
+		lcuU_resumereqop(thread, loop, request);
+	}
+	freeaddrinfo(results);
+}
+static int k_setupnameaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	int err;
+	int ltype = lua_type(L, 1);
+	if (ltype == LUA_TSTRING) {
+		uv_getaddrinfo_t *addrreq = (uv_getaddrinfo_t *)request;
+		const char *name = lua_tostring(L, 1);
+		struct addrinfo hints;
+		memset(&hints, 0, sizeof(struct addrinfo));
+		hints.ai_flags = AI_CANONNAME;
+		err = uv_getaddrinfo(loop, addrreq, uv_oncannonical, name, NULL, &hints);
+	} else {
+		uv_getnameinfo_t *namereq = (uv_getnameinfo_t *)request;
+		int flags = 0;
+		const char *mode = luaL_optstring(L, 2, "");
+		for (; *mode; ++mode) switch (*mode) {
+			case 'l': flags |= NI_NOFQDN; break;
+			case 'd': flags |= NI_DGRAM; break;
+#ifdef NI_IDN
+			case 'i': flags |= NI_IDN; break;
+			case 'u': flags |= NI_IDN|NI_IDN_ALLOW_UNASSIGNED; break;
+			case 'a': flags |= NI_IDN|NI_IDN_USE_STD3_ASCII_RULES; break;
+#endif
+			default: return luaL_error(L, "unknown mode char (got '%c')", *mode);
+		}
+		if (ltype == LUA_TNUMBER) {
+			in_port_t port = int2port(L, lua_tointeger(L, 1), 1);
+			struct sockaddr_in addrbuf;
+			struct sockaddr *addr = (struct sockaddr *)&addrbuf;
+			memset(&addrbuf, 0, sizeof(addrbuf));
+			addrbuf.sin_family = AF_INET;
+			addrbuf.sin_port = htons(port);
+			err = uv_getnameinfo(loop, namereq, uv_onservnamed, addr, flags);
+		} else {
+			struct sockaddr *addr = lcu_checkaddress(L, 1);
+			flags |= NI_NAMEREQD;
+			err = uv_getnameinfo(loop, namereq, uv_onaddrnamed, addr, flags);
+		}
+	}
+	return err;
+}
+static int system_nameaddr (lua_State *L) {
+	return lcuT_resetreqopk(L, k_setupnameaddr, NULL);
+}
+
 
 /*
  * Sockets
@@ -1156,6 +1243,7 @@ static const luaL_Reg lstn[] = {
 static const luaL_Reg modf[] = {
 	{"address", system_address},
 	{"findaddr", system_findaddr},
+	{"nameaddr", system_nameaddr},
 	{"socket", system_socket},
 	{NULL, NULL}
 };
