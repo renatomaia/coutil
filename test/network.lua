@@ -1,6 +1,6 @@
 local system = require "coutil.system"
 
-newtest "resolve"
+newtest "findaddr"
 
 local hosts = {
 	localhost = { ["127.0.0.1"] = "ipv4" },

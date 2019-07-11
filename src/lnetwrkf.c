@@ -344,11 +344,11 @@ static int resolved_close (lua_State *L) {
 }
 
 /* next, domain = system.resolveaddr (name [, service [, mode]]) */
-static void uv_onresolved (uv_getaddrinfo_t *resolvereq,
+static void uv_onresolved (uv_getaddrinfo_t *addrreq,
                            int err,
                            struct addrinfo* results) {
-	uv_loop_t *loop = resolvereq->loop;
-	uv_req_t *request = (uv_req_t *)resolvereq;
+	uv_loop_t *loop = addrreq->loop;
+	uv_req_t *request = (uv_req_t *)addrreq;
 	lua_State *thread = lcuU_endreqop(loop, request);
 	if (thread) {
 		if (!err) {
@@ -361,8 +361,8 @@ static void uv_onresolved (uv_getaddrinfo_t *resolvereq,
 	}
 	else if (!err) freeaddrinfo(results);
 }
-static int k_setupresolve (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
-	uv_getaddrinfo_t *resolvereq = (uv_getaddrinfo_t *)request;
+static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_getaddrinfo_t *addrreq = (uv_getaddrinfo_t *)request;
 	const char *nodename = luaL_optstring(L, 1, NULL);
 	const char *servname = luaL_optstring(L, 2, NULL);
 	const char *mode = luaL_optstring(L, 3, "");
@@ -405,10 +405,10 @@ static int k_setupresolve (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		hints.ai_family = AF_INET6;
 	}
 	hints.ai_protocol = 0;  /* clear mark that 'ai_socktype' was defined above */
-	return uv_getaddrinfo(loop, resolvereq, uv_onresolved, nodename, servname, &hints);
+	return uv_getaddrinfo(loop, addrreq, uv_onresolved, nodename, servname, &hints);
 }
 static int system_findaddr (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupresolve, NULL);
+	return lcuT_resetreqopk(L, k_setupfindaddr, NULL);
 }
 
 
