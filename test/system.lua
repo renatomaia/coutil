@@ -132,6 +132,8 @@ newtest "halt" -----------------------------------------------------------------
 
 do case "error messages"
 	asserterr("not running", pcall(system.halt))
+
+	done()
 end
 
 do case "halt loop"
