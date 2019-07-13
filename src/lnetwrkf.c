@@ -503,11 +503,11 @@ static int system_nameaddr (lua_State *L) {
  * Sockets
  */
 
-/* socket [, errmsg] = system.socket(type [, domain]) */
+/* socket [, errmsg] = system.socket(type, domain) */
 static int system_socket (lua_State *L) {
 	static const char *const TcpTypeName[] = { "stream", "listen", "datagram", NULL };
 	int class = luaL_checkoption(L, 1, NULL, TcpTypeName);
-	int domain = AddrTypeId[luaL_checkoption(L, 2, "ipv4", AddrTypeName)];
+	int domain = AddrTypeId[luaL_checkoption(L, 2, NULL, AddrTypeName)];
 	uv_loop_t *loop = lcu_toloop(L);
 	int err;
 	switch (class) {
