@@ -39,7 +39,7 @@ Index
 	- [`system.address`](#systemaddress-type--data--port--mode)
 	- [`system.findaddr`](#systemfindaddr-name--service--mode)
 	- [`system.nameaddr`](#systemnameaddr-address--mode)
-	- [`system.socket`](#systemsocket-type--domain)
+	- [`system.socket`](#systemsocket-type-domain)
 		- [`socket:close`](#socketclose-)
 		- [`socket:getdomain`](#socketgetdomain-)
 		- [`socket:bind`](#socketbind-address)
@@ -483,7 +483,7 @@ By default, `mode` is the empty string.
 
 In case of errors, it returns `nil` plus an error message.
 
-### `system.socket (type [, domain])`
+### `system.socket (type, domain)`
 
 Creates a socket, of the type specified by `type`,
 which is either:
