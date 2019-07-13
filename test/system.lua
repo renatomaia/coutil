@@ -7,7 +7,7 @@ do case "before and after run"
 
 	spawn(function ()
 		assert(system.isrunning() == false)
-		system.pause()
+		system.suspend()
 		assert(system.isrunning() == true)
 	end)
 
@@ -21,10 +21,10 @@ end
 do case "before and after halt"
 	spawn(function ()
 		assert(system.isrunning() == false)
-		system.pause()
+		system.suspend()
 		assert(system.isrunning() == true)
 		system.halt()
-		system.pause()
+		system.suspend()
 		assert(system.isrunning() == true)
 	end)
 
@@ -55,7 +55,7 @@ end
 do case "nested call"
 	local stage = 0
 	spawn(function ()
-		system.pause()
+		system.suspend()
 		asserterr("already running", pcall(system.run))
 		stage = 1
 	end)
@@ -73,7 +73,7 @@ do case "run step|ready"
 			stage[i] = 0
 			spawn(function (c)
 				for j = 1, c do
-					system.pause()
+					system.suspend()
 					stage[i] = j
 				end
 			end, i)
@@ -107,7 +107,7 @@ do case "run loop"
 			stage[i] = 0
 			spawn(function (c)
 				for j = 1, c do
-					system.pause()
+					system.suspend()
 					stage[i] = j
 				end
 			end, i)
@@ -137,10 +137,10 @@ end
 do case "halt loop"
 	spawn(function ()
 		garbage.thread = coroutine.running()
-		system.pause(1000)
+		system.suspend(1000)
 	end)
 	spawn(function ()
-		system.pause()
+		system.suspend()
 		system.halt()
 	end)
 	assert(system.run() == true)
@@ -152,11 +152,11 @@ do case "halt loop"
 	done()
 end
 
-newtest "pause" ----------------------------------------------------------------
+newtest "suspend" --------------------------------------------------------------
 
 do case "error messages"
-	asserterr("number expected", pcall(system.pause, false))
-	asserterr("unable to yield", pcall(system.pause))
+	asserterr("number expected", pcall(system.suspend, false))
+	asserterr("unable to yield", pcall(system.suspend))
 
 	done()
 end
@@ -168,7 +168,7 @@ do case "yield values"
 		local delay = args[i]
 		local stage = 0
 		local a,b,c = spawn(function ()
-			local res, extra = system.pause(delay, "testing", 1, 2, 3)
+			local res, extra = system.suspend(delay, "testing", 1, 2, 3)
 			assert(res == true)
 			assert(extra == nil)
 			stage = 1
@@ -197,7 +197,7 @@ do case "scheduled yield"
 		local delay = args[i]
 		local stage = 0
 		spawn(function ()
-			system.pause(delay)
+			system.suspend(delay)
 			stage = 1
 			coroutine.yield()
 			stage = 2
@@ -223,11 +223,11 @@ do case "reschedule"
 		local delay = args[i]
 		local stage = 0
 		spawn(function ()
-			local res, extra = system.pause(delay)
+			local res, extra = system.suspend(delay)
 			assert(res == true)
 			assert(extra == nil)
 			stage = 1
-			local res, extra = system.pause(delay)
+			local res, extra = system.suspend(delay)
 			assert(res == true)
 			assert(extra == nil)
 			stage = 2
@@ -259,7 +259,7 @@ do case "cancel schedule"
 		local stage = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
-			local a,b,c = system.pause(delay)
+			local a,b,c = system.suspend(delay)
 			assert(a == true)
 			assert(b == nil)
 			assert(c == 3)
@@ -286,10 +286,10 @@ do case "cancel and reschedule"
 		local stage = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
-			local extra = system.pause(delay)
+			local extra = system.suspend(delay)
 			assert(extra == nil)
 			stage = 1
-			assert(system.pause(delay) == true)
+			assert(system.suspend(delay) == true)
 			stage = 2
 		end)
 		assert(stage == 0)
@@ -311,9 +311,9 @@ do case "resume while closing"
 		local stage = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
-			assert(system.pause(delay) == nil)
+			assert(system.suspend(delay) == nil)
 			stage = 1
-			local a,b,c = system.pause(delay)
+			local a,b,c = system.suspend(delay)
 			assert(a == 1)
 			assert(b == 22)
 			assert(c == 333)
@@ -322,7 +322,7 @@ do case "resume while closing"
 		assert(stage == 0)
 
 		spawn(function ()
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro, 1,22,333) -- while being closed.
 			assert(stage == 2)
 			stage = 3
@@ -345,7 +345,7 @@ do case "ignore errors"
 		local delay = args[i]
 		local stage = 0
 		pspawn(function (errmsg)
-			system.pause(delay)
+			system.suspend(delay)
 			stage = 1
 			error(errmsg)
 		end, "oops!")
@@ -366,7 +366,7 @@ do case "ignore errors after cancel"
 		local stage = 0
 		pspawn(function (errmsg)
 			garbage.coro = coroutine.running()
-			system.pause(delay)
+			system.suspend(delay)
 			stage = 1
 			error(errmsg)
 		end, "oops!")
@@ -411,7 +411,7 @@ do case "yield values"
 	assert(stage == 0)
 
 	spawn(function ()
-		system.pause()
+		system.suspend()
 		sendsignal("USR1")
 	end)
 
@@ -433,7 +433,7 @@ do case "scheduled yield"
 	assert(stage == 0)
 
 	spawn(function ()
-		system.pause()
+		system.suspend()
 		sendsignal("USR1")
 	end)
 
@@ -455,9 +455,9 @@ do case "reschedule same signal"
 	assert(stage == 0)
 
 	spawn(function ()
-		system.pause()
+		system.suspend()
 		sendsignal("USR1")
-		system.pause()
+		system.suspend()
 		sendsignal("USR1")
 	end)
 
@@ -483,9 +483,9 @@ do case "reschedule different signal"
 	assert(stage == 0)
 
 	spawn(function ()
-		system.pause()
+		system.suspend()
 		sendsignal("USR1")
-		system.pause()
+		system.suspend()
 		sendsignal("USR2")
 	end)
 
@@ -537,8 +537,8 @@ do case "cancel and reschedule"
 	assert(stage == 0)
 
 	spawn(function ()
-		system.pause() -- the first signal handle is active.
-		system.pause() -- the first signal handle is being closed.
+		system.suspend() -- the first signal handle is active.
+		system.suspend() -- the first signal handle is being closed.
 		sendsignal("USR1") -- the second signal handle is active.
 	end)
 
@@ -567,7 +567,7 @@ do case "resume while closing"
 	assert(stage == 0)
 
 	spawn(function ()
-		system.pause()
+		system.suspend()
 		coroutine.resume(garbage.coro, .1, 2.2, 33.3) -- while being closed.
 		assert(stage == 2)
 		stage = 3
@@ -594,7 +594,7 @@ do case "ignore errors"
 	assert(stage == 0)
 
 	spawn(function ()
-		system.pause()
+		system.suspend()
 		sendsignal("USR1")
 	end)
 

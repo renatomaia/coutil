@@ -600,7 +600,7 @@ end
 
 		local stage2 = 0
 		spawn(function ()
-			system.pause()
+			system.suspend()
 			stage2 = 1
 			assert(server:close())
 			stage2 = 2
@@ -698,7 +698,7 @@ end
 		assert(stage == 1)
 
 		spawn(function ()
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro, .1, 2.2, 33.3)
 			assert(stage == 3)
 			stage = 4
@@ -776,7 +776,7 @@ end
 
 		local stage = 0
 		spawn(function ()
-			system.pause()
+			system.suspend()
 			local stream = assert(system.socket("stream", domain))
 			stage = 1
 			asserterr("netaddress expected", pcall(stream.connect, stream))
@@ -918,7 +918,7 @@ end
 		assert(stage == 0)
 
 		spawn(function ()
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro, .1, 2.2, 33.3) -- while being closed.
 			assert(stage == 2)
 			stage = 3
@@ -950,7 +950,7 @@ end
 		assert(stage == 0)
 
 		spawn(function ()
-			system.pause()
+			system.suspend()
 			assert(server:accept())
 			assert(server:close())
 		end)
@@ -1034,7 +1034,7 @@ end
 			stage2 = 4
 			asserterr("closed", stream:receive(buffer))
 			stage2 = 5
-			system.pause()
+			system.suspend()
 			assert(accepted:close() == true)
 			stage2 = 6
 		end)
@@ -1090,7 +1090,7 @@ end
 			local stream = assert(system.socket("stream", domain))
 			assert(stream:connect(ipaddr[domain].localaddress))
 			assert(stream:send(data, 1, 64))
-			system.pause()
+			system.suspend()
 			assert(stream:send(data, 65, 128))
 			--assert(stream:close())
 			done2 = true
@@ -1215,7 +1215,7 @@ end
 		spawn(function ()
 			local stream = assert(system.socket("stream", domain))
 			assert(stream:connect(ipaddr[domain].localaddress))
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro, garbage, true,nil,3)
 		end)
 		assert(stage == 0)
@@ -1252,7 +1252,7 @@ end
 		spawn(function ()
 			local stream = assert(system.socket("stream", domain))
 			assert(stream:connect(ipaddr[domain].localaddress))
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro)
 			assert(stage == 2)
 			assert(stream:send("0123456789"))
@@ -1290,10 +1290,10 @@ end
 		spawn(function ()
 			local stream = assert(system.socket("stream", domain))
 			assert(stream:connect(ipaddr[domain].localaddress))
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro)
 			assert(stage == 2)
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro, .1, 2.2, 33.3)
 			assert(stage == 3)
 			stage = 4
@@ -1355,7 +1355,7 @@ end
 		spawn(function ()
 			local stream = assert(system.socket("stream", domain))
 			assert(stream:connect(ipaddr[domain].localaddress))
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro, garbage)
 		end)
 		assert(stage == 1)
@@ -1399,7 +1399,7 @@ end
 			stage2 = 1
 			assert(stream:connect(ipaddr[domain].localaddress))
 			stage2 = 2
-			system.pause()
+			system.suspend()
 			stage2 = 3
 			assert(stream:close())
 			stage2 = 4
@@ -1444,7 +1444,7 @@ end
 		spawn(function ()
 			local stream = assert(system.socket("stream", domain))
 			assert(stream:connect(ipaddr[domain].localaddress))
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro, garbage, true,nil,3)
 
 			local bytes = 1<<24
@@ -1484,7 +1484,7 @@ end
 		spawn(function ()
 			local stream = assert(system.socket("stream", domain))
 			assert(stream:connect(ipaddr[domain].localaddress))
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro)
 			local bytes = (1<<24)+64
 			local buffer = memory.create(bytes)
@@ -1528,7 +1528,7 @@ end
 		spawn(function ()
 			local stream = assert(system.socket("stream", domain))
 			assert(stream:connect(ipaddr[domain].localaddress))
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro)
 			local bytes = 1<<24
 			local buffer = memory.create(1<<24)
@@ -1596,7 +1596,7 @@ end
 		spawn(function ()
 			local stream = assert(system.socket("stream", domain))
 			assert(stream:connect(ipaddr[domain].localaddress))
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro, garbage)
 
 			assert(stream:close())
@@ -1809,7 +1809,7 @@ end
 		end)
 
 		spawn(function ()
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro, garbage, true,nil,3)
 		end)
 		assert(stage == 0)
@@ -1842,7 +1842,7 @@ end
 		assert(stage == 1)
 
 		spawn(function ()
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro)
 			assert(stage == 2)
 			local connected = assert(system.socket("datagram", domain))
@@ -1878,10 +1878,10 @@ end
 		assert(stage == 1)
 
 		spawn(function ()
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro)
 			assert(stage == 2)
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro, .1, 2.2, 33.3)
 			assert(stage == 3)
 			stage = 4
@@ -1935,7 +1935,7 @@ end
 		end)
 
 		spawn(function ()
-			system.pause()
+			system.suspend()
 			coroutine.resume(garbage.coro, garbage)
 		end)
 		assert(stage == 1)
@@ -2025,7 +2025,7 @@ end
 		assert(stage2 == 1)
 
 		spawn(function ()
-			--system.pause()
+			--system.suspend()
 			coroutine.resume(garbage.coro, garbage, true,nil,3)
 		end)
 		assert(stage1 == 0)
@@ -2090,7 +2090,7 @@ end
 		local stage0 = 0
 		spawn(function ()
 			stage0 = 1
-			system.pause()
+			system.suspend()
 			stage0 = 2
 			coroutine.resume(garbage.coro, garbage, true,nil,3)
 			stage0 = 3
@@ -2214,7 +2214,7 @@ end
 		assert(stage2 == 1)
 
 		spawn(function ()
-			--system.pause()
+			--system.suspend()
 			coroutine.resume(garbage.coro, garbage, true,nil,3)
 		end)
 		assert(stage1 == 0)
