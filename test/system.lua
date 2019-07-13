@@ -154,6 +154,37 @@ do case "halt loop"
 	done()
 end
 
+newtest "time" -----------------------------------------------------------------
+
+do case "error messages"
+	for _, value in ipairs(types) do
+		asserterr("bad argument", pcall(system.time, value))
+	end
+
+	done()
+end
+
+do case "time modes"
+	local msec = 1000000
+
+	local cached = system.time("cached")
+	assert(cached > 0)
+	assert(cached%msec == 0)
+	repeat
+		local actual = system.time("actual")
+		assert(actual > cached)
+	until actual > cached+msec
+	assert(system.time("cached") == cached)
+
+	local updated = system.time("update")
+	assert(updated == cached+msec)
+	assert(updated%msec == 0)
+	cached = system.time("cached")
+	assert(cached == updated)
+
+	done()
+end
+
 newtest "suspend" --------------------------------------------------------------
 
 do case "error messages"

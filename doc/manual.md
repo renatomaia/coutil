@@ -260,6 +260,19 @@ or `false` otherwise.
 
 Causes [`system.run`](#systemrun-mode) to return prematurely.
 
+### `system.time ([mode])`
+
+Returns a number representing a timestamp in nanoseconds.
+The timestamp increases monotonically from some arbitrary point in time,
+and is not subject to clock drift.
+`mode` is a string that defines the timestamp to the returned as described below:
+
+- `"actual"`: timestamp that reflects the actual and precise time of the system.
+- `"cached"`: the last cached timestamp used for processing time-related system events.
+- `"update"`: the cached timestamp, but updated to the current time of the system.
+
+The default value of `mode` is `"cached"`.
+
 ### `system.suspend ([delay])`
 
 Suspends the execution of the calling coroutine, and schedules it to be resumed after `delay` seconds have passed since the coroutine was last resumed.
