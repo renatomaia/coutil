@@ -32,6 +32,7 @@ Index
 	- [`spawn.trap`](#spawntrap-h-f-)
 - [`coutil.system`](#system)
 	- [`system.run`](#systemrun-mode)
+	- [`system.isrunning`](#systemisrunning-)
 	- [`system.halt`](#systemhalt-)
 	- [`system.suspend`](#systemsuspend-delay)
 	- [`system.awaitsig`](#systemawaitsig-signal)
