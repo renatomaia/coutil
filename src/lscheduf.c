@@ -15,6 +15,12 @@ static int lcuM_run (lua_State *L) {
 	return 1;
 }
 
+static int lcuM_isrunning (lua_State *L) {
+	uv_loop_t *loop = lcu_toloop(L);
+	lua_pushboolean(L, loop->data != NULL);
+	return 1;
+}
+
 static int lcuM_halt (lua_State *L) {
 	uv_loop_t *loop = lcu_toloop(L);
 	if (!loop->data) luaL_error(L, "not running");
@@ -31,6 +37,7 @@ static int lcuM_printall (lua_State *L) {
 LCULIB_API void lcuM_addscheduf (lua_State *L) {
 	static const luaL_Reg modf[] = {
 		{"run", lcuM_run},
+		{"isrunning", lcuM_isrunning},
 		{"halt", lcuM_halt},
 		{"printall", lcuM_printall},
 		{NULL, NULL}
