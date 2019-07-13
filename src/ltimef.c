@@ -2,6 +2,20 @@
 #include "loperaux.h"
 
 
+/* timestamp = system.time([update]) */
+static int lcuM_time (lua_State *L) {
+	uv_loop_t *loop = lcu_toloop(L);
+	if (lua_toboolean(L, 1)) uv_update_time(loop);
+	lua_pushnumber(L, (lua_Number)(uv_now(loop))/1e3);
+	return 1;
+}
+
+/* timestamp = system.nanosecs() */
+static int lcuM_nanosecs (lua_State *L) {
+	lua_pushinteger(L, (lua_Integer)uv_hrtime());
+	return 1;
+}
+
 /* succ [, errmsg] = system.suspend([delay]) */
 static int returntrue (lua_State *L) {
 	lua_pushboolean(L, 1);
@@ -40,9 +54,18 @@ static int lcuM_suspend (lua_State *L) {
 
 
 LCULIB_API void lcuM_addtimef (lua_State *L) {
+	static const luaL_Reg luaf[] = {
+		{"nanosecs", lcuM_nanosecs},
+		{NULL, NULL}
+	};
 	static const luaL_Reg modf[] = {
+		{"time", lcuM_time},
 		{"suspend", lcuM_suspend},
 		{NULL, NULL}
 	};
 	lcuM_setfuncs(L, modf, LCU_MODUPVS);
+
+	lua_pushvalue(L, -(LCU_MODUPVS+1));
+	luaL_setfuncs(L, luaf, 0);
+	lua_pop(L, 1);
 }
