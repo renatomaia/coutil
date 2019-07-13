@@ -27,8 +27,8 @@ Asynchronous operation perfomed over a UV handle that can be replicated for diff
 
 | Operation | Handle | Callback |
 | --------- | ------ | -------- |
-| `system.pause` | `UV_IDLE` | `uv_idle_cb` |
-| `system.pause` | `UV_TIMER` | `uv_timer_cb` |
+| `system.suspend` | `UV_IDLE` | `uv_idle_cb` |
+| `system.suspend` | `UV_TIMER` | `uv_timer_cb` |
 | `system.awaitsig` | `UV_SIGNAL` | `uv_signal_cb` |
 | --------- | ------ | -------- |
 | `system.awaitpath` | `UV_FS_EVENT` | `uv_fs_event_cb` |
