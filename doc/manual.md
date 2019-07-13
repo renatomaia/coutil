@@ -32,6 +32,7 @@ Index
 	- [`spawn.trap`](#spawntrap-h-f-)
 - [`coutil.system`](#system)
 	- [`system.run`](#systemrun-mode)
+	- [`system.isrunning`](#systemisrunning-)
 	- [`system.halt`](#systemhalt-)
 	- [`system.pause`](#systempause-delay)
 	- [`system.awaitsig`](#systemawaitsig-signal)
@@ -250,6 +251,11 @@ Resumes scheduled coroutines that becomes ready according to its corresponding s
 - `"ready"`: it resumes only coroutines that are currently ready.
 
 `run` returns `true` if there are scheduled coroutines, or `false` otherwise.
+
+### `system.isrunning ()`
+
+Returns `true` if [`system.run`](#systemrun-mode) is executing,
+or `false` otherwise.
 
 ### `system.halt ()`
 

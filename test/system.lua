@@ -1,5 +1,42 @@
 local system = require "coutil.system"
 
+newtest "isrunning" ------------------------------------------------------------------
+
+do case "before and after run"
+	assert(system.isrunning() == false)
+
+	spawn(function ()
+		assert(system.isrunning() == false)
+		system.pause()
+		assert(system.isrunning() == true)
+	end)
+
+	assert(system.isrunning() == false)
+	assert(system.run() == false)
+	assert(system.isrunning() == false)
+
+	done()
+end
+
+do case "before and after halt"
+	spawn(function ()
+		assert(system.isrunning() == false)
+		system.pause()
+		assert(system.isrunning() == true)
+		system.halt()
+		system.pause()
+		assert(system.isrunning() == true)
+	end)
+
+	assert(system.isrunning() == false)
+	assert(system.run() == true)
+	assert(system.isrunning() == false)
+	assert(system.run() == false)
+	assert(system.isrunning() == false)
+
+	done()
+end
+
 newtest "run" ------------------------------------------------------------------
 
 do case "error messages"
@@ -91,9 +128,15 @@ do case "run loop"
 	done()
 end
 
-do case "halt loop"
+newtest "halt" -----------------------------------------------------------------
+
+do case "error messages"
 	asserterr("not running", pcall(system.halt))
 
+	done()
+end
+
+do case "halt loop"
 	spawn(function ()
 		garbage.thread = coroutine.running()
 		system.pause(1000)
