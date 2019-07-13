@@ -34,6 +34,8 @@ Index
 	- [`system.run`](#systemrun-mode)
 	- [`system.isrunning`](#systemisrunning-)
 	- [`system.halt`](#systemhalt-)
+	- [`system.time`](#systemtime-update)
+	- [`system.nanosecs`](#systemnanosecs-)
 	- [`system.suspend`](#systemsuspend-delay)
 	- [`system.awaitsig`](#systemawaitsig-signal)
 	- [`system.execute`](#systemexecute-cmd-)
