@@ -2,6 +2,26 @@
 #include "loperaux.h"
 
 
+#define MSEC2NANOS	1000000
+
+/* timestamp = system.time([mode]) */
+static int lcuM_time (lua_State *L) {
+	static const char *const modes[] = {"update", "cached", "actual", NULL};
+	uv_loop_t *loop = lcu_toloop(L);
+	int mode = luaL_checkoption(L, 1, NULL, modes);
+	switch (mode) {
+		case 0:
+			uv_update_time(loop);
+		case 1:
+			lua_pushinteger(L, uv_now(loop)*MSEC2NANOS);
+			break;
+		case 2:
+			lua_pushinteger(L, uv_hrtime());
+			break;
+	}
+	return 1;
+}
+
 /* succ [, errmsg] = system.suspend([delay]) */
 static int returntrue (lua_State *L) {
 	lua_pushboolean(L, 1);
@@ -41,6 +61,7 @@ static int lcuM_suspend (lua_State *L) {
 
 LCULIB_API void lcuM_addtimef (lua_State *L) {
 	static const luaL_Reg modf[] = {
+		{"time", lcuM_time},
 		{"suspend", lcuM_suspend},
 		{NULL, NULL}
 	};
