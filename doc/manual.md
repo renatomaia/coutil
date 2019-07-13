@@ -346,7 +346,8 @@ table mapping environment variable names to the values they must assume for the 
 If this field is provided, only the variables defined will be available for the new process.
 
 If `cmd` is a table,
-the field `pid` is set with a number that identifies the new process (_e.g._ UNIX process identifier, `pid`),
+the field `pid` is set with a number that identifies the new process
+(_e.g._ UNIX process identifier)
 before the calling coroutine is suspended.
 
 Returns a string when the new process terminates,
