@@ -251,6 +251,11 @@ Resumes scheduled coroutines that becomes ready according to its corresponding s
 
 `run` returns `true` if there are scheduled coroutines, or `false` otherwise.
 
+### `system.isrunning ()`
+
+Returns `true` if [`system.run`](#systemrun-mode),
+or `false` otherwise.
+
 ### `system.halt ()`
 
 Causes [`system.run`](#systemrun-mode) to return prematurely.
