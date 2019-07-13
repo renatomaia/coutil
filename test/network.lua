@@ -163,9 +163,10 @@ newtest "socket"
 
 do case "error messages"
 	for value in pairs(types) do
-		asserterr("bad argument", pcall(system.socket, value))
-		asserterr("bad argument", pcall(system.socket, nil, value))
-		asserterr("bad argument", pcall(system.socket, nil, value))
+		asserterr("bad argument", pcall(system.socket, "datagram"))
+		asserterr("bad argument", pcall(system.socket, value, "ipv4"))
+		asserterr("bad argument", pcall(system.socket, "stream", value))
+		asserterr("bad argument", pcall(system.socket, "listen", value))
 	end
 
 	done()
