@@ -154,6 +154,57 @@ do case "halt loop"
 	done()
 end
 
+newtest "time" -----------------------------------------------------------------
+
+do case "cached time"
+	local function testtime()
+		local factor = 1e3 -- to milliseconds
+
+		local cached = system.time()*factor
+		assert(cached > 0)
+		assert(cached%1 == 0)
+		local actual = system.nanosecs()
+		repeat until system.nanosecs() > actual+1e6
+
+		local updated = system.time("update")*factor
+		assert(updated == cached+1)
+		assert(updated%1 == 0)
+
+		cached = system.time()*factor
+		assert(cached == updated)
+	end
+
+	testtime()
+
+	spawn(function ()
+		system.suspend()
+		testtime()
+	end)
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "nanosecs"
+	local before = system.nanosecs()
+	local elapsed = system.nanosecs()-before
+	assert(elapsed > 0)
+	assert(elapsed < 1e3)
+
+	spawn(function ()
+		before = system.nanosecs()
+		system.time("update")
+		system.suspend(1e-3)
+		elapsed = system.nanosecs()-before
+	end)
+
+	assert(system.run() == false)
+	assert(elapsed > 1e6)
+	assert(elapsed < 2e6)
+
+	done()
+end
+
 newtest "suspend" --------------------------------------------------------------
 
 do case "error messages"

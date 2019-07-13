@@ -34,6 +34,8 @@ Index
 	- [`system.run`](#systemrun-mode)
 	- [`system.isrunning`](#systemisrunning-)
 	- [`system.halt`](#systemhalt-)
+	- [`system.time`](#systemtime-update)
+	- [`system.nanosecs`](#systemnanosecs-)
 	- [`system.suspend`](#systemsuspend-delay)
 	- [`system.awaitsig`](#systemawaitsig-signal)
 	- [`system.execute`](#systemexecute-cmd-)
@@ -260,6 +262,22 @@ or `false` otherwise.
 ### `system.halt ()`
 
 Causes [`system.run`](#systemrun-mode) to return prematurely.
+
+### `system.time ([update])`
+
+Returns the last calculated timestamp used to evaluate time-related system events.
+The timestamp is a number of seconds with precision of milliseconds.
+It increases monotonically from some arbitrary point in time,
+and is not subject to clock drift.
+
+If `update` is provided and evaluates to `true`,
+the cached timestamp is updated to the current time of the system before it is returned.
+
+### `system.nanosecs ()`
+
+Returns a timestamp in nanoseconds that represents the current time of the system.
+It increases monotonically from some arbitrary point in time,
+and is not subject to clock drift.
 
 ### `system.suspend ([delay])`
 
