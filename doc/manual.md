@@ -260,18 +260,21 @@ or `false` otherwise.
 
 Causes [`system.run`](#systemrun-mode) to return prematurely.
 
-### `system.time ([mode])`
+### `system.time ([update])`
 
-Returns a number representing a timestamp in nanoseconds.
-The timestamp increases monotonically from some arbitrary point in time,
+Returns the last calculated timestamp used to evaluate time-related system events.
+The timestamp is a number of seconds with precision of milliseconds.
+It increases monotonically from some arbitrary point in time,
 and is not subject to clock drift.
-`mode` is a string that defines the timestamp to the returned as described below:
 
-- `"actual"`: timestamp that reflects the actual and precise time of the system.
-- `"cached"`: the last cached timestamp used for processing time-related system events.
-- `"update"`: the cached timestamp, but updated to the current time of the system.
+If `update` is provided and evaluates to `true`,
+the cached timestamp is updated to the current time of the system before it is returned.
 
-The default value of `mode` is `"cached"`.
+### `system.nanosecs ()`
+
+Returns a timestamp in nanoseconds that represents the current time of the system.
+It increases monotonically from some arbitrary point in time,
+and is not subject to clock drift.
 
 ### `system.suspend ([delay])`
 

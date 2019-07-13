@@ -156,31 +156,50 @@ end
 
 newtest "time" -----------------------------------------------------------------
 
-do case "error messages"
-	for _, value in ipairs(types) do
-		asserterr("bad argument", pcall(system.time, value))
+do case "cached time"
+	local function testtime()
+		local factor = 1e3 -- to milliseconds
+
+		local cached = system.time()*factor
+		assert(cached > 0)
+		assert(cached%1 == 0)
+		local actual = system.nanosecs()
+		repeat until system.nanosecs() > actual+1e6
+
+		local updated = system.time("update")*factor
+		assert(updated == cached+1)
+		assert(updated%1 == 0)
+
+		cached = system.time()*factor
+		assert(cached == updated)
 	end
+
+	testtime()
+
+	spawn(function ()
+		system.suspend()
+		testtime()
+	end)
+	assert(system.run() == false)
 
 	done()
 end
 
-do case "time modes"
-	local msec = 1000000
+do case "nanosecs"
+	local before = system.nanosecs()
+	local elapsed = system.nanosecs()-before
+	assert(elapsed > 0)
+	assert(elapsed < 1e3)
 
-	local cached = system.time("cached")
-	assert(cached > 0)
-	assert(cached%msec == 0)
-	repeat
-		local actual = system.time("actual")
-		assert(actual > cached)
-	until actual > cached+msec
-	assert(system.time("cached") == cached)
+	spawn(function ()
+		before = system.nanosecs()
+		system.suspend(1e-3)
+		elapsed = system.nanosecs()-before
+	end)
 
-	local updated = system.time("update")
-	assert(updated == cached+msec)
-	assert(updated%msec == 0)
-	cached = system.time("cached")
-	assert(cached == updated)
+	assert(system.run() == false)
+	assert(elapsed > 1e6)
+	assert(elapsed < 2e6)
 
 	done()
 end
