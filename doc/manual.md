@@ -483,7 +483,7 @@ By default, `mode` is the empty string.
 
 In case of errors, it returns `nil` plus an error message.
 
-### `system.socket (type [, domain])`
+### `system.socket (type, domain)`
 
 Creates a socket, of the type specified by `type`,
 which is either:
