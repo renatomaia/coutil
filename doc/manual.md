@@ -33,7 +33,7 @@ Index
 - [`coutil.system`](#system)
 	- [`system.run`](#systemrun-mode)
 	- [`system.halt`](#systemhalt-)
-	- [`system.pause`](#systempause-delay)
+	- [`system.suspend`](#systemsuspend-delay)
 	- [`system.awaitsig`](#systemawaitsig-signal)
 	- [`system.execute`](#systemexecute-cmd-)
 	- [`system.address`](#systemaddress-type--data--port--mode)
@@ -260,14 +260,14 @@ or `false` otherwise.
 
 Causes [`system.run`](#systemrun-mode) to return prematurely.
 
-### `system.pause ([delay])`
+### `system.suspend ([delay])`
 
 Suspends the execution of the calling coroutine, and schedules it to be resumed after `delay` seconds have passed since the coroutine was last resumed.
 
 If `delay` is not provided or is `nil`, the coroutine is scheduled as ready, so it will be resumed as soon as possible.
 The same is applies when `delay` is zero or negative.
 
-`pause` returns `true` if the calling coroutine is resumed as scheduled.
+Returns `true` if the calling coroutine is resumed as scheduled.
 Otherwise it returns like [`event.await`](#eventawait-e).
 In any case, the coroutine is not scheduled to be resumed anymore after it returns.
 
@@ -314,7 +314,7 @@ and schedules it to be resumed when the process receives signal indicated by str
 | `"user1"`     | SIGUSR1   | terminate | User-defined conditions. |
 | `"user2"`     | SIGUSR2   | terminate | User-defined conditions. |
 
-`awaitsig` returns like [`pause`](#systempause-).
+`awaitsig` returns like [`system.suspend`](#systemsuspend-delay).
 
 ### `system.execute (cmd, ...)`
 
