@@ -256,7 +256,7 @@ Resumes scheduled coroutines that becomes ready according to its corresponding s
 
 ### `system.isrunning ()`
 
-Returns `true` if [`system.run`](#systemrun-mode),
+Returns `true` if [`system.run`](#systemrun-mode) is executing,
 or `false` otherwise.
 
 ### `system.halt ()`
