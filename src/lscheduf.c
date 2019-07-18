@@ -34,7 +34,7 @@ static int lcuM_printall (lua_State *L) {
 	return 0;
 }
 
-LCULIB_API void lcuM_addscheduf (lua_State *L) {
+LCUI_FUNC void lcuM_addscheduf (lua_State *L) {
 	static const luaL_Reg modf[] = {
 		{"run", lcuM_run},
 		{"isrunning", lcuM_isrunning},
