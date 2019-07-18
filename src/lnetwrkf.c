@@ -500,6 +500,24 @@ static int system_nameaddr (lua_State *L) {
 
 
 /*
+ * Object
+ */
+
+/* getmetatable(object).__gc(object) */
+static int object_gc (lua_State *L) {
+	lcu_closeobj(L, 1, LCU_OBJECTCLS);
+	return 0;
+}
+
+/* succ [, errmsg] = object:close() */
+static int object_close (lua_State *L) {
+	int closed = lcu_closeobj(L, 1, LCU_OBJECTCLS);
+	lua_pushboolean(L, closed);
+	return 1;
+}
+
+
+/*
  * Sockets
  */
 
@@ -599,35 +617,6 @@ static const struct sockaddr *toudpaddr (lua_State *L, int idx, \
 }
 
 
-/* string = tostring(udp) */
-static int udp_tostring (lua_State *L) {
-	lcu_UdpSocket *udp = toudp(L);
-	if (!lcu_isudpclosed(udp)) lua_pushfstring(L, "udp (%p)", udp);
-	else lua_pushliteral(L, "udp (closed)");
-	return 1;
-}
-
-
-/* getmetatable(udp).__gc(udp) */
-static int udp_gc (lua_State *L) {
-	lcu_closeudp(L, 1);
-	return 0;
-}
-
-
-/* succ [, errmsg] = udp:close() */
-static int udp_close (lua_State *L) {
-	lcu_UdpSocket *udp = toudp(L);
-	if (!lcu_isudpclosed(udp)) {
-		int closed = lcu_closeudp(L, 1);
-		lcu_assert(closed);
-		lua_pushboolean(L, closed);
-	}
-	else lua_pushboolean(L, 0);
-	return 1;
-}
-
-
 /* domain = udp:getdomain() */
 static int udp_getdomain (lua_State *L) {
 	lcu_UdpSocket *udp = toudp(L);
@@ -644,12 +633,7 @@ static int udp_getaddress (lua_State *L) {
 	int addrsz;
 	int peer = getaddrarg(L, lcu_getudpaddrfam(udp), &addr, &addrsz);
 	int err;
-	if (peer)
-#ifdef uv_udp_getpeername
-		err = uv_udp_getpeername(handle, addr, &addrsz);
-#else
-		err = UV_ENOTSUP;
-#endif
+	if (peer) err = uv_udp_getpeername(handle, addr, &addrsz);
 	else err = uv_udp_getsockname(handle, addr, &addrsz);
 	lcu_assert(addrsz == lua_rawlen(L, 3));
 	return lcuL_pushresults(L, 1, err);
@@ -1009,14 +993,14 @@ static int tcp_getoption (lua_State *L) {
 static void uv_onconnected (uv_connect_t *request, int err) {
 	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
-static int k_setupconnect (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setuptcpconn (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_TcpSocket *tcp = ownedtcp(L, loop, LCU_TCPTYPE_STREAM);
 	const struct sockaddr *addr = totcpaddr(L, 2, tcp);
 	uv_connect_t *connect = (uv_connect_t *)request;
 	return uv_tcp_connect(connect, lcu_totcphandle(tcp), addr, uv_onconnected);
 }
 static int tcp_connect (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupconnect, NULL);
+	return lcuT_resetreqopk(L, k_setuptcpconn, NULL);
 }
 
 

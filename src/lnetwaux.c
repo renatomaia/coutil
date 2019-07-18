@@ -3,16 +3,6 @@
 
 #include <string.h>
 
-#define newbooloption(name, type, flag) \
-	LCULIB_API int lcu_get##name(type *obj) { \
-		return lcuL_maskflag(obj, flag); \
-	} \
-	\
-	LCULIB_API void lcu_set##name(type *obj, int enabled) { \
-		if (enabled) lcuL_setflag(obj, flag); \
-		else lcuL_clearflag(obj, flag); \
-	}
-
 
 /*
  * Addresses
@@ -83,9 +73,9 @@ LCULIB_API struct addrinfo *lcu_nextaddrlist (lcu_AddressList *l) {
  * Sockets
  */
 
-#define FLAG_IPV6DOM 0x01
-#define FLAG_CLOSED 0x02
-#define FLAG_OBJOPON 0x04
+#define FLAG_CLOSED 0x01
+#define FLAG_OBJOPON 0x02
+#define FLAG_IPV6DOM 0x04
 
 #define FLAG_LISTEN 0x08  /* only for listen sockets */
 
@@ -105,9 +95,14 @@ LCULIB_API struct addrinfo *lcu_nextaddrlist (lcu_AddressList *l) {
 #define KEEPALIVE_SHIFT 4
 #define MCASTTTL_SHIFT 6
 
-struct lcu_UdpSocket {
-	uv_udp_t handle;
+struct lcu_Object {
 	int flags;
+	uv_handle_t handle;
+};
+
+struct lcu_UdpSocket {
+	int flags;
+	uv_udp_t handle;
 	union {
 		struct in_addr ipv4;
 		struct in6_addr ipv6;
@@ -115,92 +110,108 @@ struct lcu_UdpSocket {
 };
 
 struct lcu_TcpSocket {
-	uv_tcp_t handle;
 	int flags;
+	uv_tcp_t handle;
 };
 
-#define initsockobj(O,D,F) O->handle.data = NULL; \
-                         if (D == AF_INET) O->flags = FLAG_CLOSED|(F); \
-                         else O->flags = FLAG_CLOSED|FLAG_IPV6DOM|(F);
+struct lcu_IpcPipe {
+	int flags;
+	uv_pipe_t handle;
+};
+
+static lcu_Object *createobj (lua_State *L, size_t size, const char *cls) {
+	lcu_Object *object = (lcu_Object *)lua_newuserdata(L, size);
+	object->handle.data = NULL;
+	object->flags = FLAG_CLOSED;
+	luaL_setmetatable(L, cls);
+	return object;
+}
+
+LCULIB_API int lcu_closeobj (lua_State *L, int idx, const char *cls) {
+	lcu_Object *object = (lcu_Object *)luaL_checkinstance(L, idx, cls);
+	if (object && lcuL_maskflag(object, FLAG_CLOSED)) {
+		lcu_closeobjhdl(L, idx, &object->handle);
+		lcuL_setflag(object, FLAG_CLOSED);
+		return 1;
+	}
+	return 0;
+}
+
+LCULIB_API void lcu_enableobj (lcu_Object *object) {
+	lcu_assert(lcuL_maskflag(object, FLAG_CLOSED));
+	lcu_assert(object->handle.data == NULL);
+	lcuL_clearflag(object, FLAG_CLOSED);
+}
+
+LCULIB_API int lcu_isobjclosed (lcu_Object *object) {
+	return lcuL_maskflag(object, FLAG_CLOSED);
+}
+
+LCULIB_API uv_handle_t *lcu_toobjhdl (lcu_Object *object) {
+	return &object->handle;
+}
+
+LCULIB_API void lcu_addobjlisten (lcu_Object *object) {
+	object->flags += LISTENCONN_UNIT;
+}
+
+LCULIB_API int lcu_pickobjlisten (lcu_Object *object) {
+	if (object->flags < 2*LISTENCONN_UNIT) return 0;
+	object->flags -= LISTENCONN_UNIT;
+	return 1;
+}
+
+LCULIB_API int lcu_isobjlisten (lcu_Object *object) {
+	return object->flags >= LISTENCONN_UNIT;
+}
+
+LCULIB_API void lcu_markobjlisten (lcu_Object *object) {
+	lcu_assert(!lcu_isobjlisten(object));
+	lcu_addobjlisten(object);
+}
+
 
 LCULIB_API lcu_UdpSocket *lcu_newudp (lua_State *L, int domain) {
-	lcu_UdpSocket *udp = (lcu_UdpSocket *)lua_newuserdata(L, sizeof(lcu_UdpSocket));
-	initsockobj(udp, domain, 1<<MCASTTTL_SHIFT);
+	lcu_UdpSocket *udp = (lcu_UdpSocket *)createobj(L, sizeof(lcu_UdpSocket),
+	                                                   LCU_UDPSOCKCLS);
+	if (domain == AF_INET6) lcuL_setflag(object, FLAG_IPV6DOM);
+	lcuL_setflag(object, 1<<MCASTTTL_SHIFT);
 	luaL_setmetatable(L, LCU_UDPSOCKCLS);
 	return udp;
 }
 
-LCULIB_API lcu_TcpSocket *lcu_newtcp (lua_State *L, int domain, int class) {
-	lcu_TcpSocket *tcp = (lcu_TcpSocket *)lua_newuserdata(L, sizeof(lcu_TcpSocket));
-	initsockobj(tcp, domain, 0);
-	luaL_setmetatable(L, lcu_TcpSockCls[class]);
+LCULIB_API lcu_TcpSocket *lcu_newtcp (lua_State *L, int class, int domain) {
+	lcu_TcpSocket *tcp = (lcu_TcpSocket *)createobj(L, sizeof(lcu_TcpSocket),
+	                                                   lcu_TcpSockCls[class]);
+	if (domain == AF_INET6) lcuL_setflag(object, FLAG_IPV6DOM);
 	return tcp;
 }
 
-LCULIB_API void lcu_enableudp (lua_State *L, int idx) {
-	lcu_UdpSocket *udp = lcu_toudp(L, idx);
-	lcu_assert(lcuL_maskflag(udp, FLAG_CLOSED));
-	lcu_assert(udp->handle.data == NULL);
-	lcuL_clearflag(udp, FLAG_CLOSED);
+LCULIB_API lcu_IpcPipe *lcu_newpipe (lua_State *L, int class) {
+	return (lcu_IpcPipe *)createobj(L, sizeof(lcu_IpcPipe), lcu_IpcPipeCls[class]);
 }
 
-LCULIB_API void lcu_enabletcp (lua_State *L, int idx) {
-	lcu_TcpSocket *tcp = lcu_totcp(L, idx, LCU_TCPTYPE_SOCKET);
-	lcu_assert(lcuL_maskflag(tcp, FLAG_CLOSED));
-	lcu_assert(tcp->handle.data == NULL);
-	lcuL_clearflag(tcp, FLAG_CLOSED);
-}
-
-LCULIB_API uv_udp_t *lcu_toudphandle (lcu_UdpSocket *udp) {
-	return &udp->handle;
-}
-
-LCULIB_API uv_tcp_t *lcu_totcphandle (lcu_TcpSocket *tcp) {
-	return &tcp->handle;
-}
-
-
-LCULIB_API int lcu_isudpclosed (lcu_UdpSocket *udp) {
-	return lcuL_maskflag(udp, FLAG_CLOSED);
-}
-
-LCULIB_API int lcu_istcpclosed (lcu_TcpSocket *tcp) {
-	return lcuL_maskflag(tcp, FLAG_CLOSED);
-}
-
-LCULIB_API int lcu_closeudp (lua_State *L, int idx) {
-	lcu_UdpSocket *udp = lcu_toudp(L, idx);
-	if (udp && !lcu_isudpclosed(udp)) {
-		lcu_closeobj(L, idx, (uv_handle_t *)&udp->handle);
-		lcuL_clearflag(udp, FLAG_LISTEN);
-		lcuL_setflag(udp, FLAG_CLOSED);
-		return 1;
-	}
-	return 0;
-}
-
-LCULIB_API int lcu_closetcp (lua_State *L, int idx) {
-	lcu_TcpSocket *tcp = lcu_totcp(L, idx, LCU_TCPTYPE_SOCKET);
-	if (tcp && !lcu_istcpclosed(tcp)) {
-		lcu_closeobj(L, idx, (uv_handle_t *)&tcp->handle);
-		lcuL_clearflag(tcp, FLAG_LISTEN);
-		lcuL_setflag(tcp, FLAG_CLOSED);
-		return 1;
-	}
-	return 0;
-}
+#define toaddrfam(O)	(lcuL_maskflag(O, FLAG_IPV6DOM) ? AF_INET6 : AF_INET)
 
 LCULIB_API int lcu_getudpaddrfam (lcu_UdpSocket *udp) {
-	return lcuL_maskflag(udp, FLAG_IPV6DOM) ? AF_INET6 : AF_INET;
+	return toaddrfam(udp);
 }
 
 LCULIB_API int lcu_gettcpaddrfam (lcu_TcpSocket *tcp) {
-	return lcuL_maskflag(tcp, FLAG_IPV6DOM) ? AF_INET6 : AF_INET;
+	return toaddrfam(tcp);
 }
 
-newbooloption(udparmed, lcu_UdpSocket, FLAG_OBJOPON);
-newbooloption(tcparmed, lcu_TcpSocket, FLAG_OBJOPON);
+#define newbooloption(name, type, flag) \
+	LCULIB_API int lcu_get##name(type *obj) { \
+		return lcuL_maskflag(obj, flag); \
+	} \
+	\
+	LCULIB_API void lcu_set##name(type *obj, int enabled) { \
+		if (enabled) lcuL_setflag(obj, flag); \
+		else lcuL_clearflag(obj, flag); \
+	}
 
+newbooloption(objarmed, lcu_Object, FLAG_OBJOPON);
 newbooloption(udpconnected, lcu_UdpSocket, FLAG_CONNECTED);
 newbooloption(udpbroadcast, lcu_UdpSocket, FLAG_BROADCAST);
 newbooloption(udpmcastloop, lcu_UdpSocket, FLAG_MCASTLOOP);
@@ -247,22 +258,4 @@ LCULIB_API void lcu_settcpkeepalive (lcu_TcpSocket *tcp, int delay) {
 	else tcp->flags = (delay<<KEEPALIVE_SHIFT)
 	                | FLAG_KEEPALIVE
 	                | (tcp->flags&FLAG_STRMMASK);
-}
-
-LCULIB_API void lcu_addtcplisten (lcu_TcpSocket *tcp) {
-	tcp->flags += LISTENCONN_UNIT;
-}
-
-LCULIB_API int lcu_picktcplisten (lcu_TcpSocket *tcp) {
-	if (tcp->flags < 2*LISTENCONN_UNIT) return 0;
-	tcp->flags -= LISTENCONN_UNIT;
-	return 1;
-}
-
-LCULIB_API int lcu_istcplisten (lcu_TcpSocket *tcp) {
-	return tcp->flags >= LISTENCONN_UNIT;
-}
-
-LCULIB_API void lcu_marktcplisten (lcu_TcpSocket *tcp) {
-	if (!lcu_istcplisten(tcp)) lcu_addtcplisten(tcp);
 }
