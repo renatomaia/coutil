@@ -13,11 +13,7 @@
 
 #define lcu_pusherror(L,e)	lua_pushstring(L, uv_strerror(e))
 
-LCULIB_API void *lcuL_allocmemo (lua_State *L, size_t size);
-
-LCULIB_API void lcuL_freememo (lua_State *L, void *memo, size_t size);
-
-LCULIB_API int lcuL_pushresults (lua_State *L, int n, int err);
+LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err);
 
 #define lcuL_maskflag(O,F) ((O)->flags&(F))
 #define lcuL_setflag(O,F) ((O)->flags |= (F))
@@ -28,14 +24,13 @@ LCULIB_API int lcuL_pushresults (lua_State *L, int n, int err);
 
 #define lcu_toloop(L)	(uv_loop_t *)lua_touserdata(L, lua_upvalueindex(1))
 
-LCULIB_API void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv);
+LCUI_FUNC void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv);
 
-LCULIB_API void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup);
+LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup);
 
-LCULIB_API void lcuM_newclass (lua_State *L, const luaL_Reg *l, int nup,
-                               const char *name, const char *super);
+LCUI_FUNC void lcuM_newclass (lua_State *L, const char *name);
 
-LCULIB_API void lcuL_printstack (lua_State *L, const char *file, int line,
-                                               const char *func);
+LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
+                                              const char *func);
 
 #endif

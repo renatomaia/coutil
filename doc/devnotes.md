@@ -15,10 +15,10 @@ Asynchronous operation perfomed over a UV request.
 | `tcp:send` | `UV_WRITE` | `uv_write_cb` |
 | `tcp:connect` | `UV_CONNECT` | `uv_connect_cb` |
 | `tcp:shutdown` | `UV_SHUTDOWN` | `uv_shutdown_cb` |
-| --------- | ------- | -------- |
 | `udp:send` | `UV_UDP_SEND` | `uv_udp_send_cb` |
-| `system.toaddress` | `UV_GETADDRINFO` | `uv_getaddrinfo_cb` |
-| `system.tonetname` | `UV_GETNAMEINFO` | `uv_getnameinfo_cb` |
+| `system.findaddr` | `UV_GETADDRINFO` | `uv_getaddrinfo_cb` |
+| `system.nameaddr` | `UV_GETNAMEINFO` | `uv_getnameinfo_cb` |
+| --------- | ------- | -------- |
 | `file:*` | `UV_FS` | `uv_fs_cb` |
 
 ### Thread Operations (`throp`)
@@ -30,6 +30,7 @@ Asynchronous operation perfomed over a UV handle that can be replicated for diff
 | `system.suspend` | `UV_IDLE` | `uv_idle_cb` |
 | `system.suspend` | `UV_TIMER` | `uv_timer_cb` |
 | `system.awaitsig` | `UV_SIGNAL` | `uv_signal_cb` |
+| `system.execute` | `UV_PROCESS` | `uv_exit_cb` |
 | --------- | ------ | -------- |
 | `system.awaitpath` | `UV_FS_EVENT` | `uv_fs_event_cb` |
 | `system.awaitpath` | `UV_FS_POLL` | `uv_fs_poll_cb` |
@@ -40,15 +41,14 @@ Asynchronous operation perfomed over a UV handle associated with a system resour
 
 | Operation | Handle | Callback |
 | --------- | ------ | -------- |
+| `udp:receive` | `UV_UDP` | `uv_udp_recv_cb` |
 | `tcp:receive` | `UV_TCP` | `uv_read_cb` |
 | `tcp:accept` | `UV_TCP` | `uv_connection_cb` |
-| --------- | ------ | -------- |
-| `udp:receive` | `UV_UDP` | `uv_udp_recv_cb` |
 | `pipe:receive` | `UV_NAMED_PIPE` | `uv_read_cb` |
 | `pipe:accept` | `UV_NAMED_PIPE` | `uv_connection_cb` |
+| --------- | ------ | -------- |
 | `tty:receive` | `UV_TTY` | `uv_read_cb` |
 | `tty:accept` | `UV_TTY` | `uv_connection_cb` |
-| `process:exitval` | `UV_PROCESS` | `uv_exit_cb` |
 
 Identifiers
 -----------

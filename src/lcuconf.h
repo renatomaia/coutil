@@ -7,12 +7,24 @@
 #define lcuconf_h
 
 
+#ifndef LCUI_FUNC
+#define LCUI_FUNC LUAI_FUNC
+#endif
+
 #ifndef LCULIB_API
-#define LCULIB_API
+#define LCULIB_API LUALIB_API
+#endif
+
+#ifndef LCUMOD_API
+#define LCUMOD_API LUAMOD_API
 #endif
 
 #ifndef LCU_PREFIX
 #define LCU_PREFIX	"coutil:"
+#endif
+
+#ifndef LCU_PIPEADDRBUF
+#define LCU_PIPEADDRBUF	128
 #endif
 
 #ifndef LCU_EXECARGCOUNT
@@ -37,6 +49,7 @@
 
 #include <assert.h>
 #define lcu_assert assert
+//#define lcu_assert(X) (printf("%s:%d: %s = %s\n", __FILE__, __LINE__, __func__, (X) ? "true" : "false"), assert(X))
 
 
 #if !defined(lcu_assert)
