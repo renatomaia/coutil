@@ -15,6 +15,10 @@
 #define LCU_PREFIX	"coutil:"
 #endif
 
+#ifndef LCU_PIPEADDRBUF
+#define LCU_PIPEADDRBUF	128
+#endif
+
 #ifndef LCU_EXECARGCOUNT
 #define LCU_EXECARGCOUNT	1023
 #endif

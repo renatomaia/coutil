@@ -48,31 +48,38 @@ LCULIB_API struct addrinfo *lcu_peekaddrlist (lcu_AddressList *list);
 LCULIB_API struct addrinfo *lcu_nextaddrlist (lcu_AddressList *list);
 
 
+typedef struct lcu_Object lcu_Object;
+
+LCULIB_API int lcu_closeobj (lua_State *L, int idx, const char *cls);
+
+LCULIB_API void lcu_enableobj (lcu_Object *object);
+
+LCULIB_API int lcu_isobjclosed (lcu_Object *object);
+
+LCULIB_API uv_handle_t *lcu_toobjhdl (lcu_Object *object);
+
+LCULIB_API void lcu_addobjlisten (lcu_Object *object);
+
+LCULIB_API int lcu_pickobjlisten (lcu_Object *object);
+
+LCULIB_API int lcu_isobjlisten (lcu_Object *object);
+
+LCULIB_API void lcu_markobjlisten (lcu_Object *object);
+
+
 #define LCU_UDPSOCKCLS LCU_PREFIX"udpsocket"
 
 typedef struct lcu_UdpSocket lcu_UdpSocket;
 
 #define lcu_checkudp(L,i)	((lcu_UdpSocket *) \
-                         	 loopL_checkinstance(L, i, LCU_UDPSOCKCLS))
+                         	 luaL_checkudata(L, i, LCU_UDPSOCKCLS))
 
 #define lcu_toudp(L,i)	((lcu_UdpSocket *) \
-                      	 loopL_testinstance(L, i, LCU_UDPSOCKCLS))
+                      	 luaL_testudata(L, i, LCU_UDPSOCKCLS))
 
 #define lcu_isudp(L,i)	(lcu_toudp(L, i) != NULL)
 
 LCULIB_API lcu_UdpSocket *lcu_newudp (lua_State *L, int domain);
-
-LCULIB_API void lcu_enableudp (lua_State *L, int idx);
-
-LCULIB_API uv_udp_t *lcu_toudphandle (lcu_UdpSocket *udp);
-
-LCULIB_API int lcu_isudpclosed (lcu_UdpSocket *udp);
-
-LCULIB_API int lcu_closeudp (lua_State *L, int idx);
-
-LCULIB_API int lcu_getudparmed (lcu_UdpSocket *udp);
-
-LCULIB_API void lcu_setudparmed (lcu_UdpSocket *udp, int value);
 
 LCULIB_API int lcu_getudpaddrfam (lcu_UdpSocket *udp);
 
@@ -119,19 +126,7 @@ typedef struct lcu_TcpSocket lcu_TcpSocket;
 
 #define lcu_istcp(L,i,c)	(lcu_totcp(L, i, c) != NULL)
 
-LCULIB_API lcu_TcpSocket *lcu_newtcp (lua_State *L, int domain, int class);
-
-LCULIB_API void lcu_enabletcp (lua_State *L, int idx);
-
-LCULIB_API uv_tcp_t *lcu_totcphandle (lcu_TcpSocket *tcp);
-
-LCULIB_API int lcu_istcpclosed (lcu_TcpSocket *tcp);
-
-LCULIB_API int lcu_closetcp (lua_State *L, int idx);
-
-LCULIB_API int lcu_gettcparmed (lcu_TcpSocket *tcp);
-
-LCULIB_API void lcu_settcparmed (lcu_TcpSocket *tcp, int value);
+LCULIB_API lcu_TcpSocket *lcu_newtcp (lua_State *L, int class, int domain);
 
 LCULIB_API int lcu_gettcpaddrfam (lcu_TcpSocket *tcp);
 
@@ -143,12 +138,29 @@ LCULIB_API int lcu_gettcpkeepalive (lcu_TcpSocket *tcp);
 
 LCULIB_API void lcu_settcpkeepalive (lcu_TcpSocket *tcp, int delay);
 
-LCULIB_API void lcu_addtcplisten (lcu_TcpSocket *tcp);
 
-LCULIB_API int lcu_picktcplisten (lcu_TcpSocket *tcp);
+typedef enum lcu_IpcPipeType {
+	LCU_PIPETYPE_STREAM = 0,
+	LCU_PIPETYPE_LISTEN,
+	LCU_PIPETYPE_OBJECT
+} lcu_IpcPipeType;
 
-LCULIB_API int lcu_istcplisten (lcu_TcpSocket *tcp);
+static const char *const lcu_IpcPipeCls[] = {
+	LCU_PREFIX"pipestream",
+	LCU_PREFIX"pipelisten",
+	LCU_PREFIX"pipeobject"
+};
 
-LCULIB_API void lcu_marktcplisten (lcu_TcpSocket *tcp);
+typedef struct lcu_IpcPipe lcu_IpcPipe;
+
+#define lcu_checkpipe(L,i,c) ((lcu_IpcPipe *) \
+                              loopL_checkinstance(L, i, lcu_IpcPipeCls[c]))
+
+#define lcu_topipe(L,i,c)  ((lcu_IpcPipe *) \
+                            loopL_testinstance(L, i, lcu_IpcPipeCls[c]))
+
+#define lcu_ispipe(L,i,c)  (lcu_topipe(L, i, c) != NULL)
+
+LCULIB_API lcu_IpcPipe *lcu_newpipe (lua_State *L, int class);
 
 #endif
