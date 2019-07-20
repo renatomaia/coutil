@@ -263,7 +263,6 @@ for domain, otherdomain in pairs{ipv6 = "ipv4", ipv4 = "ipv6"} do
 			assert(garbage.sock:close() == true)
 
 			local protoname = kind == "datagram" and "udp" or "tcp"
-			assert(tostring(garbage.sock) == protoname.." (closed)")
 			asserterr("closed "..protoname, pcall(garbage.sock.getaddress, garbage.sock))
 
 			assert(garbage.sock:close() == false)
@@ -1283,7 +1282,7 @@ end
 			assert(stream:receive(buffer) == 10)
 			assert(memory.diff(buffer, "0123456789") == nil)
 			assert(stream:close())
-			stage = 3
+			stage = 4
 		end)
 		assert(stage == 1)
 
@@ -1294,11 +1293,12 @@ end
 			coroutine.resume(garbage.coro)
 			assert(stage == 2)
 			assert(stream:send("0123456789"))
+			stage = 3
 		end)
 
 		gc()
 		assert(system.run() == false)
-		assert(stage == 3)
+		assert(stage == 4)
 
 		done()
 	end

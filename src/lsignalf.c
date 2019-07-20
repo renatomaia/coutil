@@ -80,6 +80,7 @@ static int returnsignal (lua_State *L) {
 }
 static void uv_onsignal (uv_signal_t *handle, int signum) {
 	lua_State *thread = (lua_State *)handle->data;
+	lcu_assert(lua_gettop(thread) == 0);
 	lua_pushinteger(thread, signum);
 	lcuU_resumethrop(thread, (uv_handle_t *)handle);
 }
@@ -238,6 +239,7 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 }
 static void uv_procexited (uv_process_t *process, int64_t exitval, int signum) {
 	lua_State *thread = (lua_State *)process->data;
+	lcu_assert(lua_gettop(thread) == 0);
 	if (signum) {
 		lua_pushliteral(thread, "signal");
 		pushsignal(thread, signum);

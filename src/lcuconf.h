@@ -41,6 +41,7 @@
 
 #include <assert.h>
 #define lcu_assert assert
+//#define lcu_assert(X) (printf("%s:%d: %s = %s\n", __FILE__, __LINE__, __func__, (X) ? "true" : "false"), assert(X))
 
 
 #if !defined(lcu_assert)
