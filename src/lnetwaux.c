@@ -1,8 +1,11 @@
 #include "lnetwaux.h"
 #include "loperaux.h"
+#include "looplib.h"
 
 #include <string.h>
 
+
+#define hdl2obj(H,T) (lcu_Object *)((char *)H - offsetof(lcu_Object, handle))
 
 /*
  * Addresses
@@ -128,8 +131,8 @@ static lcu_Object *createobj (lua_State *L, size_t size, const char *cls) {
 }
 
 LCULIB_API int lcu_closeobj (lua_State *L, int idx, const char *cls) {
-	lcu_Object *object = (lcu_Object *)luaL_checkinstance(L, idx, cls);
-	if (object && lcuL_maskflag(object, FLAG_CLOSED)) {
+	lcu_Object *object = (lcu_Object *)loopL_checkinstance(L, idx, cls);
+	if (object && !lcuL_maskflag(object, FLAG_CLOSED)) {
 		lcu_closeobjhdl(L, idx, &object->handle);
 		lcuL_setflag(object, FLAG_CLOSED);
 		return 1;
@@ -149,6 +152,15 @@ LCULIB_API int lcu_isobjclosed (lcu_Object *object) {
 
 LCULIB_API uv_handle_t *lcu_toobjhdl (lcu_Object *object) {
 	return &object->handle;
+}
+
+LCULIB_API lcu_Object *lcu_tohdlobj (uv_handle_t *handle) {
+	const char *ptr = (const char *)handle;
+	return (lcu_Object *)(ptr - offsetof(lcu_Object, handle));
+}
+
+LCULIB_API int lcu_getobjdomain (lcu_Object *obj) {
+	return lcuL_maskflag(obj, FLAG_IPV6DOM) ? AF_INET6 : AF_INET;
 }
 
 LCULIB_API void lcu_addobjlisten (lcu_Object *object) {
@@ -174,31 +186,20 @@ LCULIB_API void lcu_markobjlisten (lcu_Object *object) {
 LCULIB_API lcu_UdpSocket *lcu_newudp (lua_State *L, int domain) {
 	lcu_UdpSocket *udp = (lcu_UdpSocket *)createobj(L, sizeof(lcu_UdpSocket),
 	                                                   LCU_UDPSOCKCLS);
-	if (domain == AF_INET6) lcuL_setflag(object, FLAG_IPV6DOM);
-	lcuL_setflag(object, 1<<MCASTTTL_SHIFT);
-	luaL_setmetatable(L, LCU_UDPSOCKCLS);
+	if (domain == AF_INET6) lcuL_setflag(udp, FLAG_IPV6DOM);
+	lcuL_setflag(udp, 1<<MCASTTTL_SHIFT);
 	return udp;
 }
 
 LCULIB_API lcu_TcpSocket *lcu_newtcp (lua_State *L, int class, int domain) {
 	lcu_TcpSocket *tcp = (lcu_TcpSocket *)createobj(L, sizeof(lcu_TcpSocket),
 	                                                   lcu_TcpSockCls[class]);
-	if (domain == AF_INET6) lcuL_setflag(object, FLAG_IPV6DOM);
+	if (domain == AF_INET6) lcuL_setflag(tcp, FLAG_IPV6DOM);
 	return tcp;
 }
 
 LCULIB_API lcu_IpcPipe *lcu_newpipe (lua_State *L, int class) {
 	return (lcu_IpcPipe *)createobj(L, sizeof(lcu_IpcPipe), lcu_IpcPipeCls[class]);
-}
-
-#define toaddrfam(O)	(lcuL_maskflag(O, FLAG_IPV6DOM) ? AF_INET6 : AF_INET)
-
-LCULIB_API int lcu_getudpaddrfam (lcu_UdpSocket *udp) {
-	return toaddrfam(udp);
-}
-
-LCULIB_API int lcu_gettcpaddrfam (lcu_TcpSocket *tcp) {
-	return toaddrfam(tcp);
 }
 
 #define newbooloption(name, type, flag) \

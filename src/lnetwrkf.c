@@ -351,12 +351,13 @@ static void uv_onresolved (uv_getaddrinfo_t *addrreq,
 	uv_req_t *request = (uv_req_t *)addrreq;
 	lua_State *thread = lcuU_endreqop(loop, request);
 	if (thread) {
+		lcu_assert(lua_gettop(thread) == 0);
 		if (!err) {
 			lcu_AddressList *list = lcu_newaddrlist(thread);
 			lcu_setaddrlist(list, results);
 			pushaddrtype(thread, results->ai_family);
 		}
-		lcuL_pushresults(thread, 2, err);
+		else lcuL_pushresults(thread, 0, err);
 		lcuU_resumereqop(thread, loop, request);
 	}
 	else if (!err) freeaddrinfo(results);
@@ -420,11 +421,12 @@ static void uv_onaddrnamed (uv_getnameinfo_t *namereq,
 	uv_req_t *request = (uv_req_t *)namereq;
 	lua_State *thread = lcuU_endreqop(loop, request);
 	if (thread) {
+		lcu_assert(lua_gettop(thread) == 0);
 		if (!err) {
 			lua_pushstring(thread, hostname);
 			lua_pushstring(thread, servname);
 		}
-		lcuL_pushresults(thread, 2, err);
+		else lcuL_pushresults(thread, 0, err);
 		lcuU_resumereqop(thread, loop, request);
 	}
 }
@@ -436,8 +438,9 @@ static void uv_onservnamed (uv_getnameinfo_t *namereq,
 	uv_req_t *request = (uv_req_t *)namereq;
 	lua_State *thread = lcuU_endreqop(loop, request);
 	if (thread) {
+		lcu_assert(lua_gettop(thread) == 0);
 		if (!err) lua_pushstring(thread, servname);
-		lcuL_pushresults(thread, 1, err);
+		else lcuL_pushresults(thread, 0, err);
 		lcuU_resumereqop(thread, loop, request);
 	}
 }
@@ -448,8 +451,9 @@ static void uv_oncannonical (uv_getaddrinfo_t *addrreq,
 	uv_req_t *request = (uv_req_t *)addrreq;
 	lua_State *thread = lcuU_endreqop(loop, request);
 	if (thread) {
+		lcu_assert(lua_gettop(thread) == 0);
 		if (!err) lua_pushstring(thread, results->ai_canonname);
-		lcuL_pushresults(thread, 1, err);
+		else lcuL_pushresults(thread, 0, err);
 		lcuU_resumereqop(thread, loop, request);
 	}
 	freeaddrinfo(results);
@@ -523,23 +527,22 @@ static int object_close (lua_State *L) {
 
 /* socket [, errmsg] = system.socket(type, domain) */
 static int system_socket (lua_State *L) {
-	static const char *const TcpTypeName[] = { "stream", "listen", "datagram", NULL };
+	static const char *const TcpTypeName[] = { "datagram", "stream", "listen", NULL };
 	int class = luaL_checkoption(L, 1, NULL, TcpTypeName);
 	int domain = AddrTypeId[luaL_checkoption(L, 2, NULL, AddrTypeName)];
 	uv_loop_t *loop = lcu_toloop(L);
 	int err;
 	switch (class) {
-		case 0:
-		case 1: {
-			lcu_TcpSocket *tcp = lcu_newtcp(L, domain, class ? LCU_TCPTYPE_LISTEN
-			                                                 : LCU_TCPTYPE_STREAM);
-			err = uv_tcp_init_ex(loop, lcu_totcphandle(tcp), domain);
-			if (!err) lcu_enabletcp(L, -1);
-		} break;
-		case 2: {
+		case 0: {
 			lcu_UdpSocket *udp = lcu_newudp(L, domain);
-			err = uv_udp_init_ex(loop, lcu_toudphandle(udp), domain);
-			if (!err) lcu_enableudp(L, -1);
+			err = uv_udp_init_ex(loop, lcu_toudphdl(udp), domain);
+			if (!err) lcu_enableobj((lcu_Object *)udp);
+		} break;
+		case 1: class = LCU_TCPTYPE_STREAM; goto afternextline;
+		case 2: class = LCU_TCPTYPE_LISTEN; afternextline: {
+			lcu_TcpSocket *tcp = lcu_newtcp(L, class, domain);
+			err = uv_tcp_init_ex(loop, lcu_totcphdl(tcp), domain);
+			if (!err) lcu_enableobj((lcu_Object *)tcp);
 		} break;
 		default: err = UV_EAI_SOCKTYPE;
 	}
@@ -585,6 +588,7 @@ static int getbufarg (lua_State *L, uv_buf_t *buf) {
 static void completereqop (uv_loop_t *loop, uv_req_t *request, int err) {
 	lua_State *thread = lcuU_endreqop(loop, request);
 	if (thread) {
+		lcu_assert(lua_gettop(thread) == 0);
 		lcuL_pushresults(thread, 0, err);
 		lcuU_resumereqop(thread, loop, request);
 	}
@@ -599,20 +603,20 @@ static void completereqop (uv_loop_t *loop, uv_req_t *request, int err) {
 
 static lcu_UdpSocket *openedudp (lua_State *L) {
 	lcu_UdpSocket *udp = toudp(L);
-	luaL_argcheck(L, !lcu_isudpclosed(udp), 1, "closed udp");
+	luaL_argcheck(L, !lcu_isobjclosed((lcu_Object *)udp), 1, "closed udp");
 	return udp;
 }
 
 static lcu_UdpSocket *ownedudp (lua_State *L, uv_loop_t *loop) {
 	lcu_UdpSocket *udp = openedudp(L);
-	luaL_argcheck(L, lcu_toudphandle(udp)->loop == loop, 1, "foreign object");
+	luaL_argcheck(L, lcu_toudphdl(udp)->loop == loop, 1, "foreign object");
 	return udp;
 }
 
 static const struct sockaddr *toudpaddr (lua_State *L, int idx, \
                                          lcu_UdpSocket *udp) {
 	struct sockaddr *addr = lcu_checkaddress(L, idx);
-	chkaddrdom(L, idx, addr, lcu_getudpaddrfam(udp));
+	chkaddrdom(L, idx, addr, lcu_getobjdomain((lcu_Object *)udp));
 	return addr;
 }
 
@@ -620,7 +624,7 @@ static const struct sockaddr *toudpaddr (lua_State *L, int idx, \
 /* domain = udp:getdomain() */
 static int udp_getdomain (lua_State *L) {
 	lcu_UdpSocket *udp = toudp(L);
-	pushaddrtype(L, lcu_getudpaddrfam(udp));
+	pushaddrtype(L, lcu_getobjdomain((lcu_Object *)udp));
 	return 1;
 }
 
@@ -628,10 +632,10 @@ static int udp_getdomain (lua_State *L) {
 /* address [, errmsg] = udp:getaddress([site [, address]]) */
 static int udp_getaddress (lua_State *L) {
 	lcu_UdpSocket *udp = openedudp(L);
-	uv_udp_t *handle = lcu_toudphandle(udp);
+	uv_udp_t *handle = lcu_toudphdl(udp);
 	struct sockaddr *addr;
 	int addrsz;
-	int peer = getaddrarg(L, lcu_getudpaddrfam(udp), &addr, &addrsz);
+	int peer = getaddrarg(L, lcu_getobjdomain((lcu_Object *)udp), &addr, &addrsz);
 	int err;
 	if (peer) err = uv_udp_getpeername(handle, addr, &addrsz);
 	else err = uv_udp_getsockname(handle, addr, &addrsz);
@@ -644,7 +648,7 @@ static int udp_getaddress (lua_State *L) {
 static int udp_bind (lua_State *L) {
 	lcu_UdpSocket *udp = openedudp(L);
 	const struct sockaddr *addr = toudpaddr(L, 2, udp);
-	int err = uv_udp_bind(lcu_toudphandle(udp), addr, 0);
+	int err = uv_udp_bind(lcu_toudphdl(udp), addr, 0);
 	return lcuL_pushresults(L, 0, err);
 }
 
@@ -660,7 +664,7 @@ static const char * const UdpOptions[] = {
 /* succ [, errmsg] = udp:setoption(name, value) */
 static int udp_setoption (lua_State *L) {
 	lcu_UdpSocket *udp = openedudp(L);
-	uv_udp_t *handle = lcu_toudphandle(udp);
+	uv_udp_t *handle = lcu_toudphdl(udp);
 	int opt = luaL_checkoption(L, 2, NULL, UdpOptions);
 	int err;
 	switch (opt) {
@@ -681,7 +685,7 @@ static int udp_setoption (lua_State *L) {
 			if (err >= 0) lcu_setudpmcastttl(udp, (int)value);
 		}; break;
 		case 3: {  /* mcastiface */
-			int domain = lcu_getudpaddrfam(udp);
+			int domain = lcu_getobjdomain((lcu_Object *)udp);
 			size_t len;
 			const char *addr = luaL_checklstring(L, 3, &len);
 			char buffer[LCU_ADDRMAXLITERAL];
@@ -727,7 +731,7 @@ static int udp_getoption (lua_State *L) {
 static int udp_connect (lua_State *L) {
 	lcu_UdpSocket *udp = openedudp(L);
 	const struct sockaddr *addr = lua_isnil(L, 2) ? NULL : toudpaddr(L, 2, udp);
-	int err = uv_udp_connect(lcu_toudphandle(udp), addr);
+	int err = uv_udp_connect(lcu_toudphdl(udp), addr);
 	if (err >= 0) lcu_setudpconnected(udp, addr != NULL);
 	return lcuL_pushresults(L, 0, err);
 }
@@ -741,7 +745,7 @@ static void uv_onsent (uv_udp_send_t *request, int err) {
 static int k_setupsend (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_UdpSocket *udp = ownedudp(L, loop);
 	uv_udp_send_t *send = (uv_udp_send_t *)request;
-	uv_udp_t *handle = (uv_udp_t *)lcu_toudphandle(udp);
+	uv_udp_t *handle = (uv_udp_t *)lcu_toudphdl(udp);
 	uv_buf_t bufs[1];
 	const struct sockaddr *addr = lcu_getudpconnected(udp) ? NULL
 	                                                       : toudpaddr(L, 5, udp);
@@ -758,15 +762,15 @@ static int stopudp (uv_udp_t *udp) {
 	int err = uv_udp_recv_stop(udp);
 	if (err < 0) {
 		lua_State *L = (lua_State *)udp->loop->data;
-		lcu_closeobj(L, 1, (uv_handle_t *)udp);
+		lcu_closeobjhdl(L, 1, (uv_handle_t *)udp);
 	}
-	lcu_setudparmed((lcu_UdpSocket *)udp, 0);
+	lcu_setobjarmed(lcu_tohdlobj((uv_handle_t *)udp), 0);
 	return err;
 }
 static int k_udpbuffer (lua_State *L, int status, lua_KContext ctx);
 static int k_udprecv (lua_State *L, int status, lua_KContext ctx) {
 	lcu_UdpSocket *udp = openedudp(L);
-	uv_udp_t *handle = lcu_toudphandle(udp);
+	uv_udp_t *handle = lcu_toudphdl(udp);
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
 	if (lcuT_haltedobjop(L, (uv_handle_t *)handle)) {
@@ -778,7 +782,7 @@ static int k_udprecv (lua_State *L, int status, lua_KContext ctx) {
 		if (src) {
 			struct sockaddr *dst = lcu_toaddress(L, 5);
 			if (dst) {
-				lcu_assert(src->sa_family == lcu_getudpaddrfam(udp));
+				lcu_assert(src->sa_family == lcu_getobjdomain((lcu_Object *)udp));
 				memcpy(dst, src, src->sa_family == AF_INET ? sizeof(struct sockaddr_in)
 				                                           : sizeof(struct sockaddr_in6));
 			}
@@ -792,7 +796,7 @@ static int k_udprecv (lua_State *L, int status, lua_KContext ctx) {
 }
 static int k_udpbuffer (lua_State *L, int status, lua_KContext ctx) {
 	lcu_UdpSocket *udp = openedudp(L);
-	uv_udp_t *handle = lcu_toudphandle(udp);
+	uv_udp_t *handle = lcu_toudphdl(udp);
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
 	if (!lcuT_haltedobjop(L, (uv_handle_t *)handle)) {
@@ -816,6 +820,7 @@ static void uv_onudprecv (uv_udp_t *udp,
 	if (buf->base != (char *)buf) {
 		lua_State *thread = (lua_State *)udp->data;
 		lcu_assert(thread);
+		lcu_assert(lua_gettop(thread) == 0);
 		if (nread >= 0) {
 			lua_pushinteger(thread, nread);
 			lua_pushboolean(thread, flags&UV_UDP_PARTIAL);
@@ -833,6 +838,7 @@ static void uv_ongetbuffer (uv_handle_t *handle,
 	do {
 		lua_State *thread = (lua_State *)handle->data;
 		lcu_assert(thread);
+		lcu_assert(lua_gettop(thread) == 0);
 		buf->base = (char *)buf;
 		buf->len = 0;
 		lua_pushlightuserdata(thread, buf);
@@ -841,14 +847,15 @@ static void uv_ongetbuffer (uv_handle_t *handle,
 }
 static int udp_receive (lua_State *L) {
 	lcu_UdpSocket *udp = ownedudp(L, lcu_toloop(L));
-	uv_udp_t *handle = lcu_toudphandle(udp);
+	uv_udp_t *handle = lcu_toudphdl(udp);
 	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
 	if (handle->data) luaL_argcheck(L, handle->data == L, 1, "already in use");
 	else {
-		if (!lcu_getudparmed(udp)) {
+		lcu_Object *obj = (lcu_Object *)udp;
+		if (!lcu_getobjarmed(obj)) {
 			int err = uv_udp_recv_start(handle, uv_ongetbuffer, uv_onudprecv);
 			if (err < 0) return lcuL_pushresults(L, 0, err);
-			lcu_setudparmed(udp, 1);
+			lcu_setobjarmed(obj, 1);
 		}
 		lcuT_awaitobj(L, (uv_handle_t *)handle);
 	}
@@ -865,57 +872,28 @@ static int udp_receive (lua_State *L) {
 
 static lcu_TcpSocket *openedtcp (lua_State *L, int cls) {
 	lcu_TcpSocket *tcp = totcp(L, cls);
-	luaL_argcheck(L, !lcu_istcpclosed(tcp), 1, "closed tcp");
+	luaL_argcheck(L, !lcu_isobjclosed((lcu_Object *)tcp), 1, "closed tcp");
 	return tcp;
 }
 
 static lcu_TcpSocket *ownedtcp (lua_State *L, uv_loop_t *loop, int cls) {
 	lcu_TcpSocket *tcp = openedtcp(L, cls);
-	luaL_argcheck(L, lcu_totcphandle(tcp)->loop == loop, 1, "foreign object");
+	luaL_argcheck(L, lcu_totcphdl(tcp)->loop == loop, 1, "foreign object");
 	return tcp;
 }
 
 static const struct sockaddr *totcpaddr (lua_State *L, int idx, \
                                          lcu_TcpSocket *tcp) {
 	struct sockaddr *addr = lcu_checkaddress(L, idx);
-	chkaddrdom(L, idx, addr, lcu_gettcpaddrfam(tcp));
+	chkaddrdom(L, idx, addr, lcu_getobjdomain((lcu_Object *)tcp));
 	return addr;
-}
-
-
-/* string = tostring(tcp) */
-static int tcp_tostring (lua_State *L) {
-	lcu_TcpSocket *tcp = totcp(L, LCU_TCPTYPE_SOCKET);
-	if (!lcu_istcpclosed(tcp)) lua_pushfstring(L, "tcp (%p)", tcp);
-	else lua_pushliteral(L, "tcp (closed)");
-	return 1;
-}
-
-
-/* getmetatable(tcp).__gc(tcp) */
-static int tcp_gc (lua_State *L) {
-	lcu_closetcp(L, 1);
-	return 0;
-}
-
-
-/* succ [, errmsg] = tcp:close() */
-static int tcp_close (lua_State *L) {
-	lcu_TcpSocket *tcp = totcp(L, LCU_TCPTYPE_SOCKET);
-	if (!lcu_istcpclosed(tcp)) {
-		int closed = lcu_closetcp(L, 1);
-		lcu_assert(closed);
-		lua_pushboolean(L, closed);
-	}
-	else lua_pushboolean(L, 0);
-	return 1;
 }
 
 
 /* domain = tcp:getdomain() */
 static int tcp_getdomain (lua_State *L) {
 	lcu_TcpSocket *tcp = totcp(L, LCU_TCPTYPE_SOCKET);
-	pushaddrtype(L, lcu_gettcpaddrfam(tcp));
+	pushaddrtype(L, lcu_getobjdomain((lcu_Object *)tcp));
 	return 1;
 }
 
@@ -923,10 +901,10 @@ static int tcp_getdomain (lua_State *L) {
 /* address [, errmsg] = tcp:getaddress([site [, address]]) */
 static int tcp_getaddress (lua_State *L) {
 	lcu_TcpSocket *tcp = openedtcp(L, LCU_TCPTYPE_SOCKET);
-	uv_tcp_t *handle = lcu_totcphandle(tcp);
+	uv_tcp_t *handle = lcu_totcphdl(tcp);
 	struct sockaddr *addr;
 	int addrsz;
-	int peer = getaddrarg(L, lcu_gettcpaddrfam(tcp), &addr, &addrsz);
+	int peer = getaddrarg(L, lcu_getobjdomain((lcu_Object *)tcp), &addr, &addrsz);
 	int err;
 	if (peer) err = uv_tcp_getpeername(handle, addr, &addrsz);
 	else err = uv_tcp_getsockname(handle, addr, &addrsz);
@@ -939,7 +917,7 @@ static int tcp_getaddress (lua_State *L) {
 static int tcp_bind (lua_State *L) {
 	lcu_TcpSocket *tcp = openedtcp(L, LCU_TCPTYPE_SOCKET);
 	const struct sockaddr *addr = totcpaddr(L, 2, tcp);
-	int err = uv_tcp_bind(lcu_totcphandle(tcp), addr, 0);
+	int err = uv_tcp_bind(lcu_totcphdl(tcp), addr, 0);
 	return lcuL_pushresults(L, 0, err);
 }
 
@@ -959,11 +937,11 @@ static int tcp_setoption (lua_State *L) {
 				delay = (int)luaL_checkinteger(L, 3);
 				luaL_argcheck(L, delay >= 0, 3, "negative delay");
 			}
-			err = uv_tcp_keepalive(lcu_totcphandle(tcp), enabled, delay);
+			err = uv_tcp_keepalive(lcu_totcphdl(tcp), enabled, delay);
 			if (err >= 0) lcu_settcpkeepalive(tcp, delay);
 		}; break;
 		case 1: {  /* nodelay */
-			err = uv_tcp_nodelay(lcu_totcphandle(tcp), enabled);
+			err = uv_tcp_nodelay(lcu_totcphdl(tcp), enabled);
 			if (err >= 0) lcu_settcpnodelay(tcp, enabled);
 		}; break;
 	}
@@ -997,7 +975,7 @@ static int k_setuptcpconn (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_TcpSocket *tcp = ownedtcp(L, loop, LCU_TCPTYPE_STREAM);
 	const struct sockaddr *addr = totcpaddr(L, 2, tcp);
 	uv_connect_t *connect = (uv_connect_t *)request;
-	return uv_tcp_connect(connect, lcu_totcphandle(tcp), addr, uv_onconnected);
+	return uv_tcp_connect(connect, lcu_totcphdl(tcp), addr, uv_onconnected);
 }
 static int tcp_connect (lua_State *L) {
 	return lcuT_resetreqopk(L, k_setuptcpconn, NULL);
@@ -1011,7 +989,7 @@ static void uv_onshutdown (uv_shutdown_t *request, int err) {
 static int k_setupshutdown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_TcpSocket *tcp = ownedtcp(L, loop, LCU_TCPTYPE_STREAM);
 	uv_shutdown_t *shutdown = (uv_shutdown_t *)request;
-	uv_stream_t *stream = (uv_stream_t *)lcu_totcphandle(tcp);
+	uv_stream_t *stream = (uv_stream_t *)lcu_totcphdl(tcp);
 	return uv_shutdown(shutdown, stream, uv_onshutdown);
 }
 static int tcp_shutdown (lua_State *L) {
@@ -1026,7 +1004,7 @@ static void uv_onwritten (uv_write_t *request, int err) {
 static int k_setupwrite (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_TcpSocket *tcp = ownedtcp(L, loop, LCU_TCPTYPE_STREAM);
 	uv_write_t *write = (uv_write_t *)request;
-	uv_stream_t *stream = (uv_stream_t *)lcu_totcphandle(tcp);
+	uv_stream_t *stream = (uv_stream_t *)lcu_totcphdl(tcp);
 	uv_buf_t bufs[1];
 	getbufarg(L, bufs);
 	return uv_write(write, stream, bufs, 1, uv_onwritten);
@@ -1041,14 +1019,14 @@ static int stopread (uv_stream_t *stream) {
 	int err = uv_read_stop(stream);
 	if (err < 0) {
 		lua_State *L = (lua_State *)stream->loop->data;
-		lcu_closeobj(L, 1, (uv_handle_t *)stream);
+		lcu_closeobjhdl(L, 1, (uv_handle_t *)stream);
 	}
-	lcu_settcparmed((lcu_TcpSocket *)stream, 0);
+	lcu_setobjarmed(lcu_tohdlobj((uv_handle_t *)stream), 0);
 	return err;
 }
 static int k_recvdata (lua_State *L, int status, lua_KContext ctx) {
 	lcu_TcpSocket *tcp = openedtcp(L, LCU_TCPTYPE_STREAM);
-	uv_stream_t *stream = (uv_stream_t *)lcu_totcphandle(tcp);
+	uv_stream_t *stream = (uv_stream_t *)lcu_totcphdl(tcp);
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
 	if (lcuT_haltedobjop(L, (uv_handle_t *)stream)) {
@@ -1059,7 +1037,7 @@ static int k_recvdata (lua_State *L, int status, lua_KContext ctx) {
 }
 static int k_getbuffer (lua_State *L, int status, lua_KContext ctx) {
 	lcu_TcpSocket *tcp = openedtcp(L, LCU_TCPTYPE_STREAM);
-	uv_stream_t *stream = (uv_stream_t *)lcu_totcphandle(tcp);
+	uv_stream_t *stream = (uv_stream_t *)lcu_totcphdl(tcp);
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
 	if (!lcuT_haltedobjop(L, (uv_handle_t *)stream)) {
@@ -1081,6 +1059,7 @@ static void uv_onrecvdata (uv_stream_t *stream,
 	if (buf->base != (char *)buf) {
 		lua_State *thread = (lua_State *)stream->data;
 		lcu_assert(thread);
+		lcu_assert(lua_gettop(thread) == 0);
 		if (nread >= 0) lua_pushinteger(thread, nread);
 		else if (nread != UV_EOF) lcuL_pushresults(thread, 0, nread);
 		lcuU_resumeobjop(thread, (uv_handle_t *)stream);
@@ -1089,14 +1068,15 @@ static void uv_onrecvdata (uv_stream_t *stream,
 }
 static int tcp_receive (lua_State *L) {
 	lcu_TcpSocket *tcp = ownedtcp(L, lcu_toloop(L), LCU_TCPTYPE_STREAM);
-	uv_stream_t *stream = (uv_stream_t *)lcu_totcphandle(tcp);
+	uv_stream_t *stream = (uv_stream_t *)lcu_totcphdl(tcp);
 	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
 	if (stream->data) luaL_argcheck(L, stream->data == L, 1, "already in use");
 	else {
-		if (!lcu_gettcparmed(tcp)) {
+		lcu_Object *obj = (lcu_Object *)tcp;
+		if (!lcu_getobjarmed(obj)) {
 			int err = uv_read_start(stream, uv_ongetbuffer, uv_onrecvdata);
 			if (err < 0) return lcuL_pushresults(L, 0, err);
-			lcu_settcparmed(tcp, 1);
+			lcu_setobjarmed(obj, 1);
 		}
 		lcuT_awaitobj(L, (uv_handle_t *)stream);
 	}
@@ -1109,23 +1089,25 @@ static int tcp_receive (lua_State *L) {
 static void uv_onconnection (uv_stream_t *stream, int status) {
 	lua_State *thread = (lua_State *)stream->data;
 	if (thread) {
+		uv_handle_t *handle = (uv_handle_t *)stream;
+		lcu_assert(lua_gettop(thread) == 0);
 		lua_pushinteger(thread, status);
-		lcuU_resumeobjop(thread, (uv_handle_t *)stream);
-		if (stream->data == NULL) uv_unref((uv_handle_t *)stream);
-		else lcu_assert(uv_has_ref((uv_handle_t *)stream));
+		lcuU_resumeobjop(thread, handle);
+		if (stream->data == NULL) uv_unref(handle);
+		else lcu_assert(uv_has_ref(handle));
 	}
-	else lcu_addtcplisten((lcu_TcpSocket *)stream);
+	else lcu_addobjlisten(lcu_tohdlobj((uv_handle_t *)stream));
 }
 static int tcp_listen (lua_State *L) {
 	lcu_TcpSocket *tcp = ownedtcp(L, lcu_toloop(L), LCU_TCPTYPE_LISTEN);
-	uv_stream_t *stream = (uv_stream_t *)lcu_totcphandle(tcp);
+	uv_stream_t *stream = (uv_stream_t *)lcu_totcphdl(tcp);
 	lua_Integer backlog = luaL_checkinteger(L, 2);
 	int err;
-	luaL_argcheck(L, !lcu_istcplisten(tcp), 1, "already listening");
+	luaL_argcheck(L, !lcu_isobjlisten((lcu_Object *)tcp), 1, "already listening");
 	luaL_argcheck(L, 0 <= backlog && backlog <= INT_MAX, 2, "large backlog");
 	err = uv_listen(stream, (int)backlog, uv_onconnection);
 	if (err >= 0) {
-		lcu_marktcplisten(tcp);
+		lcu_markobjlisten((lcu_Object *)tcp);
 		uv_unref((uv_handle_t *)stream); /* uv_listen_stop */
 	}
 	return lcuL_pushresults(L, 0, err);
@@ -1135,17 +1117,17 @@ static int tcp_listen (lua_State *L) {
 /* tcp [, errmsg] = socket:accept() */
 static int k_accepttcp (lua_State *L, int status, lua_KContext ctx) {
 	lcu_TcpSocket *tcp = openedtcp(L, LCU_TCPTYPE_LISTEN);
-	uv_stream_t *stream = (uv_stream_t *)lcu_totcphandle(tcp);
+	uv_stream_t *stream = (uv_stream_t *)lcu_totcphdl(tcp);
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
 	if (!lcuT_haltedobjop(L, (uv_handle_t *)stream)) {
-		int domain = lcu_gettcpaddrfam(tcp);
-		lcu_TcpSocket *newtcp = lcu_newtcp(L, domain, LCU_TCPTYPE_STREAM);
-		uv_tcp_t *newhdl = lcu_totcphandle(newtcp);
+		int domain = lcu_getobjdomain((lcu_Object *)tcp);
+		lcu_TcpSocket *newtcp = lcu_newtcp(L, LCU_TCPTYPE_STREAM, domain);
+		uv_tcp_t *newhdl = lcu_totcphdl(newtcp);
 		int err = uv_tcp_init(stream->loop, newhdl);
 		if (err >= 0) {
 			err = uv_accept(stream, (uv_stream_t *)newhdl);
-			if (err >= 0) lcu_enabletcp(L, -1);
+			if (err >= 0) lcu_enableobj((lcu_Object *)newtcp);
 		}
 		return lcuL_pushresults(L, 1, err);
 	}
@@ -1155,9 +1137,9 @@ static int k_accepttcp (lua_State *L, int status, lua_KContext ctx) {
 static int tcp_accept (lua_State *L) {
 	uv_loop_t *loop = lcu_toloop(L);
 	lcu_TcpSocket *tcp = ownedtcp(L, loop, LCU_TCPTYPE_LISTEN);
-	luaL_argcheck(L, lcu_istcplisten(tcp), 1, "not listening");
-	if (!lcu_picktcplisten(tcp)) {
-		uv_handle_t *handle = (uv_handle_t *)lcu_totcphandle(tcp);
+	luaL_argcheck(L, lcu_isobjlisten((lcu_Object *)tcp), 1, "not listening");
+	if (!lcu_pickobjlisten((lcu_Object *)tcp)) {
+		uv_handle_t *handle = (uv_handle_t *)lcu_totcphdl(tcp);
 		luaL_argcheck(L, handle->data == NULL, 1, "already used");
 		if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
 		uv_ref(handle);  /* uv_listen_start */
@@ -1183,10 +1165,13 @@ static const luaL_Reg list[] = {
 	{NULL, NULL}
 };
 
+static const luaL_Reg obj[] = {
+	{"__gc", object_gc},
+	{"close", object_close},
+	{NULL, NULL}
+};
+
 static const luaL_Reg udp[] = {
-	{"__tostring", udp_tostring},
-	{"__gc", udp_gc},
-	{"close", udp_close},
 	{"getdomain", udp_getdomain},
 	{"getaddress", udp_getaddress},
 	{"bind", udp_bind},
@@ -1199,9 +1184,6 @@ static const luaL_Reg udp[] = {
 };
 
 static const luaL_Reg tcp[] = {
-	{"__tostring", tcp_tostring},
-	{"__gc", tcp_gc},
-	{"close", tcp_close},
 	{"getdomain", tcp_getdomain},
 	{"getaddress", tcp_getaddress},
 	{"bind", tcp_bind},
@@ -1235,8 +1217,10 @@ static const luaL_Reg modf[] = {
 LCULIB_API void lcuM_addtcpf (lua_State *L) {
 	lcuM_newclass(L, addr, 0, LCU_NETADDRCLS, NULL);
 	lcuM_newclass(L, list, 0, LCU_NETADDRLISTCLS, NULL);
-	lcuM_newclass(L, udp, LCU_MODUPVS, LCU_UDPSOCKCLS, NULL);
-	lcuM_newclass(L, tcp, LCU_MODUPVS, lcu_TcpSockCls[LCU_TCPTYPE_SOCKET], NULL);
+	lcuM_newclass(L, obj, LCU_MODUPVS, LCU_OBJECTCLS, NULL);
+	lcuM_newclass(L, udp, LCU_MODUPVS, LCU_UDPSOCKCLS, LCU_OBJECTCLS);
+	lcuM_newclass(L, tcp, LCU_MODUPVS, lcu_TcpSockCls[LCU_TCPTYPE_SOCKET],
+	                                   LCU_OBJECTCLS);
 	lcuM_newclass(L, strm, LCU_MODUPVS, lcu_TcpSockCls[LCU_TCPTYPE_STREAM],
 	                                    lcu_TcpSockCls[LCU_TCPTYPE_SOCKET]);
 	lcuM_newclass(L, lstn, LCU_MODUPVS, lcu_TcpSockCls[LCU_TCPTYPE_LISTEN],

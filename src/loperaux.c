@@ -27,7 +27,7 @@ static void freethread (lua_State *L, void *key) {
 static int resumethread (lua_State *thread, lua_State *L, uv_loop_t *loop) {
 	lcu_assert(loop->data == (void *)L);
 	lua_pushlightuserdata(thread, loop);  /* token to sign scheduler resume */
-	return lua_resume(thread, L, 0);
+	return lua_resume(thread, L, lua_gettop(thread));
 }
 
 static int haltedop (lua_State *L, uv_loop_t *loop) {
@@ -69,14 +69,15 @@ static void closedhdl (uv_handle_t *handle) {
 	Operation *op = (Operation *)handle;
 	uv_loop_t *loop = handle->loop;
 	lua_State *L = (lua_State *)loop->data;
-	lua_State *thread = (lua_State *)handle->data;
+	void *thread = handle->data;
 	uv_req_t *request = torequest(op);
 	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST));
 	freethread(L, (void *)handle);
 	lcuL_setflag(op, FLAG_REQUEST);
 	request->type = UV_UNKNOWN_REQ;
-	request->data = (void *)thread;
-	if (lcuL_maskflag(op, FLAG_PENDING)) resumethread(thread, L, loop);
+	request->data = thread;
+	if (lcuL_maskflag(op, FLAG_PENDING))
+		resumethread((lua_State *)thread, L, loop);
 }
 
 static void cancelop (Operation *op) {
@@ -261,14 +262,14 @@ static void closedobj (uv_handle_t *handle) {
 	freethread(L, (void *)handle);  /* becomes garbage */
 }
 
-LCULIB_API void lcu_closeobj (lua_State *L, int idx, uv_handle_t *handle) {
+LCULIB_API void lcu_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle) {
 	lua_State *thread = (lua_State *)handle->data;
 	if (thread) {
 		lcu_assert(lua_gettop(thread) == 0);
 		handle->data = NULL;
 		lua_pushnil(thread);
 		lua_pushliteral(thread, "closed");
-		lua_resume(thread, L, 0);
+		lua_resume(thread, L, 2);
 	}
 	lua_pushvalue(L, idx);  /* get the object */
 	lua_pushlightuserdata(L, (void *)handle);
@@ -276,18 +277,6 @@ LCULIB_API void lcu_closeobj (lua_State *L, int idx, uv_handle_t *handle) {
 	lua_settable(L, COREGISTRY);  /* also 'freethread' */
 	uv_close(handle, closedobj);
 }
-
-/*
-LCULIB_API int lcu_close##OBJ (lua_State *L, int idx) {
-	lcu_##OBJTYPE *object = to##OBJ(L, idx);
-	if (object && lcu_isopen##OBJ(tcp)) {
-		lcu_closeobj(L, idx, (uv_handle_t *)&object->handle);
-		lcuL_setflag(object, LCU_OBJFLAG_CLOSED);
-		return 1;
-	}
-	return 0;
-}
-*/
 
 LCULIB_API void lcuT_awaitobj (lua_State *L, uv_handle_t *handle) {
 	lcu_assert(handle->data == NULL);
