@@ -1,4 +1,3 @@
-#include "looplib.h"
 #include "lmodaux.h"
 #include "loperaux.h"
 #include "lnetwaux.h"

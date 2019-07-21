@@ -6,7 +6,6 @@
 
 #include <lua.h>
 #include <lauxlib.h>
-#include <looplib.h>
 #include <uv.h>
 #include <netinet/in.h>  /* network addresses */
 #include <arpa/inet.h>  /* IP addresses */
