@@ -48,7 +48,7 @@ static void pushhandlemap (lua_State *L) {
 	}
 }
 
-#define LCU_UVLOOPCLS	LCU_PREFIX"EventLoop"
+#define LCU_UVLOOPCLS	LCU_PREFIX"uv_loop_t"
 
 static int terminateloop (lua_State *L) {
 	uv_loop_t *loop = (uv_loop_t *)luaL_checkudata(L, 1, LCU_UVLOOPCLS);
@@ -90,20 +90,16 @@ LCULIB_API void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
 	for (; l->name != NULL; l++) {  /* fill the table with given functions */
 		int i;
 		for (i = 0; i < nup; i++)  /* copy upvalues to the top */
-			lua_pushvalue(L, -nup);
+			lua_pushvalue(L, -(nup+1));
 		lua_pushcclosure(L, l->func, nup);  /* closure with those upvalues */
-		lua_setfield(L, -(nup + 2), l->name);
+		lua_setfield(L, -2, l->name);
 	}
 }
 
-LCULIB_API void lcuM_newclass (lua_State *L, const luaL_Reg *l, int nup,
-                               const char *name, const char *super) {
-	loopL_newclass(L, name, super);
+LCULIB_API void lcuM_newclass (lua_State *L, const char *name) {
+	luaL_newmetatable(L, name);
 	lua_pushvalue(L, -1);
 	lua_setfield(L, -2, "__index");
-	lua_insert(L, -(nup+1));
-	lcuM_setfuncs(L, l, nup);
-	lua_remove(L, -(nup+1));
 }
 
 

@@ -204,6 +204,17 @@ LCULIB_API void lcuU_resumereqop (lua_State *thread,
 		freethread(L, (void *)request);
 }
 
+LCULIB_API void lcuU_completereqop (uv_loop_t *loop,
+                                    uv_req_t *request,
+                                    int err) {
+	lua_State *thread = lcuU_endreqop(loop, request);
+	if (thread) {
+		lcu_assert(lua_gettop(thread) == 0);
+		lcuL_pushresults(thread, 0, err);
+		lcuU_resumereqop(thread, loop, request);
+	}
+}
+
 
 /*
  * thread operation
