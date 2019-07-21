@@ -264,9 +264,9 @@ static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	procopts.stdio = streams;
 	tabarg = getprocopts(L, &procopts);
 
-	err = lcuT_armthrop(L, uv_spawn(loop, process, &procopts));
-	if (err) uv_close(handle, NULL);  /* TODO: does libuv requires this? */
-	else if (tabarg) {
+	err = uv_spawn(loop, process, &procopts);
+	lcuT_armthrop(L, 0);  /* 'uv_spawn' always arms the operation */
+	if (err && tabarg) {
 		lua_pushinteger(L, uv_process_get_pid(process));
 		lua_setfield(L, 1, "pid");
 	}
