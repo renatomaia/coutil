@@ -5,11 +5,15 @@ local trap = spawn.trap
 newtest "catch" --------------------------------------------------------------
 
 do case "error messages"
+	assert(coroutine.status(catch()) == "dead")
+	assert(coroutine.status(catch(nil)) == "dead")
+	assert(coroutine.status(catch(nil, nil)) == "dead")
+
 	local c = counter()
-	asserterr("bad argument #1 (function expected)", pcall(catch))
-	asserterr("bad argument #1 (function expected)", pcall(catch, nil))
-	asserterr("bad argument #1 (function expected)", pcall(catch, nil, c))
-	assert(c() == 1)
+	assert(coroutine.status(catch(c, nil)) == "dead")
+	assert(c() == 2)
+	assert(coroutine.status(catch(nil, c)) == "dead")
+	assert(c() == 3)
 
 	done()
 end
@@ -135,11 +139,15 @@ end
 newtest "trap" --------------------------------------------------------------
 
 do case "error messages"
+	assert(coroutine.status(trap()) == "dead")
+	assert(coroutine.status(trap(nil)) == "dead")
+	assert(coroutine.status(trap(nil, nil)) == "dead")
+
 	local c = counter()
-	asserterr("bad argument #1 (function expected)", pcall(trap))
-	asserterr("bad argument #1 (function expected)", pcall(trap, nil))
-	asserterr("bad argument #1 (function expected)", pcall(trap, nil, c))
-	assert(c() == 1)
+	assert(coroutine.status(trap(c, nil)) == "dead")
+	assert(c() == 2)
+	assert(coroutine.status(trap(nil, c)) == "dead")
+	assert(c() == 4)
 
 	done()
 end
