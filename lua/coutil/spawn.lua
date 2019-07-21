@@ -24,13 +24,15 @@ end
 local module = {}
 
 function module.trap(handler, f, ...)
-	assert(type(handler) == "function", "bad argument #1 (function expected)")
-	resume(newthread(trapcall), f, handler, ...)
+	local thread = newthread(trapcall)
+	resume(thread, f, handler, ...)
+	return thread
 end
 
 function module.catch(handler, f, ...)
-	assert(type(handler) == "function", "bad argument #1 (function expected)")
-	resume(newthread(xpcall), f, handler, ...)
+	local thread = newthread(xpcall)
+	resume(thread, f, handler, ...)
+	return thread
 end
 
 return module
