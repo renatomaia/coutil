@@ -229,6 +229,7 @@ Module `coutil.spawn` provides functions to execute functions in new coroutines 
 Calls function `f` with the given arguments in a new coroutine.
 If any error is raised inside `f`, the coroutine executes the error message handler function `h` with the error message as argument.
 `h` is executed in the calling context of the raised error, just like an error message handler in `xpcall`.
+Returns the new coroutine.
 
 ### `spawn.trap (h, f, ...)`
 
@@ -236,6 +237,7 @@ Calls function `f` with the given arguments in a new coroutine.
 If `f` executes without any error, the coroutine executes function `h` passing as arguments the `true` followed by all the results from `f`.
 In case of any error, `h` is executed with arguments `false` and the error message.
 In the latter case, `h` is executed in the calling context of the raised error, just like a error message handler in `xpcall`.
+Returns the new coroutine.
 
 System
 ------
