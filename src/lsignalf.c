@@ -266,7 +266,7 @@ static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 
 	err = uv_spawn(loop, process, &procopts);
 	lcuT_armthrop(L, 0);  /* 'uv_spawn' always arms the operation */
-	if (err && tabarg) {
+	if (!err && tabarg) {
 		lua_pushinteger(L, uv_process_get_pid(process));
 		lua_setfield(L, 1, "pid");
 	}
