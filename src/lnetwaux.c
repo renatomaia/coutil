@@ -7,6 +7,7 @@
 
 #define hdl2obj(H,T) (lcu_Object *)((char *)H - offsetof(lcu_Object, handle))
 
+
 /*
  * Addresses
  */
@@ -131,7 +132,7 @@ static lcu_Object *createobj (lua_State *L, size_t size, const char *cls) {
 }
 
 LCULIB_API int lcu_closeobj (lua_State *L, int idx, const char *cls) {
-	lcu_Object *object = (lcu_Object *)loopL_checkinstance(L, idx, cls);
+	lcu_Object *object = (lcu_Object *)luaL_checkudata(L, idx, cls);
 	if (object && !lcuL_maskflag(object, FLAG_CLOSED)) {
 		lcu_closeobjhdl(L, idx, &object->handle);
 		lcuL_setflag(object, FLAG_CLOSED);
@@ -185,21 +186,27 @@ LCULIB_API void lcu_markobjlisten (lcu_Object *object) {
 
 LCULIB_API lcu_UdpSocket *lcu_newudp (lua_State *L, int domain) {
 	lcu_UdpSocket *udp = (lcu_UdpSocket *)createobj(L, sizeof(lcu_UdpSocket),
-	                                                   LCU_UDPSOCKCLS);
+	                                                   LCU_UDPSOCKETCLS);
 	if (domain == AF_INET6) lcuL_setflag(udp, FLAG_IPV6DOM);
 	lcuL_setflag(udp, 1<<MCASTTTL_SHIFT);
 	return udp;
 }
 
-LCULIB_API lcu_TcpSocket *lcu_newtcp (lua_State *L, int class, int domain) {
+LCULIB_API lcu_TcpSocket *lcu_newtcp (lua_State *L,
+                                      const char *class,
+                                      int domain) {
 	lcu_TcpSocket *tcp = (lcu_TcpSocket *)createobj(L, sizeof(lcu_TcpSocket),
-	                                                   lcu_TcpSockCls[class]);
+	                                                   class);
 	if (domain == AF_INET6) lcuL_setflag(tcp, FLAG_IPV6DOM);
 	return tcp;
 }
 
-LCULIB_API lcu_IpcPipe *lcu_newpipe (lua_State *L, int class) {
-	return (lcu_IpcPipe *)createobj(L, sizeof(lcu_IpcPipe), lcu_IpcPipeCls[class]);
+LCULIB_API lcu_IpcPipe *lcu_newpipe (lua_State *L,
+                                     const char *class,
+                                     int ipc) {
+	lcu_IpcPipe *pipe = (lcu_IpcPipe *)createobj(L, sizeof(lcu_IpcPipe), class);
+	if (ipc) lcuL_setflag(pipe, FLAG_IPV6DOM);
+	return pipe;
 }
 
 #define newbooloption(name, type, flag) \

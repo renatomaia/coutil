@@ -22,6 +22,10 @@ LCULIB_API void lcuU_resumereqop (lua_State *thread,
                                   uv_loop_t *loop,
                                   uv_req_t *request);
 
+LCULIB_API void lcuU_completereqop (uv_loop_t *loop,
+                                    uv_req_t *request,
+                                    int err);
+
 /* thread operations */
 
 typedef int (*lcu_HandleSetup) (lua_State *L, uv_handle_t *h, uv_loop_t *l);

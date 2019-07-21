@@ -65,9 +65,6 @@ LCULIB_API void lcuM_addtimef (lua_State *L) {
 		{"suspend", lcuM_suspend},
 		{NULL, NULL}
 	};
+	lcuM_setfuncs(L, luaf, 0);
 	lcuM_setfuncs(L, modf, LCU_MODUPVS);
-
-	lua_pushvalue(L, -(LCU_MODUPVS+1));
-	luaL_setfuncs(L, luaf, 0);
-	lua_pop(L, 1);
 }
