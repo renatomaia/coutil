@@ -49,18 +49,22 @@ static void pushhandlemap (lua_State *L) {
 
 #define LCU_UVLOOPCLS	LCU_PREFIX"uv_loop_t"
 
+static void closehandle (uv_handle_t* handle, void* arg) {
+	if (!uv_is_closing(handle)) uv_close(handle, NULL);
+}
+
 static int terminateloop (lua_State *L) {
 	uv_loop_t *loop = (uv_loop_t *)luaL_checkudata(L, 1, LCU_UVLOOPCLS);
 	int err = uv_loop_close(loop);
 	if (err == UV_EBUSY) {
+		uv_walk(loop, closehandle, NULL);
 		loop->data = (void *)L;
-
-printf("WARN: still pending UV handles\n");
-uv_print_all_handles(loop, stderr);
-
 		err = uv_run(loop, UV_RUN_NOWAIT);
-		if (!err) err = uv_loop_close(loop);
 		loop->data = NULL;
+		if (!err) err = uv_loop_close(loop);
+
+else {fprintf(stderr, "WARN: close failed!\n"); uv_print_all_handles(loop, stderr);}
+
 	}
 	lcu_assert(!err);
 	return 0;
