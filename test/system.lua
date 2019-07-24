@@ -193,6 +193,7 @@ do case "nanosecs"
 
 	spawn(function ()
 		before = system.nanosecs()
+		system.time("update")
 		system.suspend(1e-3)
 		elapsed = system.nanosecs()-before
 	end)
