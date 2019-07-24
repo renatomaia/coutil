@@ -1,6 +1,6 @@
+#include "lsyslib.h"
 #include "lmodaux.h"
 #include "loperaux.h"
-#include "lnetwaux.h"
 
 #include <string.h>
 #include <lmemlib.h>
@@ -1347,7 +1347,7 @@ static const luaL_Reg modf[] = {
 	{NULL, NULL}
 };
 
-LCULIB_API void lcuM_addipccls (lua_State *L) {
+LCUI_FUNC void lcuM_addcommunc (lua_State *L) {
 	lcuM_newclass(L, LCU_NETADDRCLS);
 	lcuM_setfuncs(L, addr, 0);
 	lua_pop(L, 1);
@@ -1403,6 +1403,6 @@ LCULIB_API void lcuM_addipccls (lua_State *L) {
 	lua_pop(L, 1);
 }
 
-LCULIB_API void lcuM_addipcf (lua_State *L) {
+LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	lcuM_setfuncs(L, modf, LCU_MODUPVS);
 }

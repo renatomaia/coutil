@@ -44,8 +44,9 @@ MYOBJS=
 
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 
-OSM_O=	lmodaux.o loperaux.o lnetwaux.o \
-      	lscheduf.o ltimef.o lsignalf.o lnetwrkf.o \
+OSM_O=	lsyslib.o \
+      	lmodaux.o loperaux.o \
+      	lscheduf.o ltimef.o lprocesf.o lcommunf.o \
       	lsysmod.o
 
 ALL_O=	$(OSM_O) $(MYOBJS)

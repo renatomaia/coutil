@@ -1,23 +1,7 @@
 #include "lmodaux.h"
 
 
-LCULIB_API void *lcuL_allocmemo (lua_State *L, size_t size)
-{
-	void *userdata;
-	lua_Alloc alloc = lua_getallocf(L, &userdata);
-	return alloc(userdata, NULL, 0, size);
-}
-
-LCULIB_API void lcuL_freememo (lua_State *L, void *memo, size_t size)
-{
-	void *userdata;
-	lua_Alloc alloc = lua_getallocf(L, &userdata);
-	memo = alloc(userdata, memo, size, 0);
-	assert(memo == NULL);
-}
-
-
-LCULIB_API int lcuL_pushresults (lua_State *L, int n, int err) {
+LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err) {
 	if (err < 0) {
 		lua_pop(L, n);
 		lua_pushnil(L);
@@ -70,7 +54,7 @@ else {fprintf(stderr, "WARN: close failed!\n"); uv_print_all_handles(loop, stder
 	return 0;
 }
 
-LCULIB_API void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
+LCUI_FUNC void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
 	int err;
 	if (uv) lua_pushlightuserdata(L, uv);
 	else {
@@ -88,7 +72,7 @@ LCULIB_API void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
 	pushhandlemap(L);  /* LCU_HANDLEMAP */
 }
 
-LCULIB_API void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
+LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
 	luaL_checkstack(L, nup, "too many upvalues");
 	for (; l->name != NULL; l++) {  /* fill the table with given functions */
 		int i;
@@ -99,15 +83,15 @@ LCULIB_API void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
 	}
 }
 
-LCULIB_API void lcuM_newclass (lua_State *L, const char *name) {
+LCUI_FUNC void lcuM_newclass (lua_State *L, const char *name) {
 	luaL_newmetatable(L, name);
 	lua_pushvalue(L, -1);
 	lua_setfield(L, -2, "__index");
 }
 
 
-LCULIB_API void lcuL_printstack (lua_State *L, const char *file, int line,
-                                               const char *func) {
+LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
+                                              const char *func) {
 	int i;
 	printf("%s:%d: function '%s'\n", file, line, func);
 	for(i = 1; i <= lua_gettop(L); ++i) {

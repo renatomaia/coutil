@@ -7,8 +7,16 @@
 #define lcuconf_h
 
 
+#ifndef LCUI_FUNC
+#define LCUI_FUNC LUAI_FUNC
+#endif
+
 #ifndef LCULIB_API
-#define LCULIB_API
+#define LCULIB_API LUALIB_API
+#endif
+
+#ifndef LCUMOD_API
+#define LCUMOD_API LUAMOD_API
 #endif
 
 #ifndef LCU_PREFIX

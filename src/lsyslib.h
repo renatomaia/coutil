@@ -1,5 +1,5 @@
-#ifndef lnetwaux_h
-#define lnetwaux_h
+#ifndef lsyslib_h
+#define lsyslib_h
 
 
 #include "lcuconf.h"
