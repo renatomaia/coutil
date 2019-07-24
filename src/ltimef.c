@@ -3,7 +3,7 @@
 
 
 /* timestamp = system.time([update]) */
-static int lcuM_time (lua_State *L) {
+static int system_time (lua_State *L) {
 	uv_loop_t *loop = lcu_toloop(L);
 	if (lua_toboolean(L, 1)) uv_update_time(loop);
 	lua_pushnumber(L, (lua_Number)(uv_now(loop))/1e3);
@@ -11,7 +11,7 @@ static int lcuM_time (lua_State *L) {
 }
 
 /* timestamp = system.nanosecs() */
-static int lcuM_nanosecs (lua_State *L) {
+static int system_nanosecs (lua_State *L) {
 	lua_pushinteger(L, (lua_Integer)uv_hrtime());
 	return 1;
 }
@@ -48,21 +48,21 @@ static int k_setuptimer (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	if (err >= 0) err = uv_timer_start(timer, uv_ontimer, msecs, msecs);
 	return err;
 }
-static int lcuM_suspend (lua_State *L) {
+static int system_suspend (lua_State *L) {
 	lua_Number delay = luaL_optnumber(L, 1, 0);
 	if (delay > 0) return lcuT_resetthropk(L, UV_TIMER, k_setuptimer, returntrue);
 	else return lcuT_resetthropk(L, UV_IDLE, k_setupidle, returntrue);
 }
 
 
-LCULIB_API void lcuM_addtimef (lua_State *L) {
+LCUI_FUNC void lcuM_addtimef (lua_State *L) {
 	static const luaL_Reg luaf[] = {
-		{"nanosecs", lcuM_nanosecs},
+		{"nanosecs", system_nanosecs},
 		{NULL, NULL}
 	};
 	static const luaL_Reg modf[] = {
-		{"time", lcuM_time},
-		{"suspend", lcuM_suspend},
+		{"time", system_time},
+		{"suspend", system_suspend},
 		{NULL, NULL}
 	};
 	lcuM_setfuncs(L, luaf, 0);

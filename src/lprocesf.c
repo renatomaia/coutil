@@ -284,6 +284,6 @@ static const luaL_Reg modf[] = {
 	{NULL, NULL}
 };
 
-LCULIB_API void lcuM_addsignalf (lua_State *L) {
+LCUI_FUNC void lcuM_addsignalf (lua_State *L) {
 	lcuM_setfuncs(L, modf, LCU_MODUPVS);
 }

@@ -168,9 +168,9 @@ static opstatus checkreset (Operation *op, lua_CFunction results, int type) {
  * request operation
  */
 
-LCULIB_API int lcuT_resetreqopk (lua_State *L,
-                                 lcu_RequestSetup setup,
-                                 lua_CFunction results) {
+LCUI_FUNC int lcuT_resetreqopk (lua_State *L,
+                                lcu_RequestSetup setup,
+                                lua_CFunction results) {
 	if (lua_isyieldable(L)) {
 		Operation *op = tothrop(L);
 		switch (checkreset(op, results, 0)) {
@@ -182,7 +182,7 @@ LCULIB_API int lcuT_resetreqopk (lua_State *L,
 	return luaL_error(L, "unable to yield");
 }
 
-LCULIB_API lua_State *lcuU_endreqop (uv_loop_t *loop, uv_req_t *request) {
+LCUI_FUNC lua_State *lcuU_endreqop (uv_loop_t *loop, uv_req_t *request) {
 	lua_State *L = (lua_State *)loop->data;
 	Operation *op = (Operation *)request;
 	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST));
@@ -192,9 +192,9 @@ LCULIB_API lua_State *lcuU_endreqop (uv_loop_t *loop, uv_req_t *request) {
 	return NULL;
 }
 
-LCULIB_API void lcuU_resumereqop (lua_State *thread,
-                                  uv_loop_t *loop,
-                                  uv_req_t *request) {
+LCUI_FUNC void lcuU_resumereqop (lua_State *thread,
+                                 uv_loop_t *loop,
+                                 uv_req_t *request) {
 	lua_State *L = (lua_State *)loop->data;
 	Operation *op = (Operation *)request;
 	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST));
@@ -204,9 +204,9 @@ LCULIB_API void lcuU_resumereqop (lua_State *thread,
 		freethread(L, (void *)request);
 }
 
-LCULIB_API void lcuU_completereqop (uv_loop_t *loop,
-                                    uv_req_t *request,
-                                    int err) {
+LCUI_FUNC void lcuU_completereqop (uv_loop_t *loop,
+                                   uv_req_t *request,
+                                   int err) {
 	lua_State *thread = lcuU_endreqop(loop, request);
 	if (thread) {
 		lcu_assert(lua_gettop(thread) == 0);
@@ -220,10 +220,10 @@ LCULIB_API void lcuU_completereqop (uv_loop_t *loop,
  * thread operation
  */
 
-LCULIB_API int lcuT_resetthropk (lua_State *L,
-                                 uv_handle_type type,
-                                 lcu_HandleSetup setup,
-                                 lua_CFunction results) {
+LCUI_FUNC int lcuT_resetthropk (lua_State *L,
+                                uv_handle_type type,
+                                lcu_HandleSetup setup,
+                                lua_CFunction results) {
 	if (lua_isyieldable(L)) {
 		Operation *op = tothrop(L);
 		uv_loop_t *loop = NULL;
@@ -237,7 +237,7 @@ LCULIB_API int lcuT_resetthropk (lua_State *L,
 	return luaL_error(L, "unable to yield");
 }
 
-LCULIB_API int lcuT_armthrop (lua_State *L, int err) {
+LCUI_FUNC int lcuT_armthrop (lua_State *L, int err) {
 	lcu_assert(lcuL_maskflag(tothrop(L), FLAG_REQUEST));
 	lcu_assert(tohandle(tothrop(L))->type != UV_UNKNOWN_HANDLE);
 	if (err >= 0) {
@@ -251,7 +251,7 @@ LCULIB_API int lcuT_armthrop (lua_State *L, int err) {
 	return err;
 }
 
-LCULIB_API int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle) {
+LCUI_FUNC int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle) {
 	uv_loop_t *loop = handle->loop;
 	lua_State *L = (lua_State *)loop->data;
 	Operation *op = (Operation *)handle;
@@ -273,7 +273,7 @@ static void closedobj (uv_handle_t *handle) {
 	freethread(L, (void *)handle);  /* becomes garbage */
 }
 
-LCULIB_API void lcu_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle) {
+LCUI_FUNC void lcu_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle) {
 	lua_State *thread = (lua_State *)handle->data;
 	if (thread) {
 		lcu_assert(lua_gettop(thread) == 0);
@@ -289,7 +289,7 @@ LCULIB_API void lcu_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle) {
 	uv_close(handle, closedobj);
 }
 
-LCULIB_API void lcuT_awaitobj (lua_State *L, uv_handle_t *handle) {
+LCUI_FUNC void lcuT_awaitobj (lua_State *L, uv_handle_t *handle) {
 	lcu_assert(handle->data == NULL);
 	lcu_assert(handle->type != UV_UNKNOWN_HANDLE);
 	lcu_assert(uv_has_ref(handle));
@@ -298,14 +298,14 @@ LCULIB_API void lcuT_awaitobj (lua_State *L, uv_handle_t *handle) {
 	handle->data = (void *)L;
 }
 
-LCULIB_API int lcuT_haltedobjop (lua_State *L, uv_handle_t *handle) {
+LCUI_FUNC int lcuT_haltedobjop (lua_State *L, uv_handle_t *handle) {
 	if (!haltedop(L, handle->loop)) return 0;
 	freethread(L, (void *)handle);
 	handle->data = NULL;
 	return 1;
 }
 
-LCULIB_API int lcuU_resumeobjop (lua_State *thread, uv_handle_t *handle) {
+LCUI_FUNC int lcuU_resumeobjop (lua_State *thread, uv_handle_t *handle) {
 	uv_loop_t *loop = handle->loop;
 	lua_State *L = (lua_State *)loop->data;
 	int status;
