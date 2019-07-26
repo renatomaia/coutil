@@ -1202,7 +1202,7 @@ static int tcp_setoption (lua_State *L) {
 			int delay = -1;
 			if (enabled) {
 				delay = (int)luaL_checkinteger(L, 3);
-				luaL_argcheck(L, delay >= 0, 3, "negative delay");
+				luaL_argcheck(L, delay > 0, 3, "invalid argument");
 			}
 			err = uv_tcp_keepalive(lcu_totcphdl(tcp), enabled, delay);
 			if (err >= 0) lcu_settcpkeepalive(tcp, delay);
