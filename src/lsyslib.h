@@ -142,6 +142,7 @@ LCULIB_API void lcu_settcpkeepalive (lcu_TcpSocket *tcp, int delay);
 
 
 
+#define LCU_PIPEIPCCLS LCU_PREFIX"pipeipc"
 #define LCU_PIPEACTIVECLS LCU_PREFIX"pipeactive"
 #define LCU_PIPEPASSIVECLS LCU_PREFIX"pipepassive"
 
