@@ -81,22 +81,22 @@ LCULIB_API struct addrinfo *lcu_nextaddrlist (lcu_AddressList *l) {
 #define FLAG_OBJOPON 0x02
 #define FLAG_IPV6DOM 0x04
 
-#define FLAG_LISTEN 0x08  /* only for listen sockets */
+#define FLAG_LISTEN 0x08  /* only for passive streams */
 
-#define FLAG_NODELAY 0x08  /* only for stream sockets */
-#define FLAG_KEEPALIVE 0x10  /* only for stream sockets */
+#define FLAG_NODELAY 0x08  /* only for active TCP sockets */
+#define FLAG_KEEPALIVE 0x10  /* only for active TCP sockets */
 
-#define FLAG_CONNECTED 0x08  /* only for datagram sockets */
-#define FLAG_BROADCAST 0x10  /* only for datagram sockets */
-#define FLAG_MCASTLOOP 0x20  /* only for datagram sockets */
-#define FLAG_MCASTTTL 0x3fd0  /* only for datagram sockets */
+#define FLAG_CONNECTED 0x08  /* only for UDP sockets */
+#define FLAG_BROADCAST 0x10  /* only for UDP sockets */
+#define FLAG_MCASTLOOP 0x20  /* only for UDP sockets */
+#define FLAG_MCASTTTL 0x3fd0  /* only for UDP sockets */
 
-#define FLAG_LSTNMASK 0x0f  /* only for listen sockets */
-#define FLAG_STRMMASK 0x1f  /* only for stream sockets */
-#define FLAG_DGRMMASK 0x3f  /* only for datagram sockets */
+#define FLAG_LSTNMASK 0x0f  /* only for passive streams */
+#define FLAG_TCPMASK 0x1f  /* only for active TCP sockets */
+#define FLAG_UDPMASK 0x3f  /* only for UDP sockets */
 
 #define LISTENCONN_UNIT (FLAG_LSTNMASK+1)
-#define KEEPALIVE_SHIFT 4
+#define KEEPALIVE_SHIFT 5
 #define MCASTTTL_SHIFT 6
 
 struct lcu_Object {
@@ -234,7 +234,7 @@ LCULIB_API int lcu_getudpmcastttl (lcu_UdpSocket *udp) {
 LCULIB_API void lcu_setudpmcastttl (lcu_UdpSocket *udp, int value) {
 	if (value < 1) lcuL_clearflag(udp, FLAG_MCASTTTL);
 	else udp->flags = (value<<MCASTTTL_SHIFT)
-	                | lcuL_maskflag(udp, FLAG_DGRMMASK);
+	                | lcuL_maskflag(udp, FLAG_UDPMASK);
 }
 
 #define addrbinsz(O) lcuL_maskflag(O, FLAG_IPV6DOM) ? sizeof(struct in6_addr) \
@@ -265,5 +265,5 @@ LCULIB_API void lcu_settcpkeepalive (lcu_TcpSocket *tcp, int delay) {
 	if (delay < 0) lcuL_clearflag(tcp, FLAG_KEEPALIVE);
 	else tcp->flags = (delay<<KEEPALIVE_SHIFT)
 	                | FLAG_KEEPALIVE
-	                | (tcp->flags&FLAG_STRMMASK);
+	                | (tcp->flags&FLAG_TCPMASK);
 }
