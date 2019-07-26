@@ -329,9 +329,6 @@ end
 		asserterr("value expected", pcall(stream.setoption, stream, "keepalive"))
 		asserterr("invalid option", pcall(stream.getoption, stream, "KeepAlive"))
 		asserterr("invalid option", pcall(stream.setoption, stream, "KeepAlive", 1))
-		asserterr("invalid argument", stream:setoption("keepalive", 0))
-		asserterr("number has no integer representation",
-			pcall(stream.setoption, stream, "keepalive", 0.123))
 
 		done()
 	end
@@ -362,10 +359,15 @@ end
 	do case "mcastttl"
 		local stream = assert(system.udp(domain))
 		assert(stream:getoption("mcastttl") == 1)
-		assert(stream:setoption("mcastttl", 123) == true)
-		assert(stream:getoption("mcastttl") == 123)
-		assert(stream:setoption("mcastttl", 3) == true)
-		assert(stream:getoption("mcastttl") == 3)
+		for _, value in ipairs{ 1, 2, 3, 123, 128, 255 } do
+			assert(stream:setoption("mcastttl", value) == true)
+			assert(stream:getoption("mcastttl") == value)
+		end
+
+		for _, value in ipairs{ -1, 0, 256, 257, math.maxinteger } do
+			asserterr("must be from 1 upto 255",
+				pcall(stream.setoption, stream, "mcastttl", value))
+		end
 
 		done()
 	end
@@ -373,10 +375,17 @@ end
 	do case "keepalive"
 		local stream = assert(system.tcp("active", domain))
 		assert(stream:getoption("keepalive") == nil)
-		assert(stream:setoption("keepalive", 123) == true)
-		assert(stream:getoption("keepalive") == 123)
+		for _, value in ipairs{ 1, 2, 3, 123, 128, 255 } do
+			assert(stream:setoption("keepalive", value) == true)
+			assert(stream:getoption("keepalive") == value)
+		end
 		assert(stream:setoption("keepalive", false) == true)
 		assert(stream:getoption("keepalive") == nil)
+
+		for _, value in ipairs{ -1, 0 } do
+			asserterr("invalid argument",
+				pcall(stream.setoption, stream, "keepalive", value))
+		end
 
 		done()
 	end
