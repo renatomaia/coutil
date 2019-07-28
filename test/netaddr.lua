@@ -224,7 +224,7 @@ local servs = {
 local scktypes = {
 	datagram = true,
 	stream = true,
-	listen = true,
+	passive = true,
 }
 local addrtypes = {
 	ipv4 = system.address("ipv4"),
@@ -232,7 +232,7 @@ local addrtypes = {
 }
 
 local function allexpected(ips, hostname, servport)
-	local stream = hostname == "*" and "listen" or "stream"
+	local stream = hostname == "*" and "passive" or "stream"
 	local missing = {}
 	for literal, domain in pairs(ips) do
 		missing[literal.." "..servport.." datagram"] = true
