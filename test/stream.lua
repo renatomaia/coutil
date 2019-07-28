@@ -103,7 +103,7 @@ function teststream(create, addresses)
 		local connected = {}
 		for i = 1, 3 do
 			spawn(function ()
-				local stream = assert(create("active"))
+				local stream = assert(create("stream"))
 				assert(stream:connect(addresses.bindable))
 				assert(stream:close())
 				connected[i] = true
@@ -149,7 +149,7 @@ function teststream(create, addresses)
 
 		spawn(function ()
 			for i = 1, 2 do
-				local stream = assert(create("active"))
+				local stream = assert(create("stream"))
 				assert(stream:connect(addresses.bindable))
 				assert(stream:close())
 			end
@@ -173,7 +173,7 @@ function teststream(create, addresses)
 		local stage = {}
 		for i = 1, 3 do
 			spawn(function ()
-				local stream = assert(create("active"))
+				local stream = assert(create("stream"))
 				stage[i] = 0
 				assert(stream:connect(addresses.bindable))
 				stage[i] = 1
@@ -215,7 +215,7 @@ function teststream(create, addresses)
 		local stage = {}
 		for i = 1, 3 do
 			spawn(function ()
-				local stream = assert(create("active"))
+				local stream = assert(create("stream"))
 				stage[i] = 0
 				assert(stream:connect(addresses.bindable))
 				stage[i] = 1
@@ -277,7 +277,7 @@ function teststream(create, addresses)
 
 		for _, address in ipairs{addresses.bindable, addresses.free} do
 			spawn(function ()
-				local stream = assert(create("active"))
+				local stream = assert(create("stream"))
 				assert(stream:connect(address))
 				assert(stream:close())
 			end)
@@ -370,7 +370,7 @@ function teststream(create, addresses)
 		assert(stage == 2)
 
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			assert(stream:close())
 		end)
@@ -435,7 +435,7 @@ function teststream(create, addresses)
 		assert(stage == 1)
 
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			assert(stream:close())
 		end)
@@ -474,7 +474,7 @@ function teststream(create, addresses)
 	newtest "connect"
 
 	do case "errors"
-		local stream = assert(create("active"))
+		local stream = assert(create("stream"))
 
 		assert(stream.passive == nil)
 		assert(stream.accept == nil)
@@ -482,7 +482,7 @@ function teststream(create, addresses)
 		local stage = 0
 		spawn(function ()
 			system.suspend()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			stage = 1
 			asserterr("expected, got no value", pcall(stream.connect, stream))
 			stage = 2
@@ -510,7 +510,7 @@ function teststream(create, addresses)
 
 		local stage = 0
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			stage = 1
 		end)
@@ -527,7 +527,7 @@ function teststream(create, addresses)
 	do case "connection refused"
 		local stage = 0
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			asserterr("connection refused", stream:connect(addresses.denied))
 			assert(stream:close())
 			stage = 1
@@ -545,7 +545,7 @@ function teststream(create, addresses)
 		local stage = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			local a,b,c = stream:connect(addresses.bindable)
 			assert(a == true)
 			assert(b == nil)
@@ -574,7 +574,7 @@ function teststream(create, addresses)
 		local stage = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			local a,b = stream:connect(addresses.bindable)
 			assert(a == nil)
 			assert(b == nil)
@@ -612,7 +612,7 @@ function teststream(create, addresses)
 		local stage = 0
 		spawn(function ()
 			garbage.coro = coroutine.running()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable) == nil)
 			stage = 1
 			local a,b,c = stream:connect(addresses.bindable)
@@ -648,7 +648,7 @@ function teststream(create, addresses)
 
 		local stage = 0
 		pspawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			stage = 1
 			error("oops!")
@@ -676,7 +676,7 @@ function teststream(create, addresses)
 		local stage = 0
 		pspawn(function ()
 			garbage.coro = coroutine.running()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable) == nil)
 			stage = 1
 			error("oops!")
@@ -739,7 +739,7 @@ function teststream(create, addresses)
 
 		local stage2 = 0
 		spawn(function ()
-			stream = assert(create("active"))
+			stream = assert(create("stream"))
 			stage2 = 1
 			assert(stream:connect(addresses.bindable))
 			stage2 = 2
@@ -803,7 +803,7 @@ function teststream(create, addresses)
 
 		local done2
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			assert(stream:send(data, 1, 64))
 			system.suspend()
@@ -851,7 +851,7 @@ function teststream(create, addresses)
 		end)
 
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			coroutine.resume(thread)
 			assert(stream:send(string.rep("a", size)))
@@ -889,7 +889,7 @@ function teststream(create, addresses)
 			end)
 
 			spawn(function ()
-				local stream = assert(create("active"))
+				local stream = assert(create("stream"))
 				assert(stream:connect(address))
 				assert(stream:send(string.rep("x", 32)))
 				local buffer = memory.create(64)
@@ -929,7 +929,7 @@ function teststream(create, addresses)
 		end)
 
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			system.suspend()
 			coroutine.resume(garbage.coro, garbage, true,nil,3)
@@ -966,7 +966,7 @@ function teststream(create, addresses)
 		assert(stage == 1)
 
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			system.suspend()
 			coroutine.resume(garbage.coro)
@@ -1005,7 +1005,7 @@ function teststream(create, addresses)
 		end)
 
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			system.suspend()
 			coroutine.resume(garbage.coro)
@@ -1042,7 +1042,7 @@ function teststream(create, addresses)
 		assert(stage == 1)
 
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			assert(stream:send("0123456789"))
 		end)
@@ -1070,7 +1070,7 @@ function teststream(create, addresses)
 		end)
 
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			system.suspend()
 			coroutine.resume(garbage.coro, garbage)
@@ -1123,7 +1123,7 @@ function teststream(create, addresses)
 
 		local stage2 = 0
 		spawn(function ()
-			stream = assert(create("active"))
+			stream = assert(create("stream"))
 			stage2 = 1
 			assert(stream:connect(addresses.bindable))
 			stage2 = 2
@@ -1168,7 +1168,7 @@ function teststream(create, addresses)
 		end)
 
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			system.suspend()
 			coroutine.resume(garbage.coro, garbage, true,nil,3)
@@ -1208,7 +1208,7 @@ function teststream(create, addresses)
 		end)
 
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			system.suspend()
 			coroutine.resume(garbage.coro)
@@ -1252,7 +1252,7 @@ function teststream(create, addresses)
 		end)
 
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			system.suspend()
 			coroutine.resume(garbage.coro)
@@ -1287,7 +1287,7 @@ function teststream(create, addresses)
 		end)
 
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			local buffer = memory.create("9876543210")
 			assert(stream:receive(buffer) == 10)
@@ -1327,7 +1327,7 @@ function teststream(create, addresses)
 		end)
 
 		spawn(function ()
-			local stream = assert(create("active"))
+			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
 			system.suspend()
 			coroutine.resume(garbage.coro, garbage)
