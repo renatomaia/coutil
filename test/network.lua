@@ -67,21 +67,32 @@ local function testsockaddr(create, domain, ...)
 	end
 end
 
+newtest "socket"
+
+do case "error messages"
+	for value in pairs(types) do
+		asserterr("bad argument", pcall(system.socket, value))
+		asserterr("bad argument", pcall(system.socket, value, "ipv4"))
+		asserterr("bad argument", pcall(system.socket, value, "ipv6"))
+		asserterr("bad argument", pcall(system.socket, value, "local"))
+		asserterr("bad argument", pcall(system.socket, value, "ipc"))
+		asserterr("bad argument", pcall(system.socket, "datagram", value))
+		asserterr("bad argument", pcall(system.socket, "stream", value))
+		asserterr("bad argument", pcall(system.socket, "passive", value))
+		asserterr("socket type not supported", system.socket("datagram", "local"))
+		asserterr("socket type not supported", system.socket("datagram", "ipc"))
+	end
+
+	done()
+end
+
 for _, domain in ipairs{ "ipv4", "ipv6" } do
 
 	newgroup("udp:"..domain) -----------------------------------------------------
 
-	local function create() return system.udp(domain) end
+	local function create() return system.socket("datagram", domain) end
 
 	newtest "creation"
-
-	do case "error messages"
-		for value in pairs(types) do
-			asserterr("bad argument", pcall(system.udp, value))
-		end
-
-		done()
-	end
 
 	testobject(create)
 
@@ -746,32 +757,22 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 
 	newgroup("tcp:"..domain) -----------------------------------------------------
 
+	local function create(kind) return system.socket(kind, domain) end
+
 	newtest "creation"
 
-	do case "error messages"
-		for value in pairs(types) do
-			asserterr("bad argument", pcall(system.tcp, value, "ipv4"))
-			asserterr("bad argument", pcall(system.tcp, "active", value))
-			asserterr("bad argument", pcall(system.tcp, "passive", value))
-		end
-
-		done()
-	end
-
-	local function create(kind) return system.tcp(kind, domain) end
-
 	testobject(create, "passive")
-	testobject(create, "active")
+	testobject(create, "stream")
 
 	newtest "address"
 
 	testsockaddr(create, domain, "passive")
-	testsockaddr(create, domain, "active")
+	testsockaddr(create, domain, "stream")
 
 	newtest "options"
 
 	do case "errors"
-		local socket = assert(system.tcp("active", domain))
+		local socket = assert(create("stream"))
 
 		asserterr("string expected, got no value", pcall(socket.getoption, socket))
 		asserterr("string expected, got no value", pcall(socket.setoption, socket))
@@ -783,12 +784,12 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 	end
 
 	do case "nodelay"
-		testbooloption(system.tcp("active", domain), "nodelay")
+		testbooloption(create("stream"), "nodelay")
 		done()
 	end
 
 	do case "keepalive"
-		local stream = assert(system.tcp("active", domain))
+		local stream = assert(create("stream"))
 		assert(stream:getoption("keepalive") == nil)
 		for _, value in ipairs{ 1, 2, 3, 123, 128, 255 } do
 			assert(stream:setoption("keepalive", value) == true)
@@ -805,10 +806,6 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 		done()
 	end
 
-	local function tcp(kind)
-		return system.tcp(kind, domain)
-	end
-
-	teststream(tcp, ipaddr[domain])
+	teststream(create, ipaddr[domain])
 
 end

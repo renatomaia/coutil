@@ -321,7 +321,7 @@ static int found_next (lua_State *L) {
 		}
 		memcpy(addr, found->ai_addr, found->ai_addrlen);
 		lua_pushstring(L, (found->ai_socktype == SOCK_DGRAM ? "datagram" :
-		                  (found->ai_flags&AI_PASSIVE ? "listen" : "stream" )));
+		                  (found->ai_flags&AI_PASSIVE ? "passive" : "stream" )));
 		found = lcu_nextaddrlist(list);
 		if (found) pushaddrtype(L, found->ai_family);
 		else lua_pushnil(L);
@@ -529,8 +529,50 @@ static int getbufarg (lua_State *L, uv_buf_t *buf) {
 
 
 /*
- * Object
+ * Socket
  */
+
+/* socket [, errmsg] = system.socket(type, domain) */
+static int system_socket (lua_State *L) {
+	static const char *const SockTypeName[] = { "stream", "passive", "datagram",
+	                                            NULL };
+	static const char *const SockDomainName[] = { "ipv4", "ipv6", "local", "ipc",
+	                                              NULL };
+	uv_loop_t *loop = lcu_toloop(L);
+	int type = luaL_checkoption(L, 1, NULL, SockTypeName);
+	int domain = luaL_checkoption(L, 2, NULL, SockDomainName);
+	int err = UV_EAI_SOCKTYPE;
+	if (domain < 2) {
+		domain = AddrTypeId[domain];
+		switch (type) {
+			case 0:
+			case 1: {
+				static const char *const classes[] = { LCU_TCPACTIVECLS,
+				                                       LCU_TCPPASSIVECLS };
+				lcu_TcpSocket *tcp = lcu_newtcp(L, classes[type], domain);
+				err = uv_tcp_init_ex(loop, lcu_totcphdl(tcp), domain);
+				if (!err) lcu_enableobj((lcu_Object *)tcp);
+			} break;
+			case 2: {
+				lcu_UdpSocket *udp = lcu_newudp(L, domain);
+				err = uv_udp_init_ex(loop, lcu_toudphdl(udp), domain);
+				if (!err) lcu_enableobj((lcu_Object *)udp);
+			} break;
+		}
+	} else {
+		switch (type) {
+			case 0:
+			case 1: {
+				static const char *const classes[] = { LCU_PIPEACTIVECLS,
+				                                       LCU_PIPEPASSIVECLS };
+				lcu_IpcPipe *pipe = lcu_newpipe(L, classes[type], domain-2);
+				err = uv_pipe_init(loop, lcu_topipehdl(pipe), domain-2);
+				if (!err) lcu_enableobj((lcu_Object *)pipe);
+			} break;
+		}
+	}
+	return lcuL_pushresults(L, 1, err);
+}
 
 #define toclass(L) lua_tostring(L, lua_upvalueindex(LCU_MODUPVS+1))
 
@@ -603,16 +645,6 @@ static int ipsock_getdomain (lua_State *L) {
 /*
  * UDP
  */
-
-/* socket [, errmsg] = system.udp(domain) */
-static int system_udp (lua_State *L) {
-	uv_loop_t *loop = lcu_toloop(L);
-	int domain = AddrTypeId[luaL_checkoption(L, 1, NULL, AddrTypeName)];
-	lcu_UdpSocket *udp = lcu_newudp(L, domain);
-	int err = uv_udp_init_ex(loop, lcu_toudphdl(udp), domain);
-	if (!err) lcu_enableobj((lcu_Object *)udp);
-	return lcuL_pushresults(L, 1, err);
-}
 
 #define openedudp(L)	((lcu_UdpSocket *)openedobj(L, 1, LCU_UDPSOCKETCLS))
 
@@ -1146,20 +1178,6 @@ static int listen_accept (lua_State *L,
  * TCP
  */
 
-static const char *const StreamTypeName[] = { "active", "passive", NULL };
-
-/* socket [, errmsg] = system.tcp(type, domain) */
-static int system_tcp (lua_State *L) {
-	static const char *const classes[] = { LCU_TCPACTIVECLS, LCU_TCPPASSIVECLS };
-	int type = luaL_checkoption(L, 1, NULL, StreamTypeName);
-	int domain = AddrTypeId[luaL_checkoption(L, 2, NULL, AddrTypeName)];
-	lcu_TcpSocket *tcp = lcu_newtcp(L, classes[type], domain);
-	int err = uv_tcp_init_ex(lcu_toloop(L), lcu_totcphdl(tcp), domain);
-	if (!err) lcu_enableobj((lcu_Object *)tcp);
-	return lcuL_pushresults(L, 1, err);
-}
-
-
 #define openedtcp(L,c)	((lcu_TcpSocket *)openedobj(L, 1, c))
 
 #define ownedtcp(L,l,c)	((lcu_TcpSocket *)ownedobj(L, l, 1, c))
@@ -1266,18 +1284,6 @@ static int tcp_accept (lua_State *L) {
 /*
  * Pipe
  */
-
-/* pipe [, errmsg] = system.pipe(type [, ipc]) */
-static int system_pipe (lua_State *L) {
-	static const char *const classes[] = { LCU_PIPEACTIVECLS, LCU_PIPEPASSIVECLS };
-	int type = luaL_checkoption(L, 1, NULL, StreamTypeName);
-	int ipc = lua_toboolean(L, 2);
-	lcu_IpcPipe *pipe = lcu_newpipe(L, classes[type], ipc);
-	int err = uv_pipe_init(lcu_toloop(L), lcu_topipehdl(pipe), ipc);
-	if (!err) lcu_enableobj((lcu_Object *)pipe);
-	return lcuL_pushresults(L, 1, err);
-}
-
 
 #define openedpipe(L,c)	((lcu_IpcPipe *)openedobj(L, 1, c))
 
@@ -1454,9 +1460,7 @@ static const luaL_Reg modf[] = {
 	{"address", system_address},
 	{"findaddr", system_findaddr},
 	{"nameaddr", system_nameaddr},
-	{"udp", system_udp},
-	{"tcp", system_tcp},
-	{"pipe", system_pipe},
+	{"socket", system_socket},
 	{NULL, NULL}
 };
 
