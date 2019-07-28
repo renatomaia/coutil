@@ -2,8 +2,8 @@
 #include "loperaux.h"
 
 
-#define COREGISTRY	lua_upvalueindex(2)
-#define OPERATIONS	lua_upvalueindex(3)
+#define COREGISTRY	lua_upvalueindex(1)
+#define OPERATIONS	lua_upvalueindex(2)
 
 #define FLAG_REQUEST  0x01
 #define FLAG_PENDING  0x02
