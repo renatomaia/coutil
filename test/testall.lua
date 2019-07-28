@@ -27,6 +27,12 @@ function gc()
 end
 
 function done()
+	do -- TODO: workaround for issue in libuv (https://mail.google.com/mail/u/0/#sent/QgrcJHsHqgXlgsCNsmZnpLGLcQtvmzLPFBv)
+		local system = require "coutil.system"
+		spawn(system.suspend)
+		assert(system.run("ready") == false)
+		gc()
+	end
 	assert(spawnerr == nil)
 	collectgarbage("collect")
 	assert(next(garbage) == nil)
@@ -37,6 +43,10 @@ function asserterr(expected, ok, ...)
 	local actual = ...
 	assert(not ok, "error was expected, got "..table.concat({vararg.map(tostring, ...)}, ", "))
 	assert(string.find(actual, expected, 1, true), "wrong error, got "..actual)
+end
+
+function assertnone(...)
+	assert(select("#", ...) == 0)
 end
 
 function pspawn(f, ...)
@@ -83,7 +93,12 @@ dofile "promise.lua"
 dofile "mutex.lua"
 dofile "spawn.lua"
 dofile "system.lua"
+dofile "time.lua"
+dofile "signal.lua"
+dofile "netaddr.lua"
+dofile "stream.lua"
 dofile "network.lua"
+dofile "pipe.lua"
 dofile "process.lua"
 
 print "\nSuccess!\n"
