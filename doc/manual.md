@@ -37,6 +37,7 @@ Index
 	- [`system.time`](#systemtime-update)
 	- [`system.nanosecs`](#systemnanosecs-)
 	- [`system.suspend`](#systemsuspend-delay)
+	- [`system.emitsig`](#systememitsig-pid-signal)
 	- [`system.awaitsig`](#systemawaitsig-signal)
 	- [`system.execute`](#systemexecute-cmd-)
 	- [`system.address`](#systemaddress-type--data--port--mode)
@@ -45,18 +46,18 @@ Index
 	- [`system.socket`](#systemsocket-type-domain)
 		- [`socket:close`](#socketclose-)
 		- [`socket:getdomain`](#socketgetdomain-)
+		- [`socket:setoption`](#socketsetoption-name-value)
+		- [`socket:getoption`](#socketgetoption-name)
 		- [`socket:bind`](#socketbind-address)
 		- [`socket:connect`](#socketconnect-address)
 		- [`socket:getaddress`](#socketgetaddress-site--address)
-		- [`socket:setoption`](#socketsetoption-name-value)
-		- [`socket:getoption`](#socketgetoption-name)
 		- [`socket:send`](#socketsend-data--i--j--address)
 		- [`socket:receive`](#socketreceive-buffer--i--j--address)
-		- [`datagram:joingroup`](#datagramjoingroup-multicast--interface)
-		- [`datagram:leavegroup`](#datagramleavegroup-multicast--interface)
-		- [`stream:shutdown`](#streamshutdown-)
-		- [`listen:listen`](#listenlisten-backlog)
-		- [`listen:accept`](#listenaccept-)
+		- [`socket:joingroup`](#socketjoingroup-multicast--interface)
+		- [`socket:leavegroup`](#socketleavegroup-multicast--interface)
+		- [`socket:shutdown`](#socketshutdown-)
+		- [`socket:listen`](#socketlisten-backlog)
+		- [`socket:accept`](#socketaccept-)
 
 Contents
 ========
@@ -292,6 +293,11 @@ Returns `true` if the calling coroutine is resumed as scheduled.
 Otherwise it returns like [`event.await`](#eventawait-e).
 In any case, the coroutine is not scheduled to be resumed anymore after it returns.
 
+### `system.emitsig (pid, signal)`
+
+Emits signal indicated by string `signal` to process with id `pid`.
+The strings that represent signals are described in [`system.awaitsig`](#systemawaitsig-signal).
+
 ### `system.awaitsig (signal)`
 
 Suspends the execution of the calling coroutine,
@@ -312,9 +318,9 @@ and schedules it to be resumed when the process receives signal indicated by str
 | `"bgread"`    | SIGTTIN   | stop      | **Read** from terminal while in **background**. |
 | `"bgwrite"`   | SIGTTOU   | stop      | **Write** to terminal while in **backgroun**d. |
 | `"hangup"`    | SIGHUP    | terminate | Terminal was closed. |
-| `"interrupt"` | SIGINT    | terminate | Terminal requests the process to terminate. (_e.g._ `Ctrl+C`) |
-| `"quit"`      | SIGQUIT   | core dump | Terminal requests the process to **quit** with a [core dump](https://en.wikipedia.org/wiki/Core_dump). |
-| `"stop"`      | SIGTSTP   | stop      | Terminal requests the process to **stop**. (_e.g._ `Ctrl+Z`) |
+| `"interrupt"` | SIGINT    | terminate | Terminal requests the process to terminate. (_e.g._ Ctrl+`C`) |
+| `"quit"`      | SIGQUIT   | core dump | Terminal requests the process to **quit** with a [core dump](https://en.wikipedia.org/wiki/Core_dump). (_e.g._ Ctrl+`\`) |
+| `"stop"`      | SIGTSTP   | stop      | Terminal requests the process to **stop**. (_e.g._ Ctrl+`Z`) |
 | `"winresize"` | SIGWINCH  | ignore    | Terminal window size has changed. |
 
 - Standard Notifications
@@ -433,8 +439,8 @@ It can contain any of the following characters:
 - `4`: for IPv4 addresses.
 - `6`: for IPv6 addresses.
 - `m`: for IPv4-mapped addresses.
-- `d`: for addresses for `datagram` sockets.
-- `s`: for addresses for `stream` or `listen` sockets.
+- `d`: for addresses for datagram sockets.
+- `s`: for addresses for stream or passive sockets.
 
 When neither `4` nor `6` are provided, the search only includes addresses of the same type configured in the local machine.
 When neither `d` nor `s` are provided, the search behaves as if both `d` and `s` were provided.
@@ -511,19 +517,25 @@ In case of errors, it returns `nil` plus an error message.
 
 ### `system.socket (type, domain)`
 
-Creates a socket, of the type specified by `type`,
+Creates a socket of the type specified by `type`,
 which is either:
 
-- `"datagram"` creates UDP datagram socket for data transfers.
-- `"stream"` creates TCP stream socket for data transfers.
-- `"listen"` creates TCP listen socket to accept connected TCP stream sockets.
+- `"datagram"` creates datagram socket for data transfers.
+- `"stream"` creates stream socket for data transfers.
+- `"passive"` creates passive socket to [accept](#socketaccept-) connected stream sockets.
 
 The `domain` string defines the socket's address domain (or family),
-and can be  either `"ipv4"` or `"ipv6"`,
-to create socket on the IPv4 or IPv6 address domain.
+which is either:
 
-On success it returns a new socket,
-or `nil` plus an error message otherwise.
+- `"ipv4"` for UDP (datagram) or TCP (stream) sockets over IPv4.
+- `"ipv6"` for UDP (datagram) or TCP (stream) sockets over IPv6.
+- `"local"` for sockets which addresses are file paths on Unix,
+or pipe names on Windows.
+- `"ipc"` same as `"local"`,
+but allows for transmission of stream sockets.
+
+In case of success, it returns the new socket,
+Otherwise it returns `nil` plus an error message.
 
 ### `socket:close ()`
 
@@ -536,45 +548,15 @@ Otherwise it returns `nil` plus an error message.
 
 ### `socket:getdomain ()`
 
-Returns the address domain of `socket`, which can be either `"ipv4"` or `"ipv6"`.
-
-### `socket:bind (address)`
-
-Binds socket `socket` to the local address provided as `address`.
-
-In case of success, this function returns `true`.
-Otherwise it returns `nil` plus an error message.
-
-### `socket:connect ([address])`
-
-Binds socket `socket` to the peer address provided as `address`,
-thus any data send over the socket is targeted to that `address`.
-
-If `address` is not provided and `socket` is a UDP socket then it is unbinded from its previous binded peer address
-(_i.e._ it is disconnected).
-For TCP stream sockets argument `address` is mandatory,
-and it is necessary to bind the socket to a peer address before sending any data.
-This operation is not available for sockets of type `listen`.
-
-In case of success, this function returns `true`.
-Otherwise it returns `nil` plus an error message.
-
-### `socket:getaddress ([site [, address]])`
-
-Returns the address associated with socket `socket`, as indicated by `site`, which can be:
-
-- `"this"`: The socket's address (the default).
-- `"peer"`: The socket's peer address.
-
-If `address` is provided, it is the address structure used to store the result,
-otherwise a new `address` object is returned with the result data.
-
-In case of errors, it returns `nil` plus an error message.
+Returns the address domain of `socket`,
+which can be either `"ipv4"`,
+`"ipv6"`,
+or `"local"`.
 
 ### `socket:setoption (name, value)`
 
 Sets `value` as the value of option `name` for socket `socket`.
-This operation is not available for sockets of type `listen`.
+This operation is not available for passive sockets.
 The available options are the same as defined in operation [`socket:getoption`](#socketgetoption-name).
 
 In case of success, this function returns `true`.
@@ -583,10 +565,10 @@ Otherwise it returns `nil` plus an error message.
 ### `socket:getoption (name)`
 
 Returns the value of option `name` of socket `socket`.
-This operation is not available for sockets of type `listen`.
+This operation is not available for passive sockets.
 There available options are:
 
-#### `datagram` Socket Options
+#### UDP Socket
 
 - `"broadcast"`: is `true` when broadcast is enabled in `socket`,
 or `false` otherwise.
@@ -598,26 +580,77 @@ or `false` otherwise.
 - `"mcastiface"`: is the address of the interface for multicast,
 or `nil` is none is defined.
 
-#### `stream` Socket Options
+#### TCP Socket
 
 - `"keepalive"`: is a number of seconds of the initial delay of the periodic transmission of messages when the TCP keep-alive option is enabled,
 or `nil` otherwise.
 - `"nodelay"`: is `true` when coalescing of small segments shall be avoided,
 or `false` otherwise.
 
+#### Local Socket
+
+- `"permission"`: is a string that indicate the permissions over the socket by processes run by other users.
+It can contain the following characters:
+	- `r` indicate processes have permission to read from the socket.
+	- `w` indicate processes have permission to write to the socket.
+
+### `socket:bind (address)`
+
+Binds socket `socket` to the address provided as `address`.
+
+For non-local sockets `address` must be an [IP address object](#systemaddress-type--data--port--mode).
+For local sockets `address` must be a string
+(either a path on Unix or a pipe name on Windows).
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
+### `socket:connect ([address])`
+
+Binds socket `socket` to the peer address provided as `address`,
+thus any data send over the socket is targeted to that `address`.
+
+For non-local domain sockets `address` must be an [IP address object](#systemaddress-type--data--port--mode).
+For local domain sockets `address` must be a string
+(either a path on Unix or a pipe name on Windows).
+
+If `address` is not provided and `socket` is a datagram socket then it is unbinded from its previous binded peer address
+(_i.e._ it is disconnected).
+For stream sockets argument `address` is mandatory,
+and it is necessary to bind the socket to a peer address before sending any data.
+This operation is not available for passive sockets.
+
+In case of success, this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+
+### `socket:getaddress ([site [, address]])`
+
+Returns the address associated with socket `socket`,
+as indicated by `site`,
+which can be:
+
+- `"this"`: The socket's address (the default).
+- `"peer"`: The socket's peer address.
+
+For non-local domain sockets,
+`address` can be an [IP address object](#systemaddress-type--data--port--mode) to store the result,
+otherwise a new object is returned with the result data.
+
+In case of errors, it returns `nil` plus an error message.
+
 ### `socket:send (data [, i [, j [, address]]])`
 
-Sends the substring of `data` that starts at `i` and continues until `j`;
+Suspends the execution of the calling coroutine until it sends through socket `socket` the substring of `data` that starts at `i` and continues until `j`;
 `i` and `j` can be negative.
 If `j` is absent,
 it is assumed to be equal to -1 (which is the same as the string length).
 
-For unbinded sockets of type `datagram` `address` must be provided
+For unbinded datagram sockets `address` must be provided
 (_i.e._ disconnected UDP sockets),
-and it must be omitted for sockets of type `datagram` binded to a peer address
+and it must be omitted for datagram sockets binded to a peer address
 (_i.e._ connected UDP sockets).
-For sockets of type `stream` `address` is ignored.
-This operation is not available for sockets of type `listen`.
+For stream sockets `address` is ignored.
+This operation is not available for passive sockets.
 
 In case of success, this function returns `true`.
 Otherwise it returns `nil` plus an error message.
@@ -626,17 +659,17 @@ __Note__: if `data` is a [memory](https://github.com/renatomaia/lua-memory), it 
 
 ### `socket:receive (buffer [, i [, j [, address]]])`
 
-Receives from socket `socket` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`;
+Suspends the execution of the calling coroutine until it receives from socket `socket` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`;
 `i` and `j` can be negative.
 If `j` is absent, it is assumed to be equal to -1
 (which is the same as the buffer size).
 
-For sockets of type `datagram`,
+For datagram sockets,
 if `address` is provided,
 it is used to store the peer address that sent the data.
-For sockets of type `stream`,
+For stream sockets,
 `address` is ignored.
-This operation is not available for sockets of type `listen`.
+This operation is not available for passive sockets.
 
 In case of success,
 returns the number of bytes copied to `buffer` and,
@@ -644,7 +677,7 @@ for sockets of type `datagram`,
 a boolean indicating whether the copied data was truncated.
 Otherwise it returns `nil` plus an error message.
 
-### `datagram:joingroup (multicast [, interface])`
+### `socket:joingroup (multicast [, interface])`
 
 Joins network interface with address `interface` in the multicast group of address `multicast`,
 thus datagrams targed to `multicast` address are delivered through address `interface`.
@@ -653,62 +686,45 @@ If `ifaceaddr` is not provided the socket `datagram` binded local address is use
 Both `multicast` and `interface` are string containing either textual (literal) or binary IP addresses
 (see [`system.address`](#systemaddress-type--data--port--mode)).
 
-This operation is only available for sockets of type `datagram`.
+This operation is only available for UDP sockets.
 
 In case of success, this function returns `true`.
 Otherwise it returns `nil` plus an error message.
 
-### `datagram:leavegroup (multicast [, interface])`
+### `socket:leavegroup (multicast [, interface])`
 
 Removed network interface with address `interface` from the multicast group of address `multicast`
 (see [`datagram:joingroup`](#datagramjoingroup-multicast--interface)).
 
-This operation is only available for sockets of type `datagram`.
+This operation is only available for UDP sockets.
 
 In case of success, this function returns `true`.
 Otherwise it returns `nil` plus an error message.
 
-### `stream:shutdown ()`
+### `socket:shutdown ()`
 
-Shuts down the write side of TCP stream socket `stream`.
+Shuts down the write side of stream socket `socket`.
+
+This operation is only available for stream sockets.
 
 In case of success, this function returns `true`.
 Otherwise it returns `nil` plus an error message.
 
-### `listen:listen (backlog)`
+### `socket:listen (backlog)`
 
-Starts listening for new connections on TCP listen socket `listen`.
+Starts listening for new connections on passive socket `socket`.
 `backlog` is a hint for the underlying system about the suggested number of outstanding connections that shall be kept in the socket's listen queue.
 
+This operation is only available for passive sockets.
+
 In case of success, this function returns `true`.
 Otherwise it returns `nil` plus an error message.
 
-### `listen:accept ()`
+### `socket:accept ()`
 
-Accepts a new pending connection on TCP listen socket `listen`.
+Suspends the execution of the calling coroutine until passive socket `socket` accepts a new connection.
 
-Returns a new `stream` socket for the accepted connection in case of success.
+This operation is only available for passive sockets.
+
+Returns a new stream socket for the accepted connection in case of success.
 Otherwise it returns `nil` plus an error message.
-
-### `system.pipe (ipc)`
-
-### `pipe:bind (address)`
-
-### `pipe:getaddress ([site])`
-
-### `pipe:setperm (options)`
-
-### `pipe:connect (address)`
-
-### `pipe:listen (backlog)`
-
-### `pipe:accept ()`
-
-### `pipe:shutdown ()`
-
-### `pipe:send (value [, i [, j [, pipe]]])`
-
-### `pipe:receive (buffer [, i [, j]])`
-
-### `pipe:close ()`
-
