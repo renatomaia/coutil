@@ -56,11 +56,15 @@ else {fprintf(stderr, "WARN: close failed!\n"); uv_print_all_handles(loop, stder
 
 LCUI_FUNC void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
 	int err;
+	lua_newtable(L);  /* LCU_COREGISTRY */
+	pushhandlemap(L);  /* LCU_HANDLEMAP */
 	if (uv) lua_pushlightuserdata(L, uv);
 	else {
 		uv = (uv_loop_t *)lua_newuserdata(L, sizeof(uv_loop_t));
 		if (luaL_newmetatable(L, LCU_UVLOOPCLS)) {
-			lua_pushcfunction(L, terminateloop);
+			lua_pushvalue(L, -3);
+			lua_pushvalue(L, -3);
+			lua_pushcclosure(L, terminateloop, 2);
 			lua_setfield(L, -2, "__gc");
 		}
 		lua_setmetatable(L, -2);
@@ -68,8 +72,6 @@ LCUI_FUNC void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
 	err = uv_loop_init(uv);
 	if (err < 0) lcu_error(L, err);
 	uv->data = NULL;
-	lua_newtable(L);  /* LCU_COREGISTRY */
-	pushhandlemap(L);  /* LCU_HANDLEMAP */
 }
 
 LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {

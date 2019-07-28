@@ -22,7 +22,7 @@ LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err);
 
 #define LCU_MODUPVS	3
 
-#define lcu_toloop(L)	(uv_loop_t *)lua_touserdata(L, lua_upvalueindex(1))
+#define lcu_toloop(L)	(uv_loop_t *)lua_touserdata(L, lua_upvalueindex(3))
 
 LCUI_FUNC void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv);
 
