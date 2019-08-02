@@ -22,3 +22,21 @@ History
 ### Version 1.0:
 - Abstractions for syncronization of coroutines: [events](https://en.wikipedia.org/wiki/Async/await), [promises](https://en.wikipedia.org/wiki/Futures_and_promises) and [mutexes](https://en.wikipedia.org/wiki/Mutex).
 - Creation of coroutines with finalizers.
+
+TODO
+----
+
+### Improvements
+
+- `permission` option for local (Pipe) sockets.
+- Test all yield cases for operation `system.execute`.
+- Use of streams (TCP, Pipe, etc.) as process I/O (`stdout`, `stderr`).
+- User and group definition of process started with `system.execute`.
+- Function to create an envionment variables set to be used in `system.execute`.
+
+### New Features
+
+- TTY support.
+- File system support (events and operations).
+- Threading support.
+- File descriptor/handler polling suport.
