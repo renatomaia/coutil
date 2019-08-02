@@ -1,6 +1,14 @@
 Index
 =====
 
+- [Await Functions](#await)
+- [Events](#events)
+- [Queued Events](#queued-events)
+- [Mutexes](#mutex)
+- [Promises](#promises)
+- [Coroutine Finalizers](#spawn)
+- [System Features](#system)
+
 - [`coutil.event`](#events)
 	- [`event.await`](#eventawait-e)
 	- [`event.awaitall`](#eventawaitall-e1-)
@@ -62,37 +70,50 @@ Index
 Contents
 ========
 
+Await
+-----
+
+An _await function_ is a function that suspends the execution of the calling coroutine
+(like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)),
+but also awaits for some specitic condition to automatically resume the coroutine.
+
+Coroutines executing an _await function_ can also be resumed prematurely by [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
+In such case, the _await function_ returns the values provided to the resume
+(like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
+Otherwise, the _await function_ returns as described in the following sections.
+In any case, the coroutine will not be automatically resumed after the _await function_ returns.
+
 Events
 ------
 
 Module `coutil.event` provides functions for synchronization of coroutines using events.
-Events can be emitted on any value that can be stored in a table as a key (all values except `nil`).
+Events can be emitted on any value, except `nil`.
 Coroutines might suspend awaiting for events on values, so they are resumed when events are emitted on these values.
 
 ### `event.await (e)`
 
-Suspends the execution of the calling coroutine awaiting an event on value `e`.
+[Await function](#await) that awaits an event on value `e`.
 
-If it is resumed by [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-), it returns `e` followed by all the additional arguments passed to these functions.
-Otherwise it returns the values provided to the resume (_e.g._ [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume)).
+Returns like a call to [`event.awaitany`](#eventawait-e)`(e)`.
 
 ### `event.awaitall ([e1, ...])`
 
-Suspends the execution of the calling coroutine awaiting an event on every one of values `e1, ...`.
+[Await function](#await) that awaits an event on every one of values `e1, ...`.
 Any `nil` in `e1, ...` is ignored.
 Any repeated values in `e1, ...` are treated as a single one.
 If `e1, ...` are not provided or are all `nil`, this function has no effect.
 
-It returns `true` if the calling coroutine is resumed due to events emitted on all values `e1, ...` or if `e1, ...` are not provided or are all `nil`.
-Otherwise it returns like [`event.await`](#eventawait-e).
+Returns `true` after events are emitted on all values `e1, ...`,
+or if `e1, ...` are not provided or are all `nil`.
 
 ### `event.awaitany (e1, ...)`
 
-Suspends the execution of the calling coroutine awaiting an event on any of the values `e1, ...`.
+[Await function](#await) that awaits an event on any of the values `e1, ...`.
 Any `nil` in `e1, ...` is ignored.
 At least one value in `e1, ...` must not be `nil`.
 
-It returns like [`event.await`](#eventawait-e).
+Returns the value in `e1, ...` on which the event was emmited,
+followed by all the additional arguments passed to [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-).
 
 ### `event.emitall (e, ...)`
 
@@ -103,10 +124,9 @@ It returns `true` if there was some coroutine awaiting the event, or `false` oth
 
 ### `event.emitone (e, ...)`
 
-Resumes one single coroutine waiting for event `e`, if there is any.
-The additional arguments `...` are passed to the resumed coroutine.
-This function returns after resuming the coroutine awaiting event `e`.
-It returns `true` if there was some coroutine awaiting the event, or `false` otherwise.
+Same as [`event.emitall`](#eventemitall-e-),
+but resumes only one single coroutine waiting for event `e`,
+if there is any.
 
 ### `event.pending (e)`
 
@@ -115,7 +135,12 @@ Returns `true` if there is some coroutine suspended awaiting for event `e`, or `
 Queued Events
 -------------
 
-Module `coutil.queued` provides functions similar to module `coutil.event`, however the function in this module store events emitted in a queue to be consumed later as if they were emitted immediately after a coroutine awaits for them.
+Module `coutil.queued` provides functions similar to module [`coutil.event`](#events),
+however the functions in this module store events emitted in a queue to be consumed later,
+as if they were emitted immediately after a coroutine awaits for them.
+
+A coroutine awaiting an event on a value does not prevent the value nor the coroutine and the event arguments to be collected,
+but the coroutine and the event arguments will not be collected as long as the value does not become garbage.
 
 ### `queued.await (e)`
 
@@ -180,15 +205,16 @@ But once a promise is fulfilled its results become readily available for those t
 
 ### `promise.awaitall ([p, ...])`
 
-Suspends the calling coroutine awaiting the fulfillment of all promises `p, ...`.
+[Await function](#await) that awaits the fulfillment of all promises `p, ...`.
 Returns `true` if all promises `p, ...` are fulfilled.
 Otherwise it returns like [`event.await`](#eventawait-e).
 
 ### `promise.awaitany (p, ...)`
 
-If there are no fulfilled promises in `p, ...`, it suspends the calling coroutine awaiting the fulfillment of any of the promises in `p, ...`.
-If the calling coroutine is resumed by the fullfillment of a promise in `p, ...`, it returns the fulfilled promise.
-Otherwise it returns like [`event.await`](#eventawait-e).
+[Await function](#await) that awaits the fulfillment of any of the promises in `p, ...`,
+if there are no fulfilled promises in `p, ...`.
+Otherwise it returns immediately.
+In any case, it returns a fulfilled promise.
 
 ### `promise.create ()`
 
@@ -205,12 +231,17 @@ It returns `true` the first time it is called, or `false` otherwise.
 Coroutines suspeded awaiting a promise's fulfillment are actually suspended awaiting an event on the promise (see [`await`](#eventawait-e)).
 Such coroutines can be resumed by emitting an event on the promise.
 In such case, the additional values to [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-) will be returned by the promise.
-But the promise will remain unfulfilled.
-Therefore, when the promise is called again, it will suspend the calling coroutine awaiting an event on the promise (the promise fulfillment).
+Similarly the coroutines can be resumed prematurely by [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
+In such case, the promisse returns the values provided to the resume
+(like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
+In either case the promise will remain unfulfilled.
+Therefore, when the promise is called again, it will suspend the calling coroutine awaiting an event on the promise
+(the promise fulfillment).
 
 The first time the fulfillment function is called, an event is emitted on the promise with the promise's results as additional values.
-Therefore, to suspend awaiting the fulfillment of a promise a coroutine may await an event on the promise.
-However, once a promise is fulfilled, any coroutine that suspends awaiting events on the promise will remain suspended until an event is on the promise is emitted with function [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-).
+Therefore, to suspend awaiting the fulfillment of a promise, a coroutine can simply await an event on the promise.
+However, once a promise is fulfilled, any coroutine that suspends awaiting events on the promise will remain suspended until an event is on the promise is emitted,
+since the fulfillment function will not emit the event even if is called again.
 
 ### `promise.onlypending ([p, ...])`
 
@@ -243,19 +274,24 @@ Returns the new coroutine.
 System
 ------
 
-Module `coutil.system` provides functions to suspend coroutines and schedule them to be resumed when they are ready according to a system condition.
+Module `coutil.system` provides _await functions_ that await on system conditions.
+
+Unless otherwise stated,
+all there functions return `nil` plus an error message on failure,
+and some value different from `nil` on success.
 
 ### `system.run ([mode])`
 
-Resumes scheduled coroutines that becomes ready according to its corresponding system condition.
+Resumes coroutines awaiting to system condition.
 
 `mode` is a string that defines how `run` executes, as described below:
 
-- `"loop"` (default): it executes continously resuming every coroutine that becomes ready until there are no more scheduled coroutines.
+- `"loop"` (default): it executes continously resuming every awaiting coroutine that becomes ready to be resumed until there are no more awaiting coroutines.
 - `"step"`: it resumes every ready coroutine once, or waits to resume at least one coroutine that becomes ready.
 - `"ready"`: it resumes only coroutines that are currently ready.
 
-`run` returns `true` if there are scheduled coroutines, or `false` otherwise.
+`run` returns `true` if there are awaiting coroutines,
+or `false` otherwise.
 
 ### `system.isrunning ()`
 
@@ -264,7 +300,7 @@ or `false` otherwise.
 
 ### `system.halt ()`
 
-Causes [`system.run`](#systemrun-mode) to return prematurely.
+Causes [`system.run`](#systemrun-mode) to return prematurely after this function returns.
 
 ### `system.time ([update])`
 
@@ -284,14 +320,15 @@ and is not subject to clock drift.
 
 ### `system.suspend ([delay])`
 
-Suspends the execution of the calling coroutine, and schedules it to be resumed after `delay` seconds have passed since the coroutine was last resumed.
+[Await function](#await) that awaits `delay` seconds since the coroutine was last resumed.
 
-If `delay` is not provided or is `nil`, the coroutine is scheduled as ready, so it will be resumed as soon as possible.
-The same is applies when `delay` is zero or negative.
+If `delay` is not provided,
+is `nil`,
+or negative,
+it is assumed as zero,
+so it will be resumed as soon as possible.
 
-Returns `true` if the calling coroutine is resumed as scheduled.
-Otherwise it returns like [`event.await`](#eventawait-e).
-In any case, the coroutine is not scheduled to be resumed anymore after it returns.
+Returns `true` in case of success.
 
 ### `system.emitsig (pid, signal)`
 
@@ -300,8 +337,7 @@ The strings that represent signals are described in [`system.awaitsig`](#systema
 
 ### `system.awaitsig (signal)`
 
-Suspends the execution of the calling coroutine,
-and schedules it to be resumed when the process receives signal indicated by string `signal`, as listed below:
+[Await function](#await) that awaits for the process to receive the signal indicated by string `signal`, as listed below:
 
 - Process Commands
 
@@ -341,12 +377,12 @@ and schedules it to be resumed when the process receives signal indicated by str
 | `"user1"`     | SIGUSR1   | terminate | User-defined conditions. |
 | `"user2"`     | SIGUSR2   | terminate | User-defined conditions. |
 
-`awaitsig` returns like [`system.suspend`](#systemsuspend-delay).
+Returns string `signal`.
 
 ### `system.execute (cmd, ...)`
 
-Executes a new process,
-and suspends the execution of the calling coroutine until it terminates.
+[Await function](#await) that executes a new process,
+and awaits its termination.
 `cmd` is the path of the executable image for the new process.
 Every other extra arguments are strings to be used as command-line arguments for the executable image of the new process.
 
@@ -382,17 +418,11 @@ the field `pid` is set with a number that identifies the new process
 (_e.g._ UNIX process identifier)
 before the calling coroutine is suspended.
 
-Returns a string when the new process terminates,
-or `nil` plus an error message otherwise.
-The returned string is followed by extra values, as follows:
-
-- `"exit"`: the process terminated normally;
-it is followed by a number of the exit status of the program.
-
-- `"signal"`: the process was terminated by a signal;
-it is followed by a string with the name of the signal that terminated the program,
-and the number of the signal.
-The strings that represent signals are described in [`system.awaitsig`](#systemawaitsig-signal).
+Returns the string `"exit"`,
+followed by a number of the exit status
+when the process terminates normally,
+or the [name of the signal](#systemawaitsig-signal) that terminated the program,
+followed by the platform-dependent number of the signal.
 
 ### `system.address (type [, data [, port [, mode]]])`
 
@@ -426,8 +456,8 @@ like `"192.0.2.128:80"` (IPv4) or `[::ffff:c000:0280]:80` (IPv6).
 
 ### `system.findaddr (name [, service [, mode]])`
 
-Searches for the addresses of network name `name`,
-and suspends the execution of the calling coroutine until it concludes.
+[Await function](#await) that searches for the addresses of network name `name`,
+and awaits for the addresses found.
 If `name` is `nil`, the loopback address is searched.
 If `name` is `"*"`, the wildcard address is searched.
 
@@ -446,8 +476,7 @@ When neither `4` nor `6` are provided, the search only includes addresses of the
 When neither `d` nor `s` are provided, the search behaves as if both `d` and `s` were provided.
 By default, `mode` is the empty string.
 
-Returns `nil` plus an error message in case of errors.
-Otherwise, returns an iterator that have the following usage pattern:
+Returns an iterator that have the following usage pattern:
 
 	[address, socktype, nextdomain =] getnext ([address])
 
@@ -494,8 +523,8 @@ until nextdomain == nil
 
 ### `system.nameaddr (address [, mode])`
 
-Searches for a network name for `address`,
-and suspends the execution of the calling coroutine until it concludes.
+[Await function](#await) that searches for a network name for `address`,
+and awaits for the names found.
 If `address` is an address object,
 it returns a host name and a port service name for the address.
 If `address` is a number, it returns the service name for that port number.
@@ -512,8 +541,6 @@ The string `mode` can contain any of the following characters:
 (implies `i`).
 
 By default, `mode` is the empty string.
-
-In case of errors, it returns `nil` plus an error message.
 
 ### `system.socket (type, domain)`
 
@@ -618,10 +645,10 @@ If `address` is not provided and `socket` is a datagram socket then it is unbind
 (_i.e._ it is disconnected).
 For stream sockets argument `address` is mandatory,
 and it is necessary to bind the socket to a peer address before sending any data.
+It is a [await function](#await) that awaits for the connection establishment on stream sockets.
 This operation is not available for passive sockets.
 
-In case of success, this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Returns `true` in case of success.
 
 ### `socket:getaddress ([site [, address]])`
 
@@ -640,7 +667,7 @@ In case of errors, it returns `nil` plus an error message.
 
 ### `socket:send (data [, i [, j [, address]]])`
 
-Suspends the execution of the calling coroutine until it sends through socket `socket` the substring of `data` that starts at `i` and continues until `j`;
+[Await function](#await) that awaits until it sends through socket `socket` the substring of `data` that starts at `i` and continues until `j`;
 `i` and `j` can be negative.
 If `j` is absent,
 it is assumed to be equal to -1 (which is the same as the string length).
@@ -652,14 +679,13 @@ and it must be omitted for datagram sockets binded to a peer address
 For stream sockets `address` is ignored.
 This operation is not available for passive sockets.
 
-In case of success, this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Returns `true` in case of success.
 
 __Note__: if `data` is a [memory](https://github.com/renatomaia/lua-memory), it is not converted to a Lua string prior to have its specified contents transfered.
 
 ### `socket:receive (buffer [, i [, j [, address]]])`
 
-Suspends the execution of the calling coroutine until it receives from socket `socket` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`;
+[Await function](#await) that awaits until it receives from socket `socket` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`;
 `i` and `j` can be negative.
 If `j` is absent, it is assumed to be equal to -1
 (which is the same as the buffer size).
@@ -671,11 +697,9 @@ For stream sockets,
 `address` is ignored.
 This operation is not available for passive sockets.
 
-In case of success,
-returns the number of bytes copied to `buffer` and,
-for sockets of type `datagram`,
-a boolean indicating whether the copied data was truncated.
-Otherwise it returns `nil` plus an error message.
+Returns the number of bytes copied to `buffer`.
+For datagram sockets,
+it also restuns a boolean indicating whether the copied data was truncated.
 
 ### `socket:joingroup (multicast [, interface])`
 
@@ -722,9 +746,8 @@ Otherwise it returns `nil` plus an error message.
 
 ### `socket:accept ()`
 
-Suspends the execution of the calling coroutine until passive socket `socket` accepts a new connection.
+[Await function](#await) that awaits until passive socket `socket` accepts a new connection.
 
 This operation is only available for passive sockets.
 
-Returns a new stream socket for the accepted connection in case of success.
-Otherwise it returns `nil` plus an error message.
+Returns a new stream socket for the accepted connection.
