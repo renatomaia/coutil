@@ -76,7 +76,7 @@ end
 spawn(function ()
 	log("starting server ... ")
 	local address = assert(system.findaddr("*", port, "s6"))()
-	local server = assert(system.tcp("passive", address.type))
+	local server = assert(system.socket("passive", address.type))
 	assert(server:bind(address))
 	assert(server:listen(32))
 	spawn(function (thread)

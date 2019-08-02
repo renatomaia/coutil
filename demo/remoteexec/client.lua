@@ -11,7 +11,7 @@ assert(memory.pack(buffer, szfmt, 1, index-szlen-1))
 
 spawn(function ()
 	local address = assert(system.findaddr(host, port, "s6"))()
-	local conn = assert(system.tcp("active", address.type))
+	local conn = assert(system.socket("stream", address.type))
 	assert(conn:connect(address))
 	assert(conn:send(buffer, 1, index-1))
 	local bytes = 0
