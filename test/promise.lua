@@ -113,6 +113,32 @@ do case "fake fulfillment"
 	done()
 end
 
+do case "canceled await"
+	local p, f = newpromise()
+
+	for _ = 1, 3 do
+		local t1,t2,t3 = {},{},{}
+
+		local a,a1,a2,a3 = 0
+		local t
+		spawn(function ()
+			t = coroutine.running()
+			a1,a2,a3 = p()
+			assert(p("probe") == false)
+			a = 1
+		end)
+		assert(a == 0) -- 'p' suspended the coroutine
+
+		assert(coroutine.resume(t, t1,t2,t3) == true)
+		assert(a == 1) -- await returned
+		assert(a1 == t1)
+		assert(a2 == t2)
+		assert(a3 == t3)
+	end
+
+	done()
+end
+
 do case "fulfillment event"
 	local p, f = newpromise()
 
