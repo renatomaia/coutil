@@ -277,13 +277,16 @@ static int system_execute (lua_State *L) {
 }
 
 
-static const luaL_Reg modf[] = {
-	{"awaitsig", system_awaitsig},
-	{"emitsig", system_emitsig},
-	{"execute", system_execute},
-	{NULL, NULL}
-};
-
 LCUI_FUNC void lcuM_addsignalf (lua_State *L) {
+	static const luaL_Reg luaf[] = {
+		{"emitsig", system_emitsig},
+		{NULL, NULL}
+	};
+	static const luaL_Reg modf[] = {
+		{"awaitsig", system_awaitsig},
+		{"execute", system_execute},
+		{NULL, NULL}
+	};
+	lcuM_setfuncs(L, luaf, 0);
 	lcuM_setfuncs(L, modf, LCU_MODUPVS);
 }
