@@ -66,7 +66,9 @@ end
 
 function module.awaitany(...)
 	local ready = pickready(...)
-	if ready ~= nil then return true, ready end
+	if ready ~= nil then
+		return true, ready
+	end
 	return awaitany(...)
 end
 
