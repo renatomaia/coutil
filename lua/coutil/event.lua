@@ -1,9 +1,5 @@
 local _G = require "_G"
-local assert = _G.assert
 local error = _G.error
-local next = _G.next
-local pairs = _G.pairs
-local pcall = _G.pcall
 local select = _G.select
 local setmetatable = _G.setmetatable
 
@@ -61,7 +57,9 @@ local function removethread(event, thread, list)
 end
 
 local function yieldablecaller()
-	assert(isyieldable(), "unable to yield")
+	if not isyieldable() then
+		error("unable to yield", 3)
+	end
 	return running()
 end
 
@@ -111,7 +109,9 @@ end
 
 do
 	local function cancel(event, thread, list, ...)
-		if ... == listof then return select(2, ...) end
+		if ... == listof then
+			return select(2, ...)
+		end
 		removethread(event, thread, list)
 		return ...
 	end
@@ -156,7 +156,9 @@ do
 
 	local function registered(thread, ...)
 		local regsz = countargs(...)
-		if regsz == 0 then return true end
+		if regsz == 0 then
+			return true
+		end
 		return resumed(thread, regsz, regsz//2-1, vaconcat(yield, ...))
 	end
 
@@ -165,7 +167,7 @@ do
 		return registered(thread, register(thread, countargs(...), ...))
 	end
 
-	local function resumed(thread, regsz, ...)
+	local function resumed(thread, ...)
 		if ... == listof then
 			return select(2, ...)
 		end
@@ -174,8 +176,10 @@ do
 
 	local function registered(thread, ...)
 		local regsz = countargs(...)
-		assert(regsz > 0, "non-nil value expected")
-		return resumed(thread, regsz, cancel(thread, regsz, vaconcat(yield, ...)))
+		if regsz <= 0 then
+			error("non-nil value expected", 3)
+		end
+		return resumed(thread, cancel(thread, regsz, vaconcat(yield, ...)))
 	end
 
 	function module.awaitany(...)
