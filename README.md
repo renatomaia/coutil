@@ -29,9 +29,11 @@ TODO
 ### Improvements
 
 - Remove support to `getoption` on sockets and the like.
-- Use of streams (TCP, Pipe, etc.) as process I/O (`stdout`, `stderr`).
 - User and group definition of process started with `system.execute`.
 - Function to create an envionment variables set to be used in `system.execute`.
+- Support `std{in,out,err}`in `system.execute` to be `"rw"` to create a pipe. See `UV_CREATE_PIPE`.
+- Support for datagram UNIX domain sockets (not on Windows).
+- Make `system.socket("stream", "pair")` return two pipe sockets created by POSIX `pipe` function.
 
 ### New Features
 

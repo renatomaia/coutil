@@ -1,3 +1,4 @@
+#include "lsyslib.h"
 #include "lmodaux.h"
 #include "loperaux.h"
 
@@ -111,6 +112,13 @@ static const char* getstrfield (lua_State *L, const char *field, int required) {
 	lua_pop(L, 1);
 	return value;
 }
+static int ismetatable (lua_State *L, const char *meta) {
+	int res;
+	luaL_getmetatable(L, meta);
+	res = lua_rawequal(L, -1, -2);
+	lua_pop(L, 1);
+	return res;
+}
 static void getstreamfield (lua_State *L,
                             const char *field,
                             uv_stdio_container_t *stream,
@@ -121,13 +129,19 @@ static void getstreamfield (lua_State *L,
 	} else {
 		stream->flags = UV_IGNORE;
 		if (lua_getmetatable(L, -1)) {
-			luaL_getmetatable(L, LUA_FILEHANDLE);
-			if (lua_rawequal(L, -1, -2)) {
-				luaL_Stream *lstream = (luaL_Stream *)lua_touserdata(L, -3);
+			if (ismetatable(L, LUA_FILEHANDLE)) {
+				luaL_Stream *lstream = (luaL_Stream *)lua_touserdata(L, -2);
 				stream->data.fd = fileno(lstream->f);
 				stream->flags = UV_INHERIT_FD;
+			} else if (ismetatable(L, LCU_TCPACTIVECLS)) {
+				lcu_TcpSocket *tcp = (lcu_TcpSocket *)lua_touserdata(L, -2);
+				stream->data.stream = (uv_stream_t *)lcu_totcphdl(tcp);
+				stream->flags = UV_INHERIT_STREAM;
+			} else if (ismetatable(L, LCU_PIPEACTIVECLS)) {
+				lcu_IpcPipe *pipe = (lcu_IpcPipe *)lua_touserdata(L, -2);
+				stream->data.stream = (uv_stream_t *)lcu_topipehdl(pipe);
+				stream->flags = UV_INHERIT_STREAM;
 			}
-			lua_pop(L, 1); /* remove file handle metatable */
 		}
 		lua_pop(L, 1); /* remove value's metatable */
 		if (stream->flags == UV_IGNORE)

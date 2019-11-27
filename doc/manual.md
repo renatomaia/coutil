@@ -451,13 +451,13 @@ This field is required.
 path of the current directory of the new process.
 
 - `stdin`:
-file to be set as the standard input of the new process.
+file or stream socket to be used as the standard input of the new process.
 
 - `stdout`:
-file to be set as the standard output of the new process.
+file or stream socket to be used as the standard output of the new process.
 
 - `stderr`:
-file to be set as the standard error output of the new process.
+file or stream socket to be used as the standard error output of the new process.
 
 - `arguments`:
 table with the sequence of command-line arguments for the executable image of the new process.
