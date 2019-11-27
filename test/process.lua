@@ -331,47 +331,86 @@ do case "redirected streams"
 	done()
 end
 
-local function teststdfiles(info)
-	local infile = os.tmpname()
-	local outfile = os.tmpname()
-	local errfile = os.tmpname()
-	if info.input == "r" then writeto(infile, "stdin") end
-	if info.output == "r" then writeto(outfile, "stdout") end
-	if info.error == "r" then writeto(errfile, "stderr") end
-	local stdin = io.open(infile, info.input)
-	local stdout = io.open(outfile, info.output)
-	local stderr = io.open(errfile, info.error)
-	runscript{
-		script = info.script,
-		stdin = stdin,
-		stdout = stdout,
-		stderr = stderr,
-	}
-	stdin:close()
-	stdout:close()
-	stderr:close()
-	if info.input == "w" then assert(readfrom(infile) == "stdin") end
-	if info.output == "w" then assert(readfrom(outfile) == "stdout") end
-	if info.error == "w" then assert(readfrom(errfile) == "stderr") end
-	os.remove(infile)
-	os.remove(outfile)
-	os.remove(errfile)
-end
-
-do case "redirect all streams"
+do case "redirect streams to files"
 	spawn(function ()
-		teststdfiles{
+		local infile = os.tmpname()
+		local outfile = os.tmpname()
+		local errfile = os.tmpname()
+		writeto(infile, "stdin")
+		local stdin = io.open(infile, "r")
+		local stdout = io.open(outfile, "w")
+		local stderr = io.open(errfile, "w")
+		runscript{
 			script = [[
 				assert(io.stdin:read("a") == "stdin")
-				assert(io.stdout:write("stdout"))
-				assert(io.stderr:write("stderr"))
+				assert(io.stdout:write("stdout")) io.stdout:flush()
+				assert(io.stderr:write("stderr")) io.stderr:flush()
 			]],
-			input = "r",
-			output = "w",
-			error = "w",
+			stdin = stdin,
+			stdout = stdout,
+			stderr = stderr,
 		}
+		stdin:close()
+		stdout:close()
+		stderr:close()
+		assert(readfrom(outfile) == "stdout")
+		assert(readfrom(errfile) == "stderr")
+		os.remove(infile)
+		os.remove(outfile)
+		os.remove(errfile)
 	end)
 	assert(system.run() == false)
+
+	done()
+end
+
+do case "redirect streams to a socket"
+	local memory = require "memory"
+
+	local function testsocketstdstream(domain, address)
+		spawn(function ()
+			local passive = assert(system.socket("passive", domain))
+			assert(passive:bind(address))
+			assert(passive:getaddress("this", address))
+			assert(passive:listen(2))
+			local control = assert(passive:accept())
+			assert(passive:close())
+			assert(control:send("stdin"))
+			assert(control:shutdown())
+			local buffer = memory.create(12)
+			local bytes = 0
+			while bytes < #buffer do
+				bytes = bytes+assert(control:receive(buffer, bytes+1))
+			end
+			assert(tostring(buffer) == "stdoutstderr")
+			assert(control:close())
+		end)
+
+		spawn(function ()
+			local socket = assert(system.socket("stream", domain))
+			assert(socket:connect(address))
+			runscript{
+				script = [[
+					assert(io.stdin:read("a") == "stdin")
+					assert(io.stdout:write("stdout")) io.stdout:flush()
+					assert(io.stderr:write("stderr")) io.stderr:flush()
+				]],
+				stdin = socket,
+				stdout = socket,
+				stderr = socket,
+			}
+		end)
+
+		assert(system.run() == false)
+	end
+
+	testsocketstdstream("ipv4", system.address("ipv4", "127.0.0.1:0"))
+	testsocketstdstream("ipv6", system.address("ipv6", "[::1]:0"))
+
+	local filepath = os.tmpname()
+	os.remove(filepath)
+	testsocketstdstream("local", filepath)
+	os.remove(filepath)
 
 	done()
 end
