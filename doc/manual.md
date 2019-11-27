@@ -672,7 +672,7 @@ or `"local"`.
 ### `socket:setoption (name, value)`
 
 Sets `value` as the value of option `name` for socket `socket`.
-This operation is not available for passive sockets.
+This operation is not available for passive TCP sockets.
 The available options are the same as defined in operation [`socket:getoption`](#socketgetoption-name).
 
 In case of success,
@@ -682,7 +682,7 @@ Otherwise it returns `nil` plus an error message.
 ### `socket:getoption (name)`
 
 Returns the value of option `name` of socket `socket`.
-This operation is not available for passive sockets.
+This operation is not available for passive TCP sockets.
 There available options are:
 
 #### UDP Socket
