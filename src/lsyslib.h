@@ -160,4 +160,8 @@ LCULIB_API lcu_IpcPipe *lcu_newpipe (lua_State *L,
                                      const char *class,
                                      int ipc);
 
+LCULIB_API int lcu_getpipeperm (lcu_IpcPipe *pipe);
+
+LCULIB_API void lcu_setpipeperm (lcu_IpcPipe *pipe, int value);
+
 #endif
