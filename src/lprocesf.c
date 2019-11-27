@@ -241,7 +241,6 @@ static void uv_procexited (uv_process_t *process, int64_t exitval, int signum) {
 	lua_State *thread = (lua_State *)process->data;
 	lcu_assert(lua_gettop(thread) == 0);
 	if (signum) {
-		lua_pushliteral(thread, "signal");
 		pushsignal(thread, signum);
 	} else {
 		lua_pushliteral(thread, "exit");
