@@ -547,7 +547,9 @@ the search behaves as if both `d` and `s` were provided.
 By default,
 `mode` is the empty string.
 
-Returns an iterator that have the following usage pattern:
+Returns an iterator that have the following usage pattern,
+followed by the type of the first address found,
+or `nil` if no address is found.
 
 ```
 	[address, socktype, nextdomain =] getnext ([address])
@@ -561,8 +563,8 @@ If an address structure is provided as `address`,
 it is used to store the result;
 otherwise a new address structure is created.
 Therefore,
-`nextdomain` is `"ipv4"` if the next address id a IPv4 address,
-or `"ipv6"` if the next address id a IPv6 address,
+`nextdomain` is `"ipv4"` if the next address is a IPv4 address,
+or `"ipv6"` if the next address is a IPv6 address,
 or `nil` if the next call will return no address.
 
 As an example,
@@ -692,7 +694,7 @@ or `false` otherwise.
 - `"mcastttl"`: is a number from 1 to 255 of multicast time to live.
 (default is 1).
 - `"mcastiface"`: is the address of the interface for multicast,
-or `nil` is none is defined.
+or `nil` if none is defined.
 
 #### TCP Socket
 
