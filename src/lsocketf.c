@@ -1229,6 +1229,7 @@ static int tcp_setoption (lua_State *L) {
 			err = uv_tcp_nodelay(lcu_totcphdl(tcp), enabled);
 			if (err >= 0) lcu_settcpnodelay(tcp, enabled);
 		}; break;
+		default: return 0;
 	}
 	return lcuL_pushresults(L, 0, err);
 }
@@ -1321,19 +1322,48 @@ static int pipe_bind (lua_State *L) {
 }
 
 
-/* succ [, errmsg] = pipe:setperm(options) */
-static int pipe_setperm (lua_State *L) {
+static const char * const PipeOptions[] = {"permission", NULL};
+
+/* succ [, errmsg] = pipe:setoption(name, value) */
+static int pipe_setoption (lua_State *L) {
 	lcu_IpcPipe *pipe = openedpipe(L, toclass(L));
 	uv_pipe_t *handle = lcu_topipehdl(pipe);
-	const char *mode = luaL_optstring(L, 3, "");
-	int flags, err;
-	for (; *mode; ++mode) switch (*mode) {
-		case 'r': flags |= UV_READABLE; break;
-		case 'w': flags |= UV_WRITABLE; break;
-		default: return luaL_error(L, "unknown option (got "LUA_QL("%c")")", *mode);
+	int opt = luaL_checkoption(L, 2, NULL, PipeOptions);
+	int err;
+	switch (opt) {
+		case 0: {  /* permission */
+			const char *mode = luaL_optstring(L, 3, "");
+			int flags;
+			for (; *mode; ++mode) switch (*mode) {
+				case 'r': flags |= UV_READABLE; break;
+				case 'w': flags |= UV_WRITABLE; break;
+				default: return luaL_error(L, "unknown option (got "LUA_QL("%c")")", *mode);
+			}
+			err = uv_pipe_chmod(handle, flags);
+			if (!err) lcu_setpipeperm(pipe, flags);
+		}; break;
+		default: return 0;
 	}
-	err = uv_pipe_chmod(handle, flags);
 	return lcuL_pushresults(L, 0, err);
+}
+
+/* value = pipe:getoption(name) */
+static int pipe_getoption (lua_State *L) {
+	lcu_IpcPipe *pipe = openedpipe(L, toclass(L));
+	int opt = luaL_checkoption(L, 2, NULL, PipeOptions);
+	switch (opt) {
+		case 0: {  /* permission */
+			int flags = lcu_getpipeperm(pipe);
+			switch (flags) {
+				case UV_READABLE: lua_pushliteral(L, "r");
+				case UV_WRITABLE: lua_pushliteral(L, "w");
+				case UV_READABLE|UV_WRITABLE: lua_pushliteral(L, "rw");
+				default: lua_pushliteral(L, "");
+			}
+		}; break;
+		default: return 0;
+	}
+	return 1;
 }
 
 
@@ -1436,7 +1466,8 @@ static const luaL_Reg tcppassive[] = {
 static const luaL_Reg pipe[] = {
 	{"getaddress", pipe_getaddress},
 	{"bind", pipe_bind},
-	{"setperm", pipe_setperm},
+	{"setoption", pipe_setoption},
+	{"getoption", pipe_getoption},
 	{NULL, NULL}
 };
 
