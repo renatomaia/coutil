@@ -81,6 +81,22 @@ end
 
 newtest "execute" ------------------------------------------------------------------
 
+do case "error messages"
+	asserterr("unable to yield", pcall(system.execute))
+	asserterr("unable to yield", pcall(system.execute, function () end))
+	asserterr("unable to yield", pcall(system.execute, "echo", {}))
+	asserterr("unable to yield", pcall(system.execute, "echo", "Hello, World!"))
+
+	spawn(function ()
+		asserterr("string expected", pcall(system.execute))
+		asserterr("string expected", pcall(system.execute, function () end))
+		asserterr("string expected", pcall(system.execute, "echo", {}))
+	end)
+	assert(system.run() == false)
+
+	done()
+end
+
 do case "arguments"
 	local argtests = {
 		{
@@ -356,6 +372,210 @@ do case "redirect all streams"
 		}
 	end)
 	assert(system.run() == false)
+
+	done()
+end
+
+do case "signal termination"
+	for i, signal in ipairs{
+		"terminate",
+		"interrupt",
+		"quit",
+		"user1",
+		"user2",
+	} do
+		local procinfo = { execfile = "sleep", arguments = { "5" } }
+
+		spawn(function ()
+			local res, extra = system.execute(procinfo)
+			assert(res == signal)
+			assert(type(extra) == "number")
+		end)
+
+		spawn(function ()
+			system.suspend(.1+i*.01)
+			system.emitsig(procinfo.pid, signal)
+		end)
+	end
+
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "yield values"
+	local stage = 0
+	local a,b,c = spawn(function ()
+		local res, extra = system.execute(luabin, "-v")
+		assert(res == "exit")
+		assert(extra == 0)
+		stage = 1
+	end)
+	assert(a == nil)
+	assert(b == nil)
+	assert(c == nil)
+	assert(stage == 0)
+	gc()
+
+	assert(system.run() == false)
+	assert(stage == 1)
+
+	done()
+end
+
+do case "scheduled yield"
+	local stage = 0
+	spawn(function ()
+		system.execute(luabin, "-v")
+		stage = 1
+		coroutine.yield()
+		stage = 2
+	end)
+	assert(stage == 0)
+	gc()
+
+	assert(system.run() == false)
+	assert(stage == 1)
+
+	done()
+end
+
+do case "reschedule"
+	local stage = 0
+	spawn(function ()
+		local res, extra = system.execute(luabin, "-v")
+		assert(res == "exit")
+		assert(extra == 0)
+		stage = 1
+		local res, extra = system.execute(luabin, "-v")
+		assert(res == "exit")
+		assert(extra == 0)
+		stage = 2
+	end)
+	assert(stage == 0)
+
+	gc()
+	assert(system.run("step") == true)
+	assert(stage == 1)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 2)
+
+	done()
+end
+
+do case "cancel schedule"
+	local stage = 0
+	spawn(function ()
+		garbage.coro = coroutine.running()
+		local a,b,c = system.execute(luabin, "-v")
+		assert(a == true)
+		assert(b == nil)
+		assert(c == 3)
+		stage = 1
+		coroutine.yield()
+		stage = 2
+	end)
+	assert(stage == 0)
+
+	coroutine.resume(garbage.coro, true,nil,3)
+	assert(stage == 1)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 1)
+
+	done()
+end
+
+do case "cancel and reschedule"
+	local stage = 0
+	spawn(function ()
+		garbage.coro = coroutine.running()
+		local res = system.execute(luabin, "-v")
+		assert(res == nil)
+		stage = 1
+		local res, extra = system.execute(luabin, "-v")
+		assert(res == "exit")
+		assert(extra == 0)
+		stage = 2
+	end)
+	assert(stage == 0)
+
+	coroutine.resume(garbage.coro)
+	assert(stage == 1)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 2)
+
+	done()
+end
+
+do case "resume while closing"
+	local stage = 0
+	spawn(function ()
+		garbage.coro = coroutine.running()
+		assert(system.execute(luabin, "-v") == nil)
+		stage = 1
+		local a,b,c = system.execute(luabin, "-v")
+		assert(a == 1)
+		assert(b == 22)
+		assert(c == 333)
+		stage = 2
+	end)
+	assert(stage == 0)
+
+	spawn(function ()
+		system.suspend()
+		coroutine.resume(garbage.coro, 1,22,333) -- while being closed.
+		assert(stage == 2)
+		stage = 3
+	end)
+
+	coroutine.resume(garbage.coro)
+	assert(stage == 1)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 3)
+
+	done()
+end
+
+do case "ignore errors"
+	local stage = 0
+	pspawn(function ()
+		system.execute(luabin, "-v")
+		stage = 1
+		error("oops!")
+	end)
+	assert(stage == 0)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 1)
+
+	done()
+end
+
+do case "ignore errors after cancel"
+	local stage = 0
+	pspawn(function ()
+		garbage.coro = coroutine.running()
+		system.execute(luabin, "-v")
+		stage = 1
+		error("oops!")
+	end)
+	assert(stage == 0)
+
+	coroutine.resume(garbage.coro)
+	assert(stage == 1)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 1)
 
 	done()
 end
