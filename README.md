@@ -29,7 +29,6 @@ TODO
 ### Improvements
 
 - `permission` option for local (Pipe) sockets.
-- Test all yield cases for operation `system.execute`.
 - Use of streams (TCP, Pipe, etc.) as process I/O (`stdout`, `stderr`).
 - User and group definition of process started with `system.execute`.
 - Function to create an envionment variables set to be used in `system.execute`.
