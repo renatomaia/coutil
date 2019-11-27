@@ -45,8 +45,6 @@ function teststream(create, addresses)
 	do case "errors"
 		local passive = assert(create("passive"))
 
-		assert(passive.setoption == nil)
-		assert(passive.getoption == nil)
 		assert(passive.connect == nil)
 		assert(passive.send == nil)
 		assert(passive.receive == nil)

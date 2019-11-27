@@ -28,7 +28,7 @@ TODO
 
 ### Improvements
 
-- `permission` option for local (Pipe) sockets.
+- Remove support to `getoption` on sockets and the like.
 - Use of streams (TCP, Pipe, etc.) as process I/O (`stdout`, `stderr`).
 - User and group definition of process started with `system.execute`.
 - Function to create an envionment variables set to be used in `system.execute`.
