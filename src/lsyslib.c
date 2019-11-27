@@ -91,13 +91,17 @@ LCULIB_API struct addrinfo *lcu_nextaddrlist (lcu_AddressList *l) {
 #define FLAG_MCASTLOOP 0x20  /* only for UDP sockets */
 #define FLAG_MCASTTTL 0x3fd0  /* only for UDP sockets */
 
+#define FLAG_PIPEPERM 0x18  /* only for pipe sockets */
+
 #define FLAG_LSTNMASK 0x0f  /* only for passive streams */
 #define FLAG_TCPMASK 0x1f  /* only for active TCP sockets */
 #define FLAG_UDPMASK 0x3f  /* only for UDP sockets */
+#define FLAG_PIPEMASK 0x07  /* only for pipe sockets */
 
 #define LISTENCONN_UNIT (FLAG_LSTNMASK+1)
 #define KEEPALIVE_SHIFT 5
 #define MCASTTTL_SHIFT 6
+#define PIPEPERM_SHIFT 3
 
 struct lcu_Object {
 	int flags;
@@ -266,4 +270,13 @@ LCULIB_API void lcu_settcpkeepalive (lcu_TcpSocket *tcp, int delay) {
 	else tcp->flags = (delay<<KEEPALIVE_SHIFT)
 	                | FLAG_KEEPALIVE
 	                | (tcp->flags&FLAG_TCPMASK);
+}
+
+LCULIB_API int lcu_getpipeperm (lcu_IpcPipe *pipe) {
+	return lcuL_maskflag(pipe, FLAG_PIPEPERM)>>PIPEPERM_SHIFT;
+}
+
+LCULIB_API void lcu_setpipeperm (lcu_IpcPipe *pipe, int value) {
+	pipe->flags = (FLAG_PIPEPERM&(value<<PIPEPERM_SHIFT))
+	            | lcuL_maskflag(pipe, FLAG_PIPEMASK);
 }
