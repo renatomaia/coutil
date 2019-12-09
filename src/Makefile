@@ -46,7 +46,7 @@ MYOBJS=
 
 OSM_O=	lsyslib.o \
       	lmodaux.o loperaux.o \
-      	lscheduf.o ltimef.o lprocesf.o lsocketf.o \
+      	lscheduf.o ltimef.o lprocesf.o lsocketf.o lthreadf.o \
       	lsysmod.o
 
 ALL_O=	$(OSM_O) $(MYOBJS)

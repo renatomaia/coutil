@@ -848,3 +848,21 @@ Otherwise it returns `nil` plus an error message.
 This operation is only available for passive sockets.
 
 Returns a new stream socket for the accepted connection.
+
+
+
+### `system.thread (chunk, chunkname, mode, ...)`
+
+Loads a chunk (see [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load)) and executes it in a independnet system thread that shares no resources with the calling thread.
+Arguments `chunk`, `chunkname`, `mode` are the same of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
+Arguments `...` are arguments for the executed chunk.
+Only nil, boolean, number and string values are allowed.
+Returns `true` in case of success.
+
+### `system.threadq ()`
+
+### `threadq:send (...)`
+
+### `threadq:receive (probe)`
+
+### `threadq:close ()`
