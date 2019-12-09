@@ -75,15 +75,15 @@ Await
 
 An _await function_ is a function that suspends the execution of the calling coroutine
 (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)),
-but also awaits for some specitic condition to automatically resume the coroutine.
+but also implies that the coroutine will be resumed on some specitic condition.
 
-Coroutines executing an _await function_ can also be resumed prematurely by [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
+Coroutines executing an _await function_ can be resumed explicitly by [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
 In such case,
 the _await function_ returns the values provided to the resume.
 Otherwise,
 the _await function_ returns as described in the following sections.
 In any case,
-the coroutine will not be automatically resumed after the _await function_ returns.
+the coroutine will not be implicitly resumed after the _await function_ returns.
 
 Events
 ------
