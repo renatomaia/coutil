@@ -100,15 +100,15 @@ static int endop (lua_State *L, int status, lua_KContext kctx) {
 	return lua_gettop(L)-narg; /* return yield */
 }
 
-static int startedop (lua_State *L, Operation *op, int err) {
+static int startedop (lua_State *L, Operation *op, int nret) {
 	lcu_assert(!lcuL_maskflag(op, FLAG_PENDING));
-	if (err >= 0) {
+	if (nret < 0) {  /* shall yield, and wait for callback */
 		lcuL_setflag(op, FLAG_PENDING);
 		if (lcuL_maskflag(op, FLAG_REQUEST)) savethread(L, (void *)op);
 		return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), endop);
 	}
 	else cancelop(op);
-	return lcuL_pushresults(L, 0, err);
+	return nret;
 }
 
 #define startreqop(L,O,S,U) startedop(L, O, (S)(L, torequest(O), U))
