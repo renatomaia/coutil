@@ -367,6 +367,7 @@ static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	const char *servname = luaL_optstring(L, 2, NULL);
 	const char *mode = luaL_optstring(L, 3, "");
 	struct addrinfo hints;
+	int err;
 	memset(&hints, 0, sizeof(struct addrinfo));
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_flags = AI_ADDRCONFIG;
@@ -405,7 +406,10 @@ static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		hints.ai_family = AF_INET6;
 	}
 	hints.ai_protocol = 0;  /* clear mark that 'ai_socktype' was defined above */
-	return uv_getaddrinfo(loop, addrreq, uv_onresolved, nodename, servname, &hints);
+	err = uv_getaddrinfo(loop, addrreq, uv_onresolved,
+	                     nodename, servname, &hints);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
 }
 static int system_findaddr (lua_State *L) {
 	return lcuT_resetreqopk(L, k_setupfindaddr, NULL);
@@ -495,7 +499,8 @@ static int k_setupnameaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 			err = uv_getnameinfo(loop, namereq, uv_onaddrnamed, addr, flags);
 		}
 	}
-	return err;
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
 }
 static int system_nameaddr (lua_State *L) {
 	return lcuT_resetreqopk(L, k_setupnameaddr, NULL);
@@ -772,8 +777,11 @@ static int k_setupsend (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_buf_t bufs[1];
 	const struct sockaddr *addr = lcu_getudpconnected(udp) ?
 	                              NULL : toobjaddr(L, 5, (lcu_Object *)udp);
+	int err;
 	getbufarg(L, bufs);
-	return uv_udp_send(send, handle, bufs, 1, addr, uv_onsent);
+	err = uv_udp_send(send, handle, bufs, 1, addr, uv_onsent);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
 }
 static int udp_send (lua_State *L) {
 	return lcuT_resetreqopk(L, k_setupsend, NULL);
@@ -899,7 +907,9 @@ static int k_setupshutdown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_Object *object = ownedobj(L, loop, 1, toclass(L));
 	uv_stream_t *stream = (uv_stream_t *)lcu_toobjhdl(object);
 	uv_shutdown_t *shutdown = (uv_shutdown_t *)request;
-	return uv_shutdown(shutdown, stream, uv_onshutdown);
+	int err = uv_shutdown(shutdown, stream, uv_onshutdown);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
 }
 static int active_shutdown (lua_State *L) {
 	return lcuT_resetreqopk(L, k_setupshutdown, NULL);
@@ -915,8 +925,11 @@ static int k_setupwrite (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_stream_t *stream = (uv_stream_t *)lcu_toobjhdl(object);
 	uv_write_t *write = (uv_write_t *)request;
 	uv_buf_t bufs[1];
+	int err;
 	getbufarg(L, bufs);
-	return uv_write(write, stream, bufs, 1, uv_onwritten);
+	err = uv_write(write, stream, bufs, 1, uv_onwritten);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
 }
 static int active_send (lua_State *L) {
 	return lcuT_resetreqopk(L, k_setupwrite, NULL);
@@ -930,6 +943,7 @@ static int k_setupwriteobj (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_write_t *write = (uv_write_t *)request;
 	uv_buf_t bufs[1];
 	uv_stream_t *wrtstrm = NULL;
+	int err;
 	if (lua_isuserdata(L, 5)) {
 		if (lua_getmetatable(L, 5)) {  /* does it have a metatable? */
 			static const char *const classes[] = { LCU_TCPACTIVECLS,
@@ -954,7 +968,9 @@ static int k_setupwriteobj (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		luaL_argcheck(L, wrtstrm, 5, "writable object expected");
 	}
 	getbufarg(L, bufs);
-	return uv_write2(write, stream, bufs, 1, wrtstrm, uv_onwritten);
+	err = uv_write2(write, stream, bufs, 1, wrtstrm, uv_onwritten);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
 }
 static int pipe_send (lua_State *L) {
 	return lcuT_resetreqopk(L, k_setupwriteobj, NULL);
@@ -1131,9 +1147,9 @@ static int passive_listen (lua_State *L) {
 
 
 typedef int (*NewAcceptFunc) (lua_State *L,
-                                   uv_loop_t *loop,
-                                   lcu_Object *object,
-                                   lcu_Object **newobj);
+                              uv_loop_t *loop,
+                              lcu_Object *object,
+                              lcu_Object **newobj);
 
 /* stream [, errmsg] = listen:accept() */
 static int k_acceptstream (lua_State *L, int status, lua_KContext ctx) {
@@ -1261,7 +1277,9 @@ static int k_setuptcpconn (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_TcpSocket *tcp = ownedtcp(L, loop, LCU_TCPACTIVECLS);
 	const struct sockaddr *addr = toobjaddr(L, 2, (lcu_Object *)tcp);
 	uv_connect_t *connect = (uv_connect_t *)request;
-	return uv_tcp_connect(connect, lcu_totcphdl(tcp), addr, uv_onconnected);
+	int err = uv_tcp_connect(connect, lcu_totcphdl(tcp), addr, uv_onconnected);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
 }
 static int tcp_connect (lua_State *L) {
 	return lcuT_resetreqopk(L, k_setuptcpconn, NULL);
@@ -1373,7 +1391,7 @@ static int k_setuppipeconn (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	const char *addr = luaL_checkstring(L, 2);
 	uv_connect_t *connect = (uv_connect_t *)request;
 	uv_pipe_connect(connect, lcu_topipehdl(pipe), addr, uv_onconnected);
-	return 0;
+	return -1;  /* yield on success */
 }
 static int pipe_connect (lua_State *L) {
 	return lcuT_resetreqopk(L, k_setuppipeconn, NULL);
