@@ -13,6 +13,8 @@
 
 #define lcu_pusherror(L,e)	lua_pushstring(L, uv_strerror(e))
 
+LCUI_FUNC int lcuL_pusherrres (lua_State *L, int err);
+
 LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err);
 
 #define lcuL_maskflag(O,F) ((O)->flags&(F))

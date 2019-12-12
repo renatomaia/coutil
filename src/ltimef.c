@@ -30,9 +30,9 @@ static int k_setupidle (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 		uv_idle_t *idle = (uv_idle_t *)handle;
 		int err = lcuT_armthrop(L, uv_idle_init(loop, idle));
 		if (err >= 0) err = uv_idle_start(idle, uv_onidle);
-		return err;
+		if (err < 0) return lcuL_pusherrres(L, err);
 	}
-	return 0;
+	return -1;  /* yield on success */
 }
 static void uv_ontimer (uv_timer_t *handle) {
 	lcu_assert(lua_gettop((lua_State *)handle->data) == 0);
@@ -41,12 +41,13 @@ static void uv_ontimer (uv_timer_t *handle) {
 static int k_setuptimer (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_timer_t *timer = (uv_timer_t *)handle;
 	uint64_t msecs = (uint64_t)(lua_tonumber(L, 1)*1000);
-	int err = 0;
+	int err;
 	if (loop) err = lcuT_armthrop(L, uv_timer_init(loop, timer));
 	else if (uv_timer_get_repeat(timer) != msecs) err = uv_timer_stop(timer);
-	else return 0;
+	else return -1;  /* yield on success */
 	if (err >= 0) err = uv_timer_start(timer, uv_ontimer, msecs, msecs);
-	return err;
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
 }
 static int system_suspend (lua_State *L) {
 	lua_Number delay = luaL_optnumber(L, 1, 0);
