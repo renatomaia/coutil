@@ -1,13 +1,17 @@
 #include "lmodaux.h"
 
 
+LCUI_FUNC int lcuL_pusherrres (lua_State *L, int err) {
+	lua_pushnil(L);
+	lcu_pusherror(L, err);
+	lua_pushinteger(L, -err);
+	return 3;
+}
+
 LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err) {
 	if (err < 0) {
 		lua_pop(L, n);
-		lua_pushnil(L);
-		lcu_pusherror(L, err);
-		lua_pushinteger(L, -err);
-		return 3;
+		return lcuL_pusherrres(L, err);
 	} else if (n == 0) {
 		lua_pushboolean(L, 1);
 		return 1;
