@@ -91,9 +91,10 @@ static int k_setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	int err = 0;
 	if (loop) err = lcuT_armthrop(L, uv_signal_init(loop, signal));
 	else if (signal->signum != signum) err = uv_signal_stop(signal);
-	else return 0;
+	else return -1;  /* yield on success */
 	if (err >= 0) err = uv_signal_start(signal, uv_onsignal, signum);
-	return err;
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
 }
 static int system_awaitsig (lua_State *L) {
 	return lcuT_resetthropk(L, UV_SIGNAL, k_setupsignal, returnsignal);
@@ -279,11 +280,12 @@ static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 
 	err = uv_spawn(loop, process, &procopts);
 	lcuT_armthrop(L, 0);  /* 'uv_spawn' always arms the operation */
-	if (!err && tabarg) {
+	if (err < 0) return lcuL_pusherrres(L, err);
+	if (tabarg) {
 		lua_pushinteger(L, uv_process_get_pid(process));
 		lua_setfield(L, 1, "pid");
 	}
-	return err;
+	return -1;  /* yield on success */
 }
 static int system_execute (lua_State *L) {
 	return lcuT_resetthropk(L, -1, k_setupproc, NULL);
