@@ -1,5 +1,5 @@
-Index
-=====
+Summary
+=======
 
 - [Await Functions](#await)
 - [Events](#events)
@@ -8,6 +8,9 @@ Index
 - [Promises](#promises)
 - [Coroutine Finalizers](#spawn)
 - [System Features](#system)
+
+Index
+=====
 
 - [`coutil.event`](#events)
 	- [`event.await`](#eventawait-e)
@@ -73,7 +76,7 @@ Contents
 Await
 -----
 
-An _await function_ is a function that suspends the execution of the calling coroutine
+An _await function_ suspends the execution of the calling coroutine
 (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)),
 but also implies that the coroutine will be resumed on some specitic condition.
 
@@ -120,7 +123,7 @@ followed by all the additional arguments passed to [`emitone`](#eventemitone-e-)
 
 ### `event.emitall (e, ...)`
 
-Resumes all coroutines waiting for event `e` in the same order they were suspended.
+Resumes all coroutines awaiting for event `e` in the same order they were suspended.
 The additional arguments `...` are passed to every resumed coroutine.
 This function returns after resuming all coroutines awaiting event `e` at the moment its call is initiated.
 
@@ -130,7 +133,7 @@ or `false` otherwise.
 ### `event.emitone (e, ...)`
 
 Same as [`event.emitall`](#eventemitall-e-),
-but resumes only one single coroutine waiting for event `e`,
+but resumes only one single coroutine awaiting for event `e`,
 if there is any.
 
 ### `event.pending (e)`
@@ -654,7 +657,7 @@ Otherwise it returns `nil` plus an error message.
 ### `socket:close ()`
 
 Closes socket `socket`.
-Note that sockets are automatically closed when their handles are garbage collected,
+Note that sockets are automatically closed when they are garbage collected,
 but that takes an unpredictable amount of time to happen. 
 
 In case of success,
@@ -758,10 +761,8 @@ it returns `nil` plus an error message.
 
 ### `socket:send (data [, i [, j [, address]]])`
 
-[Await function](#await) that awaits until it sends through socket `socket` the substring of `data` that starts at `i` and continues until `j`;
-`i` and `j` can be negative.
-If `j` is absent,
-it is assumed to be equal to -1 (which is the same as the string length).
+[Await function](#await) that awaits until it sends through socket `socket` the substring of `data` that starts at `i` and continues until `j`,
+following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
 
 For unbinded datagram sockets `address` must be provided
 (_i.e._ disconnected UDP sockets),
@@ -777,11 +778,8 @@ it is not converted to a Lua string prior to have its specified contents transfe
 
 ### `socket:receive (buffer [, i [, j [, address]]])`
 
-[Await function](#await) that awaits until it receives from socket `socket` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`;
-`i` and `j` can be negative.
-If `j` is absent,
-it is assumed to be equal to -1
-(which is the same as the buffer size).
+[Await function](#await) that awaits until it receives from socket `socket` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
+following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
 
 For datagram sockets,
 if `address` is provided,
@@ -792,7 +790,7 @@ This operation is not available for passive sockets.
 
 Returns the number of bytes copied to `buffer`.
 For datagram sockets,
-it also restuns a boolean indicating whether the copied data was truncated.
+it also returns a boolean indicating whether the copied data was truncated.
 
 ### `socket:joingroup (multicast [, interface])`
 
