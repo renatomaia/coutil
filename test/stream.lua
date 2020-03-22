@@ -564,6 +564,31 @@ function teststream(create, addresses)
 		done()
 	end
 
+	do case "cancel then collected"
+		local stage = 0
+		spawn(function ()
+			garbage.coro = coroutine.running()
+			garbage.stream = assert(create("stream"))
+			local a,b,c = garbage.stream:connect(addresses.bindable)
+			assert(a == true)
+			assert(b == nil)
+			assert(c == 3)
+			stage = 1
+			coroutine.yield()
+			stage = 2
+		end)
+		assert(stage == 0)
+
+		coroutine.resume(garbage.coro, true,nil,3)
+		assert(stage == 1)
+
+		gc()
+		assert(system.run() == false)
+		assert(stage == 1)
+
+		done()
+	end
+
 	do case "cancel and reschedule"
 		local server = assert(create("passive"))
 		assert(server:bind(addresses.bindable))
