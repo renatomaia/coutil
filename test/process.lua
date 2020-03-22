@@ -67,7 +67,7 @@ do
 			local file = assert(io.open("]],successfile,[[", "w"))
 			assert(file:write("SUCCESS!"))
 			assert(file:close())
-			os.exit(exitval)
+			os.exit(exitval, true)
 		]])
 		local ended, exitval = system.execute(command, scriptfile, ...)
 		assert(ended == "exit")
