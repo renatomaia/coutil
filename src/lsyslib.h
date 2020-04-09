@@ -182,12 +182,10 @@ LCULIB_API int lcu_closesysco (lua_State *L, int idx);
 
 LCULIB_API int lcu_issyscoclosed (lcu_SysCoro *sysco);
 
-LCULIB_API int lcu_issyscorunning (lcu_SysCoro *sysco);
-
-LCULIB_API void lcu_setsyscorunning (lcu_SysCoro *sysco, int value);
-
-LCULIB_API lua_State *lcu_tosyscolua(lcu_SysCoro *sysco);
+LCULIB_API void lcu_setsyscoparent (lcu_SysCoro *sysco, lua_State *value);
 
 LCULIB_API lua_State *lcu_tosyscoparent(lcu_SysCoro *sysco);
+
+LCULIB_API lua_State *lcu_tosyscolua(lcu_SysCoro *sysco);
 
 #endif

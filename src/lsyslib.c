@@ -98,8 +98,6 @@ LCULIB_API struct addrinfo *lcu_nextaddrlist (lcu_AddressList *l) {
 #define FLAG_UDPMASK 0x3f  /* only for UDP sockets */
 #define FLAG_PIPEMASK 0x07  /* only for pipe sockets */
 
-#define FLAG_RUNNING 0x02  /* only for system coroutines */
-
 #define LISTENCONN_UNIT (FLAG_LSTNMASK+1)
 #define KEEPALIVE_SHIFT 5
 #define MCASTTTL_SHIFT 6
@@ -300,18 +298,17 @@ static void freecoroutine (lcu_SysCoro *sysco) {
 
 LCULIB_API lcu_SysCoro *lcu_newsysco (lua_State *L, lua_State *co) {
 	lcu_SysCoro *sysco = (lcu_SysCoro *)lua_newuserdata(L, sizeof(lcu_SysCoro));
-	sysco->thread = L;
-	sysco->coroutine = co;
 	sysco->flags = 0;
+	sysco->thread = NULL;
+	sysco->coroutine = co;
 	luaL_setmetatable(L, LCU_SYSCOROCLS);
 	return sysco;
 }
 
 LCULIB_API int lcu_closesysco (lua_State *L, int idx) {
 	lcu_SysCoro *sysco = lcu_checksysco(L, idx);
-	lcu_assert(sysco->thread == L);
 	if (sysco && !lcuL_maskflag(sysco, FLAG_CLOSED)) {
-		if (lcuL_maskflag(sysco, FLAG_RUNNING)) {
+		if (sysco->thread) {
 			lua_pushvalue(L, idx);
 			lcuT_savevalue(L, (void *)sysco);
 		} else {
@@ -327,14 +324,12 @@ LCULIB_API int lcu_issyscoclosed (lcu_SysCoro *sysco) {
 	return lcuL_maskflag(sysco, FLAG_CLOSED);
 }
 
-LCULIB_API int lcu_issyscorunning (lcu_SysCoro *sysco) {
-	return lcuL_maskflag(sysco, FLAG_RUNNING);
-}
-
-LCULIB_API void lcu_setsyscorunning (lcu_SysCoro *sysco, int value) {
-	if (value) lcuL_setflag(sysco, FLAG_RUNNING);
-	else if (lcuL_maskflag(sysco, FLAG_RUNNING)) {
-		lcuL_clearflag(sysco, FLAG_RUNNING);
+LCULIB_API void lcu_setsyscoparent (lcu_SysCoro *sysco, lua_State *value) {
+	if (value) {
+		lcu_assert(sysco->thread == NULL);
+		sysco->thread = value;
+	} else if (sysco->thread) {
+		sysco->thread = NULL;
 		if (sysco->coroutine && lcuL_maskflag(sysco, FLAG_CLOSED)) {
 			lua_State *L = sysco->thread;
 			lcuT_freevalue(L, (void *)sysco);
@@ -343,10 +338,10 @@ LCULIB_API void lcu_setsyscorunning (lcu_SysCoro *sysco, int value) {
 	}
 }
 
-LCULIB_API lua_State *lcu_tosyscolua(lcu_SysCoro *sysco) {
-	return sysco->coroutine;
-}
-
 LCULIB_API lua_State *lcu_tosyscoparent(lcu_SysCoro *sysco) {
 	return sysco->thread;
+}
+
+LCULIB_API lua_State *lcu_tosyscolua(lcu_SysCoro *sysco) {
+	return sysco->coroutine;
 }

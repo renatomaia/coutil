@@ -2,22 +2,88 @@ local system = require "coutil.system"
 
 newtest "coroutine" ------------------------------------------------------------
 
-do case "error messages"
+do case "compilation errors"
 	for v in ipairs(types) do
-		if type(v) ~= "string" then
+		local ltype = type(v)
+		if ltype ~= "string" and ltype ~= "number" then
 			asserterr("string or memory expected", pcall(system.coroutine, v))
 			asserterr("string expected", pcall(system.coroutine, "", v))
 			asserterr("string expected", pcall(system.coroutine, "", "", v))
 		end
 	end
+
+	local bytecodes = string.dump(function () a = a+1 end)
+	asserterr("attempt to load a binary chunk (mode is 't')",
+	          system.coroutine(bytecodes, nil, "t"))
+	asserterr("attempt to load a text chunk (mode is 'b')",
+	          system.coroutine("a = a+1", "bytecodes", "b"))
 	asserterr("syntax error", system.coroutine("invalid chunk"))
+
+	local co = system.coroutine""
+	asserterr("unable to yield", pcall(system.resume, co))
 
 	done()
 end
 
 do case "runtime errors"
-	local co = system.coroutine[[ error "Oops!" ]]
-	asserterr("Oops!", system.resume(co))
+	local co = system.coroutine([[
+		require "_G"
+		error "Oops!"
+	]], "@bytecodes")
+
+	local stage
+	spawn(function ()
+		stage = 0
+		asserterr("bytecodes:2: Oops!", system.resume(co))
+		asserterr("cannot resume dead coroutine", system.resume(co))
+		stage = 2
+	end)
+	assert(stage == 0)
+
+	spawn(function ()
+		asserterr("cannot resume running coroutine", system.resume(co))
+		stage = 1
+		--local res, errval = system.resume(system.coroutine[[
+		--	require "_G"
+		--	error(true)
+		--]])
+		--assert(res == false)
+		--assert(errval == true)
+		stage = 3
+	end)
+
+	assert(stage == 1)
+	assert(system.run() == false)
+	assert(stage == 2 or stage == 3)
+
+	done()
+end
+
+do return end
+
+do case "type errors"
+	local stage = 0
+	spawn(function ()
+		local co = system.coroutine(string.dump(function ()
+			require "_G"
+			error{}
+		end))
+		asserterr("bad argument #2 (illegal type)", system.resume(co, table))
+		asserterr("bad argument #3 (illegal type)", system.resume(co, 1, print))
+		asserterr("bad argument #4 (illegal type)", system.resume(co, 1, 2, coroutine.running()))
+		asserterr("bad argument #5 (illegal type)", system.resume(co, 1, 2, 3, co))
+		stage = 1
+		asserterr("bad error (illegal type)", system.resume(co))
+		asserterr("bad return value #2 (illegal type)",
+		          system.resume(system.coroutine[[ return 1, {2}, 3 ]]))
+		asserterr("bad return value #4 (illegal type)",
+		          system.resume(system.coroutine[[ return 1, 2, 3, require ]]))
+		stage = 2
+	end)
+
+	assert(stage == 1)
+	assert(system.run() == false)
+	assert(stage == 2)
 
 	done()
 end
@@ -42,7 +108,7 @@ do case "parallel execution"
 				end
 			end
 		end
-	]], path)) == true)
+	]], path)))
 
 	local stage = 0
 	spawn(function ()
@@ -56,22 +122,25 @@ do case "parallel execution"
 
 	local removed = false
 	for i=1, 1e3 do
-		if io.open(path) == nil then
+		file = io.open(path)
+		if file == nil then
 			removed = true
 			break
+		else
+			file:close()
 		end
 	end
-
 	assert(removed)
 
+	assert(stage == 0)
 	system.run()
-
 	assert(stage == 1)
 
 	done()
 end
 
-do return end
+
+
 
 
 local function startsynced(chunk, ...)

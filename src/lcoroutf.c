@@ -2,9 +2,36 @@
 #include "lmodaux.h"
 #include "loperaux.h"
 
+#include <lualib.h>
 #include <lmemlib.h>
 
-
+/* succ [, errmsg] = system.coroutine(chunk, chunkname, mode) */
+static const luaL_Reg stdlibs[] = {
+	{"_G", luaopen_base},
+	{LUA_COLIBNAME, luaopen_coroutine},
+	{LUA_TABLIBNAME, luaopen_table},
+	{LUA_IOLIBNAME, luaopen_io},
+	{LUA_OSLIBNAME, luaopen_os},
+	{LUA_STRLIBNAME, luaopen_string},
+	{LUA_MATHLIBNAME, luaopen_math},
+	{LUA_UTF8LIBNAME, luaopen_utf8},
+	{LUA_DBLIBNAME, luaopen_debug},
+#if defined(LUA_COMPAT_BITLIB)
+	{LUA_BITLIBNAME, luaopen_bit32},
+#endif
+	{NULL, NULL}
+};
+static void preloadlibs (lua_State *L) {
+	const luaL_Reg *lib;
+	luaL_checkstack(L, 3, "not enough memory");
+	luaL_requiref(L, LUA_LOADLIBNAME, luaopen_package, 0);
+	luaL_getsubtable(L, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
+	for (lib = stdlibs; lib->func; lib++) {
+		lua_pushcfunction(L, lib->func);
+		lua_setfield(L, -2, lib->name);
+	}
+	lua_pop(L, 2);  /* remove 'package' and 'LUA_PRELOAD_TABLE' */
+}
 static int system_coroutine (lua_State *L) {
 	size_t l;
 	const char *s = luamem_checkstring(L, 1, &l);
@@ -21,6 +48,7 @@ static int system_coroutine (lua_State *L) {
 		lua_close(NL);
 		return 2;  /* return nil plus error message */
 	}
+	preloadlibs(NL);
 	lcu_newsysco(L, NL);
 	return 1;
 }
@@ -45,7 +73,7 @@ static int coroutine_close(lua_State *L) {
 static int coroutine_status(lua_State *L) {
 	lcu_SysCoro *sysco = lcu_checksysco(L, 1);
 	if (lcu_issyscoclosed(sysco)) lua_pushliteral(L, "dead");
-	else if (lcu_issyscorunning(sysco)) lua_pushliteral(L, "running");
+	else if (lcu_tosyscoparent(sysco)) lua_pushliteral(L, "running");
 	else {
 		lua_State *co = lcu_tosyscolua(sysco);
 		if (lua_status(co) == LUA_YIELD) lua_pushliteral(L, "suspended");
@@ -57,10 +85,10 @@ static int coroutine_status(lua_State *L) {
 }
 
 
- /* succ [, errmsg] = system.thread(chunk, chunkname, mode, ...) */
+/* succ [, errmsg] = system.resume(coroutine) */
 static int movevals (lua_State *from, lua_State *to, int n) {
 	int i;
-	lcu_assert(lua_gettop(from) < n);
+	lcu_assert(lua_gettop(from) >= n);
 	luaL_checkstack(to, n, "too many arguments to resume");
 	for (i = 0; i < n; i++) {
 		switch (lua_type(from, i-n)) {
@@ -93,8 +121,11 @@ static void uv_onworking(uv_work_t* req) {
 	lcu_SysCoro *sysco = (lcu_SysCoro *)req->data;
 	lua_State *co = lcu_tosyscolua(sysco);
 	int narg = lua_gettop(co);
+	int status, hasspace;
 	if (lua_status(co) == LUA_OK) --narg;  /* function on stack */
-	int status = lua_resume(co, NULL, narg);
+	status = lua_resume(co, NULL, narg);
+	hasspace = lua_checkstack(co, 1);
+	assert(hasspace);
 	lua_pushinteger(co, status);
 }
 static void uv_onworked(uv_work_t* work, int status) {
@@ -107,7 +138,6 @@ static void uv_onworked(uv_work_t* work, int status) {
 	thread = lcuU_endreqop(loop, request);
 	if (thread) {
 		int lstatus = (int)lua_tointeger(co, -1);
-		lcu_assert(lua_gettop(thread) == 1);  /* only the coroutine on stack */
 		lua_pop(co, 1);  /* remove lstatus value */
 		if (lstatus == LUA_OK || lstatus == LUA_YIELD) {
 			int nres = lua_gettop(co);
@@ -135,10 +165,10 @@ static void uv_onworked(uv_work_t* work, int status) {
 				lua_pushstring(thread, "bad error (illegal type)");
 			}
 		}
-		lcu_setsyscorunning(sysco, 0);  /* frees 'co' if closed */
+		lcu_setsyscoparent(sysco, NULL);  /* frees 'co' if closed */
 		lcuU_resumereqop(thread, loop, request);
 	}
-	else lcu_setsyscorunning(sysco, 0);  /* frees 'co' if closed */
+	else lcu_setsyscoparent(sysco, NULL);  /* frees 'co' if closed */
 }
 static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_work_t *work = (uv_work_t *)request;
@@ -147,7 +177,7 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	int narg = lua_gettop(L)-1;
 	int err;
 	lcu_assert(request->data == L);
-	if (lcu_issyscorunning(sysco)) {
+	if (lcu_tosyscoparent(sysco)) {
 		lua_pushboolean(L, 0);
 		lua_pushliteral(L, "cannot resume running coroutine");
 		return 2;
@@ -177,7 +207,7 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		lua_pop(co, narg);  /* restore coroutine stack */
 		return lcuL_pusherrres(L, err);
 	}
-	lcu_setsyscorunning(sysco, 1);
+	lcu_setsyscoparent(sysco, L);
 	return -1;  /* yield on success */
 }
 static int system_resume (lua_State *L) {

@@ -26,7 +26,6 @@ LCUI_FUNC void lcuT_freevalue (lua_State *L, void *key) {
 
 static void savethread (lua_State *L, void *key) {
 	lua_pushthread(L);
-	lua_pushlightuserdata(L, key);
 	lcuT_savevalue(L, key);
 }
 
