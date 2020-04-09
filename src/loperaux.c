@@ -12,16 +12,22 @@
 #define torequest(O) ((uv_req_t *)&((O)->kind.request))
 #define tohandle(O) ((uv_handle_t *)&((O)->kind.handle))
 
-static void savethread (lua_State *L, void *key) {
+LCUI_FUNC void lcuT_savevalue (lua_State *L, void *key) {
 	lua_pushlightuserdata(L, key);
-	lua_pushthread(L);
+	lua_insert(L, -2);
 	lua_settable(L, COREGISTRY);
 }
 
-static void freethread (lua_State *L, void *key) {
+LCUI_FUNC void lcuT_freevalue (lua_State *L, void *key) {
 	lua_pushlightuserdata(L, key);
 	lua_pushnil(L);
 	lua_settable(L, COREGISTRY);
+}
+
+static void savethread (lua_State *L, void *key) {
+	lua_pushthread(L);
+	lua_pushlightuserdata(L, key);
+	lcuT_savevalue(L, key);
 }
 
 static int resumethread (lua_State *thread, lua_State *L, uv_loop_t *loop) {
@@ -72,7 +78,7 @@ static void closedhdl (uv_handle_t *handle) {
 	void *thread = handle->data;
 	uv_req_t *request = torequest(op);
 	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST));
-	freethread(L, (void *)handle);
+	lcuT_freevalue(L, (void *)handle);
 	lcuL_setflag(op, FLAG_REQUEST);
 	request->type = UV_UNKNOWN_REQ;
 	request->data = thread;
@@ -188,7 +194,7 @@ LCUI_FUNC lua_State *lcuU_endreqop (uv_loop_t *loop, uv_req_t *request) {
 	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST));
 	request->type = UV_UNKNOWN_REQ;
 	if (lcuL_maskflag(op, FLAG_PENDING)) return (lua_State *)request->data;
-	freethread(L, (void *)request);
+	lcuT_freevalue(L, (void *)request);
 	return NULL;
 }
 
@@ -201,7 +207,7 @@ LCUI_FUNC void lcuU_resumereqop (lua_State *thread,
 	lcu_assert(lcuL_maskflag(op, FLAG_PENDING));
 	resumethread(thread, L, loop);
 	if (lcuL_maskflag(op, FLAG_REQUEST) && request->type == UV_UNKNOWN_REQ)
-		freethread(L, (void *)request);
+		lcuT_freevalue(L, (void *)request);
 }
 
 LCUI_FUNC void lcuU_completereqop (uv_loop_t *loop,
@@ -263,14 +269,13 @@ LCUI_FUNC int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle) {
 	return status;
 }
 
-
 /*
  * object operation
  */
 
 static void closedobj (uv_handle_t *handle) {
 	lua_State *L = (lua_State *)handle->loop->data;
-	freethread(L, (void *)handle);  /* becomes garbage */
+	lcuT_freevalue(L, (void *)handle);  /* becomes garbage */
 }
 
 LCUI_FUNC void lcu_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle) {
@@ -285,7 +290,7 @@ LCUI_FUNC void lcu_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle) {
 	lua_pushvalue(L, idx);  /* get the object */
 	lua_pushlightuserdata(L, (void *)handle);
 	lua_insert(L, -2);  /* place it below the object */
-	lua_settable(L, COREGISTRY);  /* also 'freethread' */
+	lua_settable(L, COREGISTRY);  /* also 'lcuT_freevalue' */
 	uv_close(handle, closedobj);
 }
 
@@ -300,7 +305,7 @@ LCUI_FUNC void lcuT_awaitobj (lua_State *L, uv_handle_t *handle) {
 
 LCUI_FUNC int lcuT_haltedobjop (lua_State *L, uv_handle_t *handle) {
 	if (!haltedop(L, handle->loop)) return 0;
-	freethread(L, (void *)handle);
+	lcuT_freevalue(L, (void *)handle);
 	handle->data = NULL;
 	return 1;
 }
@@ -311,6 +316,6 @@ LCUI_FUNC int lcuU_resumeobjop (lua_State *thread, uv_handle_t *handle) {
 	int status;
 	handle->data = NULL;
 	status = resumethread(thread, L, loop);
-	if (handle->data == NULL) freethread(L, (void *)handle);
+	if (handle->data == NULL) lcuT_freevalue(L, (void *)handle);
 	return status;
 }

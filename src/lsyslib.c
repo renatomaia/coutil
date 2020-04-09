@@ -31,10 +31,10 @@ LCULIB_API struct sockaddr *lcu_newaddress (lua_State *L, int type) {
  * Names
  */
 
-typedef struct lcu_AddressList {
+struct lcu_AddressList {
 	struct addrinfo *start;
 	struct addrinfo *current;
-} lcu_AddressList;
+};
 
 LCULIB_API lcu_AddressList *lcu_newaddrlist (lua_State *L) {
 	lcu_AddressList *l = (lcu_AddressList *)lua_newuserdata(L, sizeof(lcu_AddressList));
@@ -97,6 +97,8 @@ LCULIB_API struct addrinfo *lcu_nextaddrlist (lcu_AddressList *l) {
 #define FLAG_TCPMASK 0x1f  /* only for active TCP sockets */
 #define FLAG_UDPMASK 0x3f  /* only for UDP sockets */
 #define FLAG_PIPEMASK 0x07  /* only for pipe sockets */
+
+#define FLAG_RUNNING 0x02  /* only for system coroutines */
 
 #define LISTENCONN_UNIT (FLAG_LSTNMASK+1)
 #define KEEPALIVE_SHIFT 5
@@ -279,4 +281,72 @@ LCULIB_API int lcu_getpipeperm (lcu_IpcPipe *pipe) {
 LCULIB_API void lcu_setpipeperm (lcu_IpcPipe *pipe, int value) {
 	pipe->flags = (FLAG_PIPEPERM&(value<<PIPEPERM_SHIFT))
 	            | lcuL_maskflag(pipe, FLAG_PIPEMASK);
+}
+
+/*
+ * Coroutines
+ */
+
+struct lcu_SysCoro {
+	int flags;
+	lua_State *thread;
+	lua_State *coroutine;
+};
+
+static void freecoroutine (lcu_SysCoro *sysco) {
+	lua_close(sysco->coroutine);
+	sysco->coroutine = NULL;
+}
+
+LCULIB_API lcu_SysCoro *lcu_newsysco (lua_State *L, lua_State *co) {
+	lcu_SysCoro *sysco = (lcu_SysCoro *)lua_newuserdata(L, sizeof(lcu_SysCoro));
+	sysco->thread = L;
+	sysco->coroutine = co;
+	sysco->flags = 0;
+	luaL_setmetatable(L, LCU_SYSCOROCLS);
+	return sysco;
+}
+
+LCULIB_API int lcu_closesysco (lua_State *L, int idx) {
+	lcu_SysCoro *sysco = lcu_checksysco(L, idx);
+	lcu_assert(sysco->thread == L);
+	if (sysco && !lcuL_maskflag(sysco, FLAG_CLOSED)) {
+		if (lcuL_maskflag(sysco, FLAG_RUNNING)) {
+			lua_pushvalue(L, idx);
+			lcuT_savevalue(L, (void *)sysco);
+		} else {
+			freecoroutine(sysco);
+		}
+		lcuL_setflag(sysco, FLAG_CLOSED);
+		return 1;
+	}
+	return 0;
+}
+
+LCULIB_API int lcu_issyscoclosed (lcu_SysCoro *sysco) {
+	return lcuL_maskflag(sysco, FLAG_CLOSED);
+}
+
+LCULIB_API int lcu_issyscorunning (lcu_SysCoro *sysco) {
+	return lcuL_maskflag(sysco, FLAG_RUNNING);
+}
+
+LCULIB_API void lcu_setsyscorunning (lcu_SysCoro *sysco, int value) {
+	if (value) lcuL_setflag(sysco, FLAG_RUNNING);
+	else if (lcuL_maskflag(sysco, FLAG_RUNNING)) {
+		lcuL_clearflag(sysco, FLAG_RUNNING);
+		if (sysco->coroutine && lcuL_maskflag(sysco, FLAG_CLOSED)) {
+			lua_State *L = sysco->thread;
+			lcuT_freevalue(L, (void *)sysco);
+			freecoroutine(sysco);
+		}
+	}
+}
+
+LCULIB_API lua_State *lcu_tosyscolua(lcu_SysCoro *sysco) {
+	return sysco->coroutine;
+}
+
+LCULIB_API lua_State *lcu_tosyscoparent(lcu_SysCoro *sysco) {
+	return sysco->thread;
 }

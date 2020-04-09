@@ -2,7 +2,7 @@
 # == CHANGE THE SETTINGS BELOW TO SUIT YOUR ENVIRONMENT =======================
 
 #LUA_HOME= /usr/local
-LUA_HOME= /home/maia/Work/lua/build/5.3
+LUA_HOME= /home/maia/Work/lua/build/5.3-debug
 LUA_INC= $(LUA_HOME)/include
 LUA_LIB= $(LUA_HOME)/lib
 LUA_BIN= $(LUA_HOME)/bin
@@ -46,7 +46,7 @@ MYOBJS=
 
 OSM_O=	lsyslib.o \
       	lmodaux.o loperaux.o \
-      	lscheduf.o ltimef.o lprocesf.o lsocketf.o lthreadf.o \
+      	lscheduf.o ltimef.o lprocesf.o lsocketf.o lcoroutf.o \
       	lsysmod.o
 
 ALL_O=	$(OSM_O) $(MYOBJS)

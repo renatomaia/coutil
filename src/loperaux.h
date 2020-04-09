@@ -8,6 +8,10 @@
 #include <lua.h>
 
 
+LCUI_FUNC void lcuT_savevalue (lua_State *L, void *key);
+
+LCUI_FUNC void lcuT_freevalue (lua_State *L, void *key);
+
 /* request operations */
 
 typedef int (*lcu_RequestSetup) (lua_State *L, uv_req_t *r, uv_loop_t *l);

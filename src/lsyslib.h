@@ -164,4 +164,30 @@ LCULIB_API int lcu_getpipeperm (lcu_IpcPipe *pipe);
 
 LCULIB_API void lcu_setpipeperm (lcu_IpcPipe *pipe, int value);
 
+
+
+#define LCU_SYSCOROCLS LCU_PREFIX"syscoro"
+
+typedef struct lcu_SysCoro lcu_SysCoro;
+
+#define lcu_checksysco(L,i) ((lcu_SysCoro *)luaL_checkudata(L, i, LCU_SYSCOROCLS))
+
+#define lcu_tosysco(L,i)  ((lcu_SysCoro *)luaL_testudata(L, i, LCU_SYSCOROCLS))
+
+#define lcu_issysco(L,i)  (lcu_tosysco(L, i) != NULL)
+
+LCULIB_API lcu_SysCoro *lcu_newsysco (lua_State *L, lua_State *co);
+
+LCULIB_API int lcu_closesysco (lua_State *L, int idx);
+
+LCULIB_API int lcu_issyscoclosed (lcu_SysCoro *sysco);
+
+LCULIB_API int lcu_issyscorunning (lcu_SysCoro *sysco);
+
+LCULIB_API void lcu_setsyscorunning (lcu_SysCoro *sysco, int value);
+
+LCULIB_API lua_State *lcu_tosyscolua(lcu_SysCoro *sysco);
+
+LCULIB_API lua_State *lcu_tosyscoparent(lcu_SysCoro *sysco);
+
 #endif

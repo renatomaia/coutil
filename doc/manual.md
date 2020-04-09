@@ -849,18 +849,82 @@ Returns a new stream socket for the accepted connection.
 
 
 
-### `system.thread (chunk, chunkname, mode, ...)`
 
-Loads a chunk (see [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load)) and executes it in a independnet system thread that shares no resources with the calling thread.
+
+### `system.coroutine (chunk [, chunkname [, mode]])`
+
+### `system.resume (coroutine, ...)`
+
+
+
+
+
+### `system.tpool ([size])`
+
+Returns a new pool of `size` system threads that executes [chunks](http://www.lua.org/manual/5.3/manual.html#pdf-load) as independent coroutines (see [`tpool:dostring`](#tpooldostring-chunk-chunkname-mode-)).
+
+If `size` is omitted,
+returns the thread pool where the calling code is executing,
+or `nil` if it is not executing in a thread pool (_i.e._ the main process thread).
+
+### `tpool:resize (size)`
+
+Defines the `tpool` shall keep `size` system threads to execute coroutines in `tpool`.
+If `size` is smaller than the current number of threads,
+the exceeding threads are destroyed at the rate they are released from the coroutines currently executing in `tpool`.
+Otherwise, if necessary, new threads are created to reach the defined value.
+
+### `tpool:getcount ([option])`
+
+Returns a count of the `tpool` according to the value of `option`,
+as described below:
+
+- `"size"`: the expected number of system threads.
+- `"thread"`: the actual number of existing system threads.
+- `"coroutine"`: the total number of different coroutines.
+- `"running"`: the number of coroutines executing.
+- `"pending"`: the number of coroutines ready to execute.
+- `"suspended"`: the number of coroutines not executing.
+
+Returns the defined number of system threads,
+followed by the actual number of current system threads,
+and the number of pending coroutines in `tpool`.
+
+### `tpool:dostring (chunk [, chunkname [, mode, ...]])`
+
+Loads a [chunk](http://www.lua.org/manual/5.3/manual.html#pdf-load) as a independent coroutine to be executed on a system thread from [`tpool`](#systemtpool-size).
+
 Arguments `chunk`, `chunkname`, `mode` are the same of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
-Arguments `...` are arguments for the executed chunk.
-Only nil, boolean, number and string values are allowed.
-Returns `true` in case of success.
+Arguments `...` are arguments for the load chunk,
+and only nil, boolean, number, string, `tpool` and `tchannel` values are allowed as such arguments.
 
-### `system.threadq ()`
+Whenever the loaded `chunk` yields (see [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) it reschedules itself as pending to be resumed,
+and releases its running system thread to execute any pending coroutines in [`tpool`](#systemtpool-size).
 
-### `threadq:send (...)`
+Execution errors in the loaded `chunk` are not handled,
+and simply terminate the coroutine.
 
-### `threadq:receive (probe)`
+Returns `true` if `chunk` is loaded successfully.
 
-### `threadq:close ()`
+### `tpool:dofile (filename [, mode, ...])`
+
+Similar to [`tpool:dostring`](#tpooldostring-chunk-chunkname-mode-),
+but gets the chunk from file `filename`.
+
+### `tpool:detach ()`
+
+Discards reference to thread pool `tpool` so its resources can be released when it has no more running threads (_i.e._ `tpool:resize(0)`) or pending coroutines.
+Note that `tpool` objects are automatically detached when they are garbage collected,
+but that takes an unpredictable amount of time to happen. 
+
+
+
+
+
+### `system.tchannel ()`
+
+### `tchannel:send (...)`
+
+### `tchannel:receive (probe)`
+
+### `tchannel:close ()`
