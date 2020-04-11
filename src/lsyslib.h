@@ -51,7 +51,7 @@ LCULIB_API struct addrinfo *lcu_nextaddrlist (lcu_AddressList *list);
 
 typedef struct lcu_Object lcu_Object;
 
-LCULIB_API int lcu_closeobj (lua_State *L, int idx, const char *cls);
+LCULIB_API int lcuT_closeobj (lua_State *L, int idx, const char *cls);
 
 LCULIB_API void lcu_enableobj (lcu_Object *object);
 
@@ -178,14 +178,16 @@ typedef struct lcu_SysCoro lcu_SysCoro;
 
 LCULIB_API lcu_SysCoro *lcu_newsysco (lua_State *L, lua_State *co);
 
-LCULIB_API int lcu_closesysco (lua_State *L, int idx);
-
-LCULIB_API int lcu_issyscoclosed (lcu_SysCoro *sysco);
-
-LCULIB_API void lcu_setsyscoparent (lcu_SysCoro *sysco, lua_State *value);
-
 LCULIB_API lua_State *lcu_tosyscoparent(lcu_SysCoro *sysco);
 
 LCULIB_API lua_State *lcu_tosyscolua(lcu_SysCoro *sysco);
+
+LCULIB_API int lcu_issyscoclosed (lcu_SysCoro *sysco);
+
+LCULIB_API int lcuT_closesysco (lua_State *L, int idx);
+
+LCULIB_API void lcuT_startsysco (lua_State *L, lcu_SysCoro *sysco);
+
+LCULIB_API void lcuT_stopsysco (lua_State *L, lcu_SysCoro *sysco);
 
 #endif

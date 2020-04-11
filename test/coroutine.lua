@@ -19,7 +19,7 @@ do case "compilation errors"
 	          system.coroutine("a = a+1", "bytecodes", "b"))
 	asserterr("syntax error", system.coroutine("invalid chunk"))
 
-	local co = system.coroutine""
+	local co = system.coroutine[[ return 1, 2, 3 ]]
 	asserterr("unable to yield", pcall(system.resume, co))
 
 	done()
@@ -43,12 +43,12 @@ do case "runtime errors"
 	spawn(function ()
 		asserterr("cannot resume running coroutine", system.resume(co))
 		stage = 1
-		--local res, errval = system.resume(system.coroutine[[
-		--	require "_G"
-		--	error(true)
-		--]])
-		--assert(res == false)
-		--assert(errval == true)
+		local res, errval = system.resume(system.coroutine[[
+			require "_G"
+			error(true)
+		]])
+		assert(res == false)
+		assert(errval == true)
 		stage = 3
 	end)
 
@@ -58,8 +58,6 @@ do case "runtime errors"
 
 	done()
 end
-
-do return end
 
 do case "type errors"
 	local stage = 0
@@ -88,7 +86,7 @@ do case "type errors"
 	done()
 end
 
-do case "parallel execution"
+do case "preemptive execution"
 	local path = os.tmpname()
 	os.remove(path)
 
@@ -138,6 +136,62 @@ do case "parallel execution"
 
 	done()
 end
+
+do case "yield values"
+	local co = system.coroutine[[
+		require "_G"
+		assert(select("#", ...) == 5)
+		local a,b,c,d,e = ...
+		assert(a == nil)
+		assert(b == false)
+		assert(c == 123)
+		assert(d == 0xfacep-8)
+		assert(e == "\001")
+
+		local coroutine = require "coroutine"
+		assert(select("#", coroutine.yield()) == 0)
+		assert(coroutine.yield(nil) == nil)
+		assert(coroutine.yield(false) == false)
+		assert(coroutine.yield(true) == true)
+		assert(coroutine.yield(0) == 0)
+		assert(coroutine.yield(1) == 1)
+		assert(coroutine.yield(-1) == -1)
+		assert(coroutine.yield(0xadap-16) == 0xadap-16)
+		assert(coroutine.yield('') == '')
+		assert(coroutine.yield('Lua 5.4') == 'Lua 5.4')
+		assert(coroutine.yield('\\0') == '\\0')
+
+		return ...
+	]]
+
+	spawn(function ()
+		local function assertreturn(count, ...)
+			assert(select("#", ...) == 2*count+1)
+			assert(select(count+1, ...) == true)
+			for i = 1, count do
+				assert(select(i, ...) == select(count+1+i, ...))
+			end
+		end
+		assertreturn(0, system.resume(co, nil, false, 123, 0xfacep-8, "\001"))
+		assertreturn(1, nil, system.resume(co))
+		assertreturn(1, false, system.resume(co, nil))
+		assertreturn(1, true, system.resume(co, false))
+		assertreturn(1, 0, system.resume(co, true))
+		assertreturn(1, 1, system.resume(co, 0))
+		assertreturn(1, -1, system.resume(co, 1))
+		assertreturn(1, 0xadap-16, system.resume(co, -1))
+		assertreturn(1, '', system.resume(co, 0xadap-16))
+		assertreturn(1, 'Lua 5.4', system.resume(co, ''))
+		assertreturn(1, '\\0', system.resume(co, 'Lua 5.4'))
+		assertreturn(5, nil, false, 123, 0xfacep-8, "\001", system.resume(co, '\\0'))
+	end)
+
+	assert(system.run() == false)
+
+	done()
+end
+
+do return end
 
 
 

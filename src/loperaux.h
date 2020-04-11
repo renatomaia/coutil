@@ -45,7 +45,7 @@ LCUI_FUNC int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle);
 
 /* object operations */
 
-LCUI_FUNC void lcu_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle);
+LCUI_FUNC void lcuT_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle);
 
 LCUI_FUNC void lcuT_awaitobj (lua_State *L, uv_handle_t *handle);
 

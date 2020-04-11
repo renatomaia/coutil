@@ -56,14 +56,14 @@ static int system_coroutine (lua_State *L) {
 
 /* getmetatable(coroutine).__gc(coroutine) */
 static int coroutine_gc(lua_State *L) {
-	lcu_closesysco(L, 1);
+	lcuT_closesysco(L, 1);
 	return 0;
 }
 
 
 /* succ = object:close() */
 static int coroutine_close(lua_State *L) {
-	int closed = lcu_closesysco(L, 1);
+	int closed = lcuT_closesysco(L, 1);
 	lua_pushboolean(L, closed);
 	return 1;
 }
@@ -134,6 +134,7 @@ static void uv_onworked(uv_work_t* work, int status) {
 	lcu_SysCoro *sysco = (lcu_SysCoro *)request->data;
 	lua_State *co = lcu_tosyscolua(sysco);
 	lua_State *thread;
+	lua_State *L = (lua_State *)loop->data;
 	request->data = lcu_tosyscoparent(sysco);  /* restore 'lua_State' on conclusion */
 	thread = lcuU_endreqop(loop, request);
 	if (thread) {
@@ -165,10 +166,10 @@ static void uv_onworked(uv_work_t* work, int status) {
 				lua_pushstring(thread, "bad error (illegal type)");
 			}
 		}
-		lcu_setsyscoparent(sysco, NULL);  /* frees 'co' if closed */
+		lcuT_stopsysco(L, sysco);  /* frees 'co' if closed */
 		lcuU_resumereqop(thread, loop, request);
 	}
-	else lcu_setsyscoparent(sysco, NULL);  /* frees 'co' if closed */
+	else lcuT_stopsysco(L, sysco);  /* frees 'co' if closed */
 }
 static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_work_t *work = (uv_work_t *)request;
@@ -207,7 +208,7 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		lua_pop(co, narg);  /* restore coroutine stack */
 		return lcuL_pusherrres(L, err);
 	}
-	lcu_setsyscoparent(sysco, L);
+	lcuT_startsysco(L, sysco);
 	return -1;  /* yield on success */
 }
 static int system_resume (lua_State *L) {
@@ -228,7 +229,7 @@ LCUI_FUNC void lcuM_addcoroutf (lua_State *L) {
 		{NULL, NULL}
 	};
 	lcuM_newclass(L, LCU_SYSCOROCLS);
-	lcuM_setfuncs(L, clsf, 0);
+	lcuM_setfuncs(L, clsf, LCU_MODUPVS);
 	lua_pop(L, 1);
 
 	lcuM_setfuncs(L, modf, LCU_MODUPVS);

@@ -277,7 +277,7 @@ static void closedobj (uv_handle_t *handle) {
 	lcuT_freevalue(L, (void *)handle);  /* becomes garbage */
 }
 
-LCUI_FUNC void lcu_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle) {
+LCUI_FUNC void lcuT_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle) {
 	lua_State *thread = (lua_State *)handle->data;
 	if (thread) {
 		lcu_assert(lua_gettop(thread) == 0);

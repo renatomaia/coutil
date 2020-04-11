@@ -135,10 +135,10 @@ static lcu_Object *createobj (lua_State *L, size_t size, const char *cls) {
 	return object;
 }
 
-LCULIB_API int lcu_closeobj (lua_State *L, int idx, const char *cls) {
+LCULIB_API int lcuT_closeobj (lua_State *L, int idx, const char *cls) {
 	lcu_Object *object = (lcu_Object *)luaL_checkudata(L, idx, cls);
 	if (object && !lcuL_maskflag(object, FLAG_CLOSED)) {
-		lcu_closeobjhdl(L, idx, &object->handle);
+		lcuT_closeobjhdl(L, idx, &object->handle);
 		lcuL_setflag(object, FLAG_CLOSED);
 		return 1;
 	}
@@ -292,6 +292,7 @@ struct lcu_SysCoro {
 };
 
 static void freecoroutine (lcu_SysCoro *sysco) {
+	lcu_assert(sysco->coroutine);
 	lua_close(sysco->coroutine);
 	sysco->coroutine = NULL;
 }
@@ -305,7 +306,19 @@ LCULIB_API lcu_SysCoro *lcu_newsysco (lua_State *L, lua_State *co) {
 	return sysco;
 }
 
-LCULIB_API int lcu_closesysco (lua_State *L, int idx) {
+LCULIB_API lua_State *lcu_tosyscoparent(lcu_SysCoro *sysco) {
+	return sysco->thread;
+}
+
+LCULIB_API lua_State *lcu_tosyscolua(lcu_SysCoro *sysco) {
+	return sysco->coroutine;
+}
+
+LCULIB_API int lcu_issyscoclosed (lcu_SysCoro *sysco) {
+	return lcuL_maskflag(sysco, FLAG_CLOSED);
+}
+
+LCULIB_API int lcuT_closesysco (lua_State *L, int idx) {
 	lcu_SysCoro *sysco = lcu_checksysco(L, idx);
 	if (sysco && !lcuL_maskflag(sysco, FLAG_CLOSED)) {
 		if (sysco->thread) {
@@ -320,28 +333,17 @@ LCULIB_API int lcu_closesysco (lua_State *L, int idx) {
 	return 0;
 }
 
-LCULIB_API int lcu_issyscoclosed (lcu_SysCoro *sysco) {
-	return lcuL_maskflag(sysco, FLAG_CLOSED);
+LCULIB_API void lcuT_startsysco (lua_State *L, lcu_SysCoro *sysco) {
+	lcu_assert(sysco->thread == NULL);
+	sysco->thread = L;
 }
 
-LCULIB_API void lcu_setsyscoparent (lcu_SysCoro *sysco, lua_State *value) {
-	if (value) {
-		lcu_assert(sysco->thread == NULL);
-		sysco->thread = value;
-	} else if (sysco->thread) {
-		sysco->thread = NULL;
-		if (sysco->coroutine && lcuL_maskflag(sysco, FLAG_CLOSED)) {
-			lua_State *L = sysco->thread;
-			lcuT_freevalue(L, (void *)sysco);
-			freecoroutine(sysco);
-		}
+LCULIB_API void lcuT_stopsysco (lua_State *L, lcu_SysCoro *sysco) {
+	lcu_assert(sysco->thread != NULL);
+	lcu_assert(sysco->coroutine != NULL);
+	sysco->thread = NULL;
+	if (lcuL_maskflag(sysco, FLAG_CLOSED)) {
+		lcuT_freevalue(L, (void *)sysco);
+		freecoroutine(sysco);
 	}
-}
-
-LCULIB_API lua_State *lcu_tosyscoparent(lcu_SysCoro *sysco) {
-	return sysco->thread;
-}
-
-LCULIB_API lua_State *lcu_tosyscolua(lcu_SysCoro *sysco) {
-	return sysco->coroutine;
 }

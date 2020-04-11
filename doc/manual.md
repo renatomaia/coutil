@@ -855,6 +855,11 @@ Returns a new stream socket for the accepted connection.
 
 ### `system.resume (coroutine, ...)`
 
+**Note:** requires that Lua uses a thread-safe memory allocation function,
+such as the one based on `realloc` used in standard Lua.
+
+
+
 
 
 
@@ -916,7 +921,6 @@ but gets the chunk from file `filename`.
 Discards reference to thread pool `tpool` so its resources can be released when it has no more running threads (_i.e._ `tpool:resize(0)`) or pending coroutines.
 Note that `tpool` objects are automatically detached when they are garbage collected,
 but that takes an unpredictable amount of time to happen. 
-
 
 
 

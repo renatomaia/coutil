@@ -47,7 +47,7 @@ static int terminateloop (lua_State *L) {
 	if (err == UV_EBUSY) {
 		uv_walk(loop, closehandle, NULL);
 		loop->data = (void *)L;
-		err = uv_run(loop, UV_RUN_NOWAIT);
+		err = uv_run(loop, UV_RUN_DEFAULT);
 		loop->data = NULL;
 		if (!err) err = uv_loop_close(loop);
 
@@ -66,8 +66,8 @@ LCUI_FUNC void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
 	else {
 		uv = (uv_loop_t *)lua_newuserdata(L, sizeof(uv_loop_t));
 		if (luaL_newmetatable(L, LCU_UVLOOPCLS)) {
-			lua_pushvalue(L, -3);
-			lua_pushvalue(L, -3);
+			lua_pushvalue(L, -4);
+			lua_pushvalue(L, -4);
 			lua_pushcclosure(L, terminateloop, 2);
 			lua_setfield(L, -2, "__gc");
 		}
