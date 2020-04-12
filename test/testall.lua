@@ -100,5 +100,6 @@ dofile "stream.lua"
 dofile "network.lua"
 dofile "pipe.lua"
 dofile "process.lua"
+dofile "coroutine.lua"
 
 print "\nSuccess!\n"

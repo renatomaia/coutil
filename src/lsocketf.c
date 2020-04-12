@@ -599,14 +599,14 @@ static lcu_Object *ownedobj (lua_State *L,
 
 /* getmetatable(object).__gc(object) */
 static int object_gc (lua_State *L) {
-	lcu_closeobj(L, 1, toclass(L));
+	lcuT_closeobj(L, 1, toclass(L));
 	return 0;
 }
 
 
 /* succ [, errmsg] = object:close() */
 static int object_close (lua_State *L) {
-	int closed = lcu_closeobj(L, 1, toclass(L));
+	int closed = lcuT_closeobj(L, 1, toclass(L));
 	lua_pushboolean(L, closed);
 	return 1;
 }
@@ -793,7 +793,7 @@ static int stopudp (uv_udp_t *udp) {
 	int err = uv_udp_recv_stop(udp);
 	if (err < 0) {
 		lua_State *L = (lua_State *)udp->loop->data;
-		lcu_closeobjhdl(L, 1, (uv_handle_t *)udp);
+		lcuT_closeobjhdl(L, 1, (uv_handle_t *)udp);
 	}
 	lcu_setobjarmed(lcu_tohdlobj((uv_handle_t *)udp), 0);
 	return err;
@@ -981,7 +981,7 @@ static int stopread (uv_stream_t *stream) {
 	int err = uv_read_stop(stream);
 	if (err < 0) {
 		lua_State *L = (lua_State *)stream->loop->data;
-		lcu_closeobjhdl(L, 1, (uv_handle_t *)stream);
+		lcuT_closeobjhdl(L, 1, (uv_handle_t *)stream);
 	}
 	lcu_setobjarmed(lcu_tohdlobj((uv_handle_t *)stream), 0);
 	return err;

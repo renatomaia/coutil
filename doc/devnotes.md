@@ -74,11 +74,17 @@ Functions
 | ---------- | ---- | ----------- |
 | `lcu_` | `prefix` | API for manipulation of CoUtil values |
 | `lcuL_` | `prefix` | API with utilility Lua functions |
-| `lcuT_` | `prefix` | API for thread operations (**require module upvalues**). |
-| `lcuU_` | `prefix` | API for UV callbacks (**require module upvalues**). |
+| `lcuU_` | `prefix` | API for UV callbacks (see note 1). |
+| `lcuT_` | `prefix` | API for thread operations (see note 2). |
 | `uv_on` | `prefix` | UV callback function. |
 | `k_` | `prefix` | Lua continuation function. |
 | `k` | `suffix` | Function that yields with a continuation. |
+
+### Notes
+
+1. Requires an active `uv_loop_t` (**while `system.run()` is running**).
+2. Requires `lua_State` of a call to a function with **module upvalues**.
+Can be used with `(lua_State *)uv_loop_t.data` while `system.run()` is running.
 
 States
 ======

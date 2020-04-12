@@ -8,6 +8,10 @@
 #include <lua.h>
 
 
+LCUI_FUNC void lcuT_savevalue (lua_State *L, void *key);
+
+LCUI_FUNC void lcuT_freevalue (lua_State *L, void *key);
+
 /* request operations */
 
 typedef int (*lcu_RequestSetup) (lua_State *L, uv_req_t *r, uv_loop_t *l);
@@ -41,7 +45,7 @@ LCUI_FUNC int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle);
 
 /* object operations */
 
-LCUI_FUNC void lcu_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle);
+LCUI_FUNC void lcuT_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle);
 
 LCUI_FUNC void lcuT_awaitobj (lua_State *L, uv_handle_t *handle);
 

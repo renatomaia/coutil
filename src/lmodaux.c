@@ -47,7 +47,7 @@ static int terminateloop (lua_State *L) {
 	if (err == UV_EBUSY) {
 		uv_walk(loop, closehandle, NULL);
 		loop->data = (void *)L;
-		err = uv_run(loop, UV_RUN_NOWAIT);
+		err = uv_run(loop, UV_RUN_DEFAULT);
 		loop->data = NULL;
 		if (!err) err = uv_loop_close(loop);
 
