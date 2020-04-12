@@ -32,6 +32,11 @@ static void preloadlibs (lua_State *L) {
 	}
 	lua_pop(L, 2);  /* remove 'package' and 'LUA_PRELOAD_TABLE' */
 }
+static void copypanic (lua_State *from, lua_State *to) {
+	lua_CFunction panic = lua_atpanic(from, NULL);
+	lua_atpanic(from, panic);
+	lua_atpanic(to, panic);
+}
 static int system_coroutine (lua_State *L) {
 	size_t l;
 	const char *s = luamem_checkstring(L, 1, &l);
@@ -48,6 +53,7 @@ static int system_coroutine (lua_State *L) {
 		lua_close(NL);
 		return 2;  /* return nil plus error message */
 	}
+	copypanic(L, NL);
 	preloadlibs(NL);
 	lcu_newsysco(L, NL);
 	return 1;
@@ -78,7 +84,7 @@ static int coroutine_status(lua_State *L) {
 		lua_State *co = lcu_tosyscolua(sysco);
 		if (lua_status(co) == LUA_YIELD) lua_pushliteral(L, "suspended");
 		else if (lua_status(co) != LUA_OK) lua_pushliteral(L, "dead");
-		else if (lua_gettop(co)) lua_pushliteral(L, "suspended");
+		else if (lua_gettop(co)) lua_pushliteral(L, "normal");
 		else lua_pushliteral(L, "dead");
 	}
 	return 1;
@@ -105,6 +111,9 @@ static int movevals (lua_State *from, lua_State *to, int n) {
 				size_t l;
 				const char *s = luamem_tostring(from, i-n, &l);
 				lua_pushlstring(to, s, l);
+			} break;
+			case LUA_TLIGHTUSERDATA: {
+				lua_pushlightuserdata(to, lua_touserdata(from, i-n));
 			} break;
 			default:
 				lua_pop(to, i);
@@ -138,32 +147,38 @@ static void uv_onworked(uv_work_t* work, int status) {
 	request->data = lcu_tosyscoparent(sysco);  /* restore 'lua_State' on conclusion */
 	thread = lcuU_endreqop(loop, request);
 	if (thread) {
-		int lstatus = (int)lua_tointeger(co, -1);
-		lua_pop(co, 1);  /* remove lstatus value */
-		if (lstatus == LUA_OK || lstatus == LUA_YIELD) {
-			int nres = lua_gettop(co);
-			if (lua_checkstack(thread, nres+1)) {
-				int err;
-				lua_pushboolean(thread, 1);  /* return 'true' to signal success */
-				err = movevals(co, thread, nres);  /* move yielded values */
-				if (err) {
+		if (status == UV_ECANCELED) {
+			lua_settop(co, lua_status(co) == LUA_OK);  /* keep function on stack */
+			lua_pushboolean(thread, 0);
+			lua_pushliteral(thread, "cancelled");
+		} else {
+			int lstatus = (int)lua_tointeger(co, -1);
+			lua_pop(co, 1);  /* remove lstatus value */
+			if (lstatus == LUA_OK || lstatus == LUA_YIELD) {
+				int nres = lua_gettop(co);
+				if (lua_checkstack(thread, nres+1)) {
+					int err;
+					lua_pushboolean(thread, 1);  /* return 'true' to signal success */
+					err = movevals(co, thread, nres);  /* move yielded values */
+					if (err) {
+						lua_pop(co, nres);  /* remove results anyway */
+						lua_pop(thread, 1);  /* remove pushed 'true' that signals success */
+						lua_pushboolean(thread, 0);
+						lua_pushfstring(thread, "bad return value #%d (illegal type)", err);
+					}
+				} else {
 					lua_pop(co, nres);  /* remove results anyway */
-					lua_pop(thread, 1);  /* remove pushed 'true' that signals success */
 					lua_pushboolean(thread, 0);
-					lua_pushfstring(thread, "bad return value #%d (illegal type)", err);
+					lua_pushliteral(thread, "too many results to resume");
 				}
 			} else {
-				lua_pop(co, nres);  /* remove results anyway */
+				int err;
 				lua_pushboolean(thread, 0);
-				lua_pushliteral(thread, "too many results to resume");
-			}
-		} else {
-			int err;
-			lua_pushboolean(thread, 0);
-			err = movevals(co, thread, 1);  /* move error message */
-			if (err) {
-				lua_pop(co, 1);  /* remove error anyway */
-				lua_pushstring(thread, "bad error (illegal type)");
+				err = movevals(co, thread, 1);  /* move error message */
+				if (err) {
+					lua_pop(co, 1);  /* remove error anyway */
+					lua_pushstring(thread, "bad error (illegal type)");
+				}
 			}
 		}
 		lcuT_stopsysco(L, sysco);  /* frees 'co' if closed */
@@ -211,26 +226,27 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcuT_startsysco(L, sysco);
 	return -1;  /* yield on success */
 }
-static int system_resume (lua_State *L) {
+static int coroutine_resume (lua_State *L) {
 	return lcuT_resetreqopk(L, k_setupwork, returnvalues);
 }
 
-
-LCUI_FUNC void lcuM_addcoroutf (lua_State *L) {
+LCUI_FUNC void lcuM_addcoroutc (lua_State *L) {
 	static const luaL_Reg clsf[] = {
 		{"__gc", coroutine_gc},
 		{"close", coroutine_close},
 		{"status", coroutine_status},
-		{NULL, NULL}
-	};
-	static const luaL_Reg modf[] = {
-		{"coroutine", system_coroutine},
-		{"resume", system_resume},
+		{"resume", coroutine_resume},
 		{NULL, NULL}
 	};
 	lcuM_newclass(L, LCU_SYSCOROCLS);
 	lcuM_setfuncs(L, clsf, LCU_MODUPVS);
 	lua_pop(L, 1);
+}
 
+LCUI_FUNC void lcuM_addcoroutf (lua_State *L) {
+	static const luaL_Reg modf[] = {
+		{"coroutine", system_coroutine},
+		{NULL, NULL}
+	};
 	lcuM_setfuncs(L, modf, LCU_MODUPVS);
 }

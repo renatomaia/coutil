@@ -69,6 +69,10 @@ Index
 		- [`socket:shutdown`](#socketshutdown-)
 		- [`socket:listen`](#socketlisten-backlog)
 		- [`socket:accept`](#socketaccept-)
+	- [`system.coroutine`](#systemcoroutine-chunk--chunkname--mode)
+		- [`coroutine:resume`](#coroutineresume-)
+		- [`coroutine:status`](#coroutinestatus-)
+		- [`coroutine:close`](#coroutineclose-)
 
 Contents
 ========
@@ -847,18 +851,38 @@ This operation is only available for passive sockets.
 
 Returns a new stream socket for the accepted connection.
 
-
-
-
-
 ### `system.coroutine (chunk [, chunkname [, mode]])`
 
-### `system.resume (coroutine, ...)`
+Returns a new independent coroutine to execute a code in a separate system thread.
+The code to be executed is given by the arguments `chunk`, `chunkname`, `mode`, which are the same of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
 
-**Note:** requires that Lua uses a thread-safe memory allocation function,
-such as the one based on `realloc` used in standard Lua.
+### `coroutine:resume (...)`
 
+[Await function](#await) that is like [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume), but executes an [independent coroutine](#systemcoroutine-chunk-chunkname-mode-) on a separate system thread and awaits for its completion or suspension ([`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
+Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values can be passed as arguments or returned from the coroutines.
 
+If the coroutine executing this function is explicitly resumed,
+the execution continues in the separate thread,
+and it will not be able to be resumed again until the execution suspends ([`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
+In such case the results of the execution are discarted.
+
+The coroutine is executed using a limited set of threads that are also used by the underlying system.
+The number of threads is given by environment variable [`UV_THREADPOOL_SIZE`](http://docs.libuv.org/en/v1.x/threadpool.html).
+
+**Note:** The coroutines run in a separate thread,
+but share the same [memory allocation](http://www.lua.org/manual/5.3/manual.html#lua_Alloc) and [panic function](http://www.lua.org/manual/5.3/manual.html#lua_atpanic) of the caller.
+Therefore, it is required that thread-safe implementations are used,
+such as the ones used in the [Lua standalone interpreter](http://www.lua.org/manual/5.3/manual.html#7).
+
+### `coroutine:status ()`
+
+Like to [`coroutine.status`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume),
+but for coroutines created with function [`system.coroutine`](#systemcoroutine-chunk--chunkname--mode).
+
+### `coroutine:close ()`
+
+Like to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
+but for coroutines created with function [`system.coroutine`](#systemcoroutine-chunk--chunkname--mode).
 
 
 
@@ -918,7 +942,7 @@ but gets the chunk from file `filename`.
 
 ### `tpool:detach ()`
 
-Discards reference to thread pool `tpool` so its resources can be released when it has no more running threads (_i.e._ `tpool:resize(0)`) or pending coroutines.
+Discards reference to thread pool `tpool` so its resources can be released when it has no other references, andno  more running or pending coroutines, or available system threads (`tpool:resize(0)`).
 Note that `tpool` objects are automatically detached when they are garbage collected,
 but that takes an unpredictable amount of time to happen. 
 

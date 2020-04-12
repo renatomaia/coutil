@@ -87,7 +87,6 @@ types = {
 	io.stdout,
 }
 
---[=[
 dofile "event.lua"
 dofile "queued.lua"
 dofile "promise.lua"
@@ -101,8 +100,6 @@ dofile "stream.lua"
 dofile "network.lua"
 dofile "pipe.lua"
 dofile "process.lua"
---[[]=]
 dofile "coroutine.lua"
---]]
 
 print "\nSuccess!\n"
