@@ -96,7 +96,8 @@ Coroutines might suspend awaiting for events on any value,
 except `nil`.
 so they are resumed when events are emitted on these values.
 
-A coroutine awaiting events on a value does not prevent the value nor the coroutine to be collected.
+A coroutine awaiting an event on a value does not prevent the value nor the coroutine to be collected,
+but the coroutine will not be collected as long as the value does not b garbage.
 
 ### `event.await (e)`
 
