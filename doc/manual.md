@@ -943,7 +943,7 @@ but gets the chunk from file `filename`.
 
 ### `tpool:detach ()`
 
-Discards reference to thread pool `tpool` so its resources can be released when it has no other references, andno  more running or pending coroutines, or available system threads (`tpool:resize(0)`).
+Discards reference to thread pool `tpool` so its resources can be released when it has no other references, and no  more running or pending coroutines, or available system threads (`tpool:resize(0)`).
 Note that `tpool` objects are automatically detached when they are garbage collected,
 but that takes an unpredictable amount of time to happen. 
 

@@ -213,12 +213,12 @@ do case "resume closed"
 	spawn(function ()
 		local co = system.coroutine[[
 			local coroutine = require "coroutine"
-			coroutine.yield("Hello")
+			coroutine.yield("hello")
 		]]
 		stage = 0
 		local ok, res = co:resume()
 		assert(ok == true)
-		assert(res == "Hello")
+		assert(res == "hello")
 		assert(co:close() == true)
 		assert(co:status() == "dead")
 		asserterr("cannot resume dead coroutine", co:resume())
@@ -237,12 +237,12 @@ do case "collect suspended"
 	spawn(function ()
 		garbage.co = system.coroutine[[
 			local coroutine = require "coroutine"
-			coroutine.yield("Hello")
+			coroutine.yield("hello")
 		]]
 		stage = 0
 		local ok, res = garbage.co:resume()
 		assert(ok == true)
-		assert(res == "Hello")
+		assert(res == "hello")
 		gc()
 		assert(garbage.co == nil)
 		stage = 1
@@ -261,7 +261,7 @@ do case "collect cancelled"
 		garbage.coro = coroutine.running()
 		garbage.co = system.coroutine[[
 			local coroutine = require "coroutine"
-			coroutine.yield("Hello")
+			coroutine.yield("hello")
 		]]
 		stage = 0
 		local ok, res = garbage.co:resume()
@@ -287,10 +287,10 @@ do case "running unreferenced"
 		stage = 0
 		local ok, res = system.coroutine[[
 			local coroutine = require "coroutine"
-			coroutine.yield("Hello")
+			coroutine.yield("hello")
 		]]:resume()
 		assert(ok == true)
-		assert(res == "Hello")
+		assert(res == "hello")
 		stage = 1
 	end)
 
@@ -307,14 +307,14 @@ do case "close running"
 	local stage
 	local co = system.coroutine[[
 		local coroutine = require "coroutine"
-		coroutine.yield("Hello")
+		coroutine.yield("hello")
 	]]
 
 	spawn(function ()
 		stage = 0
 		local ok, res = co:resume()
 		assert(ok == true)
-		assert(res == "Hello")
+		assert(res == "hello")
 		asserterr("cannot resume dead coroutine", co:resume())
 		stage = 1
 	end)
@@ -334,11 +334,11 @@ do case "yield values"
 	local a,b,c = spawn(function ()
 		local co = system.coroutine[[
 			local coroutine = require "coroutine"
-			coroutine.yield("Hello")
+			coroutine.yield("hello")
 		]]
 		local res, extra = co:resume("testing", 1, 2, 3)
 		assert(res == true)
-		assert(extra == "Hello")
+		assert(extra == "hello")
 		stage = 1
 	end)
 	assert(a == nil)
@@ -357,7 +357,7 @@ do case "scheduled yield"
 	spawn(function ()
 		local co = system.coroutine[[
 			local coroutine = require "coroutine"
-			coroutine.yield("Hello")
+			coroutine.yield("hello")
 		]]
 		co:resume()
 		stage = 1
@@ -375,7 +375,7 @@ end
 do case "resume same coroutine"
 	local co = system.coroutine[[
 		local coroutine = require "coroutine"
-		coroutine.yield("Hello")
+		coroutine.yield("hello")
 	]]
 
 	local stage = 0
@@ -403,11 +403,11 @@ end
 do case "resume different coroutines"
 	local co1 = system.coroutine[[
 		local coroutine = require "coroutine"
-		coroutine.yield("Hello once")
+		coroutine.yield("hello once")
 	]]
 	local co2 = system.coroutine[[
 		local coroutine = require "coroutine"
-		coroutine.yield("Hello twice")
+		coroutine.yield("hello twice")
 	]]
 
 	local stage = 0
@@ -437,13 +437,55 @@ do case "resume different coroutines"
 	done()
 end
 
+do case "resume transfer"
+	local stage
+	local thread
+	spawn(function ()
+		local co = system.coroutine[[
+			local coroutine = require "coroutine"
+			coroutine.yield("hello")
+			return "bye"
+		]]
+		stage = 0
+		local res, extra = co:resume()
+		assert(res == true)
+		assert(extra == "hello")
+		assert(co:status() == "suspended")
+		stage = 2
+		coroutine.resume(thread, co)
+		stage = 4
+	end)
+	assert(stage == 0)
+
+	spawn(function ()
+		thread = coroutine.running()
+		stage = 1
+		local co = coroutine.yield()
+		stage = 3
+		local res, extra = co:resume()
+		assert(res == true)
+		assert(extra == "bye")
+		assert(co:status() == "dead")
+		stage = 5
+	end)
+	assert(stage == 1)
+
+	assert(system.run("step") == true)
+	assert(stage == 4)
+	assert(system.run() == false)
+	assert(stage == 5)
+	thread = nil
+
+	done()
+end
+
 do case "cancel resume"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
 		local co = system.coroutine[[
 			local coroutine = require "coroutine"
-			coroutine.yield("Hello")
+			coroutine.yield("hello")
 		]]
 		local a,b,c = co:resume()
 		assert(a == true)
@@ -470,8 +512,8 @@ do case "cancel and resume again"
 		local co = system.coroutine[[
 			require "_G"
 			local coroutine = require "coroutine"
-			coroutine.yield("Hello")
-			return "Bye"
+			coroutine.yield("hello")
+			return "bye"
 		]]
 		local res, extra = co:resume()
 		assert(res == nil)
@@ -480,10 +522,10 @@ do case "cancel and resume again"
 		stage = 1
 		local res, extra = co:resume()
 		assert(res == true)
-		if extra == "Hello" then
+		if extra == "hello" then
 			assert(co:status() == "suspended")
 		else
-			assert(extra == "Bye")
+			assert(extra == "bye")
 			assert(co:status() == "dead")
 		end
 		stage = 2
@@ -498,13 +540,69 @@ do case "cancel and resume again"
 	done()
 end
 
+do case "cancel and resume by other"
+	local thread
+	local stage
+
+	spawn(function ()
+		garbage.coro = coroutine.running()
+		local co = system.coroutine[[
+			require "_G"
+			local coroutine = require "coroutine"
+			coroutine.yield("hello")
+			return "bye"
+		]]
+		stage = 0
+		local res, extra = co:resume()
+		assert(res == nil)
+		assert(extra == "cancelled")
+		assert(co:status() == "running")
+		coroutine.resume(thread, co)
+	end)
+
+	assert(stage == 0)
+
+	spawn(function ()
+		thread = coroutine.running()
+		stage = 1
+		local co = coroutine.yield()
+		asserterr("cannot resume running coroutine", co:resume())
+		stage = 2
+		while co:status() == "running" do
+			system.suspend()
+		end
+		local status = co:status()
+		local res, extra = co:resume()
+		assert(res == true)
+		if status == "normal" then
+			assert(extra == "hello")
+			assert(co:status() == "suspended")
+		else
+			assert(status == "suspended")
+			assert(extra == "bye")
+			assert(co:status() == "dead")
+		end
+		stage = 3
+	end)
+
+	assert(stage == 1)
+	coroutine.resume(garbage.coro, nil, "cancelled")
+	assert(stage == 2)
+	assert(system.run() == false)
+	assert(stage == 3)
+
+	thread = nil
+
+	done()
+end
+
 do case "ignore errors"
 
 	local stage = 0
 	pspawn(function ()
 		assert(system.coroutine[[
 			local coroutine = require "coroutine"
-			coroutine.yield("Hello")
+			coroutine.yield("hello")
 		]]:resume())
 		stage = 1
 		error("oops!")
@@ -524,7 +622,7 @@ do case "ignore errors after cancel"
 		garbage.coro = coroutine.running()
 		assert(system.coroutine[[
 			local coroutine = require "coroutine"
-			coroutine.yield("Hello")
+			coroutine.yield("hello")
 		]]:resume())
 		stage = 1
 		error("oops!")
