@@ -1,8 +1,53 @@
 local system = require "coutil.system"
 
-newtest "thread" ----------------------------------------------------------------
+newtest "tpool" ----------------------------------------------------------------
 
 do case "error messages"
+	asserterr(system.tpool() == nil)
+	for v in ipairs(types) do
+		if type(v) ~= "number" then
+			asserterr("number expected", pcall(system.tpool, v))
+		end
+	end
+	asserterr("integer expected", pcall(system.tpool, math.pi))
+	asserterr("invalid size", pcall(system.tpool, -1))
+
+	done()
+end
+
+do case "zero sized"
+	local tpool = assert(system.tpool(0))
+	tpool:dostring("")
+	tpool:dostring("")
+	tpool:dostring("")
+
+	local defined = tpool:getcount("size")
+	local actual = tpool:getcount("thread")
+	local pending = tpool:getcount("pending")
+
+	os.execute("sleep 1")
+	assert(io.open(path) == nil)
+
+	tpool:resize(1)
+	waitsynced(path)
+
+	done()
+end
+
+do case "zero sized"
+	local tpool = assert(system.tpool(0))
+	local path = startsynced(tpool, "")
+
+	os.execute("sleep 1")
+	assert(io.open(path) == nil)
+
+	tpool:resize(1)
+	waitsynced(path)
+
+	done()
+end
+
+do case "zero sized"
 	asserterr("string or memory expected", pcall(system.thread))
 	asserterr("string or memory expected", pcall(system.thread, function () end))
 	asserterr("string expected", pcall(system.thread, "", function () end))
