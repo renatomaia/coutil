@@ -854,8 +854,30 @@ Returns a new stream socket for the accepted connection.
 
 ### `system.load (chunk [, chunkname [, mode]])`
 
-Returns a new independent coroutine to execute a code in a separate system thread.
-The code to be executed is given by the arguments `chunk`, `chunkname`, `mode`, which are the same of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
+Returns a coroutine with independent state that executes in a separate system thread.
+The code to be executed is given by the arguments `chunk`, `chunkname`, `mode`,
+which are the same arguments of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
+
+The state of the new coroutine have only the [`package`](http://www.lua.org/manual/5.3/manual.html#6.3) module loaded,
+which provides function [`require`](http://www.lua.org/manual/5.3/manual.html#pdf-require).
+This function can be called in the coroutine to load all other standard modules.
+In particular, [basic functions](http://www.lua.org/manual/5.3/manual.html#6.1) can be loaded using `require "_G"`.
+
+Moreover, the standard modules does not set global variables for their module tables.
+To mimic the set up of the standard standalone interpreter use a code like below:
+
+```lua
+_G = require "_G"
+package = require "package" -- loaded, but no global 'package'
+coroutine = require "coroutine"
+table = require "table"
+io = require "io"
+os = require "os"
+string = require "string"
+math = require "math"
+utf8 = require "utf8"
+debug = require "debug"
+```
 
 ### `system.loadfile ([filepath [, mode]])`
 
@@ -891,62 +913,65 @@ Like to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-corout
 but for coroutines created with function [`system.load`](#systemload-chunk--chunkname--mode).
 
 
-### `system.tpool ([size])`
 
-Returns a new pool of `size` system threads that executes [chunks](http://www.lua.org/manual/5.3/manual.html#pdf-load) as independent coroutines (see [`tpool:dostring`](#tpooldostring-chunk-chunkname-mode-)).
+
+
+
+
+### `system.threads ([size])`
+
+Returns a new pool of `size` system threads that executes [chunks](http://www.lua.org/manual/5.3/manual.html#pdf-load) as independent coroutines (see [`threads:dostring`](#threadsdostring-chunk-chunkname-mode-)).
 
 If `size` is omitted,
 returns the thread pool where the calling code is executing,
 or `nil` if it is not executing in a thread pool (_i.e._ the main process thread).
 
-### `tpool:resize (size)`
+### `threads:resize (size)`
 
-Defines the `tpool` shall keep `size` system threads to execute coroutines in `tpool`.
+Defines the `threads` shall keep `size` system threads to execute coroutines in `threads`.
 If `size` is smaller than the current number of threads,
-the exceeding threads are destroyed at the rate they are released from the coroutines currently executing in `tpool`.
+the exceeding threads are destroyed at the rate they are released from the coroutines currently executing in `threads`.
 Otherwise, if necessary, new threads are created to reach the defined value.
 
-### `tpool:getcount ([option])`
+### `threads:getcount ([option])`
 
-Returns a count of the `tpool` according to the value of `option`,
+Returns a count of the `threads` according to the value of `option`,
 as described below:
 
 - `"size"`: the expected number of system threads.
 - `"thread"`: the actual number of existing system threads.
-- `"coroutine"`: the total number of different coroutines.
 - `"running"`: the number of coroutines executing.
 - `"pending"`: the number of coroutines ready to execute.
 - `"suspended"`: the number of coroutines not executing.
+- `"tasks"`: the total number of different coroutines.
 
-Returns the defined number of system threads,
-followed by the actual number of current system threads,
-and the number of pending coroutines in `tpool`.
+The default value of `option` is `tasks`.
 
-### `tpool:dostring (chunk [, chunkname [, mode, ...]])`
+### `threads:dostring (chunk [, chunkname [, mode, ...]])`
 
-Loads a [chunk](http://www.lua.org/manual/5.3/manual.html#pdf-load) as a independent coroutine to be executed on a system thread from [`tpool`](#systemtpool-size).
+Loads a [chunk](http://www.lua.org/manual/5.3/manual.html#pdf-load) as a independent coroutine to be executed on a system thread from [`threads`](#systemthreads-size).
 
 Arguments `chunk`, `chunkname`, `mode` are the same of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
 Arguments `...` are arguments for the load chunk,
-and only nil, boolean, number, string, `tpool` and `tchannel` values are allowed as such arguments.
+and only nil, boolean, number, string, `threads` and `tchannel` values are allowed as such arguments.
 
 Whenever the loaded `chunk` yields (see [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) it reschedules itself as pending to be resumed,
-and releases its running system thread to execute any pending coroutines in [`tpool`](#systemtpool-size).
+and releases its running system thread to execute any pending coroutines in [`threads`](#systemthreads-size).
 
 Execution errors in the loaded `chunk` are not handled,
 and simply terminate the coroutine.
 
 Returns `true` if `chunk` is loaded successfully.
 
-### `tpool:dofile (filename [, mode, ...])`
+### `threads:dofile (filename [, mode, ...])`
 
-Similar to [`tpool:dostring`](#tpooldostring-chunk-chunkname-mode-),
+Similar to [`threads:dostring`](#threadsdostring-chunk-chunkname-mode-),
 but gets the chunk from file `filename`.
 
-### `tpool:detach ()`
+### `threads:detach ()`
 
-Discards reference to thread pool `tpool` so its resources can be released when it has no other references, and no  more running or pending coroutines, or available system threads (`tpool:resize(0)`).
-Note that `tpool` objects are automatically detached when they are garbage collected,
+Discards reference to thread pool `threads` so its resources can be released when it has no other references, and no  more running or pending coroutines, or available system threads (`threads:resize(0)`).
+Note that `threads` objects are automatically detached when they are garbage collected,
 but that takes an unpredictable amount of time to happen. 
 
 
