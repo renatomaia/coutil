@@ -1,6 +1,133 @@
 local system = require "coutil.system"
 
+local waitsignal = os.tmpname()
+local file = io.open(waitsignal, "w")
+file:write[[
+	local _G = require "_G"
+	local debug = require "debug"
+	local io = require "io"
+	local path = ...
+	local ok, err = xpcall(function ()
+		local file
+		repeat
+			file = io.open(path)
+		until file
+		file:close()
+		os.remove(path)
+	end, debug.traceback)
+	if not ok then
+		io.stderr:write(err)
+	end
+]]
+file:close()
+
+local function sendignal(path)
+	local file = io.open(path, "w")
+	file:write(path)
+	file:close()
+	while true do
+		file = io.open(path)
+		if file == nil then break end
+		file:close()
+	end
+end
+
 newtest "tpool" ----------------------------------------------------------------
+
+assert(system.threads() == nil)
+
+local t = system.threads(1)
+assert(t:getcount("size") == 1)
+assert(t:getcount("thread") == 0)
+assert(t:getcount("coroutine") == 0)
+assert(t:getcount("running") == 0)
+assert(t:getcount("pending") == 0)
+
+local path1 = os.tmpname()
+assert(t:dofile(waitsignal, path1) == true)
+assert(t:getcount("size") == 1)
+assert(t:getcount("thread") == 1)
+assert(t:getcount("coroutine") == 1)
+assert(t:getcount("running") == 1)
+assert(t:getcount("pending") == 0)
+
+local path2 = os.tmpname()
+assert(t:dofile(waitsignal, path2) == true)
+assert(t:getcount("size") == 1)
+assert(t:getcount("thread") == 1)
+assert(t:getcount("coroutine") == 2)
+assert(t:getcount("running") == 1)
+assert(t:getcount("pending") == 1)
+
+sendignal(path1)
+assert(t:getcount("size") == 1)
+assert(t:getcount("thread") == 1)
+assert(t:getcount("coroutine") == 1)
+assert(t:getcount("running") == 1)
+assert(t:getcount("pending") == 0)
+
+assert(t:dofile(waitsignal, path1) == true)
+assert(t:getcount("size") == 1)
+assert(t:getcount("thread") == 1)
+assert(t:getcount("coroutine") == 2)
+assert(t:getcount("running") == 1)
+assert(t:getcount("pending") == 1)
+
+assert(t:resize(4) == true)
+assert(t:getcount("size") == 4)
+assert(t:getcount("thread") == 2)
+assert(t:getcount("coroutine") == 2)
+assert(t:getcount("running") == 2)
+assert(t:getcount("pending") == 0)
+
+assert(t:resize(1) == true)
+assert(t:getcount("size") == 1)
+assert(t:getcount("thread") == 2)
+assert(t:getcount("coroutine") == 2)
+assert(t:getcount("running") == 2)
+assert(t:getcount("pending") == 0)
+
+local path3 = os.tmpname()
+assert(t:dofile(waitsignal, path3) == true)
+assert(t:getcount("size") == 1)
+assert(t:getcount("thread") == 2)
+assert(t:getcount("coroutine") == 3)
+assert(t:getcount("running") == 2)
+assert(t:getcount("pending") == 1)
+
+sendignal(path1)
+assert(t:getcount("size") == 1)
+assert(t:getcount("thread") == 1)
+assert(t:getcount("coroutine") == 2)
+assert(t:getcount("running") == 1)
+assert(t:getcount("pending") == 1)
+
+assert(t:resize(0) == true)
+assert(t:getcount("size") == 0)
+assert(t:getcount("thread") == 1)
+assert(t:getcount("coroutine") == 2)
+assert(t:getcount("running") == 1)
+assert(t:getcount("pending") == 1)
+
+sendignal(path2)
+assert(t:getcount("size") == 0)
+assert(t:getcount("thread") == 0)
+assert(t:getcount("coroutine") == 1)
+assert(t:getcount("running") == 0)
+assert(t:getcount("pending") == 1)
+
+assert(t:detach() == true)
+
+
+
+
+local path3 = os.tmpname()
+assert(t:dofile(waitsignal, path3) == true)
+assert(t:getcount("size") == 1)
+assert(t:getcount("thread") == 1)
+assert(t:getcount("coroutine") == 2)
+assert(t:getcount("running") == 1)
+assert(t:getcount("pending") == 1)
 
 do case "error messages"
 	asserterr(system.tpool() == nil)
