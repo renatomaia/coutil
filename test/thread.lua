@@ -6,13 +6,17 @@ file:write[[
 	local _G = require "_G"
 	local debug = require "debug"
 	local io = require "io"
+	local os = require "os"
 	local path = ...
 	local ok, err = xpcall(function ()
-		local file
 		repeat
-			file = io.open(path)
-		until file
-		file:close()
+			local contents
+			local file = io.open(path)
+			if file then
+				contents = file:read()
+				file:close()
+			end
+		until contents == path
 		os.remove(path)
 	end, debug.traceback)
 	if not ok then
@@ -32,100 +36,104 @@ local function sendignal(path)
 	end
 end
 
-newtest "tpool" ----------------------------------------------------------------
+local function waituntil(cond)
+	cond()
+end
+
+newtest "threads" --------------------------------------------------------------
 
 assert(system.threads() == nil)
 
-local t = system.threads(1)
+local t = assert(system.threads(1))
 assert(t:getcount("size") == 1)
 assert(t:getcount("thread") == 0)
-assert(t:getcount("coroutine") == 0)
+assert(t:getcount("tasks") == 0)
 assert(t:getcount("running") == 0)
 assert(t:getcount("pending") == 0)
 
 local path1 = os.tmpname()
-assert(t:dofile(waitsignal, path1) == true)
+assert(t:dofile(waitsignal, "t", path1) == true)
 assert(t:getcount("size") == 1)
 assert(t:getcount("thread") == 1)
-assert(t:getcount("coroutine") == 1)
-assert(t:getcount("running") == 1)
+assert(t:getcount("tasks") == 1)
+repeat until (t:getcount("running") == 1)
 assert(t:getcount("pending") == 0)
 
 local path2 = os.tmpname()
-assert(t:dofile(waitsignal, path2) == true)
+assert(t:dofile(waitsignal, "t", path2) == true)
 assert(t:getcount("size") == 1)
 assert(t:getcount("thread") == 1)
-assert(t:getcount("coroutine") == 2)
+assert(t:getcount("tasks") == 2)
 assert(t:getcount("running") == 1)
 assert(t:getcount("pending") == 1)
 
 sendignal(path1)
 assert(t:getcount("size") == 1)
 assert(t:getcount("thread") == 1)
-assert(t:getcount("coroutine") == 1)
+repeat until (t:getcount("tasks") == 1)
 assert(t:getcount("running") == 1)
 assert(t:getcount("pending") == 0)
 
-assert(t:dofile(waitsignal, path1) == true)
+assert(t:dofile(waitsignal, "t", path1) == true)
 assert(t:getcount("size") == 1)
 assert(t:getcount("thread") == 1)
-assert(t:getcount("coroutine") == 2)
+repeat until (t:getcount("tasks") == 2)
 assert(t:getcount("running") == 1)
 assert(t:getcount("pending") == 1)
 
 assert(t:resize(4) == true)
 assert(t:getcount("size") == 4)
 assert(t:getcount("thread") == 2)
-assert(t:getcount("coroutine") == 2)
-assert(t:getcount("running") == 2)
+assert(t:getcount("tasks") == 2)
+repeat until (t:getcount("running") == 2)
 assert(t:getcount("pending") == 0)
 
 assert(t:resize(1) == true)
 assert(t:getcount("size") == 1)
 assert(t:getcount("thread") == 2)
-assert(t:getcount("coroutine") == 2)
+assert(t:getcount("tasks") == 2)
 assert(t:getcount("running") == 2)
 assert(t:getcount("pending") == 0)
 
 local path3 = os.tmpname()
-assert(t:dofile(waitsignal, path3) == true)
+assert(t:dofile(waitsignal, "t", path3) == true)
 assert(t:getcount("size") == 1)
 assert(t:getcount("thread") == 2)
-assert(t:getcount("coroutine") == 3)
+assert(t:getcount("tasks") == 3)
 assert(t:getcount("running") == 2)
 assert(t:getcount("pending") == 1)
 
 sendignal(path1)
 assert(t:getcount("size") == 1)
-assert(t:getcount("thread") == 1)
-assert(t:getcount("coroutine") == 2)
+repeat until (t:getcount("thread") == 1)
+assert(t:getcount("tasks") == 2)
 assert(t:getcount("running") == 1)
 assert(t:getcount("pending") == 1)
 
 assert(t:resize(0) == true)
 assert(t:getcount("size") == 0)
 assert(t:getcount("thread") == 1)
-assert(t:getcount("coroutine") == 2)
+assert(t:getcount("tasks") == 2)
 assert(t:getcount("running") == 1)
 assert(t:getcount("pending") == 1)
 
 sendignal(path2)
 assert(t:getcount("size") == 0)
-assert(t:getcount("thread") == 0)
-assert(t:getcount("coroutine") == 1)
+repeat until (t:getcount("thread") == 0)
+assert(t:getcount("tasks") == 1)
 assert(t:getcount("running") == 0)
 assert(t:getcount("pending") == 1)
 
-assert(t:detach() == true)
+assert(t:close() == true)
 
-
+do return end
 
 
 local path3 = os.tmpname()
-assert(t:dofile(waitsignal, path3) == true)
+assert(t:dofile(waitsignal, "t", path3) == true)
 assert(t:getcount("size") == 1)
 assert(t:getcount("thread") == 1)
-assert(t:getcount("coroutine") == 2)
+assert(t:getcount("tasks") == 2)
 assert(t:getcount("running") == 1)
 assert(t:getcount("pending") == 1)
 
