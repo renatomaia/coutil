@@ -21,6 +21,10 @@ LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err);
 #define lcuL_setflag(O,F) ((O)->flags |= (F))
 #define lcuL_clearflag(O,F) ((O)->flags &= ~(F))
 
+LCUI_FUNC lua_State *lcuL_newstate (lua_State *L);
+
+LCUI_FUNC int lcuL_movevals (lua_State *from, lua_State *to, int n);
+
 
 #define LCU_MODUPVS	3
 

@@ -1,5 +1,7 @@
 #include "lmodaux.h"
 
+#include <lualib.h>
+
 
 LCUI_FUNC int lcuL_pusherrres (lua_State *L, int err) {
 	lua_pushnil(L);
@@ -17,6 +19,76 @@ LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err) {
 		return 1;
 	}
 	return n;
+}
+
+
+static const luaL_Reg stdlibs[] = {
+	{"_G", luaopen_base},
+	{LUA_COLIBNAME, luaopen_coroutine},
+	{LUA_TABLIBNAME, luaopen_table},
+	{LUA_IOLIBNAME, luaopen_io},
+	{LUA_OSLIBNAME, luaopen_os},
+	{LUA_STRLIBNAME, luaopen_string},
+	{LUA_MATHLIBNAME, luaopen_math},
+	{LUA_UTF8LIBNAME, luaopen_utf8},
+	{LUA_DBLIBNAME, luaopen_debug},
+#if defined(LUA_COMPAT_BITLIB)
+	{LUA_BITLIBNAME, luaopen_bit32},
+#endif
+	{NULL, NULL}
+};
+
+LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
+	const luaL_Reg *lib;
+	void *allocud;
+	lua_Alloc allocf = lua_getallocf(L, &allocud);
+	lua_CFunction panic = lua_atpanic(L, NULL);  /* changes panic function */
+	lua_State *NL = lua_newstate(allocf, allocud);  /* create state */
+
+	lua_atpanic(L, panic);  /* restore panic function */
+	lua_atpanic(NL, panic);
+
+	luaL_checkstack(NL, 3, "not enough memory");
+	luaL_requiref(NL, LUA_LOADLIBNAME, luaopen_package, 0);
+	luaL_getsubtable(NL, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
+	for (lib = stdlibs; lib->func; lib++) {
+		lua_pushcfunction(NL, lib->func);
+		lua_setfield(NL, -2, lib->name);
+	}
+	lua_pop(NL, 2);  /* remove 'package' and 'LUA_PRELOAD_TABLE' */
+	return NL;
+}
+
+LCUI_FUNC int lcuL_movevals (lua_State *from, lua_State *to, int n) {
+	int i;
+	lcu_assert(lua_gettop(from) >= n);
+	luaL_checkstack(to, n, "too many arguments to resume");
+	for (i = 0; i < n; i++) {
+		switch (lua_type(from, i-n)) {
+			case LUA_TNIL: {
+				lua_pushnil(to);
+			} break;
+			case LUA_TBOOLEAN: {
+				lua_pushboolean(to, lua_toboolean(from, i-n));
+			} break;
+			case LUA_TNUMBER: {
+				lua_pushnumber(to, lua_tonumber(from, i-n));
+			} break;
+			case LUA_TSTRING: {
+				size_t l;
+				const char *s = lua_tolstring(from, i-n, &l);
+				lua_pushlstring(to, s, l);
+			} break;
+			case LUA_TLIGHTUSERDATA: {
+				lua_pushlightuserdata(to, lua_touserdata(from, i-n));
+			} break;
+			default:
+				lua_pop(to, i);
+				return lua_gettop(from)+1+i-n;
+		}
+	}
+	lua_pop(from, n);
+	return 0;
 }
 
 
