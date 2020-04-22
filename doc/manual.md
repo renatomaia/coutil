@@ -968,7 +968,7 @@ Returns `true` if `chunk` is loaded successfully.
 Similar to [`threads:dostring`](#threadsdostring-chunk-chunkname-mode-),
 but gets the chunk from file `filename`.
 
-### `threads:detach ()`
+### `threads:close ([wait])`
 
 Discards reference to thread pool `threads` so its resources can be released when it has no other references, and no  more running or pending coroutines, or available system threads (`threads:resize(0)`).
 Note that `threads` objects are automatically detached when they are garbage collected,

@@ -2,46 +2,8 @@
 #include "lmodaux.h"
 #include "loperaux.h"
 
-#include <lualib.h>
 #include <lmemlib.h>
 
-
-static const luaL_Reg stdlibs[] = {
-	{"_G", luaopen_base},
-	{LUA_COLIBNAME, luaopen_coroutine},
-	{LUA_TABLIBNAME, luaopen_table},
-	{LUA_IOLIBNAME, luaopen_io},
-	{LUA_OSLIBNAME, luaopen_os},
-	{LUA_STRLIBNAME, luaopen_string},
-	{LUA_MATHLIBNAME, luaopen_math},
-	{LUA_UTF8LIBNAME, luaopen_utf8},
-	{LUA_DBLIBNAME, luaopen_debug},
-#if defined(LUA_COMPAT_BITLIB)
-	{LUA_BITLIBNAME, luaopen_bit32},
-#endif
-	{NULL, NULL}
-};
-
-static lua_State *newstate (lua_State *L) {
-	const luaL_Reg *lib;
-	void *allocud;
-	lua_Alloc allocf = lua_getallocf(L, &allocud);
-	lua_CFunction panic = lua_atpanic(L, NULL);  /* changes panic function */
-	lua_State *NL = lua_newstate(allocf, allocud);  /* create state */
-
-	lua_atpanic(L, panic);  /* restore panic function */
-	lua_atpanic(NL, panic);
-
-	luaL_checkstack(NL, 3, "not enough memory");
-	luaL_requiref(NL, LUA_LOADLIBNAME, luaopen_package, 0);
-	luaL_getsubtable(NL, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
-	for (lib = stdlibs; lib->func; lib++) {
-		lua_pushcfunction(NL, lib->func);
-		lua_setfield(NL, -2, lib->name);
-	}
-	lua_pop(NL, 2);  /* remove 'package' and 'LUA_PRELOAD_TABLE' */
-	return NL;
-}
 
 static int doloaded (lua_State *L, lua_State *NL, int status) {
 	if (status != LUA_OK) {  /* error (message is on top of the stack) */
@@ -61,7 +23,7 @@ static int system_load (lua_State *L) {
 	const char *s = luamem_checkstring(L, 1, &l);
 	const char *chunkname = luaL_optstring(L, 2, s);
 	const char *mode = luaL_optstring(L, 3, NULL);
-	lua_State *NL = newstate(L);  /* create a similar state */
+	lua_State *NL = lcuL_newstate(L);  /* create a similar state */
 	int status = luaL_loadbufferx(NL, s, l, chunkname, mode);
 	return doloaded(L, NL, status);
 }
@@ -70,7 +32,7 @@ static int system_load (lua_State *L) {
 static int system_loadfile (lua_State *L) {
 	const char *fpath = luaL_optstring(L, 1, NULL);
 	const char *mode = luaL_optstring(L, 2, NULL);
-	lua_State *NL = newstate(L);  /* create a similar state */
+	lua_State *NL = lcuL_newstate(L);  /* create a similar state */
 	int status = luaL_loadfilex(NL, fpath, mode);
 	return doloaded(L, NL, status);
 }
@@ -108,37 +70,6 @@ static int coroutine_status(lua_State *L) {
 
 
 /* succ [, errmsg] = system.resume(coroutine) */
-static int movevals (lua_State *from, lua_State *to, int n) {
-	int i;
-	lcu_assert(lua_gettop(from) >= n);
-	luaL_checkstack(to, n, "too many arguments to resume");
-	for (i = 0; i < n; i++) {
-		switch (lua_type(from, i-n)) {
-			case LUA_TNIL: {
-				lua_pushnil(to);
-			} break;
-			case LUA_TBOOLEAN: {
-				lua_pushboolean(to, lua_toboolean(from, i-n));
-			} break;
-			case LUA_TNUMBER: {
-				lua_pushnumber(to, lua_tonumber(from, i-n));
-			} break;
-			case LUA_TSTRING: {
-				size_t l;
-				const char *s = luamem_tostring(from, i-n, &l);
-				lua_pushlstring(to, s, l);
-			} break;
-			case LUA_TLIGHTUSERDATA: {
-				lua_pushlightuserdata(to, lua_touserdata(from, i-n));
-			} break;
-			default:
-				lua_pop(to, i);
-				return lua_gettop(from)+1+i-n;
-		}
-	}
-	lua_pop(from, n);
-	return 0;
-}
 static int returnvalues (lua_State *L) {
 	return lua_gettop(L)-1;  /* return all except the coroutine (arg #1) */
 }
@@ -175,7 +106,7 @@ static void uv_onworked(uv_work_t* work, int status) {
 				if (lua_checkstack(thread, nres+1)) {
 					int err;
 					lua_pushboolean(thread, 1);  /* return 'true' to signal success */
-					err = movevals(co, thread, nres);  /* move yielded values */
+					err = lcuL_movevals(co, thread, nres);  /* move yielded values */
 					if (err) {
 						lua_pop(co, nres);  /* remove results anyway */
 						lua_pop(thread, 1);  /* remove pushed 'true' that signals success */
@@ -190,7 +121,7 @@ static void uv_onworked(uv_work_t* work, int status) {
 			} else {
 				int err;
 				lua_pushboolean(thread, 0);
-				err = movevals(co, thread, 1);  /* move error message */
+				err = lcuL_movevals(co, thread, 1);  /* move error message */
 				if (err) {
 					lua_pop(co, 1);  /* remove error anyway */
 					lua_pushstring(thread, "bad error (illegal type)");
@@ -225,7 +156,7 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		lua_pushstring(L, "too many arguments to resume");
 		return 2;
 	}
-	err = movevals(L, co, narg);
+	err = lcuL_movevals(L, co, narg);
 	if (err) {
 		lua_pushboolean(L, 0);
 		lua_pushfstring(L, "bad argument #%d (illegal type)", err);
