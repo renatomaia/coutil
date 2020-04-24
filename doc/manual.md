@@ -74,6 +74,16 @@ Index
 		- [`syscoro:resume`](#syscororesume-)
 		- [`syscoro:status`](#syscorostatus-)
 		- [`syscoro:close`](#syscoroclose-)
+	- [`system.threads`](#systemthreads-size)
+		- [`threads:resize`](#threadsresize-size--create)
+		- [`threads:count`](#threadsgetcount-option)
+		- [`threads:dostring`](#threadsdostring-chunk--chunkname--mode-)
+		- [`threads:dofile`](#threadsdofile-filename--mode-)
+		- [`threads:close`](#threadsclose-)
+	- [`system.channel`](#systemchannel-)
+		- [`channel:send`](#channelsend-)
+		- [`channel:receive`](#channelreceive-probe)
+		- [`channel:close`](#channelclose-)
 
 Contents
 ========
@@ -915,46 +925,50 @@ but for  [_system coroutines_](#systemload-chunk--chunkname--mode).
 
 ### `system.threads ([size])`
 
-Returns a new pool of `size` system threads that executes [chunks](http://www.lua.org/manual/5.3/manual.html#pdf-load) as independent coroutines (see [`threads:dostring`](#threadsdostring-chunk-chunkname-mode-)).
+Returns a new pool of `size` system threads that executes [_tasks_](#threadsdostring-chunk-chunkname-mode-) with independent state.
 
 If `size` is omitted,
-returns the thread pool where the calling code is executing,
-or `nil` if it is not executing in a thread pool (_i.e._ the main process thread).
+returns a new reference to the thread pool where the calling code is executing,
+or `nil` if it is not executing in a thread pool (_e.g._ the main process thread).
 
-### `threads:resize (size)`
+### `threads:resize (size [, create])`
 
-Defines the `threads` shall keep `size` system threads to execute coroutines in `threads`.
+Defines that `threads` shall keep `size` system threads to execute [_tasks_](#threadsdostring-chunk-chunkname-mode-) in `threads`.
+
 If `size` is smaller than the current number of threads,
-the exceeding threads are destroyed at the rate they are released from the coroutines currently executing in `threads`.
-Otherwise, if necessary, new threads are created to reach the defined value.
+the exceeding threads are destroyed at the rate they are released from the _tasks_ currently executing in `threads`.
+Otherwise, the new threads are created on demand until the defined value is reached.
+Unless `create` evaluates to `true`,
+in which case the new threads are created immediatelly.
 
-### `threads:getcount ([option])`
+### `threads:count ([option])`
 
-Returns a count of the `threads` according to the value of `option`,
+Returns a number according to the value of `option`,
 as described below:
 
 - `"size"`: the expected number of system threads.
-- `"thread"`: the actual number of existing system threads.
-- `"running"`: the number of coroutines executing.
-- `"pending"`: the number of coroutines ready to execute.
-- `"suspended"`: the number of coroutines not executing.
-- `"tasks"`: the total number of different coroutines.
+- `"threads"`: the current number of system threads.
+- `"running"`: the number of _tasks_ executing.
+- `"pending"`: the number of _tasks_ ready to execute, but not executing yet.
+- `"suspended"`: the number of _tasks_ not ready to execute.
+- `"tasks"`: the total number of _tasks_.
 
 The default value of `option` is `tasks`.
 
 ### `threads:dostring (chunk [, chunkname [, mode, ...]])`
 
-Loads a [chunk](http://www.lua.org/manual/5.3/manual.html#pdf-load) as a independent coroutine to be executed on a system thread from [`threads`](#systemthreads-size).
+Loads to `threads` a [chunk](http://www.lua.org/manual/5.3/manual.html#pdf-load) as a new _task_ that executes in an independent state like [_system coroutines_](#systemload-chunk--chunkname--mode).
+However, the _tasks_ created by this call start immediately and executes on system threads from `threads`.
 
 Arguments `chunk`, `chunkname`, `mode` are the same of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
 Arguments `...` are arguments for the load chunk,
-and only nil, boolean, number, string, `threads` and `tchannel` values are allowed as such arguments.
+and only _nil_, _boolean_, _number_, _string_, _light userdata_ and [_channel_](#systemchannel-) values are allowed as such arguments.
 
 Whenever the loaded `chunk` yields (see [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) it reschedules itself as pending to be resumed,
-and releases its running system thread to execute any pending coroutines in [`threads`](#systemthreads-size).
+and releases its running system thread to execute any pending _tasks_ in [`threads`](#systemthreads-size).
 
 Execution errors in the loaded `chunk` are not handled,
-and simply terminate the coroutine.
+and simply terminate the _task_.
 
 Returns `true` if `chunk` is loaded successfully.
 
@@ -963,19 +977,25 @@ Returns `true` if `chunk` is loaded successfully.
 Similar to [`threads:dostring`](#threadsdostring-chunk-chunkname-mode-),
 but gets the chunk from file `filename`.
 
-### `threads:close ([wait])`
+### `threads:close ()`
 
-Discards reference to thread pool `threads` so its resources can be released when it has no other references, and no  more running or pending coroutines, or available system threads (`threads:resize(0)`).
-Note that `threads` objects are automatically detached when they are garbage collected,
-but that takes an unpredictable amount of time to happen. 
+When this function is called from a _task_ of `threads`
+(_i.e._ using a reference obtained by calling [`system.threads()`](#systemthreads-size-) with no arguments),
+it has no effect other than prevent further use of reference `threads`.
 
+Otherwise, it waits until there are either no more _tasks_ or no more system threads,
+and closes `threads` releasing all of its underlying resources.
 
+Note that `threads` that are garbage collected before this functions is called will retain minimum resources until the termination of the Lua state they were created.
+To avoid accumulative resource consumption by creation of multiple `threads`,
+explicitly call this function on every `threads`.
 
+Moreover, a `threads` that is not closed will prevent the current Lua state to terminate (_i.e._ `lua_close` to return) until it has no more independent coroutines or system threads.
 
-### `system.tchannel ()`
+### `system.channel ()`
 
-### `tchannel:send (...)`
+### `channel:send (...)`
 
-### `tchannel:receive (probe)`
+### `channel:receive (probe)`
 
-### `tchannel:close ()`
+### `channel:close ()`
