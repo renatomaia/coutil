@@ -24,7 +24,7 @@ LCULIB_API int lcu_initthreads (lcu_ThreadPool *pool);
 
 LCULIB_API void lcu_terminatethreads (lcu_ThreadPool *pool);
 
-LCULIB_API int lcu_resizethreads (lcu_ThreadPool *pool, int newsize);
+LCULIB_API int lcu_resizethreads (lcu_ThreadPool *pool, int size, int create);
 
 LCULIB_API int lcu_addthreads (lcu_ThreadPool *pool, lua_State *L);
 
@@ -121,11 +121,12 @@ static lua_State *dequeuestateq (StateQ *q) {
 
 struct lcu_ThreadPool {
 	uv_mutex_t mutex;
-	uv_cond_t idle;
-	uv_cond_t term;
+	uv_cond_t onwork;
+	uv_cond_t onterm;
 	int detached;
 	int size;
 	int threads;
+	int idle;
 	int running;
 	int pending;
 	StateQ queue;
@@ -134,35 +135,36 @@ struct lcu_ThreadPool {
 LCULIB_API int lcu_initthreads (lcu_ThreadPool *pool) {
 	int err = uv_mutex_init(&pool->mutex);
 	if (err) goto mutex_err;
-	err = uv_cond_init(&pool->idle);
-	if (err) goto idlecond_err;
-	err = uv_cond_init(&pool->term);
-	if (err) goto termcond_err;
+	err = uv_cond_init(&pool->onwork);
+	if (err) goto onworkcond_err;
+	err = uv_cond_init(&pool->onterm);
+	if (err) goto ontermcond_err;
 
 	pool->detached = 0;
 	pool->size = 0;
 	pool->threads = 0;
+	pool->idle = 0;
 	pool->running = 0;
 	pool->pending = 0;
 	initstateq(&pool->queue);
 	return 0;
 
-	termcond_err:
-	uv_cond_destroy(&pool->idle);
-	idlecond_err:
+	ontermcond_err:
+	uv_cond_destroy(&pool->onwork);
+	onworkcond_err:
 	uv_mutex_destroy(&pool->mutex);
 	mutex_err:
 	return err;
 }
 
 static int hasextraidle_mx (lcu_ThreadPool *pool) {
-	return pool->threads > pool->size && pool->threads > pool->running;
+	return pool->threads > pool->size && pool->idle > 0;
 }
 
-static void handlehalted_mx (lcu_ThreadPool *pool) {
+static void checkhalted_mx (lcu_ThreadPool *pool) {
 	if (pool->running == 0 && pool->pending == 0 && pool->size > 0) {
 		pool->size = 0;
-		uv_cond_signal(&pool->idle);
+		uv_cond_signal(&pool->onwork);
 	}
 }
 
@@ -173,19 +175,22 @@ static void runthread (void *arg) {
 	uv_mutex_lock(&pool->mutex);
 	while (1) {
 		int status;
-		do {
+		while (1) {
 			if (pool->threads > pool->size) {
 				goto thread_end;
 			} else if (pool->pending) {
 				pool->pending--;
-				pool->running++;
 				L = dequeuestateq(&pool->queue);
+				break;
 			} else if (pool->detached && pool->running == 0) {  /* if halted? */
 				pool->size = 0;
 			} else {
-				uv_cond_wait(&pool->idle, &pool->mutex);
+				pool->idle++;
+				uv_cond_wait(&pool->onwork, &pool->mutex);
+				pool->idle--;
 			}
-		} while (!L);
+		}
+		pool->running++;
 		uv_mutex_unlock(&pool->mutex);
 
 		status = lua_resume(L, NULL, lua_status(L) == LUA_OK ? lua_gettop(L)-1 : 0);
@@ -207,41 +212,47 @@ static void runthread (void *arg) {
 	thread_end:
 	pool->threads--;
 	if (hasextraidle_mx(pool)) {
-		uv_cond_signal(&pool->idle);
+		uv_cond_signal(&pool->onwork);
 	} else if (pool->detached) {
-		if (pool->threads == 0) uv_cond_signal(&pool->term);
-		else handlehalted_mx(pool);
+		if (pool->threads == 0) uv_cond_signal(&pool->onterm);
+		else checkhalted_mx(pool);
 	}
 	uv_mutex_unlock(&pool->mutex);
 }
 
 LCULIB_API void lcu_terminatethreads (lcu_ThreadPool *pool) {
+	int pending;
+	StateQ queue;
+
 	uv_mutex_lock(&pool->mutex);
 	pool->detached = 1;
 	if (pool->threads > 0) {
-		handlehalted_mx(pool);
-		uv_cond_wait(&pool->term, &pool->mutex);
+		checkhalted_mx(pool);
+		uv_cond_wait(&pool->onterm, &pool->mutex);
 	}
-	if (pool->pending > 0) {
-		lua_State *L;
-		while ((L = dequeuestateq(&pool->queue))) lua_close(L);
-		pool->pending = 0;
-	}
+	pending = pool->pending;
+	queue = pool->queue;
+	/* DEBUG: initstateq(&pool->queue); */
+	/* DEBUG: pool->pending = 0; */
 	uv_mutex_unlock(&pool->mutex);
 
-	uv_cond_destroy(&pool->term);
-	uv_cond_destroy(&pool->idle);
+	if (pending > 0) {
+		lua_State *L;
+		while ((L = dequeuestateq(&queue))) lua_close(L);
+	}
+	uv_cond_destroy(&pool->onterm);
+	uv_cond_destroy(&pool->onwork);
 	uv_mutex_destroy(&pool->mutex);
 }
 
-LCULIB_API int lcu_resizethreads (lcu_ThreadPool *pool, int newsize) {
+LCULIB_API int lcu_resizethreads (lcu_ThreadPool *pool, int size, int create) {
 	int newthreads, err = 0;
 
 	uv_mutex_lock(&pool->mutex);
-	newthreads = newsize-pool->size;
-	pool->size = newsize;
+	newthreads = size-pool->size;
+	pool->size = size;
 	if (newthreads > 0) {
-		if (newthreads > pool->pending) newthreads = pool->pending;
+		if (!create && newthreads > pool->pending) newthreads = pool->pending;
 		while (newthreads--) {
 			uv_thread_t tid;
 			err = uv_thread_create(&tid, runthread, pool);
@@ -249,7 +260,7 @@ LCULIB_API int lcu_resizethreads (lcu_ThreadPool *pool, int newsize) {
 			pool->threads++;
 		}
 	} else if (hasextraidle_mx(pool)) {
-		uv_cond_signal(&pool->idle);
+		uv_cond_signal(&pool->onwork);
 	}
 	uv_mutex_unlock(&pool->mutex);
 
@@ -264,8 +275,8 @@ LCULIB_API int lcu_addthreads (lcu_ThreadPool *pool, lua_State *L) {
 	lua_setfield(L, LUA_REGISTRYINDEX, LCU_THREADPOOLREGKEY);
 
 	uv_mutex_lock(&pool->mutex);
-	if (pool->threads > pool->running) {
-		uv_cond_signal(&pool->idle);
+	if (pool->idle > 0) {
+		uv_cond_signal(&pool->onwork);
 	} else if (pool->threads < pool->size) {
 		uv_thread_t tid;
 		err = uv_thread_create(&tid, runthread, pool);
@@ -326,22 +337,22 @@ static int threadpool_gc (lua_State *L) {
 	return 0;
 }
 
-/* succ [, errmsg] = threads:close([wait]) */
+/* succ [, errmsg] = threads:close() */
 static int threads_close (lua_State *L) {
 	lcu_ThreadPool **ref = (lcu_ThreadPool **)luaL_checkudata(L, 1, LCU_THREADSCLS);
 	lua_pushboolean(L, *ref != NULL);
 	if (*ref) {
-		if (lua_toboolean(L, 2)) {
-			if (lua_getuservalue(L, 1) == LUA_TUSERDATA) {
-				lcu_assert(*ref == lua_touserdata(L, -1));
-				lcu_terminatethreads(*ref);
-				lua_pushnil(L);
-				lua_setmetatable(L, -2);
-				lua_pushnil(L);
-				lua_setuservalue(L, 1);
-			}
-			lua_pop(L, 1);
+		lua_pushlightuserdata(L, *ref);
+		if (lua_gettable(L, LUA_REGISTRYINDEX) == LUA_TUSERDATA) {
+			lcu_assert(*ref == lua_touserdata(L, -1));
+			lcu_terminatethreads(*ref);
+			lua_pushnil(L);
+			lua_setmetatable(L, -2);
+			lua_pushlightuserdata(L, *ref);
+			lua_pushnil(L);
+			lua_settable(L, LUA_REGISTRYINDEX);
 		}
+		lua_pop(L, 1);
 		*ref = NULL;
 	}
 	return 1;
@@ -352,15 +363,16 @@ static int threads_resize (lua_State *L) {
 	int err;
 	lcu_ThreadPool *pool = lcu_checkthreads(L, 1);
 	int size = (int)luaL_checkinteger(L, 2);
+	int create = lua_toboolean(L, 3);
 	luaL_argcheck(L, size >= 0, 2, "size cannot be negative");
-	err = lcu_resizethreads(pool, size);
+	err = lcu_resizethreads(pool, size, create);
 	if (err) return lcuL_pusherrres(L, err);
 	lua_pushboolean(L, 1);
 	return 1;
 }
 
-/* succ [, errmsg] = threads:getcount([option]) */
-static int threads_getcount (lua_State *L) {
+/* succ [, errmsg] = threads:count([option]) */
+static int threads_count (lua_State *L) {
 	static const lcu_ThreadCount options[] = { LCU_THREADSSIZE,
 	                                           LCU_THREADSCOUNT,
 	                                           LCU_THREADSRUNNING,
@@ -368,7 +380,7 @@ static int threads_getcount (lua_State *L) {
 	                                           LCU_THREADSSUSPENDED,
 	                                           LCU_THREADSTASKS };
 	static const char *const optnames[] = { "size",
-	                                        "thread",
+	                                        "threads",
 	                                        "running",
 	                                        "pending",
 	                                        "suspended",
@@ -377,7 +389,7 @@ static int threads_getcount (lua_State *L) {
 	lcu_ThreadPool *pool = lcu_checkthreads(L, 1);
 	int option = luaL_checkoption(L, 2, "tasks", optnames);
 	int value = lcu_countthreads(pool, options[option]);
-	lua_pushnumber(L, value);
+	lua_pushinteger(L, value);
 	return 1;
 }
 
@@ -437,16 +449,17 @@ static int system_threads (lua_State *L) {
 		err = lcu_initthreads(pool);
 		if (err) return lcuL_pusherrres(L, err);
 		if (size > 0) {
-			err = lcu_resizethreads(pool, size);
+			err = lcu_resizethreads(pool, size, 1);
 			if (err) {
 				lcu_terminatethreads(pool);
 				return lcuL_pusherrres(L, err);
 			}
 		}
 		luaL_setmetatable(L, LCU_THREADPOOLCLS);
-		lcu_pushthreads(L, pool);
+		lua_pushlightuserdata(L, pool);
 		lua_insert(L, -2);
-		lua_setuservalue(L, -2);
+		lua_settable(L, LUA_REGISTRYINDEX);
+		lcu_pushthreads(L, pool);
 	} else {
 		lua_getfield(L, LUA_REGISTRYINDEX, LCU_THREADPOOLREGKEY);
 		if (lua_isnil(L, -1)) return 1;
@@ -465,7 +478,7 @@ LCUI_FUNC void lcuM_addthreadc (lua_State *L) {
 	static const luaL_Reg refclsf[] = {
 		{"close", threads_close},
 		{"resize", threads_resize},
-		{"getcount", threads_getcount},
+		{"count", threads_count},
 		{"dostring", threads_dostring},
 		{"dofile", threads_dofile},
 		{NULL, NULL}
