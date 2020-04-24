@@ -19,14 +19,14 @@ do case "compilation errors"
 	          system.load("a = a+1", "bytecodes", "b"))
 	asserterr("syntax error", system.load("invalid chunk"))
 
-	local co = system.load[[ return 1, 2, 3 ]]
-	asserterr("unable to yield", pcall(co.resume, co))
-	assert(co:status() == "normal")
-
 	done()
 end
 
 do case "runtime errors"
+	local co = system.load[[ return 1, 2, 3 ]]
+	asserterr("unable to yield", pcall(co.resume, co))
+	assert(co:status() == "normal")
+
 	local co = system.load([[
 		require "_G"
 		error "Oops!"

@@ -70,9 +70,10 @@ Index
 		- [`socket:listen`](#socketlisten-backlog)
 		- [`socket:accept`](#socketaccept-)
 	- [`system.load`](#systemload-chunk--chunkname--mode)
-		- [`coroutine:resume`](#coroutineresume-)
-		- [`coroutine:status`](#coroutinestatus-)
-		- [`coroutine:close`](#coroutineclose-)
+	- [`system.loadfile`](#systemloadfile-filepath--mode)
+		- [`syscoro:resume`](#syscororesume-)
+		- [`syscoro:status`](#syscorostatus-)
+		- [`syscoro:close`](#syscoroclose-)
 
 Contents
 ========
@@ -854,13 +855,13 @@ Returns a new stream socket for the accepted connection.
 
 ### `system.load (chunk [, chunkname [, mode]])`
 
-Returns a coroutine with independent state that executes in a separate system thread.
+Returns a _system coroutine_ with [independent state](http://www.lua.org/manual/5.3/manual.html#lua_newstate) that executes in a separate system thread.
 The code to be executed is given by the arguments `chunk`, `chunkname`, `mode`,
 which are the same arguments of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
 
-The state of the new coroutine have only the [`package`](http://www.lua.org/manual/5.3/manual.html#6.3) module loaded,
+The new _system coroutine_ have only the [`package`](http://www.lua.org/manual/5.3/manual.html#6.3) module loaded,
 which provides function [`require`](http://www.lua.org/manual/5.3/manual.html#pdf-require).
-This function can be called in the coroutine to load all other standard modules.
+This function can be called in the _system coroutine_ to load all other standard modules.
 In particular, [basic functions](http://www.lua.org/manual/5.3/manual.html#6.1) can be loaded using `require "_G"`.
 
 Moreover, the standard modules does not set global variables for their module tables.
@@ -879,44 +880,38 @@ utf8 = require "utf8"
 debug = require "debug"
 ```
 
+**Note:** These _system coroutines_ run in a separate thread,
+but share the same [memory allocation](http://www.lua.org/manual/5.3/manual.html#lua_Alloc) and [panic function](http://www.lua.org/manual/5.3/manual.html#lua_atpanic) of the caller.
+Therefore, it is required that thread-safe implementations are used,
+such as the ones used in the [Lua standalone interpreter](http://www.lua.org/manual/5.3/manual.html#7).
+
 ### `system.loadfile ([filepath [, mode]])`
 
 Similar to [`system.load`](#systemload-chunk--chunkname--mode), but gets the chunk from file.
 The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.3/manual.html#pdf-loadfile).
 
-### `coroutine:resume (...)`
+### `syscoro:resume (...)`
 
-[Await function](#await) that is like [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume), but executes an [independent coroutine](#systemload-chunk--chunkname--mode) on a separate system thread and awaits for its completion or suspension ([`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
-Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values can be passed as arguments or returned from the coroutines.
+[Await function](#await) that is like [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume), but executes the [system coroutine](#systemload-chunk--chunkname--mode) `syscoro` on a separate system thread and awaits for its completion or suspension ([`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
+Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values can be passed as arguments or returned from the _system coroutines_.
 
-If the coroutine executing this function is explicitly resumed,
-the execution continues in the separate thread,
-and it will not be able to be resumed again until the execution suspends ([`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
+If the coroutine executing this [await function](#await) is explicitly resumed,
+the execution of `syscoro` continues in the separate thread,
+and it will not be able to be resumed again until it suspends ([`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
 In such case the results of the execution are discarted.
 
-The coroutine is executed using a limited set of threads that are also used by the underlying system.
+The _system coroutine_ is executed using a limited set of threads that are also used by the underlying system.
 The number of threads is given by environment variable [`UV_THREADPOOL_SIZE`](http://docs.libuv.org/en/v1.x/threadpool.html).
 
-**Note:** The coroutines run in a separate thread,
-but share the same [memory allocation](http://www.lua.org/manual/5.3/manual.html#lua_Alloc) and [panic function](http://www.lua.org/manual/5.3/manual.html#lua_atpanic) of the caller.
-Therefore, it is required that thread-safe implementations are used,
-such as the ones used in the [Lua standalone interpreter](http://www.lua.org/manual/5.3/manual.html#7).
-
-### `coroutine:status ()`
+### `syscoro:status ()`
 
 Like to [`coroutine.status`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume),
-but for coroutines created with function [`system.load`](#systemload-chunk--chunkname--mode).
+but for [_system coroutines_](#systemload-chunk--chunkname--mode).
 
-### `coroutine:close ()`
+### `syscoro:close ()`
 
 Like to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
-but for coroutines created with function [`system.load`](#systemload-chunk--chunkname--mode).
-
-
-
-
-
-
+but for  [_system coroutines_](#systemload-chunk--chunkname--mode).
 
 ### `system.threads ([size])`
 
