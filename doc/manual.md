@@ -91,8 +91,7 @@ Contents
 Await
 -----
 
-An _await function_ suspends the execution of the calling coroutine
-(like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)),
+An _await function_ [suspends](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield) the execution of the calling coroutine,
 but also implies that the coroutine will be resumed on some specitic condition.
 
 Coroutines executing an _await function_ can be resumed explicitly by [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
@@ -902,12 +901,12 @@ The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.
 
 ### `syscoro:resume (...)`
 
-[Await function](#await) that is like [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume), but executes the [system coroutine](#systemload-chunk--chunkname--mode) `syscoro` on a separate system thread and awaits for its completion or suspension ([`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
+[Await function](#await) that is like [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume), but executes the [_system coroutine_](#systemload-chunk--chunkname--mode) `syscoro` on a separate system thread and awaits for its completion or [suspension](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield).
 Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values can be passed as arguments or returned from the _system coroutines_.
 
 If the coroutine executing this [await function](#await) is explicitly resumed,
 the execution of `syscoro` continues in the separate thread,
-and it will not be able to be resumed again until it suspends ([`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
+and it will not be able to be resumed again until it [suspends](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield).
 In such case the results of the execution are discarted.
 
 The _system coroutine_ is executed using a limited set of threads that are also used by the underlying system.
@@ -925,72 +924,73 @@ but for  [_system coroutines_](#systemload-chunk--chunkname--mode).
 
 ### `system.threads ([size])`
 
-Returns a new pool of `size` system threads that executes [_tasks_](#threadsdostring-chunk-chunkname-mode-) with independent state.
+Returns a new _thread pool_ of `size` system threads to execute [_tasks_](#threadsdostring-chunk--chunkname--mode-).
 
 If `size` is omitted,
-returns a new reference to the thread pool where the calling code is executing,
-or `nil` if it is not executing in a thread pool (_e.g._ the main process thread).
+returns a new reference to the _thread pool_ where the calling code is executing,
+or `nil` if it is not executing in a _thread pool_ (_e.g._ the main process thread).
 
 ### `threads:resize (size [, create])`
 
-Defines that `threads` shall keep `size` system threads to execute [_tasks_](#threadsdostring-chunk-chunkname-mode-) in `threads`.
+Defines that [_thread pool_](#systemthreads-size) `threads` shall keep `size` system threads to execute its _tasks_.
 
 If `size` is smaller than the current number of threads,
 the exceeding threads are destroyed at the rate they are released from the _tasks_ currently executing in `threads`.
-Otherwise, the new threads are created on demand until the defined value is reached.
+Otherwise, new threads are created on demand until the defined value is reached.
 Unless `create` evaluates to `true`,
 in which case the new threads are created immediatelly.
 
 ### `threads:count ([option])`
 
-Returns a number according to the value of `option`,
+Returns the number of components in [_thread pool_](#systemthreads-size) `threads` according to the value of `option`,
 as described below:
 
 - `"size"`: the expected number of system threads.
 - `"threads"`: the current number of system threads.
+- `"tasks"`: the total number of [_tasks_](#threadsdostring-chunk--chunkname--mode-).
 - `"running"`: the number of _tasks_ executing.
 - `"pending"`: the number of _tasks_ ready to execute, but not executing yet.
 - `"suspended"`: the number of _tasks_ not ready to execute.
-- `"tasks"`: the total number of _tasks_.
 
-The default value of `option` is `tasks`.
+The default value of `option` is `"tasks"`.
 
 ### `threads:dostring (chunk [, chunkname [, mode, ...]])`
 
-Loads to `threads` a [chunk](http://www.lua.org/manual/5.3/manual.html#pdf-load) as a new _task_ that executes in an independent state like [_system coroutines_](#systemload-chunk--chunkname--mode).
-However, the _tasks_ created by this call start immediately and executes on system threads from `threads`.
+Loads a chunk as a new _task_ that executes in an independent state similar to [_system coroutines_](#systemload-chunk--chunkname--mode).
+However, such _tasks_ start immediately and executes on system threads from [_thread pool_](#systemthreads-size) `threads`.
 
 Arguments `chunk`, `chunkname`, `mode` are the same of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
-Arguments `...` are arguments for the load chunk,
-and only _nil_, _boolean_, _number_, _string_, _light userdata_ and [_channel_](#systemchannel-) values are allowed as such arguments.
+Arguments `...` are passed to the loaded chunk,
+but only _nil_, _boolean_, _number_, _string_, _light userdata_ and [_channel_](#systemchannel-) values are allowed as such arguments.
 
-Whenever the loaded `chunk` yields (see [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) it reschedules itself as pending to be resumed,
-and releases its running system thread to execute any pending _tasks_ in [`threads`](#systemthreads-size).
+Whenever the loaded `chunk` [yields](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield) it reschedules itself as pending to be resumed,
+and releases its running system thread.
 
-Execution errors in the loaded `chunk` are not handled,
+Execution errors in the loaded `chunk` are silently ignored,
 and simply terminate the _task_.
 
 Returns `true` if `chunk` is loaded successfully.
 
 ### `threads:dofile (filename [, mode, ...])`
 
-Similar to [`threads:dostring`](#threadsdostring-chunk-chunkname-mode-),
+Similar to [`threads:dostring`](#threadsdostring-chunk--chunkname--mode-),
 but gets the chunk from file `filename`.
 
 ### `threads:close ()`
 
-When this function is called from a _task_ of `threads`
-(_i.e._ using a reference obtained by calling [`system.threads()`](#systemthreads-size-) with no arguments),
+When this function is called from a _task_ of [_thread pool_](#systemthreads-size) `threads`
+(_i.e._ using a reference obtained by calling [`system.threads()`](#systemthreads-size) with no arguments),
 it has no effect other than prevent further use of reference `threads`.
 
 Otherwise, it waits until there are either no more _tasks_ or no more system threads,
 and closes `threads` releasing all of its underlying resources.
 
-Note that `threads` that are garbage collected before this functions is called will retain minimum resources until the termination of the Lua state they were created.
-To avoid accumulative resource consumption by creation of multiple `threads`,
+Note that when _thread pool_ `threads` is garbage collected before this functions is called,
+it will retain minimum resources until the termination of the Lua state they were created.
+To avoid accumulative resource consumption by creation of multiple _thread pools_,
 explicitly call this function on every `threads`.
 
-Moreover, a `threads` that is not closed will prevent the current Lua state to terminate (_i.e._ `lua_close` to return) until it has no more independent coroutines or system threads.
+Moreover, a _thread pool_ that is not closed will prevent the current Lua state to terminate (_i.e._ `lua_close` to return) until it has no more tasks or no more system threads.
 
 ### `system.channel ()`
 
