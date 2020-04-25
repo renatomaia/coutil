@@ -1,39 +1,40 @@
 local system = require "coutil.system"
 
-local waitsignal = os.tmpname()
-local file = io.open(waitsignal, "w")
-file:write[[
+local protectcode = [[
+	local function self(...) %s end
 	local _G = require "_G"
 	local debug = require "debug"
-	local io = require "io"
-	local os = require "os"
-	local path, yield = ...
-	local ok, err = xpcall(function ()
-		if yield then
-			local coroutine = require "coroutine"
-			yield = coroutine.yield
-		else
-			yield = function () end
-		end
-		repeat
-			assert(select("#", yield(1, 2, 3)) == 0)
-			local contents
-			local file = io.open(path)
-			if file then
-				contents = file:read()
-				file:close()
-			end
-		until contents == path
-		os.remove(path)
-	end, debug.traceback)
+	local ok, err = _G.xpcall(self, debug.traceback, ...)
 	if not ok then
+		local io = require "io"
 		io.stderr:write(err)
 		io.stderr:flush()
 	end
 ]]
-file:close()
 
-local function sendignal(path)
+local function waitsignal(path, yield)
+	local _G = require "_G"
+	local io = require "io"
+	local os = require "os"
+	if yield then
+		yield = require("coroutine").yield
+	else
+		yield = function () end
+	end
+	repeat
+		assert(_G.select("#", yield(1, 2, 3)) == 0)
+		local contents
+		local file = io.open(path)
+		if file then
+			contents = file:read()
+			file:close()
+		end
+	until contents == path
+	os.remove(path)
+end
+
+local function sendsignal(path)
+	local io = require "io"
 	local file = io.open(path, "w")
 	file:write(path)
 	file:close()
@@ -44,8 +45,13 @@ local function sendignal(path)
 	end
 end
 
-newtest "threads" --------------------------------------------------------------
+local waitscript = os.tmpname()
+local file = io.open(waitscript, "w")
+local main = string.format('require("_G") assert(load(%q, nil, "b"))(...)', string.dump(waitsignal))
+file:write(protectcode:format(main))
+file:close()
 
+newtest "threads" --------------------------------------------------------------
 
 do case "error messages"
 	for v in ipairs(types) do
@@ -159,7 +165,7 @@ do case "yielding tasks"
 	local path = { n = 5 }
 	for i = 1, path.n do
 		path[i] = os.tmpname()
-		assert(t:dofile(waitsignal, "t", path[i], "yield") == true)
+		assert(t:dofile(waitscript, "t", path[i], "yield") == true)
 	end
 
 	assert(t:count("size") == 1)
@@ -169,7 +175,7 @@ do case "yielding tasks"
 	assert(t:count("pending") == path.n-1)
 
 	while path.n > 0 do
-		sendignal(path[path.n])
+		sendsignal(path[path.n])
 		path.n = path.n-1
 		assert(t:count("size") == 1)
 		assert(t:count("threads") == 1)
@@ -253,7 +259,7 @@ end
 do case "pending tasks"
 	local t = assert(system.threads(1))
 	local path1 = os.tmpname()
-	assert(t:dofile(waitsignal, "t", path1) == true)
+	assert(t:dofile(waitscript, "t", path1) == true)
 	assert(t:count("size") == 1)
 	assert(t:count("threads") == 1)
 	assert(t:count("tasks") == 1)
@@ -261,21 +267,21 @@ do case "pending tasks"
 	assert(t:count("pending") == 0)
 
 	local path2 = os.tmpname()
-	assert(t:dofile(waitsignal, "t", path2) == true)
+	assert(t:dofile(waitscript, "t", path2) == true)
 	assert(t:count("size") == 1)
 	assert(t:count("threads") == 1)
 	assert(t:count("tasks") == 2)
 	assert(t:count("running") == 1)
 	assert(t:count("pending") == 1)
 
-	sendignal(path1)
+	sendsignal(path1)
 	assert(t:count("size") == 1)
 	assert(t:count("threads") == 1)
 	repeat until (t:count("tasks") == 1)
 	assert(t:count("running") == 1)
 	assert(t:count("pending") == 0)
 
-	sendignal(path2)
+	sendsignal(path2)
 	assert(t:count("size") == 1)
 	assert(t:count("threads") == 1)
 	repeat until (t:count("tasks") == 0)
@@ -297,7 +303,7 @@ do case "idle threads"
 	assert(t:count("pending") == 0)
 
 	local path3 = os.tmpname()
-	assert(t:dofile(waitsignal, "t", path3) == true)
+	assert(t:dofile(waitscript, "t", path3) == true)
 	assert(t:count("size") == 4)
 	assert(t:count("threads") == 2)
 	assert(t:count("tasks") == 1)
@@ -305,15 +311,15 @@ do case "idle threads"
 	assert(t:count("pending") == 0)
 
 	local path4 = os.tmpname()
-	assert(t:dofile(waitsignal, "t", path4) == true)
+	assert(t:dofile(waitscript, "t", path4) == true)
 	assert(t:count("size") == 4)
 	assert(t:count("threads") == 2)
 	assert(t:count("tasks") == 2)
 	repeat until (t:count("running") == 2)
 	assert(t:count("pending") == 0)
 
-	sendignal(path3)
-	sendignal(path4)
+	sendsignal(path3)
+	sendsignal(path4)
 	repeat until (t:count("running") == 0)
 	assert(t:count("size") == 4)
 	assert(t:count("threads") == 2)
@@ -327,9 +333,9 @@ end
 do case "increase size"
 	local t = assert(system.threads(1))
 	local path1 = os.tmpname()
-	assert(t:dofile(waitsignal, "t", path1) == true)
+	assert(t:dofile(waitscript, "t", path1) == true)
 	local path2 = os.tmpname()
-	assert(t:dofile(waitsignal, "t", path2) == true)
+	assert(t:dofile(waitscript, "t", path2) == true)
 
 	assert(t:count("size") == 1)
 	assert(t:count("threads") == 1)
@@ -344,8 +350,8 @@ do case "increase size"
 	repeat until (t:count("running") == 2)
 	assert(t:count("pending") == 0)
 
-	sendignal(path1)
-	sendignal(path2)
+	sendsignal(path1)
+	sendsignal(path2)
 	repeat until (t:count("running") == 0)
 	assert(t:count("size") == 4)
 	assert(t:count("threads") == 2)
@@ -360,9 +366,9 @@ end
 do case "decrease size"
 	local t = assert(system.threads(4))
 	local path1 = os.tmpname()
-	assert(t:dofile(waitsignal, "t", path1) == true)
+	assert(t:dofile(waitscript, "t", path1) == true)
 	local path2 = os.tmpname()
-	assert(t:dofile(waitsignal, "t", path2) == true)
+	assert(t:dofile(waitscript, "t", path2) == true)
 	repeat until (t:count("running") == 2)
 	assert(t:count("size") == 4)
 	assert(t:count("threads") == 4)
@@ -384,7 +390,7 @@ do case "decrease size"
 	assert(t:count("running") == 2)
 	assert(t:count("pending") == 1)
 
-	sendignal(path1)
+	sendsignal(path1)
 	assert(t:count("size") == 1)
 	repeat until (t:count("threads") == 1)
 	assert(t:count("tasks") == 2)
@@ -398,7 +404,7 @@ do case "decrease size"
 	assert(t:count("running") == 1)
 	assert(t:count("pending") == 1)
 
-	sendignal(path2)
+	sendsignal(path2)
 	assert(t:count("size") == 0)
 	repeat until (t:count("threads") == 0)
 	assert(t:count("tasks") == 1)
@@ -421,12 +427,102 @@ do case "collect running"
 
 	do
 		local t = assert(system.threads(1))
-		assert(t:dofile(waitsignal, "t", path1) == true)
+		assert(t:dofile(waitscript, "t", path1) == true)
 		repeat until (t:count("running") == 1)
 	end
 
 	gc()
-	sendignal(path1)
+	sendsignal(path1)
+
+	done()
+end
+
+local testutils = string.format([[
+	local _G = require "_G"
+	local waitsignal = _G.load(%q, nil, "b")
+	local sendsignal = _G.load(%q, nil, "b")
+]], string.dump(waitsignal), string.dump(sendsignal))
+
+do case "nested task"
+	local path1 = os.tmpname()
+	local path2 = os.tmpname()
+
+	local t = assert(system.threads(1))
+	assert(t:dostring(protectcode:format(testutils..string.format([[
+		local system = require "coutil.system"
+		local t = assert(system.threads())
+		assert(t:count("size") == 1)
+		assert(t:count("threads") == 1)
+		assert(t:count("tasks") == 1)
+		assert(t:count("running") == 1)
+		assert(t:count("pending") == 0)
+
+		assert(t:dofile(%q, "t", %q))
+		waitsignal(%q)
+	]], waitscript, path2, path1)), "@nestedtask.lua"))
+
+	assert(t:count("size") == 1)
+	assert(t:count("threads") == 1)
+	repeat until (t:count("tasks") == 2)
+	assert(t:count("running") == 1)
+	assert(t:count("pending") == 1)
+
+	sendsignal(path1)
+
+	assert(t:count("size") == 1)
+	assert(t:count("threads") == 1)
+	repeat until (t:count("tasks") == 1)
+	assert(t:count("running") == 1)
+	assert(t:count("pending") == 0)
+
+	sendsignal(path2)
+
+	assert(t:close() == true)
+
+	done()
+end
+
+do case "nested pool"
+	local path1 = os.tmpname()
+	local path2 = os.tmpname()
+
+	local t = assert(system.threads(1))
+	assert(t:dostring(protectcode:format(testutils..string.format([[
+		local system = require "coutil.system"
+		local t = assert(system.threads(1))
+		assert(t:count("size") == 1)
+		assert(t:count("threads") == 1)
+		assert(t:count("tasks") == 0)
+		assert(t:count("running") == 0)
+		assert(t:count("pending") == 0)
+
+		waitsignal(%q)
+		assert(t:dofile(%q, "t", %q))
+	]], path1, waitscript, path2)), "@nestedpool.lua"))
+
+	assert(t:count("size") == 1)
+	assert(t:count("threads") == 1)
+	repeat until (t:count("tasks") == 1)
+	assert(t:count("running") == 1)
+	assert(t:count("pending") == 0)
+
+	sendsignal(path1)
+
+	assert(t:count("size") == 1)
+	assert(t:count("threads") == 1)
+	repeat until (t:count("tasks") == 1)
+	assert(t:count("running") == 1)
+	assert(t:count("pending") == 0)
+
+	sendsignal(path2)
+
+	assert(t:count("size") == 1)
+	assert(t:count("threads") == 1)
+	repeat until (t:count("tasks") == 0)
+	assert(t:count("running") == 0)
+	assert(t:count("pending") == 0)
+
+	assert(t:close() == true)
 
 	done()
 end
