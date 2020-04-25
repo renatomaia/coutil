@@ -671,6 +671,36 @@ do case "chunk from file"
 	assert(system.run() == false)
 	assert(stage == 2)
 
+	done()
+end
+
+do case "inherit preload"
+	spawn(function ()
+		package.preload["coutil.spawn"] =
+			assert(package.searchers[2]("coutil.spawn"))
+		package.preload["coutil.system"] =
+			assert(package.searchers[3]("coutil.system"))
+
+		local co = system.load[[
+			local package = require "package"
+			package.path = ""
+			package.cpath = ""
+
+			require "coutil.spawn"
+			require "coutil.system"
+
+			return true
+		]]
+
+		package.preload["coutil.spawn"] = nil
+		package.preload["coutil.system"] = nil
+
+		local ok, res = co:resume()
+		assert(ok == true and res == true)
+	end)
+
+	assert(system.run() == false)
 
 	done()
 end
+

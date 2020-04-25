@@ -502,8 +502,8 @@ do case "nested pool"
 
 	assert(t:count("size") == 1)
 	assert(t:count("threads") == 1)
-	repeat until (t:count("tasks") == 1)
-	assert(t:count("running") == 1)
+	assert(t:count("tasks") == 1)
+	repeat until (t:count("running") == 1)
 	assert(t:count("pending") == 0)
 
 	sendsignal(path1)
@@ -523,6 +523,50 @@ do case "nested pool"
 	assert(t:count("pending") == 0)
 
 	assert(t:close() == true)
+
+	done()
+end
+
+do case "inherit preload"
+	package.preload["coutil.spawn"] =
+		assert(package.searchers[2]("coutil.spawn"))
+	package.preload["coutil.system"] =
+		assert(package.searchers[3]("coutil.system"))
+
+	local path = os.tmpname()
+	local t = assert(system.threads(1))
+	assert(t:dostring(protectcode:format(testutils..string.format([[
+		local package = require "package"
+		package.path = ""
+		package.cpath = ""
+
+		require "coutil.spawn"
+		require "coutil.system"
+
+		sendsignal(%q)
+	]], path)), "@inheritpreload.lua"))
+
+	waitsignal(path)
+
+	package.preload["coutil.spawn"] = nil
+	package.preload["coutil.system"] = nil
+
+	done()
+end
+
+do case "system coroutine"
+	spawn(function ()
+		local syscoro = system.load[[
+			local _G = require "_G"
+			local system = require "coutil.system"
+			assert(system.threads() == nil)
+			return true
+		]]
+		local ok, res = syscoro:resume()
+		assert(ok == true and res == true)
+	end)
+
+	system.run()
 
 	done()
 end

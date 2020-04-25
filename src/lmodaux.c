@@ -38,12 +38,18 @@ static const luaL_Reg stdlibs[] = {
 	{NULL, NULL}
 };
 
+static int writer (lua_State *L, const void *b, size_t size, void *B) {
+	(void)L;
+	luaL_addlstring((luaL_Buffer *) B, (const char *)b, size);
+	return 0;
+}
+
 LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
 	const luaL_Reg *lib;
 	void *allocud;
 	lua_Alloc allocf = lua_getallocf(L, &allocud);
 	lua_CFunction panic = lua_atpanic(L, NULL);  /* changes panic function */
-	lua_State *NL = lua_newstate(allocf, allocud);  /* create state */
+	lua_State *NL = lua_newstate(allocf, allocud);
 
 	lua_atpanic(L, panic);  /* restore panic function */
 	lua_atpanic(NL, panic);
@@ -51,11 +57,47 @@ LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
 	luaL_checkstack(NL, 3, "not enough memory");
 	luaL_requiref(NL, LUA_LOADLIBNAME, luaopen_package, 0);
 	luaL_getsubtable(NL, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
+	luaL_getsubtable(L, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
+
+	/* add standard libraries to 'package.preload' */
 	for (lib = stdlibs; lib->func; lib++) {
 		lua_pushcfunction(NL, lib->func);
 		lua_setfield(NL, -2, lib->name);
 	}
+
+	/* copy 'package.preload' */
+	lua_pushnil(L);  /* first key */
+	while (lua_next(L, -2) != 0) {
+		if (lua_isstring(L, -2) && lua_isfunction(L, -1)) {
+			size_t len;
+			const char *name = lua_tolstring(L, -2, &len);
+			lua_pushlstring(NL, name, len);
+			if (lua_iscfunction(L, -1)) {
+				lua_CFunction loader = lua_tocfunction(L, -1);
+				lua_pushcfunction(NL, loader);
+			} else {
+				luaL_Buffer b;
+				int err;
+				luaL_buffinit(NL, &b);
+				err = lua_dump(L, writer, &b, 0);
+				luaL_pushresult(&b);
+				if (err) {
+					lua_pop(NL, 1);
+					lua_pushnil(NL);
+				} else {
+					size_t l;
+					const char *bytecodes = lua_tolstring(NL, -1, &l);
+					int status = luaL_loadbufferx(NL, bytecodes, l, NULL, "b");
+					lcu_assert(status == LUA_OK);
+					lua_remove(NL, -2);
+				}
+			}
+			lua_settable(NL, -3);
+		}
+		lua_pop(L, 1);
+	}
 	lua_pop(NL, 2);  /* remove 'package' and 'LUA_PRELOAD_TABLE' */
+	lua_pop(L, 1);  /* remove 'LUA_PRELOAD_TABLE' */
 	return NL;
 }
 
