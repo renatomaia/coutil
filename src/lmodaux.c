@@ -101,32 +101,39 @@ LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
 	return NL;
 }
 
+LCUI_FUNC int lcuL_copyvalue (lua_State *from, lua_State *to, int idx) {
+	switch (lua_type(from, idx)) {
+		case LUA_TNIL: {
+			lua_pushnil(to);
+		} break;
+		case LUA_TBOOLEAN: {
+			lua_pushboolean(to, lua_toboolean(from, idx));
+		} break;
+		case LUA_TNUMBER: {
+			lua_pushnumber(to, lua_tonumber(from, idx));
+		} break;
+		case LUA_TSTRING: {
+			size_t l;
+			const char *s = lua_tolstring(from, idx, &l);
+			lua_pushlstring(to, s, l);
+		} break;
+		case LUA_TLIGHTUSERDATA: {
+			lua_pushlightuserdata(to, lua_touserdata(from, idx));
+		} break;
+		default:
+			return 0;
+	}
+	return 1;
+}
+
 LCUI_FUNC int lcuL_movevals (lua_State *from, lua_State *to, int n) {
 	int i;
 	lcu_assert(lua_gettop(from) >= n);
 	luaL_checkstack(to, n, "too many arguments to resume");
 	for (i = 0; i < n; i++) {
-		switch (lua_type(from, i-n)) {
-			case LUA_TNIL: {
-				lua_pushnil(to);
-			} break;
-			case LUA_TBOOLEAN: {
-				lua_pushboolean(to, lua_toboolean(from, i-n));
-			} break;
-			case LUA_TNUMBER: {
-				lua_pushnumber(to, lua_tonumber(from, i-n));
-			} break;
-			case LUA_TSTRING: {
-				size_t l;
-				const char *s = lua_tolstring(from, i-n, &l);
-				lua_pushlstring(to, s, l);
-			} break;
-			case LUA_TLIGHTUSERDATA: {
-				lua_pushlightuserdata(to, lua_touserdata(from, i-n));
-			} break;
-			default:
-				lua_pop(to, i);
-				return lua_gettop(from)+1+i-n;
+		if (!lcuL_copyvalue(from, to, i-n)) {
+			lua_pop(to, i);
+			return lua_gettop(from)+1+i-n;
 		}
 	}
 	lua_pop(from, n);
