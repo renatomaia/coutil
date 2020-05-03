@@ -116,7 +116,7 @@ static void uv_onworked(uv_work_t* work, int status) {
 				} else {
 					lua_pop(co, nres);  /* remove results anyway */
 					lua_pushboolean(thread, 0);
-					lua_pushliteral(thread, "too many results to resume");
+					lua_pushliteral(thread, "too many values returned");
 				}
 			} else {
 				int err;

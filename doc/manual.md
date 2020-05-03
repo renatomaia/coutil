@@ -991,10 +991,36 @@ call this function on every _thread pool_.
 
 Moreover, a _thread pool_ that is not closed will prevent the current Lua state to terminate (_i.e._ `lua_close` to return) until it has either no more tasks or no more system threads.
 
-### `system.channel ()`
+### `system.syncport ()`
 
-### `channel:send (...)`
+Returns a new _synchronization port_ that can be shared among [_system coroutines_](#systemload-chunk--chunkname--mode) or [_tasks_](#threadsdostring-chunk--chunkname--mode-) to create [_channels_](#systemchannel-) for synchronization and to exchange values between them.
 
-### `channel:receive (probe)`
+A _task_ can yield a _synchronization port_ followed by the arguments of [`channel:sync`](#channelsync-operation-) to be suspended without the need to create a _channel_ nor coroutines.
+
+### `system.channel ([syncport])`
+
+Returns a new _channel_ over [_synchronization port_](#systemsyncport-) `syncport`.
+If `syncport` is not provided, a new _synchronization port_ is implicitly created.
+
+Channels over the same _synchronization port_ share the same corresponding [_endpoints_](#channelsync-outward-).
+
+### `channel:port ()`
+
+Returns the [_synchronization port_](#systemsyncport-) `syncport` of the channel `channel`.
+
+### `channel:sync (endpoint, ...)`
+
+[Await function](#await) that awaits for a similar call on the oposite _endpoint_,
+either from another coroutine, [_tasks_](#threadsdostring-chunk--chunkname--mode-) or  [_system coroutines_](#systemload-chunk--chunkname--mode).
+
+`endpoint` is a string that starts with either letter `"i"` and `"o"`,
+each identifying an oposite _endpoint_ of the _channel_.
+If `endpoint` is not a string or does not start with neither  `"i"` nor `"o"`,
+this call will match with any other call to `sync` on any _endpoints_.
+
+Returns `true` followed by the extra arguments `...` from the matching call.
+Otherwise, return `false` followed by an error message.
+
+### `channel:probe (endpoint)`
 
 ### `channel:close ()`
