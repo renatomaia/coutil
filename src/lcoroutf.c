@@ -7,9 +7,10 @@
 
 static int doloaded (lua_State *L, lua_State *NL, int status) {
 	if (status != LUA_OK) {  /* error (message is on top of the stack) */
-		const char *errmsg = lua_tostring(NL, -1);
+		size_t len;
+		const char *errmsg = lua_tolstring(NL, -1, &len);
 		lua_pushnil(L);
-		lua_pushstring(L, errmsg);
+		lua_pushlstring(L, errmsg, len);
 		lua_close(NL);
 		return 2;  /* return nil plus error message */
 	}
@@ -103,28 +104,16 @@ static void uv_onworked(uv_work_t* work, int status) {
 			lua_pop(co, 1);  /* remove lstatus value */
 			if (lstatus == LUA_OK || lstatus == LUA_YIELD) {
 				int nres = lua_gettop(co);
-				if (lua_checkstack(thread, nres+1)) {
-					int err;
-					lua_pushboolean(thread, 1);  /* return 'true' to signal success */
-					err = lcuL_movevals(co, thread, nres);  /* move yielded values */
-					if (err) {
-						lua_pop(co, nres);  /* remove results anyway */
-						lua_pop(thread, 1);  /* remove pushed 'true' that signals success */
-						lua_pushboolean(thread, 0);
-						lua_pushfstring(thread, "bad return value #%d (illegal type)", err);
-					}
-				} else {
+				lua_pushboolean(thread, 1);  /* return 'true' to signal success */
+				if (lcuL_moveargsfrom(co, thread, nres, NULL) != LUA_OK) {
 					lua_pop(co, nres);  /* remove results anyway */
 					lua_pushboolean(thread, 0);
-					lua_pushliteral(thread, "too many values returned");
+					lua_replace(thread, -3);  /* remove pushed 'true' that signals success */
 				}
 			} else {
-				int err;
 				lua_pushboolean(thread, 0);
-				err = lcuL_movevals(co, thread, 1);  /* move error message */
-				if (err) {
+				if (lcuL_moveargsfrom(co, thread, 1, NULL) != LUA_OK) {
 					lua_pop(co, 1);  /* remove error anyway */
-					lua_pushstring(thread, "bad error (illegal type)");
 				}
 			}
 		}
@@ -151,15 +140,11 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		lua_pushliteral(L, "cannot resume dead coroutine");
 		return 2;
 	}
-	if (!lua_checkstack(co, narg)) {
+	if (lcuL_moveargsfrom(L, co, narg, NULL) != LUA_OK) {
+		const char *msg = lua_tostring(co, -1);
 		lua_pushboolean(L, 0);
-		lua_pushstring(L, "too many arguments to resume");
-		return 2;
-	}
-	err = lcuL_movevals(L, co, narg);
-	if (err) {
-		lua_pushboolean(L, 0);
-		lua_pushfstring(L, "bad argument #%d (illegal type)", err);
+		lua_pushfstring(L, msg);
+		lua_pop(co, 1);
 		return 2;
 	}
 	request->data = sysco;  /* CAUTION: Only moment when 'data' is not a */

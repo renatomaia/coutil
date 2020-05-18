@@ -23,7 +23,17 @@ LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err);
 
 LCUI_FUNC lua_State *lcuL_newstate (lua_State *L);
 
-LCUI_FUNC int lcuL_movevals (lua_State *from, lua_State *to, int n);
+typedef int (*lcuL_CustomTransfer) (lua_State *from, lua_State *to, int arg);
+
+LCUI_FUNC int lcuL_pushargfrom (lua_State *to,
+                                lua_State *from,
+                                int arg,
+                                lcuL_CustomTransfer customf);
+
+LCUI_FUNC int lcuL_moveargsfrom (lua_State *to,
+                                 lua_State *from,
+                                 int narg,
+                                 lcuL_CustomTransfer customf);
 
 
 #define LCU_MODUPVS	3
