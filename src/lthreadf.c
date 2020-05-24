@@ -242,6 +242,9 @@ static void runthread (void *arg) {
 				lua_settop(L, 0);  /* discard returned values */
 			}
 		} else {
+			if (status != LUA_OK) {
+				lua_writestringerror("[COUTIL PANIC] %s", lua_tostring(L, -1));
+			}
 			/* avoid 'pool->tasks--' */
 			lua_settop(L, 0);
 			lua_getfield(L, LUA_REGISTRYINDEX, LCU_THREADPOOLREGKEY);
@@ -566,8 +569,6 @@ LCULIB_API int lcu_matchsyncport (lcu_SyncPort **portref,
                                   lua_State *L) {
 	lcu_SyncPort *port = *portref;
 	int endpoint;
-	NULL;
-	if (endname == NULL) endname = "";
 	switch (*endname) {
 		case 'i': endpoint = LCU_SYNCPORTIN; break;
 		case 'o': endpoint = LCU_SYNCPORTOUT; break;
