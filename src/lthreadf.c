@@ -664,21 +664,17 @@ static int threads_resize (lua_State *L) {
 static int threads_count (lua_State *L) {
 	lcu_ThreadCount count;
 	lcu_ThreadPool *pool = lcu_checkthreads(L, 1);
-	const char *options = luaL_checkstring(L, 2);
-	lcu_countthreads(pool, &count, options);
+	const char *opt = luaL_checkstring(L, 2);
+	lcu_countthreads(pool, &count, opt);
 	lua_settop(L, 2);
-	for (; *options; ++options) switch (*options) {
+	for (; *opt; ++opt) switch (*opt) {
 		case 'e': lua_pushinteger(L, count.expected); break;
 		case 'a': lua_pushinteger(L, count.actual); break;
 		case 'r': lua_pushinteger(L, count.running); break;
 		case 'p': lua_pushinteger(L, count.pending); break;
 		case 's': lua_pushinteger(L, count.suspended); break;
 		case 'n': lua_pushinteger(L, count.numoftasks); break;
-		default: {
-			char msg[19] = "invalid option '?'";
-			msg[16] = *options;
-			return luaL_argerror(L, 2, msg);
-		}
+		default: return luaL_error(L, "bad option (got '%c')", (int)*opt);
 	}
 	return lua_gettop(L)-2;
 }
