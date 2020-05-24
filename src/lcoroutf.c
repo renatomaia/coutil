@@ -78,11 +78,10 @@ static void uv_onworking(uv_work_t* req) {
 	lcu_SysCoro *sysco = (lcu_SysCoro *)req->data;
 	lua_State *co = lcu_tosyscolua(sysco);
 	int narg = lua_gettop(co);
-	int status, hasspace;
+	int status;
 	if (lua_status(co) == LUA_OK) --narg;  /* function on stack */
 	status = lua_resume(co, NULL, narg);
-	hasspace = lua_checkstack(co, 1);
-	assert(hasspace);
+	lcu_assert(lua_checkstack(co, 1));
 	lua_pushinteger(co, status);
 }
 static void uv_onworked(uv_work_t* work, int status) {
@@ -105,14 +104,14 @@ static void uv_onworked(uv_work_t* work, int status) {
 			if (lstatus == LUA_OK || lstatus == LUA_YIELD) {
 				int nres = lua_gettop(co);
 				lua_pushboolean(thread, 1);  /* return 'true' to signal success */
-				if (lcuL_moveargsfrom(co, thread, nres, NULL) != LUA_OK) {
+				if (lcuL_movefrom(thread, co, nres, "transfer return value", NULL) != LUA_OK) {
 					lua_pop(co, nres);  /* remove results anyway */
 					lua_pushboolean(thread, 0);
 					lua_replace(thread, -3);  /* remove pushed 'true' that signals success */
 				}
 			} else {
 				lua_pushboolean(thread, 0);
-				if (lcuL_moveargsfrom(co, thread, 1, NULL) != LUA_OK) {
+				if (lcuL_pushfrom(thread, co, -1, "transfer error", NULL) != LUA_OK) {
 					lua_pop(co, 1);  /* remove error anyway */
 				}
 			}
@@ -140,7 +139,7 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		lua_pushliteral(L, "cannot resume dead coroutine");
 		return 2;
 	}
-	if (lcuL_moveargsfrom(L, co, narg, NULL) != LUA_OK) {
+	if (lcuL_movefrom(co, L, narg, "transfer argument", NULL) != LUA_OK) {
 		const char *msg = lua_tostring(co, -1);
 		lua_pushboolean(L, 0);
 		lua_pushfstring(L, msg);

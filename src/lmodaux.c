@@ -101,83 +101,92 @@ LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
 	return NL;
 }
 
-static void pushargfrom (lua_State *to,
-                         lua_State *from,
-                         int arg,
-                         lcuL_CustomTransfer customf) {
-	switch (lua_type(from, arg)) {
+static void pushfrom (lua_State *to,
+                      lua_State *from,
+                      int idx,
+                      const char *msg,
+                      lcuL_CustomTransfer customf) {
+	switch (lua_type(from, idx)) {
 		case LUA_TNIL: {
 			lua_pushnil(to);
 		} break;
 		case LUA_TBOOLEAN: {
-			lua_pushboolean(to, lua_toboolean(from, arg));
+			lua_pushboolean(to, lua_toboolean(from, idx));
 		} break;
 		case LUA_TNUMBER: {
-			lua_pushnumber(to, lua_tonumber(from, arg));
+			lua_pushnumber(to, lua_tonumber(from, idx));
 		} break;
 		case LUA_TSTRING: {
 			size_t l;
-			const char *s = lua_tolstring(from, arg, &l);
+			const char *s = lua_tolstring(from, idx, &l);
 			lua_pushlstring(to, s, l);
 		} break;
 		case LUA_TLIGHTUSERDATA: {
-			lua_pushlightuserdata(to, lua_touserdata(from, arg));
+			lua_pushlightuserdata(to, lua_touserdata(from, idx));
 		} break;
 		case LUA_TUSERDATA: {
-			if (customf && customf(to, from, arg)) break;
+			if (customf && customf(to, from, idx)) break;
 		}
-		default:
-			luaL_error(to, "unable to tranfer argument #%d (got %s)",
-			               arg, luaL_typename(from, arg));
+		default: {
+			const char *tname = luaL_typename(from, idx);
+			if (idx < 0) luaL_error(to, "unable to %s (got %s)", msg, tname);
+			else luaL_error(to, "unable to %s #%d (got %s)", msg, idx, tname);
+		}
 	}
 }
 
-static int auxpushargfrom (lua_State *to) {
+static int auxpushfrom (lua_State *to) {
 	lua_State *from = (lua_State *)lua_touserdata(to, 1);
-	int arg = lua_tointeger(to, 2);
-	lcuL_CustomTransfer customf = (lcuL_CustomTransfer)lua_touserdata(to, 3);
-	pushargfrom(to, from, arg, customf);
+	int idx = lua_tointeger(to, 2);
+	const char *msg = (const char *)lua_touserdata(to, 3);
+	lcuL_CustomTransfer customf = (lcuL_CustomTransfer)lua_touserdata(to, 4);
+	pushfrom(to, from, idx, msg, customf);
 	return 1;
 }
 
-LCUI_FUNC int lcuL_pushargfrom (lua_State *to,
-                                lua_State *from,
-                                int arg,
-                                lcuL_CustomTransfer customf) {
-	lcu_assert(lua_gettop(from) >= arg);
-	if (!lua_checkstack(to, 3)) return LUA_ERRMEM;
-	lua_pushcfunction(to, auxpushargfrom);
+LCUI_FUNC int lcuL_pushfrom (lua_State *to,
+                             lua_State *from,
+                             int idx,
+                             const char *msg,
+                             lcuL_CustomTransfer customf) {
+	lcu_assert(lua_gettop(from) >= idx);
+	if (!lua_checkstack(to, 4)) return LUA_ERRMEM;
+	lua_pushcfunction(to, auxpushfrom);
 	lua_pushlightuserdata(to, from);
-	lua_pushinteger(to, arg);
+	lua_pushinteger(to, idx);
+	lua_pushlightuserdata(to, (void *)msg);
 	lua_pushlightuserdata(to, customf);
-	return lua_pcall(to, 3, 1, 0);
+	return lua_pcall(to, 4, 1, 0);
 }
 
-static int auxmoveargsfrom (lua_State *to) {
+static int auxmovefrom (lua_State *to) {
 	lua_State *from = (lua_State *)lua_touserdata(to, 1);
-	int narg = lua_tointeger(to, 2);
-	lcuL_CustomTransfer customf = (lcuL_CustomTransfer)lua_touserdata(to, 3);
+	int n = lua_tointeger(to, 2);
+	const char *msg = (const char *)lua_touserdata(to, 3);
+	lcuL_CustomTransfer customf = (lcuL_CustomTransfer)lua_touserdata(to, 4);
 	int top = lua_gettop(from);
 	int idx;
 	lua_settop(to, 0);
-	luaL_checkstack(to, narg, "too many arguments");
-	for (idx = 1+top-narg; idx < top; idx++) pushargfrom(to, from, idx, customf);
-	return narg;
+	luaL_checkstack(to, n, "too many values");
+	for (idx = 1+top-n; idx <= top; idx++) pushfrom(to, from, idx, msg, customf);
+	return n;
 }
 
-LCUI_FUNC int lcuL_moveargsfrom (lua_State *to,
-                                 lua_State *from,
-                                 int narg,
-                                 lcuL_CustomTransfer customf) {
+LCUI_FUNC int lcuL_movefrom (lua_State *to,
+                             lua_State *from,
+                             int n,
+                             const char *msg,
+                             lcuL_CustomTransfer customf) {
 	int status;
-	lcu_assert(lua_gettop(from) >= narg);
-	if (!lua_checkstack(to, 3)) return LUA_ERRMEM;
-	lua_pushcfunction(to, auxmoveargsfrom);
+	lcu_assert(lua_gettop(from) >= n);
+	if (!lua_checkstack(to, 4)) return LUA_ERRMEM;
+	lua_pushcfunction(to, auxmovefrom);
 	lua_pushlightuserdata(to, from);
-	lua_pushinteger(to, narg);
+	lua_pushinteger(to, n);
+	lua_pushlightuserdata(to, (void *)msg);
 	lua_pushlightuserdata(to, customf);
-	status = lua_pcall(to, 3, narg, 0);
-	if (status == LUA_OK) lua_pop(from, narg);
+	status = lua_pcall(to, 4, n, 0);
+	if (status == LUA_OK) lua_pop(from, n);
 	return status;
 }
 

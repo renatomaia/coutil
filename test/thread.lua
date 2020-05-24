@@ -1,8 +1,8 @@
 local system = require "coutil.system"
 
 local protectcode = [[
-	local function self(...) %s end
 	local _G = require "_G"
+	local function self(...) %s end
 	local debug = require "debug"
 	local ok, err = _G.xpcall(self, debug.traceback, ...)
 	if not ok then
@@ -50,6 +50,12 @@ local file = io.open(waitscript, "w")
 local main = string.format('require("_G") assert(load(%q, nil, "b"))(...)', string.dump(waitsignal))
 file:write(protectcode:format(main))
 file:close()
+
+local testutils = string.format([[
+	local _G = require "_G"
+	local waitsignal = _G.load(%q, nil, "b")
+	local sendsignal = _G.load(%q, nil, "b")
+]], string.dump(waitsignal), string.dump(sendsignal))
 
 newtest "threads" --------------------------------------------------------------
 
@@ -101,13 +107,13 @@ end
 
 do case "type errors"
 	local t = assert(system.threads(1))
-	asserterr("bad argument #5 (illegal type)",
+	asserterr("unable to transfer argument #5 (got table)",
 		t:dostring("", nil, "t", table))
-	asserterr("bad argument #6 (illegal type)",
+	asserterr("unable to transfer argument #6 (got function)",
 		t:dostring("", nil, "t", 1, print))
-	asserterr("bad argument #7 (illegal type)",
+	asserterr("unable to transfer argument #7 (got thread)",
 		t:dostring("", nil, "t", 1, 2, coroutine.running()))
-	asserterr("bad argument #8 (illegal type)",
+	asserterr("unable to transfer argument #8 (got userdata)",
 		t:dostring("", nil, "t", 1, 2, 3, io.stdout))
 
 	done()
@@ -154,6 +160,46 @@ do case "no tasks"
 	assert(t:count("tasks") == 0)
 	assert(t:count("running") == 0)
 	assert(t:count("pending") == 0)
+
+	assert(t:close() == true)
+
+	done()
+end
+
+do case "no arguments"
+	local t = assert(system.threads(1))
+
+	local path = os.tmpname()
+	local code = protectcode:format(testutils..string.format([[
+		assert(select("#", ...) == 0)
+		sendsignal(%q)
+	]], path))
+	assert(t:dostring(code))
+	waitsignal(path)
+
+	assert(t:close() == true)
+
+	done()
+end
+
+do case "transfer arguments"
+	local t = assert(system.threads(1))
+
+	local path = os.tmpname()
+	local code = protectcode:format(testutils..string.format([[
+		assert(select("#", ...) == 5)
+		local a,b,c,d,e = ...
+		assert(a == nil)
+		assert(b == false)
+		assert(c == 123)
+		assert(d == 0xfacep-8)
+		assert(e == "\001")
+
+		sendsignal(%q)
+	]], path))
+	assert(t:dostring(code, "@tranfargs.lua", "t",
+	                  nil, false, 123, 0xfacep-8, "\001"))
+	waitsignal(path)
 
 	assert(t:close() == true)
 
@@ -437,12 +483,6 @@ do case "collect running"
 	done()
 end
 
-local testutils = string.format([[
-	local _G = require "_G"
-	local waitsignal = _G.load(%q, nil, "b")
-	local sendsignal = _G.load(%q, nil, "b")
-]], string.dump(waitsignal), string.dump(sendsignal))
-
 do case "nested task"
 	local path1 = os.tmpname()
 	local path2 = os.tmpname()
@@ -456,7 +496,6 @@ do case "nested task"
 		assert(t:count("tasks") == 1)
 		assert(t:count("running") == 1)
 		assert(t:count("pending") == 0)
-
 		assert(t:dofile(%q, "t", %q))
 		waitsignal(%q)
 	]], waitscript, path2, path1)), "@nestedtask.lua"))

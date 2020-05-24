@@ -171,7 +171,7 @@ do case "environment inherit"
 	done()
 end
 
-do case "environment redefined"
+do case "environment redefined new"
 	spawn(function ()
 		runscript{
 			script = [[
@@ -229,7 +229,7 @@ do case "environment illegal char"
 	done()
 end
 
-do case "exit value"
+do case "environment redefined existing"
 	spawn(function ()
 		runscript{
 			script = 'assert(os.getenv("HOME") == "My Home!")',
