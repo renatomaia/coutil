@@ -51,11 +51,24 @@ local main = string.format('require("_G") assert(load(%q, nil, "b"))(...)', stri
 file:write(protectcode:format(main))
 file:close()
 
+local function checkcount(threads, options, ...)
+	assert(#options == select("#", ...))
+	local results = { threads:count(options) }
+	assert(#options == #results)
+	for i = 1, #options do
+		if results[i] ~= select(i, ...) then
+			return false
+		end
+	end
+	return true
+end
+
 local testutils = string.format([[
 	local _G = require "_G"
 	local waitsignal = _G.load(%q, nil, "b")
 	local sendsignal = _G.load(%q, nil, "b")
-]], string.dump(waitsignal), string.dump(sendsignal))
+	local checkcount = _G.load(%q, nil, "b")
+]], string.dump(waitsignal), string.dump(sendsignal), string.dump(checkcount))
 
 newtest "threads" --------------------------------------------------------------
 
@@ -67,6 +80,9 @@ do case "error messages"
 	end
 	asserterr("number has no integer representation",
 		pcall(system.threads, math.pi))
+
+	local t = assert(system.threads(0))
+	asserterr("invalid option 'w'", pcall(t.count, t, "wrong"))
 
 	done()
 end
@@ -99,7 +115,7 @@ do case "runtime errors"
 		require "_G"
 		error "Oops!"
 	]] == true)
-	repeat until (t:count("tasks") == 0)
+	repeat until checkcount(t, "n", 0)
 	assert(t:close() == true)
 
 	done()
@@ -127,26 +143,14 @@ end
 
 do case "no threads"
 	local t = assert(system.threads(-1))
-	assert(t:count("size") == 0)
-	assert(t:count("threads") == 0)
-	assert(t:count("tasks") == 0)
-	assert(t:count("running") == 0)
-	assert(t:count("pending") == 0)
+	assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 0, 0))
 	assert(t:close() == true)
 
 	local t = assert(system.threads(0))
-	assert(t:count("size") == 0)
-	assert(t:count("threads") == 0)
-	assert(t:count("tasks") == 0)
-	assert(t:count("running") == 0)
-	assert(t:count("pending") == 0)
+	assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 0, 0))
 
 	assert(t:dostring[[repeat until false]] == true)
-	assert(t:count("size") == 0)
-	assert(t:count("threads") == 0)
-	assert(t:count("tasks") == 1)
-	assert(t:count("running") == 0)
-	assert(t:count("pending") == 1)
+	assert(checkcount(t, "nrpsea", 1, 0, 1, 0, 0, 0))
 
 	assert(t:close() == true)
 
@@ -155,11 +159,7 @@ end
 
 do case "no tasks"
 	local t = assert(system.threads(3))
-	assert(t:count("size") == 3)
-	assert(t:count("threads") == 3)
-	assert(t:count("tasks") == 0)
-	assert(t:count("running") == 0)
-	assert(t:count("pending") == 0)
+	assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 3, 3))
 
 	assert(t:close() == true)
 
@@ -214,32 +214,20 @@ do case "yielding tasks"
 		assert(t:dofile(waitscript, "t", path[i], "yield") == true)
 	end
 
-	assert(t:count("size") == 1)
-	assert(t:count("threads") == 1)
-	assert(t:count("tasks") == path.n)
-	repeat until (t:count("running") == 1)
-	assert(t:count("pending") == path.n-1)
+	repeat until (checkcount(t, "r", 1))
+	assert(checkcount(t, "nrpsea", path.n, 1, path.n-1, 0, 1, 1))
 
 	while path.n > 0 do
 		sendsignal(path[path.n])
 		path.n = path.n-1
-		assert(t:count("size") == 1)
-		assert(t:count("threads") == 1)
-		repeat until (t:count("tasks") == path.n)
+		repeat until (checkcount(t, "n", path.n))
 		if path.n > 0 then
-			assert(t:count("running") == 1)
-			assert(t:count("pending") == path.n-1)
+			assert(checkcount(t, "nrpsea", path.n, 1, path.n-1, 0, 1, 1))
 		else
-			assert(t:count("running") == 0)
-			assert(t:count("pending") == 0)
+			assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 1, 1))
 		end
 	end
 
-	assert(t:count("size") == 1)
-	assert(t:count("threads") == 1)
-	assert(t:count("tasks") == 0)
-	assert(t:count("running") == 0)
-	assert(t:count("pending") == 0)
 	assert(t:close() == true)
 
 	done()
@@ -275,21 +263,16 @@ do case "many threads, even more tasks"
 		]], nil, "t", path[i]) == true)
 	end
 
-	assert(t:count("size") == n)
-	assert(t:count("threads") == n)
-	assert(t:count("tasks") == m)
-	repeat until (t:count("running") == n)
-	assert(t:count("pending") == m-n)
+	assert(checkcount(t, "nea", m, n, n))
+	repeat until (checkcount(t, "r", n))
+	assert(checkcount(t, "nrpsea", m, n, m-n, 0, n, n))
 
 	for _, path in ipairs(path) do
 		os.remove(path)
 	end
 
-	repeat until (t:count("tasks") == 0)
-	assert(t:count("size") == n)
-	assert(t:count("threads") == n)
-	assert(t:count("running") == 0)
-	assert(t:count("pending") == 0)
+	repeat until (checkcount(t, "n", 0))
+	assert(checkcount(t, "nrpsea", 0, 0, 0, 0, n, n))
 	assert(t:close() == true)
 
 	for _, path in ipairs(path) do
@@ -306,33 +289,20 @@ do case "pending tasks"
 	local t = assert(system.threads(1))
 	local path1 = os.tmpname()
 	assert(t:dofile(waitscript, "t", path1) == true)
-	assert(t:count("size") == 1)
-	assert(t:count("threads") == 1)
-	assert(t:count("tasks") == 1)
-	repeat until (t:count("running") == 1)
-	assert(t:count("pending") == 0)
+	repeat until (checkcount(t, "r", 1))
+	assert(checkcount(t, "nrpsea", 1, 1, 0, 0, 1, 1))
 
 	local path2 = os.tmpname()
 	assert(t:dofile(waitscript, "t", path2) == true)
-	assert(t:count("size") == 1)
-	assert(t:count("threads") == 1)
-	assert(t:count("tasks") == 2)
-	assert(t:count("running") == 1)
-	assert(t:count("pending") == 1)
+	assert(checkcount(t, "nrpsea", 2, 1, 1, 0, 1, 1))
 
 	sendsignal(path1)
-	assert(t:count("size") == 1)
-	assert(t:count("threads") == 1)
-	repeat until (t:count("tasks") == 1)
-	assert(t:count("running") == 1)
-	assert(t:count("pending") == 0)
+	repeat until (checkcount(t, "n", 1))
+	assert(checkcount(t, "nrpsea", 1, 1, 0, 0, 1, 1))
 
 	sendsignal(path2)
-	assert(t:count("size") == 1)
-	assert(t:count("threads") == 1)
-	repeat until (t:count("tasks") == 0)
-	assert(t:count("running") == 0)
-	assert(t:count("pending") == 0)
+	repeat until (checkcount(t, "n", 0))
+	assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 1, 1))
 
 	assert(t:close() == true)
 
@@ -342,34 +312,22 @@ end
 do case "idle threads"
 	local t = assert(system.threads(2))
 	assert(t:resize(4) == true)
-	assert(t:count("size") == 4)
-	assert(t:count("threads") == 2)
-	assert(t:count("tasks") == 0)
-	assert(t:count("running") == 0)
-	assert(t:count("pending") == 0)
+	assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 4, 2))
 
 	local path3 = os.tmpname()
 	assert(t:dofile(waitscript, "t", path3) == true)
-	assert(t:count("size") == 4)
-	assert(t:count("threads") == 2)
-	assert(t:count("tasks") == 1)
-	repeat until (t:count("running") == 1)
-	assert(t:count("pending") == 0)
+	repeat until (checkcount(t, "r", 1))
+	assert(checkcount(t, "nrpsea", 1, 1, 0, 0, 4, 2))
 
 	local path4 = os.tmpname()
 	assert(t:dofile(waitscript, "t", path4) == true)
-	assert(t:count("size") == 4)
-	assert(t:count("threads") == 2)
-	assert(t:count("tasks") == 2)
-	repeat until (t:count("running") == 2)
-	assert(t:count("pending") == 0)
+	repeat until (checkcount(t, "r", 2))
+	assert(checkcount(t, "nrpsea", 2, 2, 0, 0, 4, 2))
 
 	sendsignal(path3)
 	sendsignal(path4)
-	repeat until (t:count("running") == 0)
-	assert(t:count("size") == 4)
-	assert(t:count("threads") == 2)
-	assert(t:count("tasks") == 0)
+	repeat until (checkcount(t, "r", 0))
+	assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 4, 2))
 
 	assert(t:close() == true)
 
@@ -383,26 +341,18 @@ do case "increase size"
 	local path2 = os.tmpname()
 	assert(t:dofile(waitscript, "t", path2) == true)
 
-	assert(t:count("size") == 1)
-	assert(t:count("threads") == 1)
-	assert(t:count("tasks") == 2)
-	repeat until (t:count("running") == 1)
-	assert(t:count("pending") == 1)
+	repeat until (checkcount(t, "r", 1))
+	assert(checkcount(t, "nrpsea", 2, 1, 1, 0, 1, 1))
 
 	assert(t:resize(4) == true)
-	assert(t:count("size") == 4)
-	assert(t:count("threads") == 2)
-	assert(t:count("tasks") == 2)
-	repeat until (t:count("running") == 2)
-	assert(t:count("pending") == 0)
+	assert(checkcount(t, "e", 4))
+	repeat until (checkcount(t, "r", 2))
+	assert(checkcount(t, "nrpsea", 2, 2, 0, 0, 4, 2))
 
 	sendsignal(path1)
 	sendsignal(path2)
-	repeat until (t:count("running") == 0)
-	assert(t:count("size") == 4)
-	assert(t:count("threads") == 2)
-	assert(t:count("tasks") == 0)
-	assert(t:count("pending") == 0)
+	repeat until (checkcount(t, "r", 0))
+	assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 4, 2))
 
 	assert(t:close() == true)
 
@@ -415,47 +365,27 @@ do case "decrease size"
 	assert(t:dofile(waitscript, "t", path1) == true)
 	local path2 = os.tmpname()
 	assert(t:dofile(waitscript, "t", path2) == true)
-	repeat until (t:count("running") == 2)
-	assert(t:count("size") == 4)
-	assert(t:count("threads") == 4)
-	assert(t:count("tasks") == 2)
-	assert(t:count("running") == 2)
-	assert(t:count("pending") == 0)
+	repeat until (checkcount(t, "r", 2))
+	assert(checkcount(t, "nrpsea", 2, 2, 0, 0, 4, 4))
 
 	assert(t:resize(1) == true)
-	assert(t:count("size") == 1)
-	repeat until (t:count("threads") == 2)
-	assert(t:count("tasks") == 2)
-	assert(t:count("running") == 2)
-	assert(t:count("pending") == 0)
+	assert(checkcount(t, "e", 1))
+	repeat until (checkcount(t, "a", 2))
+	assert(checkcount(t, "nrpsea", 2, 2, 0, 0, 1, 2))
 
 	assert(t:dostring[[repeat until false]] == true)
-	assert(t:count("size") == 1)
-	assert(t:count("threads") == 2)
-	assert(t:count("tasks") == 3)
-	assert(t:count("running") == 2)
-	assert(t:count("pending") == 1)
+	assert(checkcount(t, "nrpsea", 3, 2, 1, 0, 1, 2))
 
 	sendsignal(path1)
-	assert(t:count("size") == 1)
-	repeat until (t:count("threads") == 1)
-	assert(t:count("tasks") == 2)
-	assert(t:count("running") == 1)
-	assert(t:count("pending") == 1)
+	repeat until (checkcount(t, "a", 1))
+	assert(checkcount(t, "nrpsea", 2, 1, 1, 0, 1, 1))
 
 	assert(t:resize(0) == true)
-	assert(t:count("size") == 0)
-	assert(t:count("threads") == 1)
-	assert(t:count("tasks") == 2)
-	assert(t:count("running") == 1)
-	assert(t:count("pending") == 1)
+	assert(checkcount(t, "nrpsea", 2, 1, 1, 0, 0, 1))
 
 	sendsignal(path2)
-	assert(t:count("size") == 0)
-	repeat until (t:count("threads") == 0)
-	assert(t:count("tasks") == 1)
-	assert(t:count("running") == 0)
-	assert(t:count("pending") == 1)
+	repeat until (checkcount(t, "a", 0))
+	assert(checkcount(t, "nrpsea", 1, 0, 1, 0, 0, 0))
 
 	assert(t:close() == true)
 
@@ -474,7 +404,7 @@ do case "collect running"
 	do
 		local t = assert(system.threads(1))
 		assert(t:dofile(waitscript, "t", path1) == true)
-		repeat until (t:count("running") == 1)
+		repeat until (checkcount(t, "r", 1))
 	end
 
 	gc()
@@ -491,30 +421,23 @@ do case "nested task"
 	assert(t:dostring(protectcode:format(testutils..string.format([[
 		local system = require "coutil.system"
 		local t = assert(system.threads())
-		assert(t:count("size") == 1)
-		assert(t:count("threads") == 1)
-		assert(t:count("tasks") == 1)
-		assert(t:count("running") == 1)
-		assert(t:count("pending") == 0)
+		assert(checkcount(t, "nrpsea", 1, 1, 0, 0, 1, 1))
 		assert(t:dofile(%q, "t", %q))
 		waitsignal(%q)
 	]], waitscript, path2, path1)), "@nestedtask.lua"))
 
-	assert(t:count("size") == 1)
-	assert(t:count("threads") == 1)
-	repeat until (t:count("tasks") == 2)
-	assert(t:count("running") == 1)
-	assert(t:count("pending") == 1)
+	repeat until (checkcount(t, "n", 2))
+	assert(checkcount(t, "nrpsea", 2, 1, 1, 0, 1, 1))
 
 	sendsignal(path1)
 
-	assert(t:count("size") == 1)
-	assert(t:count("threads") == 1)
-	repeat until (t:count("tasks") == 1)
-	assert(t:count("running") == 1)
-	assert(t:count("pending") == 0)
+	repeat until (checkcount(t, "n", 1))
+	assert(checkcount(t, "nrpsea", 1, 1, 0, 0, 1, 1))
 
 	sendsignal(path2)
+
+	repeat until (checkcount(t, "n", 0))
+	assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 1, 1))
 
 	assert(t:close() == true)
 
@@ -529,37 +452,24 @@ do case "nested pool"
 	assert(t:dostring(protectcode:format(testutils..string.format([[
 		local system = require "coutil.system"
 		local t = assert(system.threads(1))
-		assert(t:count("size") == 1)
-		assert(t:count("threads") == 1)
-		assert(t:count("tasks") == 0)
-		assert(t:count("running") == 0)
-		assert(t:count("pending") == 0)
+		assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 1, 1))
 
 		waitsignal(%q)
 		assert(t:dofile(%q, "t", %q))
 	]], path1, waitscript, path2)), "@nestedpool.lua"))
 
-	assert(t:count("size") == 1)
-	assert(t:count("threads") == 1)
-	assert(t:count("tasks") == 1)
-	repeat until (t:count("running") == 1)
-	assert(t:count("pending") == 0)
+	repeat until (checkcount(t, "r", 1))
+	assert(checkcount(t, "nrpsea", 1, 1, 0, 0, 1, 1))
 
 	sendsignal(path1)
 
-	assert(t:count("size") == 1)
-	assert(t:count("threads") == 1)
-	repeat until (t:count("tasks") == 1)
-	assert(t:count("running") == 1)
-	assert(t:count("pending") == 0)
+	repeat until (checkcount(t, "n", 1))
+	assert(checkcount(t, "nrpsea", 1, 1, 0, 0, 1, 1))
 
 	sendsignal(path2)
 
-	assert(t:count("size") == 1)
-	assert(t:count("threads") == 1)
-	repeat until (t:count("tasks") == 0)
-	assert(t:count("running") == 0)
-	assert(t:count("pending") == 0)
+	repeat until (checkcount(t, "n", 0))
+	assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 1, 1))
 
 	assert(t:close() == true)
 
