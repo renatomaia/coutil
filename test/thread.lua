@@ -81,9 +81,6 @@ do case "error messages"
 	asserterr("number has no integer representation",
 		pcall(system.threads, math.pi))
 
-	local t = assert(system.threads(0))
-	asserterr("invalid option 'w'", pcall(t.count, t, "wrong"))
-
 	done()
 end
 
@@ -131,6 +128,21 @@ do case "type errors"
 		t:dostring("", nil, "t", 1, 2, coroutine.running()))
 	asserterr("unable to transfer argument #8 (got userdata)",
 		t:dostring("", nil, "t", 1, 2, 3, io.stdout))
+
+	done()
+end
+
+do case "couting"
+	local t = assert(system.threads(0))
+	assert(t:dostring[[repeat until false]] == true)
+	assert(t:dostring[[repeat until false]] == true)
+	assert(t:dostring[[repeat until false]] == true)
+
+	asserterr("bad option (got 'w')", pcall(function () t:count("wrong") end))
+
+	assert(checkcount(t, "panepane", 3, 0, 3, 0, 3, 0, 3, 0))
+
+	assert(t:close() == true)
 
 	done()
 end
@@ -360,7 +372,14 @@ do case "increase size"
 end
 
 do case "decrease size"
-	local t = assert(system.threads(4))
+	local t = assert(system.threads(5))
+	assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 5, 5))
+
+	assert(t:resize(4) == true)
+	assert(checkcount(t, "e", 4))
+	repeat until (checkcount(t, "a", 4))
+	assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 4, 4))
+
 	local path1 = os.tmpname()
 	assert(t:dofile(waitscript, "t", path1) == true)
 	local path2 = os.tmpname()
