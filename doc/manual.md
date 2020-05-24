@@ -962,8 +962,8 @@ but only _nil_, _boolean_, _number_, _string_, _light userdata_ and [_synchroniz
 Whenever the loaded `chunk` [yields](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield) it reschedules itself as pending to be resumed,
 and releases its running system thread.
 
-Execution errors in the loaded `chunk` are silently ignored,
-and simply terminate the _task_.
+Execution errors in the loaded `chunk` terminate the _task_,
+and a message is written to the current process [standard error](https://en.wikipedia.org/wiki/Standard_streams#Standard_error_(stderr)) with prefix `[COUTIL PANIC]`.
 
 Returns `true` if `chunk` is loaded successfully.
 
@@ -1007,13 +1007,13 @@ Returns the [_synchronization port_](#systemsyncport-) `syncport` of the channel
 
 ### `channel:sync (endpoint, ...)`
 
-[Await function](#await) that awaits for a similar call on the oposite _endpoint_,
+[Await function](#await) that awaits for a similar call on the opposite _endpoint_,
 either from another coroutine, [_tasks_](#threadsdostring-chunk--chunkname--mode-) or  [_system coroutines_](#systemload-chunk--chunkname--mode).
 
-`endpoint` is a string that starts with either letter `"i"` and `"o"`,
+`endpoint` is a string that starts with either letter `"i"` or `"o"`,
 each identifying an oposite _endpoint_ of the _channel_.
-If `endpoint` is not a string or does not start with neither  `"i"` nor `"o"`,
-this call will match with any other call to `sync` on any _endpoints_.
+If `endpoint` is not a string or starts with neither  `"i"` nor `"o"`,
+this call will match with any call on either _endpoints_.
 
 Returns `true` followed by the extra arguments `...` from the matching call.
 Otherwise, return `false` followed by an error message.
