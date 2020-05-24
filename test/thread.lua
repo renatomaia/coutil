@@ -117,7 +117,7 @@ do case "runtime errors"
 		})
 		assert(errfile:close())
 
-		assert(readfrom(errpath) == "[COUTIL PANIC] runerror.lua:2: Oops!")
+		assert(readfrom(errpath) == "[COUTIL PANIC] runerror.lua:2: Oops!\n")
 		os.remove(errpath)
 	end)
 
@@ -546,6 +546,63 @@ do case "system coroutine"
 	end)
 
 	system.run()
+
+	done()
+end
+
+newtest "syncport" --------------------------------------------------------------
+
+do case "transfer port"
+	local t = assert(system.threads(1))
+	local port = system.syncport()
+	local code = [[
+		local port = ...
+		local _ENV = require "_G"
+		assert(port:close())
+	]]
+	assert(t:dostring(code, "@getport.lua", "t", port))
+	assert(t:close())
+
+	done()
+end
+
+do case "queueing opposite endpoints"
+	local n = 3
+	local t = assert(system.threads(1))
+	local port = assert(system.syncport())
+	local paths = { producer = {}, consumer = {} }
+
+	local producer = testutils..[[
+		local port, path = ...
+		local _ENV = require "_G"
+		local coroutine = require "coroutine"
+		assert(coroutine.yield(port, "outward"))
+		sendsignal(path)
+	]]
+	for i = 1, n do
+		paths.producer[i] = os.tmpname()
+		assert(t:dostring(producer, "@producer.lua", "t", port, paths.producer[i]))
+	end
+	repeat until (checkcount(t, "s", n))
+	assert(checkcount(t, "nrpsea", n, 0, 0, n, 1, 1))
+
+	local consumer = testutils..[[
+		local port, path = ...
+		local _ENV = require "_G"
+		local coroutine = require "coroutine"
+		assert(coroutine.yield(port, "inward"))
+		sendsignal(path)
+	]]
+	for i = 1, n do
+		paths.consumer[i] = os.tmpname()
+		assert(t:dostring(consumer, "@consumer.lua", "t", port, paths.consumer[i]))
+	end
+
+	for i = 1, n do
+		waitsignal(paths.producer[i])
+		waitsignal(paths.consumer[i])
+	end
+	assert(t:close())
 
 	done()
 end
