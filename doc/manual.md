@@ -938,19 +938,16 @@ Otherwise, new threads are created on demand until the defined value is reached.
 Unless `create` evaluates to `true`,
 in which case the new threads are created immediatelly.
 
-### `threads:count ([option])`
+### `threads:count (options)`
 
-Returns the number of components in [_thread pool_](#systemthreads-size) `threads` according to the value of `option`,
-as described below:
+Returns numbers corresponding to the ammount of components in [_thread pool_](#systemthreads-size) `threads` according to the following characters present in string `options`:
 
-- `"size"`: the expected number of system threads.
-- `"threads"`: the current number of system threads.
-- `"tasks"`: the total number of [_tasks_](#threadsdostring-chunk--chunkname--mode-).
-- `"running"`: the number of _tasks_ executing.
-- `"pending"`: the number of _tasks_ ready to execute, but not executing yet.
-- `"suspended"`: the number of _tasks_ not ready to execute.
-
-The default value of `option` is `"tasks"`.
+- `n`: the total number of [_tasks_](#threadsdostring-chunk--chunkname--mode-).
+- `r`: the number of _tasks_ currently executing.
+- `p`: the number of _tasks_ pending to be executed.
+- `s`: the number of _tasks_ not ready to execute.
+- `e`: the expected number of system threads.
+- `a`: the actual number of system threads.
 
 ### `threads:dostring (chunk [, chunkname [, mode, ...]])`
 
