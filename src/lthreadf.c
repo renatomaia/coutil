@@ -9,13 +9,13 @@
 #define LCU_THREADPOOLCLS LCU_PREFIX"lcu_ThreadPool"
 #define LCU_THREADSCLS LCU_PREFIX"threads"
 
-typedef enum lcu_ThreadCount {
-  LCU_THREADSSIZE,
-  LCU_THREADSCOUNT,
-  LCU_THREADSRUNNING,
-  LCU_THREADSPENDING,
-  LCU_THREADSSUSPENDED,
-  LCU_THREADSTASKS
+typedef struct lcu_ThreadCount {
+	int expected;
+	int actual;
+	int running;
+	int pending;
+	int suspended;
+	int numoftasks;
 } lcu_ThreadCount;
 
 typedef struct lcu_ThreadPool lcu_ThreadPool;
@@ -28,7 +28,9 @@ LCULIB_API int lcu_resizethreads (lcu_ThreadPool *pool, int size, int create);
 
 LCULIB_API int lcu_addthreads (lcu_ThreadPool *pool, lua_State *L);
 
-LCULIB_API int lcu_countthreads (lcu_ThreadPool *pool, lcu_ThreadCount what);
+LCULIB_API int lcu_countthreads (lcu_ThreadPool *pool,
+                                 lcu_ThreadCount *count,
+                                 const char *what);
 
 #define lcu_isthreads(L,i)  (lcu_tothreads(L, i) != NULL)
 
@@ -357,21 +359,20 @@ LCULIB_API int lcu_addthreads (lcu_ThreadPool *pool, lua_State *L) {
 	return err;
 }
 
-LCULIB_API int lcu_countthreads (lcu_ThreadPool *pool, lcu_ThreadCount what) {
-	int n = 0;
-
+LCULIB_API int lcu_countthreads (lcu_ThreadPool *pool,
+                                 lcu_ThreadCount *count,
+                                 const char *what) {
 	uv_mutex_lock(&pool->mutex);
-	switch (what) {
-		case LCU_THREADSSIZE: n = pool->size; break;
-		case LCU_THREADSCOUNT: n = pool->threads; break;
-		case LCU_THREADSRUNNING: n = pool->running; break;
-		case LCU_THREADSPENDING: n = pool->pending; break;
-		case LCU_THREADSSUSPENDED: n = pool->tasks-pool->running-pool->pending; break;
-		case LCU_THREADSTASKS: n = pool->tasks; break;
+	for (; *what; ++what) switch (*what) {
+		case 'e': count->expected = pool->size; break;
+		case 'a': count->actual = pool->threads; break;
+		case 'r': count->running = pool->running; break;
+		case 'p': count->pending = pool->pending; break;
+		case 's': count->suspended = pool->tasks-pool->running-pool->pending; break;
+		case 'n': count->numoftasks = pool->tasks; break;
 	}
 	uv_mutex_unlock(&pool->mutex);
-
-	return n;
+	return 0;
 }
 
 
@@ -661,24 +662,25 @@ static int threads_resize (lua_State *L) {
 
 /* succ [, errmsg] = threads:count([option]) */
 static int threads_count (lua_State *L) {
-	static const lcu_ThreadCount options[] = { LCU_THREADSSIZE,
-	                                           LCU_THREADSCOUNT,
-	                                           LCU_THREADSRUNNING,
-	                                           LCU_THREADSPENDING,
-	                                           LCU_THREADSSUSPENDED,
-	                                           LCU_THREADSTASKS };
-	static const char *const optnames[] = { "size",
-	                                        "threads",
-	                                        "running",
-	                                        "pending",
-	                                        "suspended",
-	                                        "tasks",
-	                                        NULL };
+	lcu_ThreadCount count;
 	lcu_ThreadPool *pool = lcu_checkthreads(L, 1);
-	int option = luaL_checkoption(L, 2, "tasks", optnames);
-	int value = lcu_countthreads(pool, options[option]);
-	lua_pushinteger(L, value);
-	return 1;
+	const char *options = luaL_checkstring(L, 2);
+	lcu_countthreads(pool, &count, options);
+	lua_settop(L, 2);
+	for (; *options; ++options) switch (*options) {
+		case 'e': lua_pushinteger(L, count.expected); break;
+		case 'a': lua_pushinteger(L, count.actual); break;
+		case 'r': lua_pushinteger(L, count.running); break;
+		case 'p': lua_pushinteger(L, count.pending); break;
+		case 's': lua_pushinteger(L, count.suspended); break;
+		case 'n': lua_pushinteger(L, count.numoftasks); break;
+		default: {
+			char msg[19] = "invalid option '?'";
+			msg[16] = *options;
+			return luaL_argerror(L, 2, msg);
+		}
+	}
+	return lua_gettop(L)-2;
 }
 
 static int loadsyncportcls (lua_State *L) {
