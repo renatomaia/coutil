@@ -957,7 +957,7 @@ and starts as soon as a system thread is available.
 
 Arguments `chunk`, `chunkname`, `mode` are the same of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
 Arguments `...` are passed to the loaded chunk,
-but only _nil_, _boolean_, _number_, _string_, _light userdata_ and [_channel_](#systemchannel-) values are allowed as such arguments.
+but only _nil_, _boolean_, _number_, _string_, _light userdata_ and [_synchronization port_](#systemsyncport-) values are allowed as such arguments.
 
 Whenever the loaded `chunk` [yields](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield) it reschedules itself as pending to be resumed,
 and releases its running system thread.
