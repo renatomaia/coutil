@@ -1,17 +1,5 @@
 local system = require "coutil.system"
 
-local protectcode = [[
-	local _G = require "_G"
-	local function self(...) %s end
-	local debug = require "debug"
-	local ok, err = _G.xpcall(self, debug.traceback, ...)
-	if not ok then
-		local io = require "io"
-		io.stderr:write(err)
-		io.stderr:flush()
-	end
-]]
-
 local function waitsignal(path, yield)
 	local _G = require "_G"
 	local io = require "io"
@@ -47,8 +35,9 @@ end
 
 local waitscript = os.tmpname()
 local file = io.open(waitscript, "w")
-local main = string.format('require("_G") assert(load(%q, nil, "b"))(...)', string.dump(waitsignal))
-file:write(protectcode:format(main))
+local main = string.format('require("_G") assert(load(%q, nil, "b"))(...)',
+                           string.dump(waitsignal))
+file:write(main)
 file:close()
 
 local function checkcount(threads, options, ...)
@@ -107,13 +96,32 @@ do case "compilation errors"
 end
 
 do case "runtime errors"
-	local t = assert(system.threads(1))
-	assert(t:dostring[[
-		require "_G"
-		error "Oops!"
-	]] == true)
-	repeat until checkcount(t, "n", 0)
-	assert(t:close() == true)
+	spawn(function ()
+		local errpath = os.tmpname()
+		local errfile = assert(io.open(errpath, "w"))
+		assert(system.execute{
+			execfile = luabin,
+			arguments = {
+				"-e",
+				[=[
+					local system = require "coutil.system"
+					local t = assert(system.threads(1))
+					assert(t:dostring([[
+						require "_G"
+						error "Oops!"
+					]], "@runerror.lua") == true)
+					assert(t:close())
+				]=],
+			},
+			stderr = errfile,
+		})
+		assert(errfile:close())
+
+		assert(readfrom(errpath) == "[COUTIL PANIC] runerror.lua:2: Oops!")
+		os.remove(errpath)
+	end)
+
+	system.run()
 
 	done()
 end
@@ -182,10 +190,10 @@ do case "no arguments"
 	local t = assert(system.threads(1))
 
 	local path = os.tmpname()
-	local code = protectcode:format(testutils..string.format([[
+	local code = string.format([[%s
 		assert(select("#", ...) == 0)
 		sendsignal(%q)
-	]], path))
+	]], testutils, path)
 	assert(t:dostring(code))
 	waitsignal(path)
 
@@ -198,7 +206,7 @@ do case "transfer arguments"
 	local t = assert(system.threads(1))
 
 	local path = os.tmpname()
-	local code = protectcode:format(testutils..string.format([[
+	local code = string.format([[%s
 		assert(select("#", ...) == 5)
 		local a,b,c,d,e = ...
 		assert(a == nil)
@@ -208,7 +216,7 @@ do case "transfer arguments"
 		assert(e == "\001")
 
 		sendsignal(%q)
-	]], path))
+	]], testutils, path)
 	assert(t:dostring(code, "@tranfargs.lua", "t",
 	                  nil, false, 123, 0xfacep-8, "\001"))
 	waitsignal(path)
@@ -437,13 +445,14 @@ do case "nested task"
 	local path2 = os.tmpname()
 
 	local t = assert(system.threads(1))
-	assert(t:dostring(protectcode:format(testutils..string.format([[
+	local code = string.format([[%s
 		local system = require "coutil.system"
 		local t = assert(system.threads())
 		assert(checkcount(t, "nrpsea", 1, 1, 0, 0, 1, 1))
 		assert(t:dofile(%q, "t", %q))
 		waitsignal(%q)
-	]], waitscript, path2, path1)), "@nestedtask.lua"))
+	]], testutils, waitscript, path2, path1)
+	assert(t:dostring(code, "@nestedtask.lua"))
 
 	repeat until (checkcount(t, "n", 2))
 	assert(checkcount(t, "nrpsea", 2, 1, 1, 0, 1, 1))
@@ -468,14 +477,15 @@ do case "nested pool"
 	local path2 = os.tmpname()
 
 	local t = assert(system.threads(1))
-	assert(t:dostring(protectcode:format(testutils..string.format([[
+	local code = string.format([[%s
 		local system = require "coutil.system"
 		local t = assert(system.threads(1))
 		assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 1, 1))
 
 		waitsignal(%q)
 		assert(t:dofile(%q, "t", %q))
-	]], path1, waitscript, path2)), "@nestedpool.lua"))
+	]], testutils, path1, waitscript, path2)
+	assert(t:dostring(code, "@nestedpool.lua"))
 
 	repeat until (checkcount(t, "r", 1))
 	assert(checkcount(t, "nrpsea", 1, 1, 0, 0, 1, 1))
@@ -503,7 +513,7 @@ do case "inherit preload"
 
 	local path = os.tmpname()
 	local t = assert(system.threads(1))
-	assert(t:dostring(protectcode:format(testutils..string.format([[
+	local code = string.format([[%s
 		local package = require "package"
 		package.path = ""
 		package.cpath = ""
@@ -512,7 +522,8 @@ do case "inherit preload"
 		require "coutil.system"
 
 		sendsignal(%q)
-	]], path)), "@inheritpreload.lua"))
+	]], testutils, path)
+	assert(t:dostring(code, "@inheritpreload.lua"))
 
 	waitsignal(path)
 
