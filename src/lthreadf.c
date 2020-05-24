@@ -229,7 +229,6 @@ static void runthread (void *arg) {
 		}
 		pool->running++;
 		uv_mutex_unlock(&pool->mutex);
-
 		status = lua_resume(L, NULL, lua_status(L) == LUA_OK ? lua_gettop(L)-1 : 0);
 		if (status == LUA_YIELD) {
 			lcu_SyncPort **portref = lcu_tosyncportref(L, 1);
@@ -241,6 +240,11 @@ static void runthread (void *arg) {
 				lua_settop(L, 0);  /* discard returned values */
 			}
 		} else {
+			/* avoid 'pool->tasks--' */
+			lua_settop(L, 0);
+			lua_getfield(L, LUA_REGISTRYINDEX, LCU_THREADPOOLREGKEY);
+			lua_pushnil(L);
+			lua_setmetatable(L, -2);
 			lua_close(L);
 			L = NULL;
 		}
@@ -251,6 +255,8 @@ static void runthread (void *arg) {
 			pool->pending++;
 			enqueuestateq(&pool->queue, L);
 			L = NULL;
+		} else if (status != LUA_YIELD) {
+			pool->tasks--;
 		}
 	}
 	thread_end:
@@ -486,9 +492,9 @@ LCULIB_API lcu_SyncPort *lcu_checksyncport (lua_State *L, int idx) {
 
 static int auxpusherrfrom (lua_State *L) {
 	lua_State *failed = (lua_State *)lua_touserdata(L, 1);
-	size_t len;
-	const char *msg = lua_tolstring(failed, -1, &len);
-	lua_pushlstring(L, msg, len);
+	const char *msg = lua_tostring(failed, -1);
+	lua_pushfstring(L, "remote: %s", msg);
+	lua_concat(L, 2);
 	return 1;
 }
 
@@ -525,14 +531,14 @@ static void swapvalues (lua_State *src, lua_State *dst) {
 	}
 
 	for (i = 3; i <= ndst; ++i) {
-		err = lcuL_pushargfrom(src, dst, i, lcu_pushsyncportfrom);
+		err = lcuL_pushfrom(src, dst, i, "receive argument", lcu_pushsyncportfrom);
 		if (err == LUA_OK) {
 			lua_replace(src, i-1);
 		} else {
 			pusherrfrom(dst, src);
 			return;
 		}
-		err = lcuL_pushargfrom(dst, src, i, lcu_pushsyncportfrom);
+		err = lcuL_pushfrom(dst, src, i, "receive argument", lcu_pushsyncportfrom);
 		if (err == LUA_OK) {
 			lua_replace(dst, i-1);
 		} else {
@@ -542,7 +548,7 @@ static void swapvalues (lua_State *src, lua_State *dst) {
 	}
 
 	lua_settop(dst, ndst-1);
-	err = lcuL_moveargsfrom(dst, src, 1+nsrc-ndst, lcu_pushsyncportfrom);
+	err = lcuL_movefrom(dst, src, 1+nsrc-ndst, "receive argument", lcu_pushsyncportfrom);
 	if (err == LUA_OK) lua_settop(src, ndst-1);
 	else pusherrfrom(src, dst);
 }
@@ -691,7 +697,12 @@ static int loadsyncportcls (lua_State *L) {
 	return 0;
 }
 
-static int dochunk (lua_State *L, lcu_ThreadPool *pool, lua_State *NL, int status, int narg) {
+static int dochunk (lua_State *L,
+                    lcu_ThreadPool *pool,
+                    lua_State *NL,
+                    int status,
+                    int narg) {
+	int top;
 	if (status != LUA_OK) {  /* error (message is on top of the stack) */
 		size_t len;
 		const char *errmsg = lua_tolstring(NL, -1, &len);
@@ -700,7 +711,9 @@ static int dochunk (lua_State *L, lcu_ThreadPool *pool, lua_State *NL, int statu
 		lua_close(NL);
 		return 2;  /* return nil plus error message */
 	}
-	status = lcuL_moveargsfrom(NL, L, narg, lcu_pushsyncportfrom);
+	top = lua_gettop(L);
+	status = lcuL_movefrom(NL, L, top > narg ? top-narg : 0,
+	                       "transfer argument", lcu_pushsyncportfrom);
 	if (status != LUA_OK) {
 		const char *msg = lua_tostring(NL, -1);
 		lua_pushboolean(L, 0);
@@ -736,7 +749,7 @@ static int threads_dostring (lua_State *L) {
 	const char *mode = luaL_optstring(L, 4, NULL);
 	lua_State *NL = lcuL_newstate(L);  /* create a similar state */
 	int status = luaL_loadbufferx(NL, s, l, chunkname, mode);
-	return dochunk(L, pool, NL, status, lua_gettop(L)-4);
+	return dochunk(L, pool, NL, status, 4);
 }
 
 /* succ [, errmsg] = threads:dofile([path [, mode, ...]]) */
@@ -746,7 +759,7 @@ static int threads_dofile (lua_State *L) {
 	const char *mode = luaL_optstring(L, 3, NULL);
 	lua_State *NL = lcuL_newstate(L);  /* create a similar state */
 	int status = luaL_loadfilex(NL, fpath, mode);
-	return dochunk(L, pool, NL, status, lua_gettop(L)-3);
+	return dochunk(L, pool, NL, status, 3);
 }
 
 /* threads [, errmsg] = system.threads([size]) */
