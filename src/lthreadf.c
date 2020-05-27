@@ -549,7 +549,6 @@ static int auxpusherrfrom (lua_State *L) {
 	lua_State *failed = (lua_State *)lua_touserdata(L, 1);
 	const char *msg = lua_tostring(failed, -1);
 	lua_pushfstring(L, "remote: %s", msg);
-	lua_concat(L, 2);
 	return 1;
 }
 
@@ -557,7 +556,7 @@ static void pusherrfrom (lua_State *L, lua_State *failed) {
 	lua_replace(failed, 1);
 	lua_settop(failed, 1);
 	lua_pushboolean(failed, 0);
-	lua_replace(failed, 1);
+	lua_insert(failed, 1);
 
 	lua_settop(L, 0);
 	lua_pushboolean(L, 0);

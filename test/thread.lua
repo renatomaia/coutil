@@ -59,6 +59,8 @@ local testutils = string.format([[
 	local checkcount = _G.load(%q, nil, "b")
 ]], string.dump(waitsignal), string.dump(sendsignal), string.dump(checkcount))
 
+goto FORWARD
+
 newtest "threads" --------------------------------------------------------------
 
 do case "error messages"
@@ -550,6 +552,8 @@ do case "system coroutine"
 	done()
 end
 
+::FORWARD::
+
 newtest "syncport" --------------------------------------------------------------
 
 do case "transfer port"
@@ -566,43 +570,138 @@ do case "transfer port"
 	done()
 end
 
-do case "queueing opposite endpoints"
-	local n = 3
+do case "queueing on endpoints"
+	local task = testutils..[[
+		local port, endpoint, path = ...
+		local _ENV = require "_G"
+		local coroutine = require "coroutine"
+		assert(coroutine.yield(port, endpoint))
+		sendsignal(path)
+	]]
+
+	for _, t in pairs{
+		{ n = 3, e1 = "i", e2 = "o" },
+		{ n = 3, e1 = "o", e2 = "i" },
+		{ n = 3, e1 = "in", e2 = "any" },
+		{ n = 3, e1 = "out", e2 = "any" },
+		{ n = 1, e1 = "any", e2 = "any" },
+		{ n = 1, e1 = nil, e2 = nil },
+		{ n = 1, e1 = 1, e2 = 2 },
+	} do
+		local n, e1, e2 = t.n, t.e1, t.e2
+		local t = assert(system.threads(1))
+		local port = assert(system.syncport())
+		local paths = { producer = {}, consumer = {} }
+
+		for i = 1, n do
+			paths.producer[i] = os.tmpname()
+			assert(t:dostring(task, "@producer"..i..".lua", "t", port, e1, paths.producer[i]))
+		end
+		repeat until (checkcount(t, "s", n))
+		assert(checkcount(t, "nrpsea", n, 0, 0, n, 1, 1))
+		for i = 1, n do
+			paths.consumer[i] = os.tmpname()
+			assert(t:dostring(task, "@consumer"..i..".lua", "t", port, e2, paths.consumer[i]))
+		end
+
+		for i = 1, n do
+			waitsignal(paths.producer[i])
+			waitsignal(paths.consumer[i])
+		end
+		assert(t:close())
+	end
+
+	done()
+end
+
+do case "transfer values"
+	local function newtask(success, args, expected)
+		local args = table.concat(args, ", ")
+		if #args > 0 then args = " , "..args end
+		local code = testutils..[[
+			local port, path = ...
+			local _ENV = require "_G"
+			local coroutine = require "coroutine"
+			local table = require "table"
+			local string = require "string"
+			local math = require "math"
+			local io = require "io"
+			local actual = table.pack(coroutine.yield(port, nil]]..args..[[))
+		]]
+		if success then
+			code = code..[[
+				assert(actual[1] == true)
+				local expected = { ]]..table.concat(expected, ", ")..[[ }
+				for i = 1, ]]..#expected..[[ do
+					assert(actual[i+1] == expected[i], i..": "..tostring(expected[i]))
+				end
+			]]
+		else
+			code = code..[[
+				assert(actual[1] == false)
+				assert(actual[2] == "]]..expected..[[", "]]..expected..[[")
+			]]
+		end
+		code = code..[[
+			sendsignal(path)
+		]]
+		return code
+	end
+
 	local t = assert(system.threads(1))
-	local port = assert(system.syncport())
-	local paths = { producer = {}, consumer = {} }
 
-	local producer = testutils..[[
-		local port, path = ...
-		local _ENV = require "_G"
-		local coroutine = require "coroutine"
-		assert(coroutine.yield(port, "outward"))
-		sendsignal(path)
-	]]
-	for i = 1, n do
-		paths.producer[i] = os.tmpname()
-		assert(t:dostring(producer, "@producer.lua", "t", port, paths.producer[i]))
+	local auto = {
+		__len = function () return 200 end,
+		__index = function (_, k) return tostring(k) end,
+	}
+	local many = setmetatable({}, auto)
+	local bads = setmetatable({ [#many] = "{}" }, auto)
+	for success, cases in pairs{
+		[true] = {
+			{ { "nil", "'error message'" }, {} },
+			{ {}, { "nil", "false", "nil" } },
+			{ { "math.huge", "0xabcdefp-123", "math.pi", "-65536" }, { "''", [[string.rep("\0\1\2\3\4\5", 0x1p10)]], "'\255'", "'CoUtil'" } },
+			{ many, many },
+			{ many, {} },
+			{ {}, many },
+		},
+		[false] = {
+			{ arg = 2, task = 1, { "nil", "coroutine.running()" }, {} },
+			{ arg = 4, task = 2, {}, { "nil", "false", "nil", "print" } },
+			{ arg = 10, task = 2, { "math.huge", "0xabcdefp-123", "math.pi", "-65536", "''", [[string.rep("\0\1\2\3\4\5", 0x1p10)]], "'\255'", "'CoUtil'" }, { "nil", "nil", "nil", "nil", "nil", "nil", "nil", "nil", "nil", "io.stdout" } },
+			{ arg = 200, task = 1, bads, bads },
+			{ arg = 200, task = 1, bads, {} },
+			{ arg = 200, task = 2, {}, bads },
+		},
+	} do
+		for _, case in ipairs(cases) do
+			local port = assert(system.syncport())
+			local vals1 = case[1]
+			local vals2 = case[2]
+			local expe1 = vals2
+			local expe2 = vals1
+			local path1 = os.tmpname()
+			local path2 = os.tmpname()
+			if not success then
+				local errval = assert(load("return "..case[case.task][case.arg]))()
+				local errmsg = string.format("unable to receive argument #%d (got %s)", 2+case.arg, type(errval))
+				local emsg1 = errmsg
+				local emsg2 = "remote: "..errmsg
+				if case.task == 1 then emsg1, emsg2 = emsg2, emsg1 end
+				expe1 = emsg1
+				expe2 = emsg2
+			end
+			local task1 = newtask(success, vals1, expe1)
+			local task2 = newtask(success, vals2, expe2)
+			assert(t:dostring(task1, "@transfer1.lua", "t", port, path1))
+			assert(t:dostring(task2, "@transfer2.lua", "t", port, path2))
+			waitsignal(path1)
+			waitsignal(path2)
+		end
 	end
-	repeat until (checkcount(t, "s", n))
-	assert(checkcount(t, "nrpsea", n, 0, 0, n, 1, 1))
 
-	local consumer = testutils..[[
-		local port, path = ...
-		local _ENV = require "_G"
-		local coroutine = require "coroutine"
-		assert(coroutine.yield(port, "inward"))
-		sendsignal(path)
-	]]
-	for i = 1, n do
-		paths.consumer[i] = os.tmpname()
-		assert(t:dostring(consumer, "@consumer.lua", "t", port, paths.consumer[i]))
-	end
-
-	for i = 1, n do
-		waitsignal(paths.producer[i])
-		waitsignal(paths.consumer[i])
-	end
 	assert(t:close())
 
 	done()
 end
+
