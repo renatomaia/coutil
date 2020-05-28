@@ -1,6 +1,7 @@
 #include "lmodaux.h"
 
 #include <lmemlib.h>
+#include <string.h>
 
 
 /******************************************************************************/
@@ -238,7 +239,10 @@ static void runthread (void *arg) {
 			lcu_SyncPort **portref = lcu_tosyncportref(L, 1);
 			if (portref && *portref) {
 				const char *endname = lua_tostring(L, 2);
-				if (endname == NULL) endname = "";
+				if (endname == NULL) {
+					endname = "";
+					if (lua_gettop(L) == 1) lua_settop(L, 2);
+				}
 				if (!lcu_matchsyncport(portref, endname, L)) L = NULL;
 			} else {
 				lua_settop(L, 0);  /* discard returned values */
@@ -491,6 +495,11 @@ LCULIB_API void lcu_pushsyncport (lua_State *L, lcu_SyncPort *port) {
 LCULIB_API int lcu_closesyncport (lua_State *L, int idx) {
 	lcu_SyncPort **ref = (lcu_SyncPort **)luaL_checkudata(L, idx, LCU_SYNCPORTCLS);
 	if (*ref) {
+		luaL_getsubtable(L, LUA_REGISTRYINDEX, LCU_SYNCPORTREGISTRY);
+		lua_pushlightuserdata(L, *ref);
+		lua_pushnil(L);
+		lua_settable(L, -3);
+		lua_pop(L, 1);
 		lcu_unrefsyncport(*ref);
 		*ref = NULL;
 		return 1;
@@ -548,7 +557,11 @@ LCULIB_API int lcu_pushsyncportfrom (lua_State *to, lua_State *from, int arg) {
 static int auxpusherrfrom (lua_State *L) {
 	lua_State *failed = (lua_State *)lua_touserdata(L, 1);
 	const char *msg = lua_tostring(failed, -1);
-	lua_pushfstring(L, "remote: %s", msg);
+	if (strncmp(msg, "unable to receive argument #", 28) == 0) {
+		lua_pushfstring(L, "unable to send argument %s", msg+27);
+	} else {
+		lua_pushstring(L, msg);
+	}
 	return 1;
 }
 
