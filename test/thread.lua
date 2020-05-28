@@ -556,20 +556,6 @@ end
 
 newtest "syncport" --------------------------------------------------------------
 
-do case "transfer port"
-	local t = assert(system.threads(1))
-	local port = system.syncport()
-	local code = [[
-		local port = ...
-		local _ENV = require "_G"
-		assert(port:close())
-	]]
-	assert(t:dostring(code, "@getport.lua", "t", port))
-	assert(t:close())
-
-	done()
-end
-
 do case "queueing on endpoints"
 	local task = testutils..[[
 		local port, endpoint, path = ...
@@ -600,6 +586,9 @@ do case "queueing on endpoints"
 		repeat until (checkcount(t, "s", n))
 		assert(checkcount(t, "nrpsea", n, 0, 0, n, 1, 1))
 		for i = 1, n do
+			assert(readfrom(paths.producer[i]) == "")
+		end
+		for i = 1, n do
 			paths.consumer[i] = os.tmpname()
 			assert(t:dostring(task, "@consumer"..i..".lua", "t", port, e2, paths.consumer[i]))
 		end
@@ -617,7 +606,7 @@ end
 do case "transfer values"
 	local function newtask(success, args, expected)
 		local args = table.concat(args, ", ")
-		if #args > 0 then args = " , "..args end
+		if #args > 0 then args = ", nil , "..args end
 		local code = testutils..[[
 			local port, path = ...
 			local _ENV = require "_G"
@@ -626,14 +615,14 @@ do case "transfer values"
 			local string = require "string"
 			local math = require "math"
 			local io = require "io"
-			local actual = table.pack(coroutine.yield(port, nil]]..args..[[))
+			local actual = table.pack(coroutine.yield(port]]..args..[[))
 		]]
 		if success then
 			code = code..[[
 				assert(actual[1] == true)
 				local expected = { ]]..table.concat(expected, ", ")..[[ }
 				for i = 1, ]]..#expected..[[ do
-					assert(actual[i+1] == expected[i], i..": "..tostring(expected[i]))
+					assert(actual[i+1] == expected[i])
 				end
 			]]
 		else
@@ -684,9 +673,9 @@ do case "transfer values"
 			local path2 = os.tmpname()
 			if not success then
 				local errval = assert(load("return "..case[case.task][case.arg]))()
-				local errmsg = string.format("unable to receive argument #%d (got %s)", 2+case.arg, type(errval))
-				local emsg1 = errmsg
-				local emsg2 = "remote: "..errmsg
+				local errmsg = string.format("#%d (got %s)", 2+case.arg, type(errval))
+				local emsg1 = "unable to receive argument "..errmsg
+				local emsg2 = "unable to send argument "..errmsg
 				if case.task == 1 then emsg1, emsg2 = emsg2, emsg1 end
 				expe1 = emsg1
 				expe2 = emsg2
@@ -705,3 +694,46 @@ do case "transfer values"
 	done()
 end
 
+do case "transfer port"
+	local t = assert(system.threads(1))
+	local port1, port2 = system.syncport(), system.syncport()
+	local path = os.tmpname()
+	local code = testutils..[[
+		local path, port1, port1copy = ...
+		local _ENV = require "_G"
+		local coroutine = require "coroutine"
+		assert(rawequal(port1copy, port1))
+		local gc = setmetatable({}, { __mode = "v" })
+		_, gc.port1, gc.port2 = assert(coroutine.yield(port1))
+		assert(rawequal(gc.port1, port1))
+		assert(gc.port2 ~= port1)
+		assert(port1:close())
+		_, gc.port1 = assert(coroutine.yield(gc.port2))
+		assert(gc.port1 ~= port1)
+		_, gc.port1copy, gc.port2copy = assert(coroutine.yield(gc.port1))
+		assert(rawequal(gc.port1copy, gc.port1))
+		assert(rawequal(gc.port2copy, gc.port2))
+		collectgarbage()
+		assert(gc.port1 == nil)
+		assert(gc.port2 == nil)
+		assert(gc.port1copy == nil)
+		assert(gc.port2copy == nil)
+		sendsignal(path)
+	]]
+	assert(t:dostring(code, "@getport.lua", "t", path, port1, port1))
+
+	local code = testutils..[[
+		local port1, port2 = ...
+		local coroutine = require "coroutine"
+		assert(coroutine.yield(port1, nil, port1, port2))
+		assert(coroutine.yield(port2, nil, port1))
+		assert(coroutine.yield(port1, nil, port1, port2))
+	]]
+	assert(t:dostring(code, "@putport.lua", "t", port1, port2))
+
+	waitsignal(path)
+
+	assert(t:close())
+
+	done()
+end
