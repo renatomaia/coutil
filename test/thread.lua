@@ -579,6 +579,34 @@ do case "collect inaccessible"
 	done()
 end
 
+do case "collect inaccessible cycle"
+	local t = assert(system.threads(1))
+	local path1 = os.tmpname()
+	local path2 = os.tmpname()
+	local port1 = system.syncport()
+	local port2 = system.syncport()
+	local code = testutils..[[
+		local port1, port2, path = ...
+		local _ENV = require "_G"
+		local coroutine = require "coroutine"
+		local system = require "coutil.system"
+		global = setmetatable({}, { __gc = function () sendsignal(path) end })
+		coroutine.yield(port1)
+		error("Oops!")
+	]]
+	assert(t:dostring(code, "@inaccessible1.lua", "t", port1, port2, path1))
+	assert(t:dostring(code, "@inaccessible2.lua", "t", port2, port1, path2))
+
+	waitsignal(path1)
+	waitsignal(path2)
+
+	repeat until (checkcount(t, "nrpsea", 0, 0, 0, 0, 1, 1))
+
+	assert(t:close())
+
+	done()
+end
+
 do case "queueing on endpoints"
 	local task = testutils..[[
 		local port, endpoint, path = ...

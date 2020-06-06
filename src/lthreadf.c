@@ -87,6 +87,14 @@ typedef struct StateQ {
 	lua_State *tail;
 } StateQ;
 
+static lua_State *nextstateq (lua_State *L) {
+	lua_State *res;
+	lua_getfield(L, LUA_REGISTRYINDEX, LCU_NEXTSTATEREGKEY);
+	res = (lua_State *)lua_touserdata(L, -1);
+	lua_pop(L, 1);
+	return res;
+}
+
 static void initstateq (StateQ *q) {
 	q->head = NULL;
 	q->tail = NULL;
@@ -111,9 +119,7 @@ static lua_State *dequeuestateq (StateQ *q) {
 			q->head = NULL;
 			q->tail = NULL;
 		} else {
-			lua_getfield(L, LUA_REGISTRYINDEX, LCU_NEXTSTATEREGKEY);
-			q->head = (lua_State *)lua_touserdata(L, -1);
-			lua_pop(L, 1);
+			q->head = nextstateq(L);
 		}
 		lua_pushnil(L);
 		lua_setfield(L, LUA_REGISTRYINDEX, LCU_NEXTSTATEREGKEY);
@@ -411,19 +417,102 @@ LCULIB_API lcu_ThreadPool *lcu_tothreads (lua_State *L, int idx) {
  */
 
 #define LCU_SYNCPORTANY	(LCU_SYNCPORTIN|LCU_SYNCPORTOUT)
+#define LCU_GARBAGEMARK	0x04
+
+
+typedef struct SetEntry {
+	SetEntry *prev;
+	SetEntry *next;
+} SetEntry;
+
+static void initset (SetEntry *set) {
+	set->prev = set;
+	set->next = set;
+}
+
+static void addset (SetEntry *set, SetEntry *entry) {
+	SetEntry *first = set->next;
+	lcu_assert(entry->prev == entry);
+	lcu_assert(entry->next == entry);
+	entry->next = first;
+	set->next = entry;
+	first->prev = entry;
+	entry->prev = set;
+}
+
+static void removeset (SetEntry *entry) {
+	SetEntry *prev = entry->prev;
+	SetEntry *next = entry->next;
+	prev->next = next;
+	next->prev = prev;
+	entry->prev = entry;
+	entry->next = entry;
+}
+
+static SetEntry *popset (SetEntry *set) {
+	SetEntry *last = set->prev;
+	if (last == set) return NULL;
+	removeset(last);
+	return last;
+}
+
 
 struct lcu_SyncPort {
 	lua_Alloc allocf;
 	void *allocud;
 	uv_mutex_t mutex;
 	int refcount;
-	int expected;
+	int flags;
 	StateQ queue;
+	SetEntry unref_entry;
+	lcu_SyncPort *next_marked;  /* by 'port_gc.mutex' */
 };
+
+static struct {
+	uv_mutex_t mutex;
+	int active;
+	SetEntry pending;
+} port_gc;
+
+static void addreachableports_mx (lcu_SyncPort *port) {
+	lua_State *L;
+	for (L = port->queue.head; L; L = nextstateq(L)) {
+		if (luaL_getfield(L, LUA_REGISTRYINDEX, LCU_SYNCPORTREGISTRY) == LUA_TTABLE) {
+			lua_pushnil(L);  /* first key */
+			while (lua_next(L, -2) != 0) {
+				lcu_SyncPort *found = (lcu_SyncPort *)lua_touserdata(L, -2);
+				if (found->next_marked == NULL) {
+					found->next_marked = port->next_marked;
+					port->next_marked = found;
+				}
+				lua_pop(L, 1);
+			}
+		}
+		lua_pop(L, 1);
+	}
+}
+
+static void collectsyncports (lcu_SyncPort *port) {
+	uv_mutex_lock(&port_gc.mutex);
+	if (port_gc.active)  {
+		addset(&port_gc.pending, &port->unref_entry);
+		port = NULL;
+	} else {
+		lcu_assert(port_gc.pending.next == &port_gc.pending);
+		port_gc.active = 1;
+		port->next_marked = port;
+		addreachableports_mx(port);
+		lcuL_setflag(port, LCU_GARBAGEMARK);
+	}
+	uv_mutex_unlock(&port_gc->mutex);
+	if (port) {
+		while ((L = dequeuestateq(&port->queue))) lua_close(L);
+	}
+}
 
 LCULIB_API void lcu_refsyncport (lcu_SyncPort *port) {
 	uv_mutex_lock(&port->mutex);
-	port->refcount++;
+	if (port->refcount++ == 0) removeset(&port->unref_entry);
 	uv_mutex_unlock(&port->mutex);
 }
 
@@ -433,6 +522,9 @@ LCULIB_API void lcu_unrefsyncport (lcu_SyncPort *port) {
 	refcount = --port->refcount;
 	uv_mutex_unlock(&port->mutex);
 	if (refcount == 0) {
+		collectsyncports(port);
+
+
 		lua_State *L;
 		while ((L = dequeuestateq(&port->queue))) lua_close(L);
 		uv_mutex_destroy(&port->mutex);
@@ -530,8 +622,9 @@ LCULIB_API lcu_SyncPort *lcu_newsyncport (lua_State *L) {
 	port->allocud = allocud;
 	uv_mutex_init(&port->mutex);
 	port->refcount = 0;
-	port->expected = 0;
+	port->flags = 0;
 	initstateq(&port->queue);
+	port->next = NULL;
 
 	lua_pushcfunction(L, auxnewsyncport);
 	lua_pushlightuserdata(L, port);
@@ -640,8 +733,10 @@ LCULIB_API int lcu_matchsyncport (lcu_SyncPort **portref,
 
 	uv_mutex_lock(&port->mutex);
 	if (port->queue.head == NULL) {
-		port->expected = endpoint == LCU_SYNCPORTANY ? LCU_SYNCPORTANY : endpoint^LCU_SYNCPORTANY;
-	} else if (port->expected&endpoint) {
+		port->flags = (~LCU_SYNCPORTANY&port->flags)
+		            | (endpoint == LCU_SYNCPORTANY ? LCU_SYNCPORTANY
+		                                           : endpoint^LCU_SYNCPORTANY);
+	} else if (port->flags&endpoint) {
 		lua_State *match = dequeuestateq(&port->queue);
 		uv_mutex_unlock(&port->mutex);
 		*portref = port;  /* restore unref by '__gc' */
