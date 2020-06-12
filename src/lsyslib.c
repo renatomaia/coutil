@@ -347,3 +347,4 @@ LCULIB_API void lcuT_stopsysco (lua_State *L, lcu_SysCoro *sysco) {
 		freecoroutine(sysco);
 	}
 }
+
