@@ -9,6 +9,8 @@
 #include <lauxlib.h>
 
 
+#define LCU_CHANNELMAP  LCU_PREFIX"ChannelMap"
+
 #define lcu_error(L,e)	luaL_error(L, uv_strerror(e))
 
 #define lcu_pusherror(L,e)	lua_pushstring(L, uv_strerror(e))
@@ -23,7 +25,15 @@ LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err);
 
 LCUI_FUNC lua_State *lcuL_newstate (lua_State *L);
 
-typedef int (*lcuL_CustomTransfer) (lua_State *from, lua_State *to, int arg);
+typedef int (*lcuL_CustomTransfer) (lua_State *from,
+                                    lua_State *to,
+                                    int arg,
+                                    int type);
+
+LCUI_FUNC int lcuL_canmove (lua_State *L,
+                            int n,
+                            const char *msg,
+                            lcuL_CustomTransfer customf);
 
 LCUI_FUNC int lcuL_pushfrom (lua_State *to,
                              lua_State *from,
