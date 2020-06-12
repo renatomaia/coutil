@@ -1,5 +1,7 @@
 #include "lmodaux.h"
 
+#include <lualib.h>
+
 
 LCUI_FUNC int lcuL_pusherrres (lua_State *L, int err) {
 	lua_pushnil(L);
@@ -17,6 +19,175 @@ LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err) {
 		return 1;
 	}
 	return n;
+}
+
+
+static const luaL_Reg stdlibs[] = {
+	{"_G", luaopen_base},
+	{LUA_COLIBNAME, luaopen_coroutine},
+	{LUA_TABLIBNAME, luaopen_table},
+	{LUA_IOLIBNAME, luaopen_io},
+	{LUA_OSLIBNAME, luaopen_os},
+	{LUA_STRLIBNAME, luaopen_string},
+	{LUA_MATHLIBNAME, luaopen_math},
+	{LUA_UTF8LIBNAME, luaopen_utf8},
+	{LUA_DBLIBNAME, luaopen_debug},
+#if defined(LUA_COMPAT_BITLIB)
+	{LUA_BITLIBNAME, luaopen_bit32},
+#endif
+	{NULL, NULL}
+};
+
+static int writer (lua_State *L, const void *b, size_t size, void *B) {
+	(void)L;
+	luaL_addlstring((luaL_Buffer *) B, (const char *)b, size);
+	return 0;
+}
+
+LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
+	const luaL_Reg *lib;
+	void *allocud;
+	lua_Alloc allocf = lua_getallocf(L, &allocud);
+	lua_CFunction panic = lua_atpanic(L, NULL);  /* changes panic function */
+	lua_State *NL = lua_newstate(allocf, allocud);
+
+	lua_atpanic(L, panic);  /* restore panic function */
+	lua_atpanic(NL, panic);
+
+	luaL_checkstack(NL, 3, "not enough memory");
+	luaL_requiref(NL, LUA_LOADLIBNAME, luaopen_package, 0);
+	luaL_getsubtable(NL, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
+	luaL_getsubtable(L, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
+
+	/* add standard libraries to 'package.preload' */
+	for (lib = stdlibs; lib->func; lib++) {
+		lua_pushcfunction(NL, lib->func);
+		lua_setfield(NL, -2, lib->name);
+	}
+
+	/* copy 'package.preload' */
+	lua_pushnil(L);  /* first key */
+	while (lua_next(L, -2) != 0) {
+		if (lua_isstring(L, -2) && lua_isfunction(L, -1)) {
+			size_t len;
+			const char *name = lua_tolstring(L, -2, &len);
+			lua_pushlstring(NL, name, len);
+			if (lua_iscfunction(L, -1)) {
+				lua_CFunction loader = lua_tocfunction(L, -1);
+				lua_pushcfunction(NL, loader);
+			} else {
+				luaL_Buffer b;
+				int err;
+				luaL_buffinit(NL, &b);
+				err = lua_dump(L, writer, &b, 0);
+				luaL_pushresult(&b);
+				if (err) {
+					lua_pop(NL, 1);
+					lua_pushnil(NL);
+				} else {
+					size_t l;
+					const char *bytecodes = lua_tolstring(NL, -1, &l);
+					int status = luaL_loadbufferx(NL, bytecodes, l, NULL, "b");
+					lcu_assert(status == LUA_OK);
+					lua_remove(NL, -2);
+				}
+			}
+			lua_settable(NL, -3);
+		}
+		lua_pop(L, 1);
+	}
+	lua_pop(NL, 2);  /* remove 'package' and 'LUA_PRELOAD_TABLE' */
+	lua_pop(L, 1);  /* remove 'LUA_PRELOAD_TABLE' */
+	return NL;
+}
+
+static void pushfrom (lua_State *to,
+                      lua_State *from,
+                      int idx,
+                      const char *msg,
+                      lcuL_CustomTransfer customf) {
+	switch (lua_type(from, idx)) {
+		case LUA_TNIL: {
+			lua_pushnil(to);
+		} break;
+		case LUA_TBOOLEAN: {
+			lua_pushboolean(to, lua_toboolean(from, idx));
+		} break;
+		case LUA_TNUMBER: {
+			lua_pushnumber(to, lua_tonumber(from, idx));
+		} break;
+		case LUA_TSTRING: {
+			size_t l;
+			const char *s = lua_tolstring(from, idx, &l);
+			lua_pushlstring(to, s, l);
+		} break;
+		case LUA_TLIGHTUSERDATA: {
+			lua_pushlightuserdata(to, lua_touserdata(from, idx));
+		} break;
+		case LUA_TUSERDATA: {
+			if (customf && customf(to, from, idx)) break;
+		}
+		default: {
+			const char *tname = luaL_typename(from, idx);
+			if (idx < 0) luaL_error(to, "unable to %s (got %s)", msg, tname);
+			else luaL_error(to, "unable to %s #%d (got %s)", msg, idx, tname);
+		}
+	}
+}
+
+static int auxpushfrom (lua_State *to) {
+	lua_State *from = (lua_State *)lua_touserdata(to, 1);
+	int idx = lua_tointeger(to, 2);
+	const char *msg = (const char *)lua_touserdata(to, 3);
+	lcuL_CustomTransfer customf = (lcuL_CustomTransfer)lua_touserdata(to, 4);
+	pushfrom(to, from, idx, msg, customf);
+	return 1;
+}
+
+LCUI_FUNC int lcuL_pushfrom (lua_State *to,
+                             lua_State *from,
+                             int idx,
+                             const char *msg,
+                             lcuL_CustomTransfer customf) {
+	lcu_assert(lua_gettop(from) >= idx);
+	if (!lua_checkstack(to, 4)) return LUA_ERRMEM;
+	lua_pushcfunction(to, auxpushfrom);
+	lua_pushlightuserdata(to, from);
+	lua_pushinteger(to, idx);
+	lua_pushlightuserdata(to, (void *)msg);
+	lua_pushlightuserdata(to, customf);
+	return lua_pcall(to, 4, 1, 0);
+}
+
+static int auxmovefrom (lua_State *to) {
+	lua_State *from = (lua_State *)lua_touserdata(to, 1);
+	int n = lua_tointeger(to, 2);
+	const char *msg = (const char *)lua_touserdata(to, 3);
+	lcuL_CustomTransfer customf = (lcuL_CustomTransfer)lua_touserdata(to, 4);
+	int top = lua_gettop(from);
+	int idx;
+	lua_settop(to, 0);
+	luaL_checkstack(to, n, "too many values");
+	for (idx = 1+top-n; idx <= top; idx++) pushfrom(to, from, idx, msg, customf);
+	return n;
+}
+
+LCUI_FUNC int lcuL_movefrom (lua_State *to,
+                             lua_State *from,
+                             int n,
+                             const char *msg,
+                             lcuL_CustomTransfer customf) {
+	int status;
+	lcu_assert(lua_gettop(from) >= n);
+	if (!lua_checkstack(to, 4)) return LUA_ERRMEM;
+	lua_pushcfunction(to, auxmovefrom);
+	lua_pushlightuserdata(to, from);
+	lua_pushinteger(to, n);
+	lua_pushlightuserdata(to, (void *)msg);
+	lua_pushlightuserdata(to, customf);
+	status = lua_pcall(to, 4, n, 0);
+	if (status == LUA_OK) lua_pop(from, n);
+	return status;
 }
 
 

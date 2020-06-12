@@ -1,29 +1,5 @@
 local system = require "coutil.system"
 
-local luabin = "lua"
-do
-	local i = -1
-	while arg[i] ~= nil do
-		luabin = arg[i]
-		i = i-1
-	end
-end
-
-function writeto(path, ...)
-	local file = assert(io.open(path, "w"))
-	assert(file:write(...))
-	assert(file:close())
-end
-
-function readfrom(path)
-	local file = io.open(path, "r")
-	if file ~= nil then
-		local data = assert(file:read("*a"))
-		assert(file:close())
-		return data
-	end
-end
-
 local runscript
 do
 	local scriptfile = os.tmpname()
@@ -171,7 +147,7 @@ do case "environment inherit"
 	done()
 end
 
-do case "environment redefined"
+do case "environment redefined new"
 	spawn(function ()
 		runscript{
 			script = [[
@@ -229,7 +205,7 @@ do case "environment illegal char"
 	done()
 end
 
-do case "exit value"
+do case "environment redefined existing"
 	spawn(function ()
 		runscript{
 			script = 'assert(os.getenv("HOME") == "My Home!")',
