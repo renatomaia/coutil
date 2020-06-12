@@ -74,6 +74,16 @@ Index
 		- [`syscoro:resume`](#syscororesume-)
 		- [`syscoro:status`](#syscorostatus-)
 		- [`syscoro:close`](#syscoroclose-)
+	- [`system.threads`](#systemthreads-size)
+		- [`threads:resize`](#threadsresize-size--create)
+		- [`threads:count`](#threadsgetcount-option)
+		- [`threads:dostring`](#threadsdostring-chunk--chunkname--mode-)
+		- [`threads:dofile`](#threadsdofile-filepath--mode-)
+		- [`threads:close`](#threadsclose-)
+	- [`system.channel`](#systemchannel-)
+		- [`channel:send`](#channelsend-)
+		- [`channel:receive`](#channelreceive-probe)
+		- [`channel:close`](#channelclose-)
 
 Contents
 ========
@@ -856,7 +866,7 @@ Returns a _system coroutine_ with [independent state](http://www.lua.org/manual/
 The code to be executed is given by the arguments `chunk`, `chunkname`, `mode`,
 which are the same arguments of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
 
-The new _system coroutine_ have only the [`package`](http://www.lua.org/manual/5.3/manual.html#6.3) module loaded,
+The new _system coroutine_ has only the [`package`](http://www.lua.org/manual/5.3/manual.html#6.3) module loaded,
 which provides function [`require`](http://www.lua.org/manual/5.3/manual.html#pdf-require).
 This function can be called in the _system coroutine_ to load all other standard modules.
 In particular, [basic functions](http://www.lua.org/manual/5.3/manual.html#6.1) can be loaded using `require "_G"`.
@@ -877,27 +887,27 @@ utf8 = require "utf8"
 debug = require "debug"
 ```
 
-**Note:** These _system coroutines_ run in a separate thread,
+__Note__: These _system coroutines_ run in a separate thread,
 but share the same [memory allocation](http://www.lua.org/manual/5.3/manual.html#lua_Alloc) and [panic function](http://www.lua.org/manual/5.3/manual.html#lua_atpanic) of the caller.
 Therefore, it is required that thread-safe implementations are used,
 such as the ones used in the [Lua standalone interpreter](http://www.lua.org/manual/5.3/manual.html#7).
 
 ### `system.loadfile ([filepath [, mode]])`
 
-Similar to [`system.load`](#systemload-chunk--chunkname--mode), but gets the chunk from file.
+Similar to [`system.load`](#systemload-chunk--chunkname--mode), but gets the chunk from a file.
 The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.3/manual.html#pdf-loadfile).
 
 ### `syscoro:resume (...)`
 
-[Await function](#await) that is like [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume), but executes the [system coroutine](#systemload-chunk--chunkname--mode) `syscoro` on a separate system thread and awaits for its completion or suspension ([`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
-Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values can be passed as arguments or returned from the _system coroutines_.
+[Await function](#await) that is like [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume), but executes the [_system coroutine_](#systemload-chunk--chunkname--mode) `syscoro` on a separate system thread and awaits for its completion or [suspension](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield).
+Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values can be passed as arguments or returned from `syscoro`.
 
 If the coroutine executing this [await function](#await) is explicitly resumed,
 the execution of `syscoro` continues in the separate thread,
-and it will not be able to be resumed again until it suspends ([`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
+and it will not be able to be resumed again until it [suspends](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield).
 In such case the results of the execution are discarted.
 
-The _system coroutine_ is executed using a limited set of threads that are also used by the underlying system.
+_System coroutines_ are executed using a limited set of threads that are also used by the underlying system.
 The number of threads is given by environment variable [`UV_THREADPOOL_SIZE`](http://docs.libuv.org/en/v1.x/threadpool.html).
 
 ### `syscoro:status ()`
@@ -909,3 +919,105 @@ but for [_system coroutines_](#systemload-chunk--chunkname--mode).
 
 Like to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
 but for  [_system coroutines_](#systemload-chunk--chunkname--mode).
+
+### `system.threads ([size])`
+
+Returns a new _thread pool_ with `size` system threads to execute its [_tasks_](#threadsdostring-chunk--chunkname--mode-).
+
+If `size` is omitted,
+returns a new reference to the _thread pool_ where the calling code is executing,
+or `nil` if it is not executing in a _thread pool_ (_e.g._ the main process thread).
+
+### `threads:resize (size [, create])`
+
+Defines that [_thread pool_](#systemthreads-size) `threads` shall keep `size` system threads to execute its [_tasks_](#threadsdostring-chunk--chunkname--mode-).
+
+If `size` is smaller than the current number of threads,
+the exceeding threads are destroyed at the rate they are released from the _tasks_ currently executing in `threads`.
+Otherwise, new threads are created on demand until the defined value is reached.
+Unless `create` evaluates to `true`,
+in which case the new threads are created immediatelly.
+
+### `threads:count (options)`
+
+Returns numbers corresponding to the ammount of components in [_thread pool_](#systemthreads-size) `threads` according to the following characters present in string `options`:
+
+- `n`: the total number of [_tasks_](#threadsdostring-chunk--chunkname--mode-).
+- `r`: the number of _tasks_ currently executing.
+- `p`: the number of _tasks_ pending to be executed.
+- `s`: the number of _tasks_ not ready to execute.
+- `e`: the expected number of system threads.
+- `a`: the actual number of system threads.
+
+### `threads:dostring (chunk [, chunkname [, mode, ...]])`
+
+Loads a chunk as a new _task_ that executes in an independent state just like [_system coroutines_](#systemload-chunk--chunkname--mode).
+However, such _tasks_ executes on system threads from [_thread pool_](#systemthreads-size) `threads`,
+and starts as soon as a system thread is available.
+
+Arguments `chunk`, `chunkname`, `mode` are the same of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
+Arguments `...` are passed to the loaded chunk,
+but only _nil_, _boolean_, _number_, _string_, _light userdata_ and [_synchronization port_](#systemsyncport-) values are allowed as such arguments.
+
+Whenever the loaded `chunk` [yields](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield) it reschedules itself as pending to be resumed,
+and releases its running system thread.
+
+Execution errors in the loaded `chunk` terminate the _task_,
+and a message is written to the current process [standard error](https://en.wikipedia.org/wiki/Standard_streams#Standard_error_(stderr)) with prefix `[COUTIL PANIC]`.
+
+Returns `true` if `chunk` is loaded successfully.
+
+### `threads:dofile (filepath [, mode, ...])`
+
+Similar to [`threads:dostring`](#threadsdostring-chunk--chunkname--mode-), but gets the chunk from a file.
+The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.3/manual.html#pdf-loadfile).
+
+### `threads:close ()`
+
+When this function is called from a _task_ of [_thread pool_](#systemthreads-size) `threads`
+(_i.e._ using a reference obtained by calling [`system.threads()`](#systemthreads-size) with no arguments),
+it has no effect other than prevent further use of reference `threads`.
+
+Otherwise, it waits until there are either no more _tasks_ or no more system threads,
+and closes `threads` releasing all of its underlying resources.
+
+Note that when _thread pool_ `threads` is garbage collected before this functions is called,
+it will retain minimum resources until the termination of the Lua state they were created.
+To avoid accumulative resource consumption by creation of multiple _thread pools_,
+call this function on every _thread pool_.
+
+Moreover, a _thread pool_ that is not closed will prevent the current Lua state to terminate (_i.e._ `lua_close` to return) until it has either no more tasks or no more system threads.
+
+### `system.syncport ()`
+
+Returns a new _synchronization port_ that can be shared among [_system coroutines_](#systemload-chunk--chunkname--mode) or [_tasks_](#threadsdostring-chunk--chunkname--mode-) to create [_channels_](#systemchannel-) for synchronization and to exchange values between them.
+
+A _task_ can yield a _synchronization port_ followed by the arguments of [`channel:sync`](#channelsync-operation-) to be suspended without the need to create a _channel_ nor coroutines.
+
+### `system.channel ([syncport])`
+
+Returns a new _channel_ over [_synchronization port_](#systemsyncport-) `syncport`.
+If `syncport` is not provided, a new _synchronization port_ is implicitly created.
+
+Channels over the same _synchronization port_ share the same corresponding [_endpoints_](#channelsync-outward-).
+
+### `channel:port ()`
+
+Returns the [_synchronization port_](#systemsyncport-) `syncport` of the channel `channel`.
+
+### `channel:sync (endpoint, ...)`
+
+[Await function](#await) that awaits for a similar call on the opposite _endpoint_,
+either from another coroutine, [_tasks_](#threadsdostring-chunk--chunkname--mode-) or  [_system coroutines_](#systemload-chunk--chunkname--mode).
+
+`endpoint` is a string that starts with either letter `"i"` or `"o"`,
+each identifying an oposite _endpoint_ of the _channel_.
+If `endpoint` is not a string or starts with neither  `"i"` nor `"o"`,
+this call will match with any call on either _endpoints_.
+
+Returns `true` followed by the extra arguments `...` from the matching call.
+Otherwise, return `false` followed by an error message.
+
+### `channel:probe (endpoint)`
+
+### `channel:close ()`

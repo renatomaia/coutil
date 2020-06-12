@@ -69,22 +69,22 @@ do case "type errors"
 			error{}
 		end))
 		assert(co:status() == "normal")
-		asserterr("bad argument #2 (illegal type)", co:resume(table))
+		asserterr("unable to transfer argument #2 (got table)", co:resume(table))
 		assert(co:status() == "normal")
-		asserterr("bad argument #3 (illegal type)", co:resume(1, print))
+		asserterr("unable to transfer argument #3 (got function)", co:resume(1, print))
 		assert(co:status() == "normal")
-		asserterr("bad argument #4 (illegal type)", co:resume(1, 2, coroutine.running()))
+		asserterr("unable to transfer argument #4 (got thread)", co:resume(1, 2, coroutine.running()))
 		assert(co:status() == "normal")
-		asserterr("bad argument #5 (illegal type)", co:resume(1, 2, 3, co))
+		asserterr("unable to transfer argument #5 (got userdata)", co:resume(1, 2, 3, co))
 		assert(co:status() == "normal")
 		stage = 1
-		asserterr("bad error (illegal type)", co:resume())
+		asserterr("unable to transfer error (got table)", co:resume())
 		assert(co:status() == "dead")
 		co = system.load[[ return 1, {2}, 3 ]]
-		asserterr("bad return value #2 (illegal type)", co:resume())
+		asserterr("unable to transfer return value #2 (got table)", co:resume())
 		assert(co:status() == "dead")
 		co = system.load[[ return 1, 2, 3, require ]]
-		asserterr("bad return value #4 (illegal type)", co:resume())
+		asserterr("unable to transfer return value #4 (got function)", co:resume())
 		assert(co:status() == "dead")
 		stage = 2
 	end)
@@ -151,7 +151,7 @@ do case "preemptive execution"
 	done()
 end
 
-do case "yield values"
+do case "transfer values"
 	local co = system.load[[
 		require "_G"
 		local coroutine = require "coroutine"
@@ -671,6 +671,36 @@ do case "chunk from file"
 	assert(system.run() == false)
 	assert(stage == 2)
 
+	done()
+end
+
+do case "inherit preload"
+	spawn(function ()
+		package.preload["coutil.spawn"] =
+			assert(package.searchers[2]("coutil.spawn"))
+		package.preload["coutil.system"] =
+			assert(package.searchers[3]("coutil.system"))
+
+		local co = system.load[[
+			local package = require "package"
+			package.path = ""
+			package.cpath = ""
+
+			require "coutil.spawn"
+			require "coutil.system"
+
+			return true
+		]]
+
+		package.preload["coutil.spawn"] = nil
+		package.preload["coutil.system"] = nil
+
+		local ok, res = co:resume()
+		assert(ok == true and res == true)
+	end)
+
+	assert(system.run() == false)
 
 	done()
 end
+
