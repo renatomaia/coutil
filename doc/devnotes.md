@@ -86,6 +86,48 @@ Functions
 2. Requires `lua_State` of a call to a function with **module upvalues**.
 Can be used with `(lua_State *)uv_loop_t.data` while `system.run()` is running.
 
+Modules
+=======
+
+Internal
+--------
+
+### `lcuconf.h`
+
+Definitions to customize implementation in similar fashion to `luaconf.h` of Lua.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| LCUI_FUNC | function prefix | prefix for internal functions. |
+| LCULIB_API | function prefix | prefix for API functions. |
+| LCUMOD_API | function prefix | prefix for `luaopen_` functions. |
+| LCU_PREFIX | string | prefix for metatables. |
+| LCU_PIPEADDRBUF | number | max. length of [pipe names](manual.md#socketgetaddress-site--address) (Unix path or Windows pipe names). |
+| LCU_EXECARGCOUNT | number | max. number of arguments for a [new process](manual.md#systemexecute-cmd-). |
+| LCU_NETHOSTNAMESZ | number | max. length of [resolved host names](manual.md#systemnameaddr-address--mode). |
+| LCU_NETSERVNAMESZ | number | max. length of [resolved service names](manual.md#systemnameaddr-address--mode). |
+| lcu_assert assert | function macro | function for internal assertions. |
+
+### `lmodaux.c`:
+
+Auxiliary functions for implementation of Lua modules.
+
+### `loperaux.c`: 
+
+Auxiliary functions for implementation of module operations,
+specially [await functions](manual.md#await).
+
+API
+---
+
+### `lsyslib.c`: 
+
+C API for manipulation of CoUtil Lua objects.
+
+### `lsysmod.c`: 
+
+Lua module of CoUtil.
+
 States
 ======
 

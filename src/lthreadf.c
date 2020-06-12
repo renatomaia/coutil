@@ -1,86 +1,29 @@
 #include "lmodaux.h"
+#include "loperaux.h"
+
+
 
 #include <lmemlib.h>
 #include <string.h>
 
 
-/******************************************************************************/
 
-#define LCU_THREADPOOLREGKEY LCU_PREFIX"lcu_ThreadPool *parentpool"
-#define LCU_THREADPOOLCLS LCU_PREFIX"lcu_ThreadPool"
-#define LCU_THREADSCLS LCU_PREFIX"threads"
+#define LCU_THREADPOOLREGKEY	LCU_PREFIX"ThreadPool *parentpool"
+#define LCU_THREADSCTL	LCU_PREFIX"ThreadPool"
+#define LCU_THREADSCLS	LCU_PREFIX"threads"
 
-typedef struct lcu_ThreadCount {
-	int expected;
-	int actual;
-	int running;
-	int pending;
-	int suspended;
-	int numoftasks;
-} lcu_ThreadCount;
-
-typedef struct lcu_ThreadPool lcu_ThreadPool;
-
-LCULIB_API int lcu_initthreads (lcu_ThreadPool *pool);
-
-LCULIB_API void lcu_terminatethreads (lcu_ThreadPool *pool);
-
-LCULIB_API int lcu_resizethreads (lcu_ThreadPool *pool, int size, int create);
-
-LCULIB_API int lcu_addthreads (lcu_ThreadPool *pool, lua_State *L);
-
-LCULIB_API int lcu_countthreads (lcu_ThreadPool *pool,
-                                 lcu_ThreadCount *count,
-                                 const char *what);
-
-#define lcu_isthreads(L,i)  (lcu_tothreads(L, i) != NULL)
-
-LCULIB_API void lcu_pushthreads (lua_State *L, lcu_ThreadPool *pool);
-
-LCULIB_API lcu_ThreadPool *lcu_checkthreads (lua_State *L, int idx);
-
-LCULIB_API lcu_ThreadPool *lcu_tothreads (lua_State *L, int idx);
-
-
-
-#define LCU_SYNCPORTREGISTRY LCU_PREFIX"SyncPortRegistry"
-#define LCU_SYNCPORTCLS LCU_PREFIX"syncport"
-
-#define LCU_SYNCPORTIN  0x01
-#define LCU_SYNCPORTOUT 0x02
-
-typedef struct lcu_SyncPort lcu_SyncPort;
-
-LCULIB_API lcu_SyncPort *lcu_newsyncport (lua_State *L);
-
-LCULIB_API void lcu_refsyncport (lcu_SyncPort *port);
-
-LCULIB_API void lcu_unrefsyncport (lcu_SyncPort *port);
-
-#define lcu_tosyncportref(L,I) ((lcu_SyncPort **)luaL_testudata(L,I,LCU_SYNCPORTCLS))
-
-LCULIB_API lcu_SyncPort *lcu_checksyncport (lua_State *L, int idx);
-
-LCULIB_API void lcu_pushsyncport (lua_State *L, lcu_SyncPort *port);
-
-LCULIB_API int lcu_closesyncport (lua_State *L, int idx);
-
-LCULIB_API int lcu_pushsyncportfrom (lua_State *to, lua_State *from, int arg);
-
-LCULIB_API int lcu_matchsyncport (lcu_SyncPort **portref,
-                                  const char *endname,
-                                  lua_State *L);
-
-
+#define LCU_CHANNELCTLREGKEY LCU_PREFIX"ChannelControl *channelctl"
+#define LCU_CHANNELSYNCREGKEY LCU_PREFIX"uv_async_t *async"
+#define LCU_CHANNELCTL LCU_PREFIX"channelctl"
 #define LCU_CHANNELCLS LCU_PREFIX"channel"
 
-/******************************************************************************/
-
-/*
- * Thread Pools
- */
+#define LCU_ENDPOINTIN	0x01
+#define LCU_ENDPOINTOUT	0x02
+#define LCU_ENDPOINTBOTH	(LCU_ENDPOINTIN|LCU_ENDPOINTOUT)
 
 #define LCU_NEXTSTATEREGKEY LCU_PREFIX"lua_State *nexttask"
+
+
 
 typedef struct StateQ {
 	lua_State *head;
@@ -122,437 +65,6 @@ static lua_State *dequeuestateq (StateQ *q) {
 }
 
 
-//typedef struct ThreadSet {
-//	union {
-//		int count;
-//		uv_thread_t tid;
-//	} value;
-//	ThreadSet *prev;
-//	ThreadSet *next;
-//} ThreadSet;
-//
-//static void initthreadset (ThreadSet *set) {
-//	set->value.count = 0;
-//	set->prev = set;
-//	set->next = set;
-//}
-//
-//static void addthreadset (ThreadSet *set, ThreadSet *entry) {
-//	ThreadSet *first = set->next;
-//	lcu_assert(entry->prev == entry);
-//	lcu_assert(entry->next == entry);
-//	entry->next = first;
-//	set->next = entry;
-//	first->prev = entry;
-//	entry->prev = set;
-//}
-//
-//static void removethreadset (ThreadSet *entry) {
-//	ThreadSet *prev = entry->prev;
-//	ThreadSet *next = entry->next;
-//	prev->next = next;
-//	next->prev = prev;
-//	entry->prev = entry;
-//	entry->next = entry;
-//}
-
-
-struct lcu_ThreadPool {
-	uv_mutex_t mutex;
-	uv_cond_t onwork;
-	uv_cond_t onterm;
-	int detached;
-	int size;
-	int threads;
-	int idle;
-	int tasks;
-	int running;
-	int pending;
-	StateQ queue;
-};
-
-LCULIB_API int lcu_initthreads (lcu_ThreadPool *pool) {
-	int err = uv_mutex_init(&pool->mutex);
-	if (err) goto mutex_err;
-	err = uv_cond_init(&pool->onwork);
-	if (err) goto onworkcond_err;
-	err = uv_cond_init(&pool->onterm);
-	if (err) goto ontermcond_err;
-
-	pool->detached = 0;
-	pool->size = 0;
-	pool->threads = 0;
-	pool->idle = 0;
-	pool->tasks = 0;
-	pool->running = 0;
-	pool->pending = 0;
-	initstateq(&pool->queue);
-	return 0;
-
-	ontermcond_err:
-	uv_cond_destroy(&pool->onwork);
-	onworkcond_err:
-	uv_mutex_destroy(&pool->mutex);
-	mutex_err:
-	return err;
-}
-
-static int hasextraidle_mx (lcu_ThreadPool *pool) {
-	return pool->threads > pool->size && pool->idle > 0;
-}
-
-static void checkhalted_mx (lcu_ThreadPool *pool) {
-	if (pool->tasks == 0 && pool->size > 0) {
-		pool->size = 0;
-		uv_cond_signal(&pool->onwork);
-	}
-}
-
-static void runthread (void *arg) {
-	lcu_ThreadPool *pool = (lcu_ThreadPool *)arg;
-	lua_State *L = NULL;
-
-	uv_mutex_lock(&pool->mutex);
-	while (1) {
-		int narg, status;
-		while (1) {
-			if (pool->threads > pool->size) {
-				goto thread_end;
-			} else if (pool->pending) {
-				pool->pending--;
-				L = dequeuestateq(&pool->queue);
-				break;
-			} else if (pool->detached && pool->tasks == 0) {  /* if halted? */
-				pool->size = 0;
-			} else {
-				pool->idle++;
-				uv_cond_wait(&pool->onwork, &pool->mutex);
-				pool->idle--;
-			}
-		}
-		pool->running++;
-		uv_mutex_unlock(&pool->mutex);
-		narg = lua_gettop(L);
-		if (lua_status(L) == LUA_OK) narg--;
-		status = lua_resume(L, NULL, narg);
-		if (status == LUA_YIELD) {
-			lcu_SyncPort **portref = lcu_tosyncportref(L, 1);
-			if (portref && *portref) {
-				const char *endname = lua_tostring(L, 2);
-				if (endname == NULL) {
-					endname = "";
-					if (lua_gettop(L) == 1) lua_settop(L, 2);
-				}
-				if (!lcu_matchsyncport(portref, endname, L)) L = NULL;
-			} else {
-				lua_settop(L, 0);  /* discard returned values */
-			}
-		} else {
-			if (status != LUA_OK) {
-				lua_writestringerror("[COUTIL PANIC] %s\n", lua_tostring(L, -1));
-			}
-			/* avoid 'pool->tasks--' */
-			lua_settop(L, 0);
-			lua_getfield(L, LUA_REGISTRYINDEX, LCU_THREADPOOLREGKEY);
-			lua_pushnil(L);
-			lua_setmetatable(L, -2);
-			lua_close(L);
-			L = NULL;
-		}
-
-		uv_mutex_lock(&pool->mutex);
-		pool->running--;
-		if (L) {
-			pool->pending++;
-			enqueuestateq(&pool->queue, L);
-			L = NULL;
-		} else if (status != LUA_YIELD) {
-			pool->tasks--;
-		}
-	}
-	thread_end:
-	pool->threads--;
-	if (hasextraidle_mx(pool)) {
-		uv_cond_signal(&pool->onwork);
-	} else if (pool->detached) {
-		if (pool->threads == 0) uv_cond_signal(&pool->onterm);
-		else checkhalted_mx(pool);
-	}
-	uv_mutex_unlock(&pool->mutex);
-}
-
-LCULIB_API void lcu_terminatethreads (lcu_ThreadPool *pool) {
-	int pending;
-	StateQ queue;
-
-	uv_mutex_lock(&pool->mutex);
-	pool->detached = 1;
-	if (pool->threads > 0) {
-		checkhalted_mx(pool);
-		uv_cond_wait(&pool->onterm, &pool->mutex);
-	}
-	pending = pool->pending;
-	queue = pool->queue;
-	/* DEBUG: initstateq(&pool->queue); */
-	/* DEBUG: pool->pending = 0; */
-	uv_mutex_unlock(&pool->mutex);
-
-	if (pending > 0) {
-		lua_State *L;
-		while ((L = dequeuestateq(&queue))) lua_close(L);
-	}
-	uv_cond_destroy(&pool->onterm);
-	uv_cond_destroy(&pool->onwork);
-	uv_mutex_destroy(&pool->mutex);
-}
-
-LCULIB_API int lcu_resizethreads (lcu_ThreadPool *pool, int size, int create) {
-	int newthreads, err = 0;
-
-	uv_mutex_lock(&pool->mutex);
-	newthreads = size-pool->size;
-	pool->size = size;
-	if (newthreads > 0) {
-		if (!create && newthreads > pool->pending) newthreads = pool->pending;
-		while (newthreads--) {
-			uv_thread_t tid;
-			err = uv_thread_create(&tid, runthread, pool);
-			if (err) break;
-			pool->threads++;
-		}
-	} else if (hasextraidle_mx(pool)) {
-		uv_cond_signal(&pool->onwork);
-	}
-	uv_mutex_unlock(&pool->mutex);
-
-	return err;
-}
-
-static int collectthreadpool (lua_State *L) {
-	lcu_ThreadPool *pool = *((lcu_ThreadPool **)lua_touserdata(L, 1));
-	uv_mutex_lock(&pool->mutex);
-	pool->tasks--;
-	uv_mutex_unlock(&pool->mutex);
-	return 0;
-}
-
-static int addthread_mx (lcu_ThreadPool *pool, lua_State *L) {
-	if (pool->idle > 0) {
-		uv_cond_signal(&pool->onwork);
-	} else if (pool->threads < pool->size) {
-		uv_thread_t tid;
-		int err = uv_thread_create(&tid, runthread, pool);
-		if (err) return err;
-		pool->threads++;
-	}
-	enqueuestateq(&pool->queue, L);
-	pool->pending++;
-	return 0;
-}
-
-LCULIB_API int lcu_addthreads (lcu_ThreadPool *pool, lua_State *L) {
-	lcu_ThreadPool **poolref;
-	int err;
-	int hasspace = lua_checkstack(L, 1);
-	lcu_assert(hasspace);
-	poolref = (lcu_ThreadPool **)lua_newuserdata(L, sizeof(lcu_ThreadPool *));
-	*poolref = pool;
-	lua_createtable(L, 0, 1);
-	lua_pushcfunction(L, collectthreadpool);
-	lua_setfield(L, -2, "__gc");
-	lua_setmetatable(L, -2);
-	lua_setfield(L, LUA_REGISTRYINDEX, LCU_THREADPOOLREGKEY);
-
-	uv_mutex_lock(&pool->mutex);
-	pool->tasks++;
-	err = addthread_mx(pool, L);
-	uv_mutex_unlock(&pool->mutex);
-
-	return err;
-}
-
-LCULIB_API int lcu_countthreads (lcu_ThreadPool *pool,
-                                 lcu_ThreadCount *count,
-                                 const char *what) {
-	uv_mutex_lock(&pool->mutex);
-	for (; *what; ++what) switch (*what) {
-		case 'e': count->expected = pool->size; break;
-		case 'a': count->actual = pool->threads; break;
-		case 'r': count->running = pool->running; break;
-		case 'p': count->pending = pool->pending; break;
-		case 's': count->suspended = pool->tasks-pool->running-pool->pending; break;
-		case 'n': count->numoftasks = pool->tasks; break;
-	}
-	uv_mutex_unlock(&pool->mutex);
-	return 0;
-}
-
-
-
-LCULIB_API void lcu_pushthreads (lua_State *L, lcu_ThreadPool *pool) {
-	lcu_ThreadPool **ref = (lcu_ThreadPool **)lua_newuserdata(L, sizeof(lcu_ThreadPool*));
-	*ref = pool;
-	luaL_setmetatable(L, LCU_THREADSCLS);
-}
-
-LCULIB_API lcu_ThreadPool *lcu_checkthreads (lua_State *L, int idx) {
-	lcu_ThreadPool **ref = (lcu_ThreadPool **)luaL_checkudata(L, idx, LCU_THREADSCLS);
-	luaL_argcheck(L, *ref, idx, "closed threads");
-	return *ref;
-}
-
-LCULIB_API lcu_ThreadPool *lcu_tothreads (lua_State *L, int idx) {
-	lcu_ThreadPool **ref = (lcu_ThreadPool **)luaL_testudata(L, idx, LCU_THREADSCLS);
-	return ref ? *ref : NULL;
-}
-
-/*
- * Sync Ports
- */
-
-#define LCU_SYNCPORTANY	(LCU_SYNCPORTIN|LCU_SYNCPORTOUT)
-
-struct lcu_SyncPort {
-	lua_Alloc allocf;
-	void *allocud;
-	uv_mutex_t mutex;
-	int refcount;
-	int expected;
-	StateQ queue;
-};
-
-LCULIB_API void lcu_refsyncport (lcu_SyncPort *port) {
-	uv_mutex_lock(&port->mutex);
-	port->refcount++;
-	uv_mutex_unlock(&port->mutex);
-}
-
-LCULIB_API void lcu_unrefsyncport (lcu_SyncPort *port) {
-	int refcount;
-	uv_mutex_lock(&port->mutex);
-	refcount = --port->refcount;
-	uv_mutex_unlock(&port->mutex);
-	if (refcount == 0) {
-		lua_State *L;
-		while ((L = dequeuestateq(&port->queue))) lua_close(L);
-		uv_mutex_destroy(&port->mutex);
-		port->allocf(port->allocud, port, sizeof(lcu_SyncPort), 0);
-	}
-}
-
-/* getmetatable(syncport).__gc(syncport) */
-static int syncport_gc (lua_State *L) {
-	lcu_closesyncport(L, 1);
-	return 0;
-}
-
-/* closed = syncport:close() */
-static int syncport_close (lua_State *L) {
-	int closed = lcu_closesyncport(L, 1);
-	lua_pushboolean(L, closed);
-	return 1;
-}
-
-LCULIB_API void lcu_pushsyncport (lua_State *L, lcu_SyncPort *port) {
-	if (!luaL_getsubtable(L, LUA_REGISTRYINDEX, LCU_SYNCPORTREGISTRY)) {
-		lua_newtable(L);
-		lua_pushliteral(L, "v");
-		lua_setfield(L, -2, "__mode");
-		lua_setmetatable(L, -2);
-		if (luaL_getmetatable(L, LCU_SYNCPORTCLS) == LUA_TNIL) {
-			static const luaL_Reg syncportf[] = {
-				{"__gc", syncport_gc},
-				{"close", syncport_close},
-				{NULL, NULL}
-			};
-			lcuM_newclass(L, LCU_SYNCPORTCLS);
-			lcuM_setfuncs(L, syncportf, 0);
-			lua_pop(L, 1);
-		}
-		lua_pop(L, 1);
-	} else {
-		lua_pushlightuserdata(L, port);
-		lua_gettable(L, -2);
-		if (lcu_tosyncportref(L, -1)) goto found;
-		lua_pop(L, 1);
-	}
-
-	{
-		lcu_SyncPort **ref = (lcu_SyncPort **)lua_newuserdata(L, sizeof(lcu_SyncPort *));
-		*ref = NULL;  /* in case of errors */
-		luaL_setmetatable(L, LCU_SYNCPORTCLS);
-		lua_pushlightuserdata(L, port);
-		lua_pushvalue(L, -2);
-		lua_settable(L, -4);
-		*ref = port;
-		lcu_refsyncport(port);
-	}
-
-	found:
-	lua_remove(L, -2);
-}
-
-LCULIB_API int lcu_closesyncport (lua_State *L, int idx) {
-	lcu_SyncPort **ref = (lcu_SyncPort **)luaL_checkudata(L, idx, LCU_SYNCPORTCLS);
-	if (*ref) {
-		luaL_getsubtable(L, LUA_REGISTRYINDEX, LCU_SYNCPORTREGISTRY);
-		lua_pushlightuserdata(L, *ref);
-		lua_pushnil(L);
-		lua_settable(L, -3);
-		lua_pop(L, 1);
-		lcu_unrefsyncport(*ref);
-		*ref = NULL;
-		return 1;
-	}
-	return 0;
-}
-
-LCULIB_API lcu_SyncPort *lcu_checksyncport (lua_State *L, int idx) {
-	lcu_SyncPort **ref = (lcu_SyncPort **)luaL_checkudata(L, idx, LCU_SYNCPORTCLS);
-	luaL_argcheck(L, *ref, idx, "closed synchronization port");
-	return *ref;
-}
-
-static int auxnewsyncport (lua_State *L) {
-	lcu_SyncPort *port = (lcu_SyncPort *)lua_touserdata(L, 1);
-	lcu_pushsyncport(L, port);
-	return 1;
-}
-
-LCULIB_API lcu_SyncPort *lcu_newsyncport (lua_State *L) {
-	int status;
-	void *allocud;
-	lua_Alloc allocf = lua_getallocf(L, &allocud);
-	lcu_SyncPort *port = (lcu_SyncPort *)allocf(allocud, NULL, 0, sizeof(lcu_SyncPort));
-	if (port == NULL) luaL_error(L, "not enough memory");
-
-	port->allocf = allocf;
-	port->allocud = allocud;
-	uv_mutex_init(&port->mutex);
-	port->refcount = 0;
-	port->expected = 0;
-	initstateq(&port->queue);
-
-	lua_pushcfunction(L, auxnewsyncport);
-	lua_pushlightuserdata(L, port);
-	status = lua_pcall(L, 1, 1, 0);
-	if (status != LUA_OK) {
-		port->refcount++;
-		lcu_unrefsyncport(port);  /* free 'port' */
-		lua_error(L);
-	}
-
-	return port;
-}
-
-LCULIB_API int lcu_pushsyncportfrom (lua_State *to, lua_State *from, int arg) {
-	lcu_SyncPort **portref = lcu_tosyncportref(from, arg);
-	if (portref && *portref) {
-		lcu_pushsyncport(to, *portref);
-		return 1;
-	}
-	return 0;
-}
 
 static int auxpusherrfrom (lua_State *L) {
 	lua_State *failed = (lua_State *)lua_touserdata(L, 1);
@@ -589,14 +101,14 @@ static void swapvalues (lua_State *src, lua_State *dst) {
 	}
 
 	for (i = 3; i <= ndst; ++i) {
-		err = lcuL_pushfrom(src, dst, i, "receive argument", lcu_pushsyncportfrom);
+		err = lcuL_pushfrom(src, dst, i, "argument");
 		if (err == LUA_OK) {
 			lua_replace(src, i-1);
 		} else {
 			pusherrfrom(dst, src);
 			return;
 		}
-		err = lcuL_pushfrom(dst, src, i, "receive argument", lcu_pushsyncportfrom);
+		err = lcuL_pushfrom(dst, src, i, "argument");
 		if (err == LUA_OK) {
 			lua_replace(dst, i-1);
 		} else {
@@ -606,7 +118,7 @@ static void swapvalues (lua_State *src, lua_State *dst) {
 	}
 
 	lua_settop(dst, ndst-1);
-	err = lcuL_movefrom(dst, src, nsrc-ndst, "receive argument", lcu_pushsyncportfrom);
+	err = lcuL_movefrom(dst, src, nsrc-ndst, "argument");
 	if (err != LUA_OK) pusherrfrom(src, dst);
 	else {
 		lua_settop(src, ndst-1);
@@ -617,74 +129,424 @@ static void swapvalues (lua_State *src, lua_State *dst) {
 	}
 }
 
+
+
+typedef struct ChannelMap ChannelMap;
+
+typedef struct ChannelSync ChannelSync;
+
+typedef struct ChannelControl {
+	uv_mutex_t mutex;
+	int pending;
+	lua_State *L;
+} ChannelControl;
+
+typedef struct ThreadPool {
+	uv_mutex_t mutex;
+	uv_cond_t onwork;
+	uv_cond_t onterm;
+	int detached;
+	int size;
+	int threads;
+	int idle;
+	int tasks;
+	int running;
+	int pending;
+	StateQ queue;
+	ChannelMap *channels;
+} ThreadPool;
+
+static int hasextraidle_mx (ThreadPool *pool) {
+	return pool->threads > pool->size && pool->idle > 0;
+}
+
+static void checkhalted_mx (ThreadPool *pool) {
+	if (pool->tasks == 0 && pool->size > 0) {
+		pool->size = 0;
+		uv_cond_signal(&pool->onwork);
+	}
+}
+
+static void threadmain (void *arg);
+
+static int addthread_mx (ThreadPool *pool, lua_State *L) {
+	/* starting or waking threads won't get this new task */
+	if (pool->threads-pool->running-pool->idle <= pool->pending) {
+		if (pool->idle > 0) {
+			pool->idle--;
+			uv_cond_signal(&pool->onwork);
+		} else if (pool->threads < pool->size) {
+			uv_thread_t tid;
+			int err = uv_thread_create(&tid, threadmain, pool);
+			if (err) return err;
+			pool->threads++;
+		}
+	}
+	enqueuestateq(&pool->queue, L);
+	pool->pending++;
+	return 0;
+}
+
 static void rescheduletask (lua_State *L) {
+	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELCTLREGKEY) == LUA_TLIGHTUSERDATA) {
+		uv_async_t *async;
+		ChannelControl *channelctl = (ChannelControl *)lua_touserdata(L, -1);
+		lua_pop(L, 1);
+		lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
+		async = (uv_async_t *)lua_touserdata(L, -1);
+		lua_pop(L, 1);
+		uv_mutex_lock(&channelctl->mutex);
+		channelctl->pending++;
+		L = channelctl->L;
+		channelctl->L = NULL;
+		uv_mutex_unlock(&channelctl->mutex);
+		uv_async_send(async);
+		if (L == NULL) return;
+	} else {
+		lua_pop(L, 1);
+	}
 	lua_getfield(L, LUA_REGISTRYINDEX, LCU_THREADPOOLREGKEY);
-	lcu_ThreadPool *pool = *((lcu_ThreadPool **)lua_touserdata(L, -1));
+	ThreadPool *pool = *((ThreadPool **)lua_touserdata(L, -1));
 	lua_pop(L, 1);
 	uv_mutex_lock(&pool->mutex);
 	addthread_mx(pool, L);
 	uv_mutex_unlock(&pool->mutex);
 }
 
-LCULIB_API int lcu_matchsyncport (lcu_SyncPort **portref,
-                                  const char *endname,
-                                  lua_State *L) {
-	lcu_SyncPort *port = *portref;
+
+
+typedef struct ChannelSync {
+	uv_mutex_t mutex;
+	int refcount;
+	int expected;
+	StateQ queue;
+} ChannelSync;
+
+static void channelsync_unref (ChannelSync *sync) {
+	uv_mutex_lock(&sync->mutex);
+	sync->refcount--;
+	uv_mutex_unlock(&sync->mutex);
+}
+
+typedef lua_State *(*GetAsyncState) (lua_State *L, void *userdata);
+
+static int channelsync_match (ChannelSync *sync,
+                              const char *endname,
+                              lua_State *L,
+                              GetAsyncState getstate,
+                              void *userdata) {
 	int endpoint;
 	switch (*endname) {
-		case 'i': endpoint = LCU_SYNCPORTIN; break;
-		case 'o': endpoint = LCU_SYNCPORTOUT; break;
-		default: endpoint = LCU_SYNCPORTANY; break;
+		case 'i': endpoint = LCU_ENDPOINTIN; break;
+		case 'o': endpoint = LCU_ENDPOINTOUT; break;
+		default: endpoint = LCU_ENDPOINTBOTH; break;
 	}
-	*portref = NULL;  /* avoid unref by '__gc', see unref at the end */
 
-	uv_mutex_lock(&port->mutex);
-	if (port->queue.head == NULL) {
-		port->expected = endpoint == LCU_SYNCPORTANY ? LCU_SYNCPORTANY : endpoint^LCU_SYNCPORTANY;
-	} else if (port->expected&endpoint) {
-		lua_State *match = dequeuestateq(&port->queue);
-		uv_mutex_unlock(&port->mutex);
-		*portref = port;  /* restore unref by '__gc' */
-		portref = lcu_tosyncportref(match, 1);
-		*portref = port;  /* restore unref for 'match' */
-		lcu_assert(portref && *portref);
-		lcu_refsyncport(port);
+	uv_mutex_lock(&sync->mutex);
+	if (sync->queue.head == NULL) {
+		sync->expected = endpoint == LCU_ENDPOINTBOTH ? LCU_ENDPOINTBOTH
+		                                              : endpoint^LCU_ENDPOINTBOTH;
+	} else if (sync->expected&endpoint) {
+		lua_State *match = dequeuestateq(&sync->queue);
+		uv_mutex_unlock(&sync->mutex);
 		swapvalues(L, match);
 		rescheduletask(match);
 		return 1;
 	}
-	enqueuestateq(&port->queue, L);
-	uv_mutex_unlock(&port->mutex);
-	lcu_unrefsyncport(port);  /* unref while suspended, might destroy it */
+	if (getstate != NULL) {
+		L = getstate(L, userdata);
+		if (L == NULL) goto match_end;
+	}
+	enqueuestateq(&sync->queue, L);
+
+	match_end:
+	uv_mutex_unlock(&sync->mutex);
+	return L == NULL;
+}
+
+
+
+struct ChannelMap {
+	uv_mutex_t mutex;
+	lua_State *L;
+};
+
+static int channelmap_gc (lua_State *L) {
+	ChannelMap *map = (ChannelMap *)lua_touserdata(L, 1);
+	if (map->L) {
+		uv_mutex_destroy(&map->mutex);
+		map->L = NULL;
+	}
 	return 0;
 }
 
-/******************************************************************************/
+static ChannelMap *channelmap_get (lua_State *L) {
+	int type = lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELMAP);
+	ChannelMap *map = (ChannelMap *)lua_touserdata(L, -1);
+	lcu_assert(type == LUA_TUSERDATA || type == LUA_TLIGHTUSERDATA);
+	lua_pop(L, 1);
+	return map;
+}
 
-/* channel [, errmsg] = system.syncport() */
-static int system_syncport (lua_State *L) {
-	lcu_newsyncport(L);
-	return 1;
+static ChannelSync *channelmap_resolve (ChannelMap *map, const char *name) {
+	lua_State *L = map->L;
+	ChannelSync *sync = NULL;
+	uv_mutex_lock(&map->mutex);
+	if (lua_getglobal(L, name) == LUA_TLIGHTUSERDATA) {
+		sync = (ChannelSync *)lua_touserdata(L, -1);
+		uv_mutex_lock(&sync->mutex);
+		sync->refcount++;
+		uv_mutex_unlock(&sync->mutex);
+	} else {
+		void *allocud;
+		lua_Alloc allocf = lua_getallocf(L, &allocud);
+		sync = (ChannelSync *)allocf(allocud, NULL, 0, sizeof(ChannelSync));
+		if (sync) {
+			uv_mutex_init_recursive(&sync->mutex);
+			sync->refcount = 1;
+			sync->expected = 0;
+			initstateq(&sync->queue);;
+			lua_pushlightuserdata(L, sync);
+			lua_setglobal(L, name);
+		}
+	}
+	lua_pop(L, 1);
+	uv_mutex_unlock(&map->mutex);
+	return sync;
 }
 
 
 
+static void threadmain (void *arg) {
+	ThreadPool *pool = (ThreadPool *)arg;
+	lua_State *L = NULL;
+
+	uv_mutex_lock(&pool->mutex);
+	while (1) {
+		int narg, status;
+		while (1) {
+			if (pool->threads > pool->size) {
+				goto thread_end;
+			} else if (pool->pending) {
+				pool->pending--;
+				L = dequeuestateq(&pool->queue);
+				break;
+			} else if (pool->detached && pool->tasks == 0) {  /* if halted? */
+				pool->size = 0;
+			} else {
+				pool->idle++;
+				uv_cond_wait(&pool->onwork, &pool->mutex);
+			}
+		}
+		pool->running++;
+		uv_mutex_unlock(&pool->mutex);
+		narg = lua_gettop(L);
+		if (lua_status(L) == LUA_OK) narg--;
+		status = lua_resume(L, NULL, narg);
+		if (status == LUA_YIELD) {
+			const char *channelname = lua_tostring(L, 1);
+			if (channelname) {
+				ChannelSync *sync = channelmap_resolve(pool->channels, channelname);
+				const char *endname = luaL_opt(L, lua_tostring, 2, "");
+				int narg = lua_gettop(L);
+				if (narg < 2) {
+					lua_settop(L, 2);
+				} else if (!lcuL_canmove(L, narg-2, "argument")) {
+					narg = 0;
+				}
+				if (narg && !channelsync_match(sync, endname, L, NULL, NULL)) L = NULL;
+				channelsync_unref(sync);
+			} else {
+				lua_settop(L, 0);  /* discard returned values */
+			}
+		} else {
+			if (status != LUA_OK) {
+				lua_writestringerror("[COUTIL PANIC] %s\n", lua_tostring(L, -1));
+			}
+			/* avoid 'pool->tasks--' */
+			lua_settop(L, 0);
+			lua_getfield(L, LUA_REGISTRYINDEX, LCU_THREADPOOLREGKEY);
+			lua_pushnil(L);
+			lua_setmetatable(L, -2);
+			lua_close(L);
+			L = NULL;
+		}
+
+		uv_mutex_lock(&pool->mutex);
+		pool->running--;
+		if (L) {
+			pool->pending++;
+			enqueuestateq(&pool->queue, L);
+			L = NULL;
+		} else if (status != LUA_YIELD) {
+			pool->tasks--;
+		}
+	}
+	thread_end:
+	pool->threads--;
+	if (hasextraidle_mx(pool)) {
+		pool->idle--;
+		uv_cond_signal(&pool->onwork);
+	} else if (pool->detached) {
+		if (pool->threads == 0) uv_cond_signal(&pool->onterm);
+		else checkhalted_mx(pool);
+	}
+	uv_mutex_unlock(&pool->mutex);
+}
+
+static int tpool_init (ThreadPool *pool, ChannelMap *channels) {
+	int err = uv_mutex_init(&pool->mutex);
+	if (err) goto mutex_err;
+	err = uv_cond_init(&pool->onwork);
+	if (err) goto onworkcond_err;
+	err = uv_cond_init(&pool->onterm);
+	if (err) goto ontermcond_err;
+
+	pool->detached = 0;
+	pool->size = 0;
+	pool->threads = 0;
+	pool->idle = 0;
+	pool->tasks = 0;
+	pool->running = 0;
+	pool->pending = 0;
+	initstateq(&pool->queue);
+	pool->channels = channels;
+	return 0;
+
+	ontermcond_err:
+	uv_cond_destroy(&pool->onwork);
+	onworkcond_err:
+	uv_mutex_destroy(&pool->mutex);
+	mutex_err:
+	return err;
+}
+
+static void tpool_close (ThreadPool *pool) {
+	int pending;
+	StateQ queue;
+
+	uv_mutex_lock(&pool->mutex);
+	pool->detached = 1;
+	if (pool->threads > 0) {
+		checkhalted_mx(pool);
+		uv_cond_wait(&pool->onterm, &pool->mutex);
+	}
+	pending = pool->pending;
+	queue = pool->queue;
+	/* DEBUG: initstateq(&pool->queue); */
+	/* DEBUG: pool->pending = 0; */
+	uv_mutex_unlock(&pool->mutex);
+
+	if (pending > 0) {
+		lua_State *L;
+		while ((L = dequeuestateq(&queue))) lua_close(L);
+	}
+	uv_cond_destroy(&pool->onterm);
+	uv_cond_destroy(&pool->onwork);
+	uv_mutex_destroy(&pool->mutex);
+}
+
+static int tpool_resize (ThreadPool *pool, int size, int create) {
+	int newthreads, err = 0;
+
+	uv_mutex_lock(&pool->mutex);
+	newthreads = size-pool->size;
+	pool->size = size;
+	if (newthreads > 0) {
+		if (!create && newthreads > pool->pending) newthreads = pool->pending;
+		while (newthreads--) {
+			uv_thread_t tid;
+			err = uv_thread_create(&tid, threadmain, pool);
+			if (err) break;
+			pool->threads++;
+		}
+	} else if (hasextraidle_mx(pool)) {
+		pool->idle--;
+		uv_cond_signal(&pool->onwork);
+	}
+	uv_mutex_unlock(&pool->mutex);
+
+	return err;
+}
+
+static int collectthreadpool (lua_State *L) {
+	ThreadPool *pool = *((ThreadPool **)lua_touserdata(L, 1));
+	uv_mutex_lock(&pool->mutex);
+	pool->tasks--;
+	uv_mutex_unlock(&pool->mutex);
+	return 0;
+}
+
+static int tpool_addtask (ThreadPool *pool, lua_State *L) {
+	ThreadPool **poolref;
+	int err;
+	int hasspace = lua_checkstack(L, 1);
+	lcu_assert(hasspace);
+	poolref = (ThreadPool **)lua_newuserdata(L, sizeof(ThreadPool *));
+	*poolref = pool;
+	lua_createtable(L, 0, 1);
+	lua_pushcfunction(L, collectthreadpool);
+	lua_setfield(L, -2, "__gc");
+	lua_setmetatable(L, -2);
+	lua_setfield(L, LUA_REGISTRYINDEX, LCU_THREADPOOLREGKEY);
+
+	uv_mutex_lock(&pool->mutex);
+	pool->tasks++;
+	err = addthread_mx(pool, L);
+	uv_mutex_unlock(&pool->mutex);
+
+	return err;
+}
+
+typedef struct ThreadCount {
+	int expected;
+	int actual;
+	int running;
+	int pending;
+	int suspended;
+	int numoftasks;
+} ThreadCount;
+
+static int tpool_count (ThreadPool *pool,
+                        ThreadCount *count,
+                        const char *what) {
+	uv_mutex_lock(&pool->mutex);
+	for (; *what; ++what) switch (*what) {
+		case 'e': count->expected = pool->size; break;
+		case 'a': count->actual = pool->threads; break;
+		case 'r': count->running = pool->running; break;
+		case 'p': count->pending = pool->pending; break;
+		case 's': count->suspended = pool->tasks-pool->running-pool->pending; break;
+		case 'n': count->numoftasks = pool->tasks; break;
+	}
+	uv_mutex_unlock(&pool->mutex);
+	return 0;
+}
+
+
+
+static ThreadPool *tothreads (lua_State *L, int idx) {
+	ThreadPool **ref = (ThreadPool **)luaL_checkudata(L, idx, LCU_THREADSCLS);
+	luaL_argcheck(L, *ref, idx, "closed threads");
+	return *ref;
+}
+
 /* getmetatable(pool).__gc(pool) */
 static int threadpool_gc (lua_State *L) {
-	lcu_ThreadPool *pool = (lcu_ThreadPool *)luaL_checkudata(L, 1, LCU_THREADPOOLCLS);
-	lcu_terminatethreads(pool);
+	ThreadPool *pool = (ThreadPool *)luaL_checkudata(L, 1, LCU_THREADSCTL);
+	tpool_close(pool);
 	return 0;
 }
 
 /* succ [, errmsg] = threads:close() */
 static int threads_close (lua_State *L) {
-	lcu_ThreadPool **ref = (lcu_ThreadPool **)luaL_checkudata(L, 1, LCU_THREADSCLS);
+	ThreadPool **ref = (ThreadPool **)luaL_checkudata(L, 1, LCU_THREADSCLS);
 	lua_pushboolean(L, *ref != NULL);
 	if (*ref) {
 		lua_pushlightuserdata(L, *ref);
 		if (lua_gettable(L, LUA_REGISTRYINDEX) == LUA_TUSERDATA) {
 			lcu_assert(*ref == lua_touserdata(L, -1));
-			lcu_terminatethreads(*ref);
+			tpool_close(*ref);
 			lua_pushnil(L);
 			lua_setmetatable(L, -2);
 			lua_pushlightuserdata(L, *ref);
@@ -700,11 +562,11 @@ static int threads_close (lua_State *L) {
 /* succ [, errmsg] = threads:resize(value) */
 static int threads_resize (lua_State *L) {
 	int err;
-	lcu_ThreadPool *pool = lcu_checkthreads(L, 1);
+	ThreadPool *pool = tothreads(L, 1);
 	int size = (int)luaL_checkinteger(L, 2);
 	int create = lua_toboolean(L, 3);
 	luaL_argcheck(L, size >= 0, 2, "size cannot be negative");
-	err = lcu_resizethreads(pool, size, create);
+	err = tpool_resize(pool, size, create);
 	if (err) return lcuL_pusherrres(L, err);
 	lua_pushboolean(L, 1);
 	return 1;
@@ -712,10 +574,10 @@ static int threads_resize (lua_State *L) {
 
 /* succ [, errmsg] = threads:count([option]) */
 static int threads_count (lua_State *L) {
-	lcu_ThreadCount count;
-	lcu_ThreadPool *pool = lcu_checkthreads(L, 1);
+	ThreadCount count;
+	ThreadPool *pool = tothreads(L, 1);
 	const char *opt = luaL_checkstring(L, 2);
-	lcu_countthreads(pool, &count, opt);
+	tpool_count(pool, &count, opt);
 	lua_settop(L, 2);
 	for (; *opt; ++opt) switch (*opt) {
 		case 'e': lua_pushinteger(L, count.expected); break;
@@ -730,7 +592,7 @@ static int threads_count (lua_State *L) {
 }
 
 static int dochunk (lua_State *L,
-                    lcu_ThreadPool *pool,
+                    ThreadPool *pool,
                     lua_State *NL,
                     int status,
                     int narg) {
@@ -744,8 +606,7 @@ static int dochunk (lua_State *L,
 		return 2;  /* return nil plus error message */
 	}
 	top = lua_gettop(L);
-	status = lcuL_movefrom(NL, L, top > narg ? top-narg : 0,
-	                       "transfer argument", lcu_pushsyncportfrom);
+	status = lcuL_movefrom(NL, L, top > narg ? top-narg : 0, "argument");
 	if (status != LUA_OK) {
 		const char *msg = lua_tostring(NL, -1);
 		lua_pushboolean(L, 0);
@@ -753,7 +614,7 @@ static int dochunk (lua_State *L,
 		lua_close(NL);
 		return 2;  /* return nil plus error message */
 	}
-	status = lcu_addthreads(pool, NL);
+	status = tpool_addtask(pool, NL);
 	if (status) {
 		lua_close(NL);
 		return lcuL_pusherrres(L, status);
@@ -764,7 +625,7 @@ static int dochunk (lua_State *L,
 
 /* succ [, errmsg] = threads:dostring(chunk [, chunkname [, mode, ...]]) */
 static int threads_dostring (lua_State *L) {
-	lcu_ThreadPool *pool = lcu_checkthreads(L, 1);
+	ThreadPool *pool = tothreads(L, 1);
 	size_t l;
 	const char *s = luamem_checkstring(L, 2, &l);
 	const char *chunkname = luaL_optstring(L, 3, s);
@@ -776,7 +637,7 @@ static int threads_dostring (lua_State *L) {
 
 /* succ [, errmsg] = threads:dofile([path [, mode, ...]]) */
 static int threads_dofile (lua_State *L) {
-	lcu_ThreadPool *pool = lcu_checkthreads(L, 1);
+	ThreadPool *pool = tothreads(L, 1);
 	const char *fpath = luaL_optstring(L, 2, NULL);
 	const char *mode = luaL_optstring(L, 3, NULL);
 	lua_State *NL = lcuL_newstate(L);  /* create a similar state */
@@ -786,54 +647,36 @@ static int threads_dofile (lua_State *L) {
 
 /* threads [, errmsg] = system.threads([size]) */
 static int system_threads (lua_State *L) {
-	lcu_ThreadPool *pool;
+	ThreadPool *pool;
 	if (lua_gettop(L) > 0) {
 		int err, size = (int)luaL_checkinteger(L, 1);
-		pool = (lcu_ThreadPool *)lua_newuserdata(L, sizeof(lcu_ThreadPool));
-		err = lcu_initthreads(pool);
+		ChannelMap *map = channelmap_get(L);
+		pool = (ThreadPool *)lua_newuserdata(L, sizeof(ThreadPool));
+		err = tpool_init(pool, map);
 		if (err) return lcuL_pusherrres(L, err);
 		if (size > 0) {
-			err = lcu_resizethreads(pool, size, 1);
+			err = tpool_resize(pool, size, 1);
 			if (err) {
-				lcu_terminatethreads(pool);
+				tpool_close(pool);
 				return lcuL_pusherrres(L, err);
 			}
 		}
-		luaL_setmetatable(L, LCU_THREADPOOLCLS);
+		luaL_setmetatable(L, LCU_THREADSCTL);
 		lua_pushlightuserdata(L, pool);
 		lua_insert(L, -2);
 		lua_settable(L, LUA_REGISTRYINDEX);
-		lcu_pushthreads(L, pool);
 	} else {
-		lua_getfield(L, LUA_REGISTRYINDEX, LCU_THREADPOOLREGKEY);
-		if (lua_isnil(L, -1)) return 1;
-		pool = *((lcu_ThreadPool **)lua_touserdata(L, -1));
+		int type = lua_getfield(L, LUA_REGISTRYINDEX, LCU_THREADPOOLREGKEY);
+		if (type == LUA_TNIL) return 1;
+		pool = *((ThreadPool **)lua_touserdata(L, -1));
 		lua_pop(L, 1);
-		lcu_pushthreads(L, pool);
+	}
+	{
+		ThreadPool **ref = (ThreadPool **)lua_newuserdata(L, sizeof(ThreadPool*));
+		*ref = pool;
+		luaL_setmetatable(L, LCU_THREADSCLS);
 	}
 	return 1;
-}
-
-
-
-/* getmetatable(channel).__gc(channel) */
-static int channel_gc (lua_State *L) {
-	return 0;
-}
-
-/* res [, errmsg] = channel:sync(endpoint, ...) */
-static int channel_sync (lua_State *L) {
-	return 0;
-}
-
-/* res [, errmsg] = channel:prove(endpoint) */
-static int channel_probe (lua_State *L) {
-	return 0;
-}
-
-/* channel [, errmsg] = system.channel() */
-static int system_channel (lua_State *L) {
-	return 0;
 }
 
 
@@ -851,28 +694,304 @@ LCUI_FUNC void lcuM_addthreadc (lua_State *L) {
 		{"dofile", threads_dofile},
 		{NULL, NULL}
 	};
-	static const luaL_Reg channelf[] = {
-		{"__gc", channel_gc},
-		{"close", channel_gc},
-		{"sync", channel_sync},
-		{"probe", channel_probe},
-		{NULL, NULL}
-	};
-	lcuM_newclass(L, LCU_THREADPOOLCLS);
+	lcuM_newclass(L, LCU_THREADSCTL);
 	lcuM_setfuncs(L, poolf, 0);
 	lua_pop(L, 1);
 	lcuM_newclass(L, LCU_THREADSCLS);
 	lcuM_setfuncs(L, threadsf, 0);
-	lua_pop(L, 1);
-	lcuM_newclass(L, LCU_CHANNELCLS);
-	lcuM_setfuncs(L, channelf, LCU_MODUPVS);
 	lua_pop(L, 1);
 }
 
 LCUI_FUNC void lcuM_addthreadf (lua_State *L) {
 	static const luaL_Reg modf[] = {
 		{"threads", system_threads},
-		{"syncport", system_syncport},
+		{NULL, NULL}
+	};
+	lcuM_setfuncs(L, modf, 0);
+}
+
+
+
+typedef struct LuaChannel {
+	ChannelSync *sync;
+	lua_State *L;
+} LuaChannel;
+
+#define tolchannel(L,I)	((LuaChannel *)luaL_checkudata(L,I,LCU_CHANNELCLS))
+
+static LuaChannel *chklchannel(lua_State *L, int arg) {
+	LuaChannel *channel = (LuaChannel *)luaL_checkudata(L, arg, LCU_CHANNELCLS);
+	luaL_argcheck(L, channel != NULL, arg, "closed channel");
+	return channel;
+}
+
+static int channelclose (LuaChannel *channel) {
+	if (channel->sync != NULL) {
+		channelsync_unref(channel->sync);
+		channel->sync = NULL;
+		lua_close(channel->L);
+		channel->L = NULL;
+		return 1;
+	}
+	return 0;
+}
+
+/* getmetatable(channel).__gc(channel) */
+static int channel_gc (lua_State *L) {
+	LuaChannel *channel = tolchannel(L, 1);
+	channelclose(channel);
+	return 0;
+}
+
+/* getmetatable(channel).__gc(channel) */
+static int channel_close (lua_State *L) {
+	LuaChannel *channel = tolchannel(L, 1);
+	int closed = channelclose(channel);
+	lua_pushboolean(L, closed);
+	return 1;
+}
+
+/* res [, errmsg] = channel:sync(endpoint, ...) */
+static int returnsynced (lua_State *L) {
+	LuaChannel *channel = chklchannel(L, 1);
+	int nret = lua_gettop(channel->L);
+	int err = lcuL_movefrom(L, channel->L, nret, "");
+	lcu_assert(err == LUA_OK);
+	lua_pushnil(channel->L);
+	lua_setfield(channel->L, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
+	return nret;
+}
+
+static void uv_onsynced (uv_async_t *handle) {
+	lua_State *thread = (lua_State *)handle->data;
+	lcuU_resumethrop(thread, (uv_handle_t *)handle);
+}
+
+typedef struct ArmSyncedArgs {
+	uv_loop_t *loop;
+	uv_async_t *async;
+	lua_State *L;
+} ArmSyncedArgs;
+
+static lua_State *armsynced (lua_State *L, void *data) {
+	ArmSyncedArgs *args = (ArmSyncedArgs *)data;
+	int err;
+	lcu_assert(lua_gettop(args->L) == 0);
+	lua_pushlightuserdata(args->L, args->async);
+	lua_setfield(args->L, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
+	lua_settop(args->L, 2);  /* placeholder for 'syncport' and 'endname' */
+	err = lcuL_movefrom(args->L, L, lua_gettop(L)-2, "argument");
+	if (err != LUA_OK) {
+		const char *msg = lua_tostring(args->L, -1);
+		lua_settop(L, 0);
+		lua_pushboolean(L, 0);
+		lua_pushfstring(L, msg);
+		lua_settop(args->L, 0);
+		return NULL;
+	}
+	err = lcuT_armthrop(L, uv_async_init(args->loop, args->async, uv_onsynced));
+	if (err < 0) {
+		lua_settop(L, 0);
+		lcuL_pusherrres(L, err);
+		lua_settop(args->L, 0);
+		return NULL;
+	}
+	return args->L;
+}
+
+static int k_setupsynced (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
+	int narg = lua_gettop(L);
+	LuaChannel *channel = chklchannel(L, 1);
+	const char *endname = luaL_optstring(L, 2, "");
+	ArmSyncedArgs args;
+	args.loop = loop;
+	args.async = (uv_async_t *)handle;
+	args.L = channel->L;
+	if (narg < 2) {
+		lua_settop(L, 2);
+	} else if (!lcuL_canmove(L, narg-2, "argument")) {
+		lua_error(L);
+	}
+	if (channelsync_match(channel->sync, endname, L, armsynced, &args))
+		return lua_gettop(L);
+	return -1;
+}
+
+static int channel_sync (lua_State *L) {
+	return lcuT_resetthropk(L, -1, k_setupsynced, returnsynced);
+}
+
+/* res [, errmsg] = channel:prove(endpoint) */
+static int channel_probe (lua_State *L) {
+	return 0;
+}
+
+/* res [, errmsg] = channel:prove(endpoint) */
+static int channel_port (lua_State *L) {
+	luaL_checkudata(L, 1, LCU_CHANNELCLS);
+	lua_getuservalue(L, 1);
+	return 1;
+}
+
+static int channelctl_gc (lua_State *L) {
+	ChannelControl *channelctl = (ChannelControl *)lua_touserdata(L, 1);
+	uv_mutex_destroy(&channelctl->mutex);
+	/* channelctl->pending = 0; */
+	/* channelctl->L = NULL; */
+	return 0;
+}
+
+/* channel [, errmsg] = system.channel(syncport) */
+static int system_channel (lua_State *L) {
+	ChannelMap *map = channelmap_get(L);
+	const char *name = luaL_checkstring(L, 1);
+	void *allocud;
+	lua_Alloc allocf = lua_getallocf(L, &allocud);
+	LuaChannel *channel = (LuaChannel *)lua_newuserdata(L, sizeof(LuaChannel));
+	ChannelControl *channelctl;
+
+	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELCTLREGKEY) == LUA_TNIL) {
+		channelctl = (ChannelControl *)lua_newuserdata(L, sizeof(ChannelControl));
+		channelctl->pending = 0;
+		channelctl->L = NULL;
+		int err = uv_mutex_init(&channelctl->mutex);
+		if (err) return lcuL_pusherrres(L, err);
+		luaL_setmetatable(L, LCU_CHANNELCTL);
+		lua_setfield(L, LUA_REGISTRYINDEX, LCU_CHANNELCTLREGKEY);
+	} else {
+		channelctl = (ChannelControl *)lua_touserdata(L, -1);
+	}
+	lua_pop(L, 1);
+
+	channel->L = lua_newstate(allocf, allocud);
+	if (channel->L == NULL) luaL_error(L, "not enough memory");
+	channel->sync = channelmap_resolve(map, name);
+	if (channel->sync == NULL) {
+		lua_close(channel->L);
+		luaL_error(L, "not enough memory");
+	}
+	luaL_setmetatable(L, LCU_CHANNELCLS);
+
+	lua_pushlightuserdata(channel->L, channelctl);
+	lua_setfield(channel->L, LUA_REGISTRYINDEX, LCU_CHANNELCTLREGKEY);
+
+	return 1;
+}
+
+typedef int (*ChannelAction) (ChannelMap* map, ChannelSync *sync);
+
+static int listchannel (ChannelMap* map, ChannelSync *sync) {
+	return 0;
+}
+
+static int resetchannel (ChannelMap* map, ChannelSync *sync) {
+	lua_State *L;
+	uv_mutex_lock(&sync->mutex);
+	while ((L = dequeuestateq(&sync->queue))) lua_close(L);
+	uv_mutex_unlock(&sync->mutex);
+	return sync->refcount == 0;
+}
+
+/* names [, errmsg] = system.ichannels(action [, names]) */
+static int system_channelnames (lua_State *L) {
+	static const char *const options[] = { "list", "reset" };
+	static const ChannelAction actions[] = { listchannel, resetchannel };
+	ChannelAction action = actions[luaL_checkoption(L, 1, NULL, options)];
+	ChannelMap *map = channelmap_get(L);
+	lua_State *tabL = NULL;
+	int tabIdx = 1;
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_settop(L, 1);
+		lua_newtable(L);
+	} else {
+		luaL_checktype(L, 2, LUA_TTABLE);
+		lua_pushnil(L);
+		if (lua_next(L, 2)) {
+			lua_pop(L, 2);
+			tabL = L;
+			tabIdx = 2;
+		}
+	}
+	uv_mutex_lock(&map->mutex);
+	if (tabL == NULL) {
+		lcu_assert(lua_gettop(map->L) == 0);
+		lua_pushglobaltable(map->L);
+		tabL = map->L;
+	}
+	lua_pushnil(tabL);
+	while (lua_next(tabL, tabIdx)) {
+		const char *name = lua_tostring(tabL, -2);
+		lua_pop(tabL, 1);
+		if (name) {
+			int type = lua_getglobal(map->L, name);
+			if (type == LUA_TLIGHTUSERDATA) {
+				ChannelSync *sync = (ChannelSync *)lua_touserdata(map->L, -1);
+				int delete = action(map, sync);
+				if (delete) {
+					void *allocud;
+					lua_Alloc allocf = lua_getallocf(map->L, &allocud);
+					uv_mutex_destroy(&sync->mutex);
+					allocf(allocud, sync, sizeof(ChannelSync), 0);
+					lua_pushnil(map->L);
+					lua_setglobal(map->L, name);
+				}
+				lua_pushboolean(L, 1);
+			} else {
+				lua_pushnil(L);
+			}
+			lua_setfield(L, 2, name);
+			lua_pop(map->L, 1);
+		}
+	}
+	lua_settop(map->L, 0);  /* remove global table */
+	uv_mutex_unlock(&map->mutex);
+	lua_settop(L, 2);
+	return 1;
+}
+
+
+
+LCUI_FUNC void lcuM_addchanelc (lua_State *L) {
+	static const luaL_Reg channelctlf[] = {
+		{"__gc", channelctl_gc},
+		{NULL, NULL}
+	};
+	static const luaL_Reg channelf[] = {
+		{"__gc", channel_gc},
+		{"close", channel_close},
+		{"sync", channel_sync},
+		{"probe", channel_probe},
+		{"port", channel_port},
+		{NULL, NULL}
+	};
+	lcuM_newclass(L, LCU_CHANNELCTL);
+	lcuM_setfuncs(L, channelctlf, 0);
+	lua_pop(L, 1);
+	lcuM_newclass(L, LCU_CHANNELCLS);
+	lcuM_setfuncs(L, channelf, LCU_MODUPVS);
+	lua_pop(L, 1);
+
+	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELMAP) == LUA_TNIL) {
+		ChannelMap *map = (ChannelMap *)lua_newuserdata(L, sizeof(ChannelMap));
+		void *allocud;
+		lua_Alloc allocf = lua_getallocf(L, &allocud);
+		map->L = NULL;
+		lua_createtable(L, 0, 1);
+		lua_pushcfunction(L, channelmap_gc);
+		lua_setfield(L, -2, "__gc");
+		lua_setmetatable(L, -2);
+		map->L = lua_newstate(allocf, allocud);
+		if (map->L == NULL) luaL_error(L, "not enough memory");
+		uv_mutex_init(&map->mutex);
+		lua_setfield(L, LUA_REGISTRYINDEX, LCU_CHANNELMAP);
+	}
+	lua_pop(L, 1);
+}
+
+LCUI_FUNC void lcuM_addchanelf (lua_State *L) {
+	static const luaL_Reg modf[] = {
+		{"channelnames", system_channelnames},
 		{"channel", system_channel},
 		{NULL, NULL}
 	};
