@@ -7,7 +7,7 @@ static int lcuM_run (lua_State *L) {
 	int pending;
 	int mode = luaL_checkoption(L, 1, "loop", opts);
 	if (loop->data) luaL_error(L, "already running");
-	lua_settop(L, 2);  /* set trap function as top */
+	lua_settop(L, 0);
 	loop->data = (void *)L;
 	pending = uv_run(loop, mode);
 	loop->data = NULL;
