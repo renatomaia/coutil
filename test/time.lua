@@ -278,5 +278,14 @@ do case "ignore errors after cancel"
 		assert(stage == 1)
 	end
 
+
+	done()
+end
+
+do case "terminate scheduled"
+	dostring(utilschunk..[[
+		local system = require "coutil.system"
+		spawn(function () system.suspend() end)
+	]])
 	done()
 end

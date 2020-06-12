@@ -9,6 +9,15 @@
 #include <lauxlib.h>
 
 
+#define LCU_TASKTPOOLREGKEY	LCU_PREFIX"ThreadPool *taskThreadPool"
+#define LCU_CHANNELTASKREGKEY	LCU_PREFIX"ChannelTask channelTask"
+#define LCU_CHANNELSREGKEY	LCU_PREFIX"ChannelMap channelMap"
+
+typedef struct lcu_ActiveOps {
+	int asyncs;
+	int others;
+} lcu_ActiveOps;
+
 #define lcu_error(L,e)	luaL_error(L, uv_strerror(e))
 
 #define lcu_pusherror(L,e)	lua_pushstring(L, uv_strerror(e))
@@ -23,23 +32,25 @@ LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err);
 
 LCUI_FUNC lua_State *lcuL_newstate (lua_State *L);
 
-typedef int (*lcuL_CustomTransfer) (lua_State *from, lua_State *to, int arg);
+LCUI_FUNC int lcuL_canmove (lua_State *L,
+                            int n,
+                            const char *msg);
 
 LCUI_FUNC int lcuL_pushfrom (lua_State *to,
                              lua_State *from,
                              int idx,
-                             const char *msg,
-                             lcuL_CustomTransfer customf);
+                             const char *msg);
 
 LCUI_FUNC int lcuL_movefrom (lua_State *to,
                              lua_State *from,
                              int n,
-                             const char *msg,
-                             lcuL_CustomTransfer customf);
+                             const char *msg);
 
-#define LCU_MODUPVS	3
+#define LCU_MODUPVS	4
 
 #define lcu_toloop(L)	(uv_loop_t *)lua_touserdata(L, lua_upvalueindex(3))
+
+#define lcu_toactops(L)	(lcu_ActiveOps *)lua_touserdata(L, lua_upvalueindex(4))
 
 LCUI_FUNC void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv);
 
