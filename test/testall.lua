@@ -87,19 +87,44 @@ types = {
 	io.stdout,
 }
 
-dofile "event.lua"
-dofile "queued.lua"
-dofile "promise.lua"
-dofile "mutex.lua"
-dofile "spawn.lua"
-dofile "system.lua"
-dofile "time.lua"
-dofile "signal.lua"
-dofile "netaddr.lua"
-dofile "stream.lua"
-dofile "network.lua"
-dofile "pipe.lua"
-dofile "process.lua"
-dofile "coroutine.lua"
+luabin = "lua"
+do
+	local i = -1
+	while arg[i] ~= nil do
+		luabin = arg[i]
+		i = i-1
+	end
+end
+
+function writeto(path, ...)
+	local file = assert(io.open(path, "w"))
+	assert(file:write(...))
+	assert(file:close())
+end
+
+function readfrom(path)
+	local file = io.open(path, "r")
+	if file ~= nil then
+		local data = assert(file:read("*a"))
+		assert(file:close())
+		return data
+	end
+end
+
+--dofile "event.lua"
+--dofile "queued.lua"
+--dofile "promise.lua"
+--dofile "mutex.lua"
+--dofile "spawn.lua"
+--dofile "system.lua"
+--dofile "time.lua"
+--dofile "signal.lua"
+--dofile "netaddr.lua"
+--dofile "stream.lua"
+--dofile "network.lua"
+--dofile "pipe.lua"
+--dofile "process.lua"
+--dofile "coroutine.lua"
+dofile "thread.lua"
 
 print "\nSuccess!\n"
