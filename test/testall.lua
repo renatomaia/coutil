@@ -101,5 +101,6 @@ dofile "network.lua"
 dofile "pipe.lua"
 dofile "process.lua"
 dofile "coroutine.lua"
+dofile "thread.lua"
 
 print "\nSuccess!\n"
