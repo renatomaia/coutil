@@ -232,22 +232,33 @@ static int pushsyncportfrom (lua_State *to, lua_State *from, int arg, int type) 
 		default: return 0;
 	}
 	if (to) {
-		type = lua_getfield(to, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
+		int preloadtype = lua_getfield(to, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
 		lua_pop(to, 1);
-		switch (type) {
-			case LUA_TTABLE: lcu_pushsyncport(to, port); break;
-			case LUA_TNIL: lua_pushlightuserdata(to, port); break;
+		switch (preloadtype) {
+			case LUA_TTABLE: {
+				lcu_pushsyncport(to, port);
+			} break;
+			case LUA_TNIL: {
+				lua_pushlightuserdata(to, port);
+				lcu_refsyncport(port);
+			} break;
 			default: lcu_assert(0);
 		}
+		if (type == LUA_TLIGHTUSERDATA) lcu_unrefsyncport(port);
 	}
 	return 1;
 }
 
 static int pushreffromsyncport (lua_State *to, lua_State *from, int arg, int type) {
-	lcu_SyncPort **portref = lcu_tosyncportref(from, arg);
-	if (portref && *portref) {
-		if (to) lua_pushlightuserdata(to, *portref);
-		return 1;
+	if (type == LUA_TUSERDATA) {
+		lcu_SyncPort **portref = lcu_tosyncportref(from, arg);
+		if (portref && *portref) {
+			if (to) {
+				lua_pushlightuserdata(to, *portref);
+				lcu_refsyncport(*portref);
+			}
+			return 1;
+		}
 	}
 	return 0;
 }
@@ -257,6 +268,7 @@ static int pushsyncportfromref (lua_State *to, lua_State *from, int arg, int typ
 		if (to) {
 			lcu_SyncPort *port = (lcu_SyncPort *)lua_touserdata(from, arg);
 			lcu_pushsyncport(to, port);
+			lcu_unrefsyncport(port);
 		}
 		return 1;
 	}
@@ -591,7 +603,7 @@ LCULIB_API lcu_SyncPort *lcu_newsyncport (lua_State *L) {
 
 	port->allocf = allocf;
 	port->allocud = allocud;
-	uv_mutex_init(&port->mutex);
+	uv_mutex_init_recursive(&port->mutex);
 	port->refcount = 0;
 	port->expected = 0;
 	initstateq(&port->queue);
@@ -1005,7 +1017,7 @@ static int k_setupsynced (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 }
 
 static int channel_sync (lua_State *L) {
-	return lcuT_resetthropk(L, UV_ASYNC, k_setupsynced, returnsynced);
+	return lcuT_resetthropk(L, -1, k_setupsynced, returnsynced);
 }
 
 /* res [, errmsg] = channel:prove(endpoint) */
