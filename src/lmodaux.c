@@ -31,9 +31,27 @@ static void pushhandlemap (lua_State *L) {
 	}
 }
 
+#define LCU_UVLOOPCLS	LCU_PREFIX"EventLoop"
+
+static int terminateloop (lua_State *L) {
+	uv_loop_t *uv = (uv_loop_t *)luaL_checkudata(L, 1, LCU_UVLOOPCLS);
+	int err = uv_loop_close(uv);
+	if (err == UV_EBUSY && uv_run(uv, UV_RUN_NOWAIT) == 0)
+		err = uv_loop_close(uv);
+	lcu_assert(!err);
+	return 0;
+}
+
 LCULIB_API void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
 	if (uv) lua_pushlightuserdata(L, uv);
-	else uv = (uv_loop_t *)lua_newuserdata(L, sizeof(uv_loop_t));
+	else {
+		uv = (uv_loop_t *)lua_newuserdata(L, sizeof(uv_loop_t));
+		if (luaL_newmetatable(L, LCU_UVLOOPCLS)) {
+			lua_pushcfunction(L, terminateloop);
+			lua_setfield(L, -2, "__gc");
+		}
+		lua_setmetatable(L, -2);
+	}
 	lcu_chkerror(L, uv_loop_init(uv));
 	lua_newtable(L);  /* LCU_COREGISTRY */
 	pushhandlemap(L);  /* LCU_HANDLEMAP */
