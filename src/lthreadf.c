@@ -228,7 +228,6 @@ static void runthread (void *arg) {
 			} else {
 				pool->idle++;
 				uv_cond_wait(&pool->onwork, &pool->mutex);
-				pool->idle--;
 			}
 		}
 		pool->running++;
@@ -274,6 +273,7 @@ static void runthread (void *arg) {
 	thread_end:
 	pool->threads--;
 	if (hasextraidle_mx(pool)) {
+		pool->idle--;
 		uv_cond_signal(&pool->onwork);
 	} else if (pool->detached) {
 		if (pool->threads == 0) uv_cond_signal(&pool->onterm);
@@ -322,6 +322,7 @@ LCULIB_API int lcu_resizethreads (lcu_ThreadPool *pool, int size, int create) {
 			pool->threads++;
 		}
 	} else if (hasextraidle_mx(pool)) {
+		pool->idle--;
 		uv_cond_signal(&pool->onwork);
 	}
 	uv_mutex_unlock(&pool->mutex);
@@ -338,13 +339,17 @@ static int collectthreadpool (lua_State *L) {
 }
 
 static int addthread_mx (lcu_ThreadPool *pool, lua_State *L) {
-	if (pool->idle > 0) {
-		uv_cond_signal(&pool->onwork);
-	} else if (pool->threads < pool->size) {
-		uv_thread_t tid;
-		int err = uv_thread_create(&tid, runthread, pool);
-		if (err) return err;
-		pool->threads++;
+	/* starting or waking threads won't get this new task */
+	if (pool->threads-pool->running-pool->idle <= pool->pending) {
+		if (pool->idle > 0) {
+			pool->idle--;
+			uv_cond_signal(&pool->onwork);
+		} else if (pool->threads < pool->size) {
+			uv_thread_t tid;
+			int err = uv_thread_create(&tid, runthread, pool);
+			if (err) return err;
+			pool->threads++;
+		}
 	}
 	enqueuestateq(&pool->queue, L);
 	pool->pending++;
