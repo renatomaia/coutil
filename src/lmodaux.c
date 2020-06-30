@@ -101,8 +101,13 @@ LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
 	return NL;
 }
 
+#define doerrmsg(F,L,I,M,T) (I > 0 ? \
+	F(L, "unable to transfer %s #%d (got %s)", M, I, T) : \
+	F(L, "unable to transfer %s (got %s)", M, T))
+
 LCUI_FUNC int lcuL_canmove (lua_State *L,
                             int n,
+                            const char *msg,
                             lcuL_CustomTransfer customf) {
 	int i, top = lua_gettop(L);
 	for (i = 1+top-n; i <= top; ++i) {
@@ -117,7 +122,7 @@ LCUI_FUNC int lcuL_canmove (lua_State *L,
 					const char *tname = luaL_typename(L, i);
 					lua_settop(L, 0);
 					lua_pushnil(L);
-					lua_pushfstring(L, "unable to transfer argument #%d (got %s)", i, tname);
+					doerrmsg(lua_pushfstring, L, i, msg, tname);
 					return 0;
 				}
 			}
@@ -129,6 +134,7 @@ LCUI_FUNC int lcuL_canmove (lua_State *L,
 static void pushfrom (lua_State *to,
                       lua_State *from,
                       int idx,
+                      const char *msg,
                       lcuL_CustomTransfer customf) {
 	int type = lua_type(from, idx);
 	switch (type) {
@@ -150,7 +156,7 @@ static void pushfrom (lua_State *to,
 			if (customf && customf(to, from, idx, type)) break;
 			else {
 				const char *tname = luaL_typename(from, idx);
-				luaL_error(to, "unable to transfer argument #%d (got %s)", idx, tname);
+				doerrmsg(luaL_error, to, idx, msg, tname);
 			}
 		}
 	}
@@ -159,39 +165,44 @@ static void pushfrom (lua_State *to,
 static int auxpushfrom (lua_State *to) {
 	lua_State *from = (lua_State *)lua_touserdata(to, 1);
 	int idx = lua_tointeger(to, 2);
+	const char *msg = lua_tostring(to, 3);
 	lcuL_CustomTransfer customf = (lcuL_CustomTransfer)lua_touserdata(to, 4);
-	pushfrom(to, from, idx, customf);
+	pushfrom(to, from, idx, msg, customf);
 	return 1;
 }
 
 LCUI_FUNC int lcuL_pushfrom (lua_State *to,
                              lua_State *from,
                              int idx,
+                             const char *msg,
                              lcuL_CustomTransfer customf) {
 	lcu_assert(lua_gettop(from) >= idx);
 	if (!lua_checkstack(to, 4)) return LUA_ERRMEM;
 	lua_pushcfunction(to, auxpushfrom);
 	lua_pushlightuserdata(to, from);
 	lua_pushinteger(to, idx);
+	lua_pushstring(to, msg);
 	lua_pushlightuserdata(to, customf);
-	return lua_pcall(to, 3, 1, 0);
+	return lua_pcall(to, 4, 1, 0);
 }
 
 static int auxmovefrom (lua_State *to) {
 	lua_State *from = (lua_State *)lua_touserdata(to, 1);
 	int n = lua_tointeger(to, 2);
-	lcuL_CustomTransfer customf = (lcuL_CustomTransfer)lua_touserdata(to, 3);
+	const char *msg = lua_tostring(to, 3);
+	lcuL_CustomTransfer customf = (lcuL_CustomTransfer)lua_touserdata(to, 4);
 	int top = lua_gettop(from);
 	int idx;
 	lua_settop(to, 0);
 	luaL_checkstack(to, n, "too many values");
-	for (idx = 1+top-n; idx <= top; idx++) pushfrom(to, from, idx, customf);
+	for (idx = 1+top-n; idx <= top; idx++) pushfrom(to, from, idx, msg, customf);
 	return n;
 }
 
 LCUI_FUNC int lcuL_movefrom (lua_State *to,
                              lua_State *from,
                              int n,
+                             const char *msg,
                              lcuL_CustomTransfer customf) {
 	int status;
 	lcu_assert(lua_gettop(from) >= n);
@@ -199,8 +210,9 @@ LCUI_FUNC int lcuL_movefrom (lua_State *to,
 	lua_pushcfunction(to, auxmovefrom);
 	lua_pushlightuserdata(to, from);
 	lua_pushinteger(to, n);
+	lua_pushstring(to, msg);
 	lua_pushlightuserdata(to, customf);
-	status = lua_pcall(to, 3, n, 0);
+	status = lua_pcall(to, 4, n, 0);
 	if (status == LUA_OK) lua_pop(from, n);
 	return status;
 }

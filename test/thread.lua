@@ -101,7 +101,6 @@ do case "runtime errors"
 		assert(readfrom(errpath) == "[COUTIL PANIC] chunk.lua:2: Oops!\n")
 		os.remove(errpath)
 	end)
-
 	system.run()
 
 	done()
