@@ -12,6 +12,35 @@ do
 	file:close()
 end
 
+local LargeArray = {}
+function LargeArray:__len()
+	return rawget(self, "n") or 200
+end
+function LargeArray:__index(k)
+	return k <= #self and tostring(k) or nil
+end
+
+local combine
+do
+	local function iterate(values, n, current)
+		if n == 0 then
+			coroutine.yield(current)
+		else
+			if current == nil then current = {} end
+			local pos = #current+1
+			for i, value in ipairs(values) do
+				current[pos] = value
+				iterate(values, n-1, current)
+				current[pos] = nil
+			end
+		end
+	end
+
+	function combine(...)
+		return coroutine.wrap(iterate), ...
+	end
+end
+
 newtest "threads" --------------------------------------------------------------
 
 do case "error messages"
@@ -527,110 +556,7 @@ newtest "syncport" -------------------------------------------------------------
 --	done()
 --end
 
-local combine
-do
-	local function iterate(values, n, current)
-		if n == 0 then
-			coroutine.yield(current)
-		else
-			if current == nil then current = {} end
-			local pos = #current+1
-			for i, value in ipairs(values) do
-				current[pos] = value
-				iterate(values, n-1, current)
-				current[pos] = nil
-			end
-		end
-	end
-
-	function combine(...)
-		return coroutine.wrap(iterate), ...
-	end
-end
-
-local LargeArray = {}
-function LargeArray:__len()
-	return rawget(self, "n") or 200
-end
-function LargeArray:__index(k)
-	return k <= #self and tostring(k) or nil
-end
-
-
-local function testTransferErrors(chunk)
-	local t = assert(system.threads(1))
-	local many = setmetatable({}, LargeArray)
-	many[#many] = "{}"
-	for _, case in ipairs({
-		{ arg = 2, values = { "nil", "coroutine.running()" } },
-		{ arg = 4, values = { "nil", "false", "nil", "print" } },
-		{ arg = 10, values = { "nil", "nil", "nil", "nil", "nil", "nil", "nil", "nil", "nil", "io.stdout" } },
-		{ arg = #many, values = many },
-	}) do
-		local port = assert(system.syncport())
-		local path = os.tmpname()
-		local errval = assert(load("return "..case.values[case.arg]))()
-		local replaces = {
-			VALUES = table.concat(case.values, ", "),
-			ERRMSG = string.format("unable to transfer argument #%d (got %s)",
-			                       2+case.arg, type(errval)),
-		}
-		local task = utilschunk..[[
-			local port, path = ...
-			local _ENV = require "_G"
-			local coroutine = require "coroutine"
-			local table = require "table"
-			local io = require "io"
-			]]..chunk:gsub("${(%u+)}", replaces)..[[
-			sendsignal(path)
-		]]
-		assert(t:dostring(task, "@chunk", "t", port, path))
-		waitsignal(path)
-	end
-end
-
-local function testTransferPort(t, begin, sync, finish)
-	local port1, port2 = system.syncport(), system.syncport()
-	local path = os.tmpname()
-	local syncrecv = sync:gsub("${ARGS}", "nil")
-	local task1 = utilschunk..[[
-		local path, port1, port1copy = ...
-		]]..begin..[[
-		local _ENV = require "_G"
-		local coroutine = require "coroutine"
-		assert(rawequal(port1copy, port1))
-		local gc = setmetatable({}, { __mode = "v" })
-		_, gc.port1, gc.port2 = assert(]]..syncrecv:gsub("${PORT}", "port1")..[[)
-		assert(rawequal(gc.port1, port1))
-		assert(gc.port2 ~= port1)
-		assert(port1:close())
-		_, gc.port1 = assert(]]..syncrecv:gsub("${PORT}", "gc.port2")..[[)
-		assert(gc.port1 ~= port1)
-		_, gc.port1copy, gc.port2copy = assert(]]..syncrecv:gsub("${PORT}", "gc.port1")..[[)
-		assert(rawequal(gc.port1copy, gc.port1))
-		assert(rawequal(gc.port2copy, gc.port2))
-		collectgarbage()
-		assert(gc.port1 == nil)
-		assert(gc.port2 == nil)
-		assert(gc.port1copy == nil)
-		assert(gc.port2copy == nil)
-		sendsignal(path)
-		]]..finish..[[
-	]]
-	assert(t:dostring(task1, "@task1.lua", "t", path, port1, port1))
-	local task2 = utilschunk..[[
-		local port1, port2 = ...
-		]]..begin..[[
-		assert(]]..sync:gsub("${(%u+)}", { PORT = "port1", ARGS = "nil, port1, port2" })..[[)
-		assert(]]..sync:gsub("${(%u+)}", { PORT = "port2", ARGS = "nil, port1"        })..[[)
-		assert(]]..sync:gsub("${(%u+)}", { PORT = "port1", ARGS = "nil, port1, port2" })..[[)
-		]]..finish..[[
-	]]
-	assert(t:dostring(task2, "@task2.lua", "t", port1, port2))
-	waitsignal(path)
-end
-
-while false do case "queueing on endpoints"
+do case "queueing on endpoints"
 	local chunks = {
 		function (t, ...)
 			local chunk = utilschunk..[[
@@ -805,56 +731,162 @@ do case "transfer values"
 end
 
 do case "transfer errors"
-	testTransferErrors([[
-		asserterr("${ERRMSG}", require("coroutine").yield(port, nil, ${VALUES}))
-	]])
-	done()
-end
-
-do case "transfer port"
-	local t = assert(system.threads(1))
-	testTransferPort(t, [[
+	local chunkprefix = utilschunk..[[
+		local port, path = ...
+		local _ENV = require "_G"
 		local coroutine = require "coroutine"
-	]], [[
-		coroutine.yield(${PORT}, ${ARGS})
-	]], [[
-	]])
-	assert(t:close())
-	done()
-end
+		local table = require "table"
+		local io = require "io"
+	]]
+	local chunks = {
+		function (t, args, errmsg, ...)
+			local chunk = chunkprefix..[[
+				asserterr("]]..errmsg..[[", require("coroutine").yield(port, nil, ]]..args..[[))
+				sendsignal(path)
+			]]
+			assert(t:dostring(chunk, "@chunk", "t", ...))
+		end,
+		function (t, args, errmsg, ...)
+			local chunk = chunkprefix..[[
+				local system = require "coutil.system"
+				spawn(function ()
+					local channel = system.channel(port)
+					asserterr("]]..errmsg..[[", pcall(channel.sync, channel, nil, ]]..args..[[))
+					sendsignal(path)
+				end)
+				system.run()
+			]]
+			assert(t:dostring(chunk, "@chunk", "t", ...))
+		end,
+		function (_, args, errmsg, port, path)
+			spawn(function ()
+				local makeargvals = assert(load("return "..args))
+				local channel = system.channel(port)
+				asserterr(errmsg, pcall(channel.sync, channel, nil, makeargvals()))
+				sendsignal(path)
+			end)
+		end,
+	}
+	local completed
+	spawn(function ()
+		local t = assert(system.threads(1))
+		local many = setmetatable({}, LargeArray)
+		many[#many] = "{}"
+		for _, case in ipairs({
+			{ arg = 2, values = { "nil", "coroutine.running()" } },
+			{ arg = 4, values = { "nil", "false", "nil", "print" } },
+			{ arg = 10, values = { "nil", "nil", "nil", "nil", "nil", "nil", "nil", "nil", "nil", "io.stdout" } },
+			{ arg = #many, values = many },
+		}) do
+			local port = assert(system.syncport())
+			local path = os.tmpname()
+			local errval = assert(load("return "..case.values[case.arg]))()
+			local errmsg = string.format("unable to transfer argument #%d (got %s)",
+			                             2+case.arg, type(errval))
+			local args = table.concat(case.values, ", ")
+			for _, task in ipairs(chunks) do
+				task(t, args, errmsg, port, path)
+				waitsignal(path, system.suspend)
+			end
+		end
+		assert(t:close())
+		completed = true
+	end)
+	system.run()
+	assert(completed == true)
 
-newtest "channel" --------------------------------------------------------------
-
-do case "transfer errors"
-	testTransferErrors([[
-		local system = require "coutil.system"
-		local done
-		spawn(function ()
-			local channel = system.channel(port)
-			asserterr("${ERRMSG}", pcall(channel.sync, channel, nil, ${VALUES}))
-			done = true
-		end)
-		system.run()
-		assert(done == true)
-	]])
 	done()
 end
 
 do case "transfer port"
-	local t = assert(system.threads(2))
-	testTransferPort(t, [[
-		local system = require "coutil.system"
-		spawn(function ()
-	]], [[
-			system.channel(${PORT}):sync(${ARGS})
-	]], [[
-		end)
-		system.run()
-	]])
-	assert(t:close())
+	local function replace(subject, values)
+		return subject:gsub("${(%u+)}", values)
+	end
+	local function task1(prefix, begin, sync, finish)
+		local recv = replace(sync, { ARGS = "nil" })
+		return prefix..[[
+			local path, port1, port1copy = ...
+			]]..begin..[[
+			local _ENV = require "_G"
+			local coroutine = require "coroutine"
+			assert(rawequal(port1copy, port1))
+			local gc = setmetatable({}, { __mode = "v" })
+			_, gc.port1, gc.port2 = assert(]]..replace(recv, { PORT = "port1"})..[[)
+			assert(rawequal(gc.port1, port1))
+			assert(gc.port2 ~= port1)
+			assert(port1:close())
+			_, gc.port1 = assert(]]..replace(recv, { PORT = "gc.port2" })..[[)
+			assert(gc.port1 ~= port1)
+			assert(]]..replace(sync, { PORT = "gc.port2", ARGS = "nil, gc.port1" })..[[)
+			_, gc.port1copy, gc.port2copy = assert(]]..replace(recv, { PORT = "gc.port1" })..[[)
+			assert(rawequal(gc.port1copy, gc.port1))
+			assert(rawequal(gc.port2copy, gc.port2))
+			collectgarbage()
+			sendsignal(path)
+			]]..finish
+	end
+	local function task2(prefix, begin, sync, finish)
+		return prefix..[[
+			local port1, port2 = ...
+			]]..begin..[[
+			assert(]]..replace(sync, { PORT = "port1", ARGS = "nil, port1, port2" })..[[)
+			assert(]]..replace(sync, { PORT = "port2", ARGS = "nil, port1"        })..[[)
+			local _, port1copy = assert(]]..replace(sync, { PORT = "port2", ARGS = "nil" })..[[)
+			assert(]]..replace(sync, { PORT = "port1copy", ARGS = "nil, port1copy, port2" })..[[)
+			]]..finish
+	end
+
+	local tasks = {
+		function (t, makechunk, ...)
+			local chunk = makechunk(utilschunk, [[
+				local coroutine = require "coroutine"
+			]],[[
+				coroutine.yield(${PORT}, ${ARGS})
+			]],[[
+			]])
+			assert(t:dostring(chunk, "@chunk", "t", ...))
+		end,
+		function (t, makechunk, ...)
+			local chunk = makechunk(utilschunk, [[
+				local system = require "coutil.system"
+				spawn(function ()
+			]],[[
+					system.channel(${PORT}):sync(${ARGS})
+			]],[[
+				end)
+				system.run()
+			]])
+			assert(t:dostring(chunk, "@chunk", "t", ...))
+		end,
+		function (t, makechunk, ...)
+			local chunk = makechunk("", [[
+				local system = require "coutil.system"
+			]], [[
+				system.channel(${PORT}):sync(${ARGS})
+			]], "")
+			spawn(assert(load(chunk, "@chunk", "t")), ...)
+		end,
+	}
+
+	local completed
+	spawn(function ()
+		local t = assert(system.threads(2))
+		for tasks in combine(tasks, 2) do
+			local path = os.tmpname()
+			local port1, port2 = system.syncport(), system.syncport()
+			tasks[1](t, task1, path, port1, port1)
+			tasks[2](t, task2, port1, port2)
+			waitsignal(path, system.suspend)
+		end
+		assert(t:close())
+
+		completed = true
+	end)
+	system.run()
+	assert(completed == true)
+
 	done()
 end
-
 
 --[===[
 do case "transfer port"
