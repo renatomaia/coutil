@@ -101,12 +101,37 @@ LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
 	return NL;
 }
 
+LCUI_FUNC int lcuL_canmove (lua_State *L,
+                            int n,
+                            lcuL_CustomTransfer customf) {
+	int i, top = lua_gettop(L);
+	for (i = 1+top-n; i <= top; ++i) {
+		int type = lua_type(L, i);
+		switch (type) {
+			case LUA_TNIL:
+			case LUA_TBOOLEAN:
+			case LUA_TNUMBER:
+			case LUA_TSTRING: break;
+			default: {
+				if (customf == NULL || !customf(NULL, L, i, type)) {
+					const char *tname = luaL_typename(L, i);
+					lua_settop(L, 0);
+					lua_pushnil(L);
+					lua_pushfstring(L, "unable to transfer argument #%d (got %s)", i, tname);
+					return 0;
+				}
+			}
+		}
+	}
+	return 1;
+}
+
 static void pushfrom (lua_State *to,
                       lua_State *from,
                       int idx,
-                      const char *msg,
                       lcuL_CustomTransfer customf) {
-	switch (lua_type(from, idx)) {
+	int type = lua_type(from, idx);
+	switch (type) {
 		case LUA_TNIL: {
 			lua_pushnil(to);
 		} break;
@@ -121,16 +146,12 @@ static void pushfrom (lua_State *to,
 			const char *s = lua_tolstring(from, idx, &l);
 			lua_pushlstring(to, s, l);
 		} break;
-		case LUA_TLIGHTUSERDATA: {
-			lua_pushlightuserdata(to, lua_touserdata(from, idx));
-		} break;
-		case LUA_TUSERDATA: {
-			if (customf && customf(to, from, idx)) break;
-		}
 		default: {
-			const char *tname = luaL_typename(from, idx);
-			if (idx < 0) luaL_error(to, "unable to %s (got %s)", msg, tname);
-			else luaL_error(to, "unable to %s #%d (got %s)", msg, idx, tname);
+			if (customf && customf(to, from, idx, type)) break;
+			else {
+				const char *tname = luaL_typename(from, idx);
+				luaL_error(to, "unable to transfer argument #%d (got %s)", idx, tname);
+			}
 		}
 	}
 }
@@ -138,44 +159,39 @@ static void pushfrom (lua_State *to,
 static int auxpushfrom (lua_State *to) {
 	lua_State *from = (lua_State *)lua_touserdata(to, 1);
 	int idx = lua_tointeger(to, 2);
-	const char *msg = (const char *)lua_touserdata(to, 3);
 	lcuL_CustomTransfer customf = (lcuL_CustomTransfer)lua_touserdata(to, 4);
-	pushfrom(to, from, idx, msg, customf);
+	pushfrom(to, from, idx, customf);
 	return 1;
 }
 
 LCUI_FUNC int lcuL_pushfrom (lua_State *to,
                              lua_State *from,
                              int idx,
-                             const char *msg,
                              lcuL_CustomTransfer customf) {
 	lcu_assert(lua_gettop(from) >= idx);
 	if (!lua_checkstack(to, 4)) return LUA_ERRMEM;
 	lua_pushcfunction(to, auxpushfrom);
 	lua_pushlightuserdata(to, from);
 	lua_pushinteger(to, idx);
-	lua_pushlightuserdata(to, (void *)msg);
 	lua_pushlightuserdata(to, customf);
-	return lua_pcall(to, 4, 1, 0);
+	return lua_pcall(to, 3, 1, 0);
 }
 
 static int auxmovefrom (lua_State *to) {
 	lua_State *from = (lua_State *)lua_touserdata(to, 1);
 	int n = lua_tointeger(to, 2);
-	const char *msg = (const char *)lua_touserdata(to, 3);
-	lcuL_CustomTransfer customf = (lcuL_CustomTransfer)lua_touserdata(to, 4);
+	lcuL_CustomTransfer customf = (lcuL_CustomTransfer)lua_touserdata(to, 3);
 	int top = lua_gettop(from);
 	int idx;
 	lua_settop(to, 0);
 	luaL_checkstack(to, n, "too many values");
-	for (idx = 1+top-n; idx <= top; idx++) pushfrom(to, from, idx, msg, customf);
+	for (idx = 1+top-n; idx <= top; idx++) pushfrom(to, from, idx, customf);
 	return n;
 }
 
 LCUI_FUNC int lcuL_movefrom (lua_State *to,
                              lua_State *from,
                              int n,
-                             const char *msg,
                              lcuL_CustomTransfer customf) {
 	int status;
 	lcu_assert(lua_gettop(from) >= n);
@@ -183,9 +199,8 @@ LCUI_FUNC int lcuL_movefrom (lua_State *to,
 	lua_pushcfunction(to, auxmovefrom);
 	lua_pushlightuserdata(to, from);
 	lua_pushinteger(to, n);
-	lua_pushlightuserdata(to, (void *)msg);
 	lua_pushlightuserdata(to, customf);
-	status = lua_pcall(to, 4, n, 0);
+	status = lua_pcall(to, 3, n, 0);
 	if (status == LUA_OK) lua_pop(from, n);
 	return status;
 }
