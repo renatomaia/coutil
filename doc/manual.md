@@ -69,7 +69,7 @@ Index
 		- [`socket:shutdown`](#socketshutdown-)
 		- [`socket:listen`](#socketlisten-backlog)
 		- [`socket:accept`](#socketaccept-)
-	- [`system.coroutine`](#systemcoroutine-chunk--chunkname--mode)
+	- [`system.load`](#systemload-chunk--chunkname--mode)
 		- [`coroutine:resume`](#coroutineresume-)
 		- [`coroutine:status`](#coroutinestatus-)
 		- [`coroutine:close`](#coroutineclose-)
@@ -852,14 +852,19 @@ This operation is only available for passive sockets.
 
 Returns a new stream socket for the accepted connection.
 
-### `system.coroutine (chunk [, chunkname [, mode]])`
+### `system.load (chunk [, chunkname [, mode]])`
 
 Returns a new independent coroutine to execute a code in a separate system thread.
 The code to be executed is given by the arguments `chunk`, `chunkname`, `mode`, which are the same of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
 
+### `system.loadfile ([filepath [, mode]])`
+
+Similar to [`system.load`](#systemload-chunk--chunkname--mode), but gets the chunk from file.
+The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.3/manual.html#pdf-loadfile).
+
 ### `coroutine:resume (...)`
 
-[Await function](#await) that is like [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume), but executes an [independent coroutine](#systemcoroutine-chunk-chunkname-mode-) on a separate system thread and awaits for its completion or suspension ([`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
+[Await function](#await) that is like [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume), but executes an [independent coroutine](#systemload-chunk--chunkname--mode) on a separate system thread and awaits for its completion or suspension ([`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
 Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values can be passed as arguments or returned from the coroutines.
 
 If the coroutine executing this function is explicitly resumed,
@@ -878,12 +883,12 @@ such as the ones used in the [Lua standalone interpreter](http://www.lua.org/man
 ### `coroutine:status ()`
 
 Like to [`coroutine.status`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume),
-but for coroutines created with function [`system.coroutine`](#systemcoroutine-chunk--chunkname--mode).
+but for coroutines created with function [`system.load`](#systemload-chunk--chunkname--mode).
 
 ### `coroutine:close ()`
 
 Like to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
-but for coroutines created with function [`system.coroutine`](#systemcoroutine-chunk--chunkname--mode).
+but for coroutines created with function [`system.load`](#systemload-chunk--chunkname--mode).
 
 
 ### `system.tpool ([size])`

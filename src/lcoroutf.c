@@ -5,7 +5,7 @@
 #include <lualib.h>
 #include <lmemlib.h>
 
-/* succ [, errmsg] = system.coroutine(chunk, chunkname, mode) */
+
 static const luaL_Reg stdlibs[] = {
 	{"_G", luaopen_base},
 	{LUA_COLIBNAME, luaopen_coroutine},
@@ -21,31 +21,29 @@ static const luaL_Reg stdlibs[] = {
 #endif
 	{NULL, NULL}
 };
-static void preloadlibs (lua_State *L) {
+
+static lua_State *newstate (lua_State *L) {
 	const luaL_Reg *lib;
-	luaL_checkstack(L, 3, "not enough memory");
-	luaL_requiref(L, LUA_LOADLIBNAME, luaopen_package, 0);
-	luaL_getsubtable(L, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
-	for (lib = stdlibs; lib->func; lib++) {
-		lua_pushcfunction(L, lib->func);
-		lua_setfield(L, -2, lib->name);
-	}
-	lua_pop(L, 2);  /* remove 'package' and 'LUA_PRELOAD_TABLE' */
-}
-static void copypanic (lua_State *from, lua_State *to) {
-	lua_CFunction panic = lua_atpanic(from, NULL);
-	lua_atpanic(from, panic);
-	lua_atpanic(to, panic);
-}
-static int system_coroutine (lua_State *L) {
-	size_t l;
-	const char *s = luamem_checkstring(L, 1, &l);
-	const char *chunkname = luaL_optstring(L, 2, s);
-	const char *mode = luaL_optstring(L, 3, "bt");
 	void *allocud;
 	lua_Alloc allocf = lua_getallocf(L, &allocud);
+	lua_CFunction panic = lua_atpanic(L, NULL);  /* changes panic function */
 	lua_State *NL = lua_newstate(allocf, allocud);  /* create state */
-	int status = luaL_loadbufferx(NL, s, l, chunkname, mode);
+
+	lua_atpanic(L, panic);  /* restore panic function */
+	lua_atpanic(NL, panic);
+
+	luaL_checkstack(NL, 3, "not enough memory");
+	luaL_requiref(NL, LUA_LOADLIBNAME, luaopen_package, 0);
+	luaL_getsubtable(NL, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
+	for (lib = stdlibs; lib->func; lib++) {
+		lua_pushcfunction(NL, lib->func);
+		lua_setfield(NL, -2, lib->name);
+	}
+	lua_pop(NL, 2);  /* remove 'package' and 'LUA_PRELOAD_TABLE' */
+	return NL;
+}
+
+static int doloaded (lua_State *L, lua_State *NL, int status) {
 	if (status != LUA_OK) {  /* error (message is on top of the stack) */
 		const char *errmsg = lua_tostring(NL, -1);
 		lua_pushnil(L);
@@ -53,10 +51,28 @@ static int system_coroutine (lua_State *L) {
 		lua_close(NL);
 		return 2;  /* return nil plus error message */
 	}
-	copypanic(L, NL);
-	preloadlibs(NL);
 	lcu_newsysco(L, NL);
 	return 1;
+}
+
+/* succ [, errmsg] = system.load(chunk, chunkname, mode) */
+static int system_load (lua_State *L) {
+	size_t l;
+	const char *s = luamem_checkstring(L, 1, &l);
+	const char *chunkname = luaL_optstring(L, 2, s);
+	const char *mode = luaL_optstring(L, 3, NULL);
+	lua_State *NL = newstate(L);  /* create a similar state */
+	int status = luaL_loadbufferx(NL, s, l, chunkname, mode);
+	return doloaded(L, NL, status);
+}
+
+/* succ [, errmsg] = system.loadfile(filepath, mode) */
+static int system_loadfile (lua_State *L) {
+	const char *fpath = luaL_optstring(L, 1, NULL);
+	const char *mode = luaL_optstring(L, 2, NULL);
+	lua_State *NL = newstate(L);  /* create a similar state */
+	int status = luaL_loadfilex(NL, fpath, mode);
+	return doloaded(L, NL, status);
 }
 
 
@@ -245,7 +261,8 @@ LCUI_FUNC void lcuM_addcoroutc (lua_State *L) {
 
 LCUI_FUNC void lcuM_addcoroutf (lua_State *L) {
 	static const luaL_Reg modf[] = {
-		{"coroutine", system_coroutine},
+		{"load", system_load},
+		{"loadfile", system_loadfile},
 		{NULL, NULL}
 	};
 	lcuM_setfuncs(L, modf, LCU_MODUPVS);
