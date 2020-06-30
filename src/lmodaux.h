@@ -30,16 +30,19 @@ typedef int (*lcuL_CustomTransfer) (lua_State *from,
 
 LCUI_FUNC int lcuL_canmove (lua_State *L,
                             int n,
+                            const char *msg,
                             lcuL_CustomTransfer customf);
 
 LCUI_FUNC int lcuL_pushfrom (lua_State *to,
                              lua_State *from,
                              int idx,
+                             const char *msg,
                              lcuL_CustomTransfer customf);
 
 LCUI_FUNC int lcuL_movefrom (lua_State *to,
                              lua_State *from,
                              int n,
+                             const char *msg,
                              lcuL_CustomTransfer customf);
 
 #define LCU_MODUPVS	3
