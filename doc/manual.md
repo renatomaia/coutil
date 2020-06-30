@@ -80,9 +80,11 @@ Index
 		- [`threads:dostring`](#threadsdostring-chunk--chunkname--mode-)
 		- [`threads:dofile`](#threadsdofile-filepath--mode-)
 		- [`threads:close`](#threadsclose-)
-	- [`system.channel`](#systemchannel-)
-		- [`channel:send`](#channelsend-)
-		- [`channel:receive`](#channelreceive-probe)
+	- [`system.channelnames`](#systemchannelnames-action-)
+	- [`system.channel`](#systemchannel-name)
+		- [`channel:sync`](#channelsync-endpoint-)
+		- [`channel:trysync`](#channeltrysync-endpoint-)
+		- [`channel:probe`](#channelprobe-endpoint)
 		- [`channel:close`](#channelclose-)
 
 Contents
@@ -823,7 +825,7 @@ Otherwise it returns `nil` plus an error message.
 ### `socket:leavegroup (multicast [, interface])`
 
 Removed network interface with address `interface` from the multicast group of address `multicast`
-(see [`datagram:joingroup`](#datagramjoingroup-multicast--interface)).
+(see [`socket:joingroup`](#socketjoingroup-multicast--interface)).
 
 This operation is only available for UDP sockets.
 
@@ -957,7 +959,7 @@ and starts as soon as a system thread is available.
 
 Arguments `chunk`, `chunkname`, `mode` are the same of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
 Arguments `...` are passed to the loaded chunk,
-but only _nil_, _boolean_, _number_, _string_, _light userdata_ and [_synchronization port_](#systemsyncport-) values are allowed as such arguments.
+but only _nil_, _boolean_, _number_, _string_ and _light userdata_ values are allowed as such arguments.
 
 Whenever the loaded `chunk` [yields](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield) it reschedules itself as pending to be resumed,
 and releases its running system thread.
@@ -966,6 +968,8 @@ Execution errors in the loaded `chunk` terminate the _task_,
 and a message is written to the current process [standard error](https://en.wikipedia.org/wiki/Standard_streams#Standard_error_(stderr)) with prefix `[COUTIL PANIC]`.
 
 Returns `true` if `chunk` is loaded successfully.
+
+__Note__: A _task_ can yield a channel name followed by the arguments of [`channel:await`](#channelawait-endpoint-) to be suspended without the need to create a _channel_ nor coroutines.
 
 ### `threads:dofile (filepath [, mode, ...])`
 
@@ -988,27 +992,30 @@ call this function on every _thread pool_.
 
 Moreover, a _thread pool_ that is not closed will prevent the current Lua state to terminate (_i.e._ `lua_close` to return) until it has either no more tasks or no more system threads.
 
-### `system.syncport ()`
+### `system.channelnames (action [, names])`
 
-Returns a new _synchronization port_ that can be shared among [_system coroutines_](#systemload-chunk--chunkname--mode) or [_tasks_](#threadsdostring-chunk--chunkname--mode-) to create [_channels_](#systemchannel-) for synchronization and to exchange values between them.
+Performs an action on channel names,
+according to the following value of `action`:
 
-A _task_ can yield a _synchronization port_ followed by the arguments of [`channel:sync`](#channelsync-operation-) to be suspended without the need to create a _channel_ nor coroutines.
+- `"list"`: finds existing channels.
+- `"reset"`: closes tasks waiting on the channel and frees any resources of the channel.
 
-### `system.channel ([syncport])`
+The keys of table `names` are the name of the channels the action must be performed on.
+When no extra arguments are provides,
+all channels are considered.
 
-Returns a new _channel_ over [_synchronization port_](#systemsyncport-) `syncport`.
-If `syncport` is not provided, a new _synchronization port_ is implicitly created.
+Returns a table wit
 
-Channels over the same _synchronization port_ share the same corresponding [_endpoints_](#channelsync-outward-).
+### `system.channel (name)`
 
-### `channel:port ()`
+Returns a new _channel_ with name `name`.
 
-Returns the [_synchronization port_](#systemsyncport-) `syncport` of the channel `channel`.
+Channels with the same name share the same corresponding [_endpoints_](#channelawait-endpoint-).
 
-### `channel:sync (endpoint, ...)`
+### `channel:await (endpoint, ...)`
 
 [Await function](#await) that awaits for a similar call on the opposite _endpoint_,
-either from another coroutine, [_tasks_](#threadsdostring-chunk--chunkname--mode-) or  [_system coroutines_](#systemload-chunk--chunkname--mode).
+either from another coroutine, [_task_](#threadsdostring-chunk--chunkname--mode-) or [_system coroutine_](#systemload-chunk--chunkname--mode).
 
 `endpoint` is a string that starts with either letter `"i"` or `"o"`,
 each identifying an oposite _endpoint_ of the _channel_.
@@ -1018,6 +1025,11 @@ this call will match with any call on either _endpoints_.
 Returns `true` followed by the extra arguments `...` from the matching call.
 Otherwise, return `false` followed by an error message.
 
-### `channel:probe (endpoint)`
+### `channel:sync (endpoint, ...)`
+
+Similar to [`channel:sync`](#channelawait-endpoint-),
+but does not await for a matching call.
+In such case,
+it returns `nil` followed by message "empty".
 
 ### `channel:close ()`

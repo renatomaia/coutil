@@ -55,6 +55,14 @@ LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
 	lua_atpanic(NL, panic);
 
 	luaL_checkstack(NL, 3, "not enough memory");
+
+	/* copy channel map reference */
+	lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELMAP);
+	lcu_assert(lua_touserdata(L, -1) != NULL);
+	lua_pushlightuserdata(NL, lua_touserdata(L, -1));
+	lua_setfield(NL, LUA_REGISTRYINDEX, LCU_CHANNELMAP);
+	lua_pop(L, 1);
+
 	luaL_requiref(NL, LUA_LOADLIBNAME, luaopen_package, 0);
 	luaL_getsubtable(NL, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
 	luaL_getsubtable(L, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
