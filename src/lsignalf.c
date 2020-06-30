@@ -63,13 +63,16 @@ static void lcuB_onsignal (uv_signal_t *handle, int signum) {
 static int lcuK_setupsignal (lua_State *L, int status, lua_KContext ctx) {
 	uv_loop_t *loop = lcu_toloop(L);
 	lcu_PendingOp *op = lcu_getopof(L);
+	int scheduled;
 	lcu_assert(status == LUA_YIELD);
-	if (lcu_doresumed(L, loop, op)) {
+	scheduled = lcu_doresumed(L, loop);
+	lcu_ignoreop(op, scheduled);
+	if (scheduled) {
 		uv_handle_t *handle = lcu_tohandle(op);
 		uv_signal_t *signal = (uv_signal_t *)handle;
 		int signum = (int)ctx;
 		lua_settop(L, 0);  /* discard yield results */
-		lcu_chkinitop(L, op, loop, uv_signal_init(loop, signal));
+		lcu_chkinitiated(L, (void*)op, uv_signal_init(loop, signal));
 		lcu_chkstarthdl(L, handle, uv_signal_start(signal, lcuB_onsignal, signum));
 		return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
 	}

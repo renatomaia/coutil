@@ -17,13 +17,16 @@ static void lcuB_onidle (uv_idle_t *h) {
 static int lcuK_setupidle (lua_State *L, int status, lua_KContext ctx) {
 	uv_loop_t *loop = lcu_toloop(L);
 	lcu_PendingOp *op = lcu_getopof(L);
+	int scheduled;
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
-	if (lcu_doresumed(L, loop, op)) {
+	scheduled = lcu_doresumed(L, loop);
+	lcu_ignoreop(op, scheduled);
+	if (scheduled) {
 		uv_handle_t *handle = lcu_tohandle(op);
 		uv_idle_t *idle = (uv_idle_t *)handle;
 		lua_settop(L, 0);  /* discard yield results */
-		lcu_chkinitop(L, op, loop, uv_idle_init(loop, idle));
+		lcu_chkinitiated(L, (void *)op, uv_idle_init(loop, idle));
 		lcu_chkstarthdl(L, handle, uv_idle_start(idle, lcuB_onidle));
 		return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
 	}
@@ -37,13 +40,16 @@ static void lcuB_ontimer (uv_timer_t *h) {
 static int lcuK_setuptimer (lua_State *L, int status, lua_KContext ctx) {
 	uv_loop_t *loop = lcu_toloop(L);
 	lcu_PendingOp *op = lcu_getopof(L);
+	int scheduled;
 	lcu_assert(status == LUA_YIELD);
-	if (lcu_doresumed(L, loop, op)) {
+	scheduled = lcu_doresumed(L, loop);
+	lcu_ignoreop(op, scheduled);
+	if (scheduled) {
 		uv_handle_t *handle = lcu_tohandle(op);
 		uv_timer_t *timer = (uv_timer_t *)handle;
 		uint64_t msecs = (uint64_t)(ctx);
 		lua_settop(L, 0);  /* discard yield results */
-		lcu_chkinitop(L, op, loop, uv_timer_init(loop, timer));
+		lcu_chkinitiated(L, (void *)op, uv_timer_init(loop, timer));
 		lcu_chkstarthdl(L, handle, uv_timer_start(timer, lcuB_ontimer, msecs, msecs));
 		return lcu_yieldop(L, 0, lcuK_chkignoreop, op);
 	}
