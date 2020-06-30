@@ -887,7 +887,7 @@ utf8 = require "utf8"
 debug = require "debug"
 ```
 
-**Note:** These _system coroutines_ run in a separate thread,
+__Note__: These _system coroutines_ run in a separate thread,
 but share the same [memory allocation](http://www.lua.org/manual/5.3/manual.html#lua_Alloc) and [panic function](http://www.lua.org/manual/5.3/manual.html#lua_atpanic) of the caller.
 Therefore, it is required that thread-safe implementations are used,
 such as the ones used in the [Lua standalone interpreter](http://www.lua.org/manual/5.3/manual.html#7).
