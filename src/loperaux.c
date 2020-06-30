@@ -6,31 +6,10 @@
 #define LCU_OPERATIONS	lua_upvalueindex(3)
 
 
-LCULIB_API lua_State *lcu_getopcoro(lcu_PendingOp *op) {
-	void *data = NULL;
-	switch (lcu_getoptype(op)) {
-		case LCU_OPTYPE_GLOBAL: data = lcu_toglobalop(op)->data; break;
-		case LCU_OPTYPE_OBJECT: data = lcu_toobjectop(op)->data; break;
-		case LCU_OPTYPE_REQUEST: data = lcu_torequestop(op)->data; break;
-		default: lcu_assert(0);
-	}
-	return (lua_State *)data;
-}
-
-LCULIB_API uv_loop_t *lcu_getoploop(lcu_PendingOp *op) {
-	switch (lcu_getoptype(op)) {
-		case LCU_OPTYPE_GLOBAL: return lcu_toglobalop(op)->loop;
-		case LCU_OPTYPE_OBJECT: return lcu_toobjectop(op)->loop;
-		case LCU_OPTYPE_REQUEST: return (op)->kind.request.loop;
-	}
-	lcu_assert(0);
-	return NULL;
-}
-
 LCULIB_API lcu_PendingOp *lcu_getopof (lua_State *L) {
 	lcu_PendingOp *op;
 	lua_pushthread(L);
-	if (lua_gettable(L, LCU_OPERATIONS) == LUA_TNIL) {
+	if (lua_gettable(L, LCU_OPERATIONS) == LUA_TNIL) { printf("%s: %d newopof\n", __FILE__, __LINE__);
 		lua_pushthread(L);
 		op = (lcu_PendingOp *)lua_newuserdata(L, sizeof(lcu_PendingOp));
 		op->flags = 0;
@@ -43,41 +22,44 @@ LCULIB_API lcu_PendingOp *lcu_getopof (lua_State *L) {
 }
 
 
-static void saveopcoro (lcu_PendingOp *op, lua_State *L) {
-	lua_pushlightuserdata(L, op);
+static void savecoro (lua_State *L, void *key) {
+	lua_pushlightuserdata(L, key);
 	lua_pushthread(L);
 	lua_settable(L, LCU_COREGISTRY);
 }
 
-static void freeopcoro (lcu_PendingOp *op) {
-	lua_State *L = (lua_State *)lcu_getoploop(op)->data;
-	lua_pushlightuserdata(L, handle);
+static void freecoro (lua_State *L, void *key) {
+	lua_pushlightuserdata(L, key);
 	lua_pushnil(L);
 	lua_settable(L, LCU_COREGISTRY);
 }
 
-LCULIB_API void lcu_chkinitop (lua_State *L,
-                               lcu_PendingOp *op,
-                               uv_loop_t * loop,
-                               int err) {
-	lcu_chkerror(L, err);
-	saveopcoro(op, L);
-	if (lcu_getoptype(op) == LCU_OPTYPE_REQUEST) op->kind.request.loop = loop;
+LCULIB_API void lcu_freereq (lcu_PendingOp *op) {
+	lcu_assert(lcu_isrequestop(op));
+	freecoro((lua_State *)lcu_torequest(op)->data, (void *)op);
+	op->flags = 0;
+	lcu_tohandle(op)->type = UV_UNKNOWN_HANDLE;
 }
 
-LCULIB_API void lcu_freeop (lcu_PendingOp *op) {
-	freeopcoro(op);
-	op->flags = 0;
-	lcu_toglobalop(op)->type = UV_UNKNOWN_HANDLE;
+LCULIB_API void lcu_chkinitiated (lua_State *L, void *key, int err) {
+	lcu_chkerror(L, err);
+	savecoro(L, key);
+}
+
+LCULIB_API void lcu_chkinitreq (lua_State *L,
+                                lcu_PendingOp *op,
+                                uv_loop_t * loop,
+                                int err) {
+	lcu_assert(lcu_isrequestop(op));
+	lcu_chkinitiated(L, (void *)&op->kind.request, err);
+	op->kind.request.loop = loop;
 }
 
 static void lcuB_onhandleclosed (uv_handle_t *handle) {
 	handle->type = UV_UNKNOWN_HANDLE;
-	lua_State *co = (lua_State *)handle->data;
-	lcu_PendingOp *op = (lcu_PendingOp *)handle;  // TODO: not valid for object ops!
-	lcu_assert(lcu_getoptype(op) == LCU_OPTYPE_GLOBAL);
-	if (lcu_ispendingop(op)) lcu_resumeop(op, co);
-	else freeopcoro(op);
+	lcu_PendingOp *op = (lcu_PendingOp *)handle;
+	if (lcu_ispendingop(op)) lcu_resumeop(op, (lua_State *)handle->data);
+	else freecoro((lua_State *)handle->loop->data, (void *)handle);
 }
 
 LCULIB_API void lcu_chkstarthdl (lua_State *L, uv_handle_t *h, int err) {
@@ -112,7 +94,7 @@ LCULIB_API int lcu_yieldop (lua_State *L,
 	return lua_yieldk(L, 0, ctx, func);
 }
 
-LCULIB_API void lcu_resumecoro (lua_State *co, uv_loop_t *loop) {
+LCULIB_API int lcu_resumecoro (lua_State *co, uv_loop_t *loop) {
 	lua_State *L = (lua_State *)loop->data;
 	lua_pushlightuserdata(co, loop);  /* token to sign scheduler resume */
 	return lua_resume(co, L, lua_gettop(L));
@@ -122,7 +104,7 @@ LCULIB_API void lcu_resumeop (lcu_PendingOp *op, lua_State *co) {
 	uv_loop_t *loop = lcu_getoploop(op);
 	int status;
 	setignoredop(op);  /* coroutine not interested anymore */
-	lcu_resumecoro(co, loop);
+	status = lcu_resumecoro(co, loop);
 	if (!lcu_isrequestop(op) && (status != LUA_YIELD || !lcu_ispendingop(op)) ) {
 		uv_handle_t *handle = lcu_tohandle(op);
 		if (handle->type != UV_UNKNOWN_HANDLE && !uv_is_closing(handle))
@@ -152,7 +134,6 @@ LCULIB_API lcu_PendingOp *lcu_resetop (lua_State *L, int req, int type,
 }
 
 LCULIB_API int lcu_doresumed (lua_State *L, uv_loop_t *loop) {
-	int interrupt = ;
 	if (lua_touserdata(L, -1) != loop) {  /* check token */
 		lua_pushnil(L);
 		lua_insert(L, 1);
@@ -162,19 +143,20 @@ LCULIB_API int lcu_doresumed (lua_State *L, uv_loop_t *loop) {
 	return 1;
 }
 
-LCULIB_API void lcu_ignoreop (lcu_PendingOp *op) {
+LCULIB_API void lcu_ignoreop (lcu_PendingOp *op, int scheduled) {
 	if (!lcu_isrequestop(op)) {
 		uv_handle_t *handle = lcu_tohandle(op);
-		if (interrupt && !uv_is_closing(handle))
+		if (!scheduled && !uv_is_closing(handle))
 			uv_close(handle, lcuB_onhandleclosed);
 	}
 	setignoredop(op);  /* mark as not rescheduled */
 }
 
 LCULIB_API int lcuK_chkignoreop (lua_State *L, int status, lua_KContext ctx) {
+	int scheduled;
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
-	lcu_ignoreop(lcu_getopof(L))
-	lcu_doresumed(L, lcu_toloop(L));
+	scheduled = lcu_doresumed(L, lcu_toloop(L));
+	lcu_ignoreop(lcu_getopof(L), scheduled);
 	return lua_gettop(L);
 }
