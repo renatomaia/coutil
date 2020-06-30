@@ -65,8 +65,6 @@ LCULIB_API void lcu_pushsyncport (lua_State *L, lcu_SyncPort *port);
 
 LCULIB_API int lcu_closesyncport (lua_State *L, int idx);
 
-LCULIB_API int lcu_pushsyncportfrom (lua_State *to, lua_State *from, int arg);
-
 typedef lua_State *(*GetAsyncState) (lua_State *L, void *userdata);
 
 LCULIB_API int lcu_matchsyncport (lcu_SyncPort **portref,
@@ -217,6 +215,54 @@ static void checkhalted_mx (lcu_ThreadPool *pool) {
 	}
 }
 
+static int pushsyncportfrom (lua_State *to, lua_State *from, int arg, int type) {
+	lcu_SyncPort *port;
+	switch (type) {
+		case LUA_TLIGHTUSERDATA: {
+			port = (lcu_SyncPort *)lua_touserdata(from, arg);
+			break;
+		}
+		case LUA_TUSERDATA: {
+			lcu_SyncPort **portref = lcu_tosyncportref(from, arg);
+			if (portref && *portref) {
+				port = *portref;
+				break;
+			}
+		}
+		default: return 0;
+	}
+	if (to) {
+		type = lua_getfield(to, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
+		lua_pop(to, 1);
+		switch (type) {
+			case LUA_TTABLE: lcu_pushsyncport(to, port); break;
+			case LUA_TNIL: lua_pushlightuserdata(to, port); break;
+			default: lcu_assert(0);
+		}
+	}
+	return 1;
+}
+
+static int pushreffromsyncport (lua_State *to, lua_State *from, int arg, int type) {
+	lcu_SyncPort **portref = lcu_tosyncportref(from, arg);
+	if (portref && *portref) {
+		if (to) lua_pushlightuserdata(to, *portref);
+		return 1;
+	}
+	return 0;
+}
+
+static int pushsyncportfromref (lua_State *to, lua_State *from, int arg, int type) {
+	if (type == LUA_TLIGHTUSERDATA) {
+		if (to) {
+			lcu_SyncPort *port = (lcu_SyncPort *)lua_touserdata(from, arg);
+			lcu_pushsyncport(to, port);
+		}
+		return 1;
+	}
+	return 0;
+}
+
 static void runthread (void *arg) {
 	lcu_ThreadPool *pool = (lcu_ThreadPool *)arg;
 	lua_State *L = NULL;
@@ -246,12 +292,15 @@ static void runthread (void *arg) {
 		if (status == LUA_YIELD) {
 			lcu_SyncPort **portref = lcu_tosyncportref(L, 1);
 			if (portref && *portref) {
-				const char *endname = lua_tostring(L, 2);
-				if (endname == NULL) {
-					endname = "";
-					if (lua_gettop(L) == 1) lua_settop(L, 2);
+				const char *endname = luaL_opt(L, lua_tostring, 2, "");
+				int narg = lua_gettop(L);
+				if (narg < 2) {
+					lua_settop(L, 2);
+				} else if (!lcuL_canmove(L, narg-2, pushsyncportfrom)) {
+					narg = 0;
 				}
-				if (!lcu_matchsyncport(portref, endname, L, NULL, NULL)) L = NULL;
+				if (narg && !lcu_matchsyncport(portref, endname, L, NULL, NULL))
+					L = NULL;
 			} else {
 				lua_settop(L, 0);  /* discard returned values */
 			}
@@ -559,31 +608,6 @@ LCULIB_API lcu_SyncPort *lcu_newsyncport (lua_State *L) {
 	return port;
 }
 
-LCULIB_API int lcu_pushsyncportfrom (lua_State *to, lua_State *from, int arg) {
-	lcu_SyncPort **portref = lcu_tosyncportref(from, arg);
-	if (portref && *portref) {
-		lcu_pushsyncport(to, *portref);
-		return 1;
-	}
-	return 0;
-}
-
-static int pushreffromsyncport (lua_State *to, lua_State *from, int arg) {
-	lcu_SyncPort **portref = lcu_tosyncportref(from, arg);
-	if (portref && *portref) {
-		lcu_SyncPort **copyref = (lcu_SyncPort **)lua_newuserdata(to, sizeof(lcu_SyncPort *));
-		*copyref = *portref;
-		return 1;
-	}
-	return 0;
-}
-
-static int pushsyncportfromref (lua_State *to, lua_State *from, int arg) {
-	lcu_SyncPort **portref = (lcu_SyncPort **)lua_touserdata(from, arg);
-	lcu_pushsyncport(to, *portref);
-	return 1;
-}
-
 static int auxpusherrfrom (lua_State *L) {
 	lua_State *failed = (lua_State *)lua_touserdata(L, 1);
 	const char *msg = lua_tostring(failed, -1);
@@ -619,14 +643,14 @@ static void swapvalues (lua_State *src, lua_State *dst) {
 	}
 
 	for (i = 3; i <= ndst; ++i) {
-		err = lcuL_pushfrom(src, dst, i, "receive argument", lcu_pushsyncportfrom);
+		err = lcuL_pushfrom(src, dst, i, pushsyncportfrom);
 		if (err == LUA_OK) {
 			lua_replace(src, i-1);
 		} else {
 			pusherrfrom(dst, src);
 			return;
 		}
-		err = lcuL_pushfrom(dst, src, i, "receive argument", lcu_pushsyncportfrom);
+		err = lcuL_pushfrom(dst, src, i, pushsyncportfrom);
 		if (err == LUA_OK) {
 			lua_replace(dst, i-1);
 		} else {
@@ -636,7 +660,7 @@ static void swapvalues (lua_State *src, lua_State *dst) {
 	}
 
 	lua_settop(dst, ndst-1);
-	err = lcuL_movefrom(dst, src, nsrc-ndst, "receive argument", lcu_pushsyncportfrom);
+	err = lcuL_movefrom(dst, src, nsrc-ndst, pushsyncportfrom);
 	if (err != LUA_OK) pusherrfrom(src, dst);
 	else {
 		lua_settop(src, ndst-1);
@@ -798,8 +822,7 @@ static int dochunk (lua_State *L,
 		return 2;  /* return nil plus error message */
 	}
 	top = lua_gettop(L);
-	status = lcuL_movefrom(NL, L, top > narg ? top-narg : 0,
-	                       "transfer argument", lcu_pushsyncportfrom);
+	status = lcuL_movefrom(NL, L, top > narg ? top-narg : 0, pushsyncportfrom);
 	if (status != LUA_OK) {
 		const char *msg = lua_tostring(NL, -1);
 		lua_pushboolean(L, 0);
@@ -915,8 +938,7 @@ static int channel_gc (lua_State *L) {
 static int returnsynced (lua_State *L) {
 	lua_State **channel = (lua_State **)luaL_checkudata(L, 1, LCU_CHANNELCLS);
 	int nret = lua_gettop(*channel);
-	int err = lcuL_movefrom(L, *channel, nret, "from channel",
-	                        pushsyncportfromref);
+	int err = lcuL_movefrom(L, *channel, nret, pushsyncportfromref);
 	lcu_assert(err == LUA_OK);
 	lua_pushnil(*channel);
 	lua_setfield(*channel, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
@@ -941,8 +963,7 @@ static lua_State *armsynced (lua_State *L, void *data) {
 	lua_pushlightuserdata(args->L, args->async);
 	lua_setfield(args->L, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
 	lua_settop(args->L, 2);  /* placeholder for 'syncport' and 'endname' */
-	err = lcuL_movefrom(args->L, L, lua_gettop(L)-2, "send argument",
-	                    pushreffromsyncport);
+	err = lcuL_movefrom(args->L, L, lua_gettop(L)-2, pushreffromsyncport);
 	if (err != LUA_OK) {
 		const char *msg = lua_tostring(args->L, -1);
 		lua_settop(L, 0);
@@ -962,17 +983,21 @@ static lua_State *armsynced (lua_State *L, void *data) {
 }
 
 static int k_setupsynced (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
+	int narg = lua_gettop(L);
+	const char *endname = luaL_optstring(L, 2, "");
 	ArmSyncedArgs args;
-	const char *endname;
 	lcu_SyncPort **portref;
 	args.loop = loop;
 	args.async = (uv_async_t *)handle;
 	args.L = *((lua_State **)luaL_checkudata(L, 1, LCU_CHANNELCLS));
-	endname = luaL_optstring(L, 2, "");
+	if (narg < 2) {
+		lua_settop(L, 2);
+	} else if (!lcuL_canmove(L, narg-2, pushsyncportfrom)) {
+		lua_error(L);
+	}
 	lua_getuservalue(L, 1);
 	portref = lcu_tosyncportref(L, -1);
 	lua_pop(L, 1);
-	if (lua_gettop(L) == 1) lua_settop(L, 2);
 	if (!lcu_matchsyncport(portref, endname, L, armsynced, &args)) {
 		return -1;
 	}
