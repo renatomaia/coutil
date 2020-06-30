@@ -886,9 +886,6 @@ Like to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-corout
 but for coroutines created with function [`system.coroutine`](#systemcoroutine-chunk--chunkname--mode).
 
 
-
-
-
 ### `system.tpool ([size])`
 
 Returns a new pool of `size` system threads that executes [chunks](http://www.lua.org/manual/5.3/manual.html#pdf-load) as independent coroutines (see [`tpool:dostring`](#tpooldostring-chunk-chunkname-mode-)).
