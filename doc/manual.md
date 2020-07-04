@@ -997,14 +997,14 @@ Moreover, a _thread pool_ that is not closed will prevent the current Lua state 
 Performs an action on channel names,
 according to the following value of `action`:
 
-- `"list"`: finds existing channels.
+- `"list"`: checks the existence of the channel.
 - `"reset"`: closes tasks waiting on the channel and frees any resources of the channel.
 
 The keys of table `names` are the name of the channels the action must be performed on.
-When no extra arguments are provides,
+When `name` is not provided provided,
 all channels are considered.
 
-Returns a table wit
+Returns a table with the name of channels processed.
 
 ### `system.channel (name)`
 
