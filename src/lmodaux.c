@@ -115,8 +115,7 @@ LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
 
 LCUI_FUNC int lcuL_canmove (lua_State *L,
                             int n,
-                            const char *msg,
-                            lcuL_CustomTransfer customf) {
+                            const char *msg) {
 	int i, top = lua_gettop(L);
 	for (i = 1+top-n; i <= top; ++i) {
 		int type = lua_type(L, i);
@@ -124,15 +123,15 @@ LCUI_FUNC int lcuL_canmove (lua_State *L,
 			case LUA_TNIL:
 			case LUA_TBOOLEAN:
 			case LUA_TNUMBER:
-			case LUA_TSTRING: break;
+			case LUA_TSTRING:
+			case LUA_TLIGHTUSERDATA:
+				break;
 			default: {
-				if (customf == NULL || !customf(NULL, L, i, type)) {
-					const char *tname = luaL_typename(L, i);
-					lua_settop(L, 0);
-					lua_pushnil(L);
-					doerrmsg(lua_pushfstring, L, i, msg, tname);
-					return 0;
-				}
+				const char *tname = luaL_typename(L, i);
+				lua_settop(L, 0);
+				lua_pushnil(L);
+				doerrmsg(lua_pushfstring, L, i, msg, tname);
+				return 0;
 			}
 		}
 	}
@@ -142,8 +141,7 @@ LCUI_FUNC int lcuL_canmove (lua_State *L,
 static void pushfrom (lua_State *to,
                       lua_State *from,
                       int idx,
-                      const char *msg,
-                      lcuL_CustomTransfer customf) {
+                      const char *msg) {
 	int type = lua_type(from, idx);
 	switch (type) {
 		case LUA_TNIL: {
@@ -160,12 +158,12 @@ static void pushfrom (lua_State *to,
 			const char *s = lua_tolstring(from, idx, &l);
 			lua_pushlstring(to, s, l);
 		} break;
+		case LUA_TLIGHTUSERDATA: {
+			lua_pushlightuserdata(to, lua_touserdata(from, idx));
+		} break;
 		default: {
-			if (customf && customf(to, from, idx, type)) break;
-			else {
-				const char *tname = luaL_typename(from, idx);
-				doerrmsg(luaL_error, to, idx, msg, tname);
-			}
+			const char *tname = luaL_typename(from, idx);
+			doerrmsg(luaL_error, to, idx, msg, tname);
 		}
 	}
 }
@@ -174,44 +172,39 @@ static int auxpushfrom (lua_State *to) {
 	lua_State *from = (lua_State *)lua_touserdata(to, 1);
 	int idx = lua_tointeger(to, 2);
 	const char *msg = lua_tostring(to, 3);
-	lcuL_CustomTransfer customf = (lcuL_CustomTransfer)lua_touserdata(to, 4);
-	pushfrom(to, from, idx, msg, customf);
+	pushfrom(to, from, idx, msg);
 	return 1;
 }
 
 LCUI_FUNC int lcuL_pushfrom (lua_State *to,
                              lua_State *from,
                              int idx,
-                             const char *msg,
-                             lcuL_CustomTransfer customf) {
+                             const char *msg) {
 	lcu_assert(lua_gettop(from) >= idx);
 	if (!lua_checkstack(to, 4)) return LUA_ERRMEM;
 	lua_pushcfunction(to, auxpushfrom);
 	lua_pushlightuserdata(to, from);
 	lua_pushinteger(to, idx);
 	lua_pushstring(to, msg);
-	lua_pushlightuserdata(to, customf);
-	return lua_pcall(to, 4, 1, 0);
+	return lua_pcall(to, 3, 1, 0);
 }
 
 static int auxmovefrom (lua_State *to) {
 	lua_State *from = (lua_State *)lua_touserdata(to, 1);
 	int n = lua_tointeger(to, 2);
 	const char *msg = lua_tostring(to, 3);
-	lcuL_CustomTransfer customf = (lcuL_CustomTransfer)lua_touserdata(to, 4);
 	int top = lua_gettop(from);
 	int idx;
 	lua_settop(to, 0);
 	luaL_checkstack(to, n, "too many values");
-	for (idx = 1+top-n; idx <= top; idx++) pushfrom(to, from, idx, msg, customf);
+	for (idx = 1+top-n; idx <= top; idx++) pushfrom(to, from, idx, msg);
 	return n;
 }
 
 LCUI_FUNC int lcuL_movefrom (lua_State *to,
                              lua_State *from,
                              int n,
-                             const char *msg,
-                             lcuL_CustomTransfer customf) {
+                             const char *msg) {
 	int status;
 	lcu_assert(lua_gettop(from) >= n);
 	if (!lua_checkstack(to, 4)) return LUA_ERRMEM;
@@ -219,8 +212,7 @@ LCUI_FUNC int lcuL_movefrom (lua_State *to,
 	lua_pushlightuserdata(to, from);
 	lua_pushinteger(to, n);
 	lua_pushstring(to, msg);
-	lua_pushlightuserdata(to, customf);
-	status = lua_pcall(to, 4, n, 0);
+	status = lua_pcall(to, 3, n, 0);
 	if (status == LUA_OK) lua_pop(from, n);
 	return status;
 }

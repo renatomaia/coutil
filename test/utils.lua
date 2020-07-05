@@ -21,7 +21,7 @@ end
 
 function asserterr(expected, ok, ...)
 	local actual = ...
-	assert(not ok, "error was expected, got "..table.concat({vararg.map(tostring, ...)}, ", "))
+	assert(not ok, "error was expected, got "..table.concat({vararg.map(tostring, ok, ...)}, ", "))
 	assert(string.find(actual, expected, 1, true), "wrong error, got "..actual)
 end
 

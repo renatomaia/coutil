@@ -101,14 +101,14 @@ static void swapvalues (lua_State *src, lua_State *dst) {
 	}
 
 	for (i = 3; i <= ndst; ++i) {
-		err = lcuL_pushfrom(src, dst, i, "argument", NULL);
+		err = lcuL_pushfrom(src, dst, i, "argument");
 		if (err == LUA_OK) {
 			lua_replace(src, i-1);
 		} else {
 			pusherrfrom(dst, src);
 			return;
 		}
-		err = lcuL_pushfrom(dst, src, i, "argument", NULL);
+		err = lcuL_pushfrom(dst, src, i, "argument");
 		if (err == LUA_OK) {
 			lua_replace(dst, i-1);
 		} else {
@@ -118,7 +118,7 @@ static void swapvalues (lua_State *src, lua_State *dst) {
 	}
 
 	lua_settop(dst, ndst-1);
-	err = lcuL_movefrom(dst, src, nsrc-ndst, "argument", NULL);
+	err = lcuL_movefrom(dst, src, nsrc-ndst, "argument");
 	if (err != LUA_OK) pusherrfrom(src, dst);
 	else {
 		lua_settop(src, ndst-1);
@@ -355,7 +355,7 @@ static void threadmain (void *arg) {
 				int narg = lua_gettop(L);
 				if (narg < 2) {
 					lua_settop(L, 2);
-				} else if (!lcuL_canmove(L, narg-2, "argument", NULL)) {
+				} else if (!lcuL_canmove(L, narg-2, "argument")) {
 					narg = 0;
 				}
 				if (narg && !channelsync_match(sync, endname, L, NULL, NULL))
@@ -610,7 +610,7 @@ static int dochunk (lua_State *L,
 		return 2;  /* return nil plus error message */
 	}
 	top = lua_gettop(L);
-	status = lcuL_movefrom(NL, L, top > narg ? top-narg : 0, "argument", NULL);
+	status = lcuL_movefrom(NL, L, top > narg ? top-narg : 0, "argument");
 	if (status != LUA_OK) {
 		const char *msg = lua_tostring(NL, -1);
 		lua_pushboolean(L, 0);
@@ -739,7 +739,7 @@ static int channel_gc (lua_State *L) {
 static int returnsynced (lua_State *L) {
 	LuaChannel *channel = tolchannel(L, 1);
 	int nret = lua_gettop(channel->L);
-	int err = lcuL_movefrom(L, channel->L, nret, "", NULL);
+	int err = lcuL_movefrom(L, channel->L, nret, "");
 	lcu_assert(err == LUA_OK);
 	lua_pushnil(channel->L);
 	lua_setfield(channel->L, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
@@ -764,7 +764,7 @@ static lua_State *armsynced (lua_State *L, void *data) {
 	lua_pushlightuserdata(args->L, args->async);
 	lua_setfield(args->L, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
 	lua_settop(args->L, 2);  /* placeholder for 'syncport' and 'endname' */
-	err = lcuL_movefrom(args->L, L, lua_gettop(L)-2, "argument", NULL);
+	err = lcuL_movefrom(args->L, L, lua_gettop(L)-2, "argument");
 	if (err != LUA_OK) {
 		const char *msg = lua_tostring(args->L, -1);
 		lua_settop(L, 0);
@@ -793,7 +793,7 @@ static int k_setupsynced (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	args.L = channel->L;
 	if (narg < 2) {
 		lua_settop(L, 2);
-	} else if (!lcuL_canmove(L, narg-2, "argument", NULL)) {
+	} else if (!lcuL_canmove(L, narg-2, "argument")) {
 		lua_error(L);
 	}
 	if (channelsync_match(channel->sync, endname, L, armsynced, &args))

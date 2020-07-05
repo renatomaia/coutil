@@ -104,14 +104,14 @@ static void uv_onworked(uv_work_t* work, int status) {
 			if (lstatus == LUA_OK || lstatus == LUA_YIELD) {
 				int nres = lua_gettop(co);
 				lua_pushboolean(thread, 1);  /* return 'true' to signal success */
-				if (lcuL_movefrom(thread, co, nres, "return value", NULL) != LUA_OK) {
+				if (lcuL_movefrom(thread, co, nres, "return value") != LUA_OK) {
 					lua_pop(co, nres);  /* remove results anyway */
 					lua_pushboolean(thread, 0);
 					lua_replace(thread, -3);  /* remove pushed 'true' that signals success */
 				}
 			} else {
 				lua_pushboolean(thread, 0);
-				if (lcuL_pushfrom(thread, co, -1, "error", NULL) != LUA_OK) {
+				if (lcuL_pushfrom(thread, co, -1, "error") != LUA_OK) {
 					lua_pop(co, 1);  /* remove error anyway */
 				}
 			}
@@ -139,7 +139,7 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		lua_pushliteral(L, "cannot resume dead coroutine");
 		return 2;
 	}
-	if (lcuL_movefrom(co, L, narg, "argument", NULL) != LUA_OK) {
+	if (lcuL_movefrom(co, L, narg, "argument") != LUA_OK) {
 		const char *msg = lua_tostring(co, -1);
 		lua_pushboolean(L, 0);
 		lua_pushfstring(L, msg);
