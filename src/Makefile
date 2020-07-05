@@ -1,8 +1,7 @@
 # See ../doc/readme.md for installation and 
 # == CHANGE THE SETTINGS BELOW TO SUIT YOUR ENVIRONMENT =======================
 
-#LUA_HOME= /usr/local
-LUA_HOME= /home/maia/Work/lua/build/5.3
+LUA_HOME= /usr/local
 LUA_INC= $(LUA_HOME)/include
 LUA_LIB= $(LUA_HOME)/lib
 LUA_BIN= $(LUA_HOME)/bin
