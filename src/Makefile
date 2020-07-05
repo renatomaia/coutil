@@ -7,12 +7,9 @@ LUA_LIB= $(LUA_HOME)/lib
 LUA_BIN= $(LUA_HOME)/bin
 LUA_VER= 5.3
 
-#LUAMEM_HOME= $(LUA_HOME)
-#LUAMEM_INC= $(LUAMEM_HOME)/include
-#LUAMEM_LIB= $(LUAMEM_HOME)/lib
-LUAMEM_HOME= /home/maia/Work/lua/proj/memory/git/src
-LUAMEM_INC= $(LUAMEM_HOME)
-LUAMEM_LIB= $(LUAMEM_HOME)
+LUAMEM_HOME= $(LUA_HOME)
+LUAMEM_INC= $(LUAMEM_HOME)/include
+LUAMEM_LIB= $(LUAMEM_HOME)/lib
 
 #LIBUV_HOME= $(LUA_HOME)
 LIBUV_HOME= /home/maia/Programs/libuv
