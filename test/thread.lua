@@ -532,28 +532,64 @@ end
 
 newtest "syncport" --------------------------------------------------------------
 
---do case "collect inaccessible"
---	local t = assert(system.threads(1))
---	local path = os.tmpname()
---	local code = utilschunk..[[
---		local path = ...
---		local _ENV = require "_G"
---		local coroutine = require "coroutine"
---		local system = require "coutil.system"
---		global = setmetatable({}, { __gc = function () sendsignal(path) end })
---		coroutine.yield(system.syncport())
---		error("Oops!")
---	]]
---	assert(t:dostring(code, "@chunk.lua", "t", path))
---
---	waitsignal(path)
---
---	repeat until (checkcount(t, "nrpsea", 0, 0, 0, 0, 1, 1))
---
---	assert(t:close())
---
---	done()
---end
+do case "collect inaccessible"
+	local chunks = {
+		function (t, ...)
+			local chunk = utilschunk..[[
+				local name, path = ...
+				local _ENV = require "_G"
+				global = setmetatable({}, { __gc = function () sendsignal(path) end })
+				assert(require("coroutine").yield(name) == true)
+			]]
+			assert(t:dostring(chunk, "@chunk", "t", ...))
+		end,
+		function (t, ...)
+			local chunk = utilschunk..[[
+				local name, path = ...
+				local _ENV = require "_G"
+				local system = require "coutil.system"
+				spawn(function ()
+					global = setmetatable({}, { __gc = function () sendsignal(path) end })
+					assert(system.channel(name):sync() == true)
+				end)
+				system.run()
+			]]
+			assert(t:dostring(chunk, "@chunk", "t", ...))
+		end,
+		function (_, name, path)
+			spawn(function ()
+				local var = setmetatable({}, { __gc = function () sendsignal(path) end })
+				assert(system.channel(name):sync() == true)
+			end)
+		end,
+	}
+
+	local t = assert(system.threads(1))
+	local path = os.tmpname()
+	local name = tostring(coroutine.running())
+
+	for _, chunk in ipairs(chunks) do
+		local names = system.channelnames("reset")
+		assert(next(names) == nil)
+
+		chunk(t, name, path)
+
+		repeat until (checkcount(t, "nrpsea", 1, 0, 0, 1, 1, 1))
+		local names = system.channelnames("reset")
+		local key, value = next(names)
+		assert(key == name)
+		assert(value == true)
+		assert(next(names, name) == nil)
+		waitsignal(path)
+		repeat until (checkcount(t, "nrpsea", 0, 0, 0, 0, 1, 1))
+	end
+
+	assert(t:close())
+
+	done()
+end
+
+do return end
 
 do case "queueing on endpoints"
 	local chunks = {
