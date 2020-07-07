@@ -530,16 +530,21 @@ do case "system coroutine"
 	done()
 end
 
-newtest "syncport" --------------------------------------------------------------
+newtest "channels" --------------------------------------------------------------
 
-do case "collect inaccessible"
+do case "reset channel"
 	local chunks = {
 		function (t, ...)
 			local chunk = utilschunk..[[
 				local name, path = ...
 				local _ENV = require "_G"
-				global = setmetatable({}, { __gc = function () sendsignal(path) end })
-				assert(require("coroutine").yield(name) == true)
+				local coroutine = require("coroutine")
+				local name = tostring(coroutine.running())
+				sendsignal(path)
+				local res, errmsg = coroutine.yield(name)
+				assert(res == nil)
+				assert(errmsg == "channel reset")
+				sendsignal(path)
 			]]
 			assert(t:dostring(chunk, "@chunk", "t", ...))
 		end,
@@ -549,8 +554,15 @@ do case "collect inaccessible"
 				local _ENV = require "_G"
 				local system = require "coutil.system"
 				spawn(function ()
-					global = setmetatable({}, { __gc = function () sendsignal(path) end })
-					assert(system.channel(name):sync() == true)
+					local coroutine = require("coroutine")
+					local name = tostring(coroutine.running())
+					local channel = system.channel(name)
+					sendsignal(path)
+					local res, errmsg = channel:await()
+					assert(res == nil)
+					assert(errmsg == "channel reset")
+					channel:close()
+					sendsignal(path)
 				end)
 				system.run()
 			]]
@@ -558,46 +570,57 @@ do case "collect inaccessible"
 		end,
 		function (_, name, path)
 			spawn(function ()
-				local var = setmetatable({}, { __gc = function () sendsignal(path) end })
-				assert(system.channel(name):sync() == true)
+				local name = tostring(coroutine.running())
+				local channel = system.channel(name)
+				sendsignal(path)
+				local res, errmsg = channel:await()
+				assert(res == nil)
+				assert(errmsg == "channel reset")
+				channel:close()
+				sendsignal(path)
 			end)
 		end,
 	}
 
-	local t = assert(system.threads(1))
-	local path = os.tmpname()
-	local name = tostring(coroutine.running())
+	local completed
+	spawn(function ()
+		local t = assert(system.threads(1))
 
-	for _, chunk in ipairs(chunks) do
-		local names = system.channelnames("reset")
-		assert(next(names) == nil)
+		for _, chunk in ipairs(chunks) do
+			local path = os.tmpname()
 
-		chunk(t, name, path)
+			local names = system.channelnames("list")
+			assert(next(names) == nil)
 
-		repeat until (checkcount(t, "nrpsea", 1, 0, 0, 1, 1, 1))
-		local names = system.channelnames("reset")
-		local key, value = next(names)
-		assert(key == name)
-		assert(value == true)
-		assert(next(names, name) == nil)
-		waitsignal(path)
-		repeat until (checkcount(t, "nrpsea", 0, 0, 0, 0, 1, 1))
-	end
+			chunk(t, name, path)
 
-	assert(t:close())
+			waitsignal(path, system.suspend)
+			local names = system.channelnames("reset")
+			local key, value = next(names)
+			assert(string.match(key, "thread: 0x%x+") ~= nil)
+			assert(value == true)
+			assert(next(names, key) == nil)
+			waitsignal(path, system.suspend)
+			system.channelnames("reset")
+		end
+
+		assert(t:close())
+
+		completed = true
+	end)
+	system.run()
+	assert(completed == true)
 
 	done()
 end
-
-do return end
 
 do case "queueing on endpoints"
 	local chunks = {
 		function (t, ...)
 			local chunk = utilschunk..[[
-				local name, endpoint, path = ...
+				local name, endpoint, path, producer = ...
 				local _ENV = require "_G"
-				sendsignal(path)
+				if producer then sendsignal(path) end
 				assert(require("coroutine").yield(name, endpoint) == true)
 				sendsignal(path)
 			]]
@@ -605,22 +628,34 @@ do case "queueing on endpoints"
 		end,
 		function (t, ...)
 			local chunk = utilschunk..[[
-				local name, endpoint, path = ...
-				local _ENV = require "_G"
+				local name, endpoint, path, producer = ...
+				local _ENV = require "_G" 
 				local system = require "coutil.system"
 				spawn(function ()
-					sendsignal(path)
-					assert(system.channel(name):sync(endpoint) == true)
+					local channel = system.channel(name)
+					if producer then
+						local res, errmsg = channel:sync(endpoint)
+						assert(res == nil)
+						assert(errmsg == "no match")
+						sendsignal(path)
+					end
+					assert(channel:await(endpoint) == true)
 					sendsignal(path)
 				end)
 				system.run()
 			]]
 			assert(t:dostring(chunk, "@chunk", "t", ...))
 		end,
-		function (_, name, endpoint, path)
+		function (_, name, endpoint, path, producer)
 			spawn(function ()
-				sendsignal(path)
-				assert(system.channel(name):sync(endpoint) == true)
+				local channel = system.channel(name)
+				if producer then
+					local res, errmsg = channel:sync(endpoint)
+					assert(res == nil)
+					assert(errmsg == "no match")
+					sendsignal(path)
+				end
+				assert(channel:await(endpoint) == true)
 				sendsignal(path)
 			end)
 		end,
@@ -647,14 +682,14 @@ do case "queueing on endpoints"
 					local paths = { producer = {}, consumer = {} }
 					for i = 1, n do
 						paths.producer[i] = os.tmpname()
-						producer[i](t, channel, e1, paths.producer[i])
+						producer[i](t, channel, e1, paths.producer[i], true)
 					end
 					for i = 1, n do
 						waitsignal(paths.producer[i], system.suspend)
 					end
 					for i = 1, n do
 						paths.consumer[i] = os.tmpname()
-						consumer[i](t, channel, e2, paths.consumer[i])
+						consumer[i](t, channel, e2, paths.consumer[i], false)
 					end
 					for i = 1, n do
 						waitsignal(paths.producer[i], system.suspend)
@@ -718,7 +753,7 @@ do case "transfer values"
 				local system = require "coutil.system"
 				spawn(function ()
 					local function assertvalues(...) ]]..assertvalues(rets)..[[ end
-					assertvalues(system.channel(name):sync(]]..makeargvals(args)..[[))
+					assertvalues(system.channel(name):await(]]..makeargvals(args)..[[))
 					sendsignal(path)
 				end)
 				system.run()
@@ -729,7 +764,7 @@ do case "transfer values"
 			local makeargvals = assert(load(makeargvals(args, "return ")))
 			local assertvalues = assert(load(assertvalues(rets)))
 			spawn(function ()
-				assertvalues(system.channel(name):sync(makeargvals()))
+				assertvalues(system.channel(name):await(makeargvals()))
 				sendsignal(path)
 			end)
 		end,
@@ -787,7 +822,7 @@ do case "transfer errors"
 				local system = require "coutil.system"
 				spawn(function ()
 					local channel = system.channel(name)
-					asserterr("]]..errmsg..[[", pcall(channel.sync, channel, nil, ]]..args..[[))
+					asserterr("]]..errmsg..[[", pcall(channel.await, channel, nil, ]]..args..[[))
 					sendsignal(path)
 				end)
 				system.run()
@@ -798,7 +833,7 @@ do case "transfer errors"
 			spawn(function ()
 				local makeargvals = assert(load("return "..args))
 				local channel = system.channel(name)
-				asserterr(errmsg, pcall(channel.sync, channel, nil, makeargvals()))
+				asserterr(errmsg, pcall(channel.await, channel, nil, makeargvals()))
 				sendsignal(path)
 			end)
 		end,
