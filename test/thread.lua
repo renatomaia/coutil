@@ -547,6 +547,22 @@ do case "close channels"
 	done()
 end
 
+do case "channels names"
+	for _, name in ipairs({
+		"",
+		"\0",
+		"\255",
+		string.rep("\0\1\2\3\4\5", 0x1p10),
+		"CoUtil"
+	}) do
+		local channel = system.channel(name)
+		assert(channel:getname() == name)
+		assert(channel:close())
+	end
+
+	done()
+end
+
 do case "list channels"
 	local empty = {}
 	local result = system.channelnames(empty)

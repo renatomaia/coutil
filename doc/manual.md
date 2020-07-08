@@ -1001,26 +1001,29 @@ returns `names`,
 but first sets each of its string keys to either `true`,
 if there is a channel with that name,
 or `nil
-`(removing it from `name`).
+`(removing it from `names`).
 
 ### `system.channel (name)`
 
 Returns a new _channel_ with name `name`.
 
-Channels with the same name share the same corresponding [_endpoints_](#channelawait-endpoint-).
+Channels with the same name share the same two opposite [_endpoints_](#channelawait-endpoint-).
 
 ### `channel:await (endpoint, ...)`
 
-[Await function](#await) that awaits for a similar call on the opposite _endpoint_,
+[Await function](#await) that awaits on an _endpoint_ of `channel` for a similar call on the opposite _endpoint_,
 either from another coroutine, [_task_](#threadsdostring-chunk--chunkname--mode-) or [_system coroutine_](#systemload-chunk--chunkname--mode).
 
 `endpoint` is a string that starts with either letter `"i"` or `"o"`,
-each identifying an oposite _endpoint_.
+each identifying an opposite _endpoint_.
+Therefore, the call `channel:await("in")` will await for a call like `channel:await("out")` on another channel with the same name.
+
 If `endpoint` is not a string or starts with neither  `"i"` nor `"o"`,
-this call will match with any call on either _endpoints_.
+the call will await for a call on either _endpoints_.
+For instance, the call `channel:await("any")` will match any call on any channel with the same name.
 
 Returns `true` followed by the extra arguments `...` from the matching call.
-Otherwise, return `false` followed by an error message.
+Otherwise, return `nil` followed by an error message.
 
 ### `channel:sync (endpoint, ...)`
 
