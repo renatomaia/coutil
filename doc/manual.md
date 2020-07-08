@@ -1000,8 +1000,8 @@ If table `names` is provided,
 returns `names`,
 but first sets each of its string keys to either `true`,
 if there is a channel with that name,
-or `nil`
-(removing it from `name`).
+or `nil
+`(removing it from `name`).
 
 ### `system.channel (name)`
 

@@ -815,13 +815,13 @@ static lua_State *armsynced (lua_State *L, void *data) {
 	lcu_assert(lua_gettop(args->L) == 0);
 	lua_pushlightuserdata(args->L, args->async);
 	lua_setfield(args->L, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
-	lua_settop(args->L, 2);  /* placeholder for 'syncport' and 'endname' */
+	lua_settop(args->L, 2);  /* placeholder for 'channel' and 'endname' */
 	err = lcuL_movefrom(args->L, L, lua_gettop(L)-2, "argument");
 	if (err != LUA_OK) {
 		const char *msg = lua_tostring(args->L, -1);
 		lua_settop(L, 0);
-		lua_pushboolean(L, 0);
-		lua_pushfstring(L, msg);
+		lua_pushnil(L);
+		lua_pushstring(L, msg);
 		lua_settop(args->L, 0);
 		return NULL;
 	}

@@ -590,6 +590,26 @@ do case "list channels"
 end
 
 do case "resume listed channels"
+	local body = [[
+		local name = tostring(coroutine.running())
+		local channel = system.channel(name)
+		sendsignal(path)
+		local res, errmsg = channel:await()
+		assert(res == true)
+		assert(errmsg == "reset")
+		channel:close()
+		sendsignal(path)
+	]]
+	local channelchunk = utilschunk..[[
+		local name, path = ...
+		local _ENV = require "_G"
+		local system = require "coutil.system"
+		spawn(function ()
+			local coroutine = require("coroutine")
+			]]..body..[[
+		end)
+		system.run()
+	]]
 	local chunks = {
 		function (t, ...)
 			local chunk = utilschunk..[[
@@ -606,36 +626,17 @@ do case "resume listed channels"
 			assert(t:dostring(chunk, "@chunk", "t", ...))
 		end,
 		function (t, ...)
-			local chunk = utilschunk..[[
-				local name, path = ...
-				local _ENV = require "_G"
-				local system = require "coutil.system"
-				spawn(function ()
-					local coroutine = require("coroutine")
-					local name = tostring(coroutine.running())
-					local channel = system.channel(name)
-					sendsignal(path)
-					local res, errmsg = channel:await()
-					assert(res == true)
-					assert(errmsg == "reset")
-					channel:close()
-					sendsignal(path)
-				end)
-				system.run()
-			]]
-			assert(t:dostring(chunk, "@chunk", "t", ...))
+			assert(t:dostring(channelchunk, "@chunk", "t", ...))
+		end,
+		function (_, ...)
+			spawn(function (...)
+				local sysco = assert(system.load(channelchunk, "@chunk", "t"))
+				assert(sysco:resume(...))
+			end, ...)
 		end,
 		function (_, name, path)
-			spawn(function ()
-				local name = tostring(coroutine.running())
-				local channel = system.channel(name)
-				sendsignal(path)
-				local res, errmsg = channel:await()
-				assert(res == true)
-				assert(errmsg == "reset")
-				channel:close()
-				sendsignal(path)
-			end)
+			local main = assert(load("local system, name, path = ... "..body))
+			spawn(main, system, name, path)
 		end,
 	}
 
@@ -674,6 +675,26 @@ do case "resume listed channels"
 end
 
 do case "queueing on endpoints"
+	local body = [[
+		local channel = system.channel(name)
+		if producer then
+			local res, errmsg = channel:sync(endpoint)
+			assert(res == nil)
+			assert(errmsg == "empty")
+			sendsignal(path)
+		end
+		assert(channel:await(endpoint) == true)
+		sendsignal(path)
+	]]
+	local channelchunk = utilschunk..[[
+		local name, endpoint, path, producer = ...
+		local _ENV = require "_G"
+		local system = require "coutil.system"
+		spawn(function ()
+			]]..body..[[
+		end)
+		system.run()
+	]]
 	local chunks = {
 		function (t, ...)
 			local chunk = utilschunk..[[
@@ -686,47 +707,27 @@ do case "queueing on endpoints"
 			assert(t:dostring(chunk, "@chunk", "t", ...))
 		end,
 		function (t, ...)
-			local chunk = utilschunk..[[
-				local name, endpoint, path, producer = ...
-				local _ENV = require "_G" 
-				local system = require "coutil.system"
-				spawn(function ()
-					local channel = system.channel(name)
-					if producer then
-						local res, errmsg = channel:sync(endpoint)
-						assert(res == nil)
-						assert(errmsg == "empty")
-						sendsignal(path)
-					end
-					assert(channel:await(endpoint) == true)
-					sendsignal(path)
-				end)
-				system.run()
-			]]
-			assert(t:dostring(chunk, "@chunk", "t", ...))
+			assert(t:dostring(channelchunk, "@chunk", "t", ...))
+		end,
+		function (_, ...)
+			spawn(function (...)
+				local sysco = assert(system.load(channelchunk, "@chunk", "t"))
+				assert(sysco:resume(...))
+			end, ...)
 		end,
 		function (_, name, endpoint, path, producer)
-			spawn(function ()
-				local channel = system.channel(name)
-				if producer then
-					local res, errmsg = channel:sync(endpoint)
-					assert(res == nil)
-					assert(errmsg == "empty")
-					sendsignal(path)
-				end
-				assert(channel:await(endpoint) == true)
-				sendsignal(path)
-			end)
+			local main = assert(load("local system, name, endpoint, path, producer = ... "..body))
+			spawn(main, system, name, endpoint, path, producer)
 		end,
 	}
 
 	local completed
 	spawn(function ()
 		for _, case in pairs{
-			{ n = 3, e1 = "i", e2 = "o" },
-			{ n = 3, e1 = "o", e2 = "i" },
-			{ n = 3, e1 = "in", e2 = "any" },
-			{ n = 3, e1 = "out", e2 = "any" },
+			{ n = 2, e1 = "i", e2 = "o" },
+			{ n = 2, e1 = "o", e2 = "i" },
+			{ n = 2, e1 = "in", e2 = "any" },
+			{ n = 2, e1 = "out", e2 = "any" },
 			{ n = 1, e1 = "any", e2 = "any" },
 			{ n = 1, e1 = nil, e2 = nil },
 			{ n = 1, e1 = 1, e2 = 2 },
@@ -790,7 +791,7 @@ do case "transfer values"
 		return chunk
 	end
 	local function assertvalues(expected)
-		local chunk = { [1] = [[
+		local chunk = { [[
 			assert(select("#", ...) == ]]..(#expected+1)..[[)
 			assert(select(1, ...) == true)
 		]] }
@@ -798,6 +799,17 @@ do case "transfer values"
 			table.insert(chunk, "assert(select("..(i+1)..", ...) == "..value..")")
 		end
 		return table.concat(chunk, "\n")
+	end
+	local function makechannelchunk(args, rets)
+		return chunkprefix..[[
+			local system = require "coutil.system"
+			spawn(function ()
+				local function assertvalues(...) ]]..assertvalues(rets)..[[ end
+				assertvalues(system.channel(name):await(]]..makeargvals(args)..[[))
+				sendsignal(path)
+			end)
+			system.run()
+		]]
 	end
 
 	local chunks = {
@@ -810,16 +822,15 @@ do case "transfer values"
 			assert(t:dostring(chunk, "@chunk", "t", ...))
 		end,
 		function (t, args, rets, ...)
-			local chunk = chunkprefix..[[
-				local system = require "coutil.system"
-				spawn(function ()
-					local function assertvalues(...) ]]..assertvalues(rets)..[[ end
-					assertvalues(system.channel(name):await(]]..makeargvals(args)..[[))
-					sendsignal(path)
-				end)
-				system.run()
-			]]
+			local chunk = makechannelchunk(args, rets)
 			assert(t:dostring(chunk, "@chunk", "t", ...))
+		end,
+		function (t, args, rets, ...)
+			spawn(function (...)
+				local chunk = makechannelchunk(args, rets)
+				local sysco = assert(system.load(chunk, "@chunk", "t"))
+				assert(sysco:resume(...))
+			end, ...)
 		end,
 		function (_, args, rets, name, path)
 			local makeargvals = assert(load(makeargvals(args, "return ")))
@@ -870,6 +881,17 @@ do case "transfer errors"
 		local table = require "table"
 		local io = require "io"
 	]]
+	local function makechannelchunk(args, errmsg)
+		return chunkprefix..[[
+			local system = require "coutil.system"
+			spawn(function ()
+				local channel = system.channel(name)
+				asserterr("]]..errmsg..[[", pcall(channel.await, channel, nil, ]]..args..[[))
+				sendsignal(path)
+			end)
+			system.run()
+		]]
+	end
 	local chunks = {
 		function (t, args, errmsg, ...)
 			local chunk = chunkprefix..[[
@@ -879,16 +901,15 @@ do case "transfer errors"
 			assert(t:dostring(chunk, "@chunk", "t", ...))
 		end,
 		function (t, args, errmsg, ...)
-			local chunk = chunkprefix..[[
-				local system = require "coutil.system"
-				spawn(function ()
-					local channel = system.channel(name)
-					asserterr("]]..errmsg..[[", pcall(channel.await, channel, nil, ]]..args..[[))
-					sendsignal(path)
-				end)
-				system.run()
-			]]
+			local chunk = makechannelchunk(args, errmsg)
 			assert(t:dostring(chunk, "@chunk", "t", ...))
+		end,
+		function (t, args, errmsg, ...)
+			local chunk = makechannelchunk(args, errmsg)
+			spawn(function (...)
+				local sysco = assert(system.load(chunk, "@chunk", "t"))
+				assert(sysco:resume(...))
+			end, ...)
 		end,
 		function (_, args, errmsg, name, path)
 			spawn(function ()
