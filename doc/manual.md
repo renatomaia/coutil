@@ -992,19 +992,16 @@ call this function on every _thread pool_.
 
 Moreover, a _thread pool_ that is not closed will prevent the current Lua state to terminate (_i.e._ `lua_close` to return) until it has either no more tasks or no more system threads.
 
-### `system.channelnames (action [, names])`
+### `system.channelnames ([names])`
 
-Performs an action on channel names,
-according to the following value of `action`:
+Returns a table mapping each name of existing channels to `true`.
 
-- `"list"`: checks the existence of the channel.
-- `"reset"`: closes tasks waiting on the channel and frees any resources of the channel.
-
-The keys of table `names` are the name of the channels the action must be performed on.
-When `name` is not provided provided,
-all channels are considered.
-
-Returns a table with the name of channels processed.
+If table `names` is provided,
+returns `names`,
+but first sets each of its string keys to either `true`,
+if there is a channel with that name,
+or `nil`
+(removing it from `name`).
 
 ### `system.channel (name)`
 
@@ -1018,7 +1015,7 @@ Channels with the same name share the same corresponding [_endpoints_](#channela
 either from another coroutine, [_task_](#threadsdostring-chunk--chunkname--mode-) or [_system coroutine_](#systemload-chunk--chunkname--mode).
 
 `endpoint` is a string that starts with either letter `"i"` or `"o"`,
-each identifying an oposite _endpoint_ of the _channel_.
+each identifying an oposite _endpoint_.
 If `endpoint` is not a string or starts with neither  `"i"` nor `"o"`,
 this call will match with any call on either _endpoints_.
 
@@ -1027,9 +1024,18 @@ Otherwise, return `false` followed by an error message.
 
 ### `channel:sync (endpoint, ...)`
 
-Similar to [`channel:sync`](#channelawait-endpoint-),
+Similar to [`channel:await`](#channelawait-endpoint-),
 but does not await for a matching call.
 In such case,
 it returns `nil` followed by message "empty".
 
 ### `channel:close ()`
+
+Closes channel `channel`.
+Note that channels are automatically closed when they are garbage collected,
+but that takes an unpredictable amount of time to happen. 
+
+In case of success,
+this function returns `true`.
+Otherwise it returns `nil` plus an error message.
+

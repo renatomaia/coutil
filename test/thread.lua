@@ -532,7 +532,64 @@ end
 
 newtest "channels" --------------------------------------------------------------
 
-do case "reset channel"
+do case "close channels"
+	spawn(function ()
+		local channel = system.channel("closing channel")
+		assert(channel:close() == true)
+		assert(channel:close() == false)
+		for _, opname in ipairs{ "await", "sync", "getname" } do
+			asserterr("closed channel", pcall(channel[opname], channel))
+		end
+	end)
+
+	system.run()
+
+	done()
+end
+
+do case "list channels"
+	local empty = {}
+	local result = system.channelnames(empty)
+	assert(result == empty)
+
+	local channels = {}
+	for i = 1, 10 do
+		local name = tostring(i)
+		channels[name] = system.channel(name)
+	end
+	local names = system.channelnames()
+	for i = 1, 10 do
+		local name = tostring(i)
+		assert(names[name] == true)
+		names[name] = nil
+	end
+	assert(next(names) == nil)
+
+	for i = 1, 10 do
+		local name = tostring(i)
+		names[name] = name
+		if i%2 == 0 then
+			channels[name]:close()
+		end
+	end
+	local result = system.channelnames(names)
+	assert(result == names)
+	for i = 1, 10 do
+		local name = tostring(i)
+		if i%2 == 0 then
+			assert(names[name] == nil)
+		else
+			assert(names[name] == true)
+			channels[name]:close()
+		end
+		names[name] = nil
+	end
+	assert(next(names) == nil)
+
+	done()
+end
+
+do case "resume listed channels"
 	local chunks = {
 		function (t, ...)
 			local chunk = utilschunk..[[
@@ -542,8 +599,8 @@ do case "reset channel"
 				local name = tostring(coroutine.running())
 				sendsignal(path)
 				local res, errmsg = coroutine.yield(name)
-				assert(res == nil)
-				assert(errmsg == "channel reset")
+				assert(res == true)
+				assert(errmsg == "reset")
 				sendsignal(path)
 			]]
 			assert(t:dostring(chunk, "@chunk", "t", ...))
@@ -559,8 +616,8 @@ do case "reset channel"
 					local channel = system.channel(name)
 					sendsignal(path)
 					local res, errmsg = channel:await()
-					assert(res == nil)
-					assert(errmsg == "channel reset")
+					assert(res == true)
+					assert(errmsg == "reset")
 					channel:close()
 					sendsignal(path)
 				end)
@@ -574,8 +631,8 @@ do case "reset channel"
 				local channel = system.channel(name)
 				sendsignal(path)
 				local res, errmsg = channel:await()
-				assert(res == nil)
-				assert(errmsg == "channel reset")
+				assert(res == true)
+				assert(errmsg == "reset")
 				channel:close()
 				sendsignal(path)
 			end)
@@ -589,19 +646,21 @@ do case "reset channel"
 		for _, chunk in ipairs(chunks) do
 			local path = os.tmpname()
 
-			local names = system.channelnames("list")
-			assert(next(names) == nil)
+			assert(next(system.channelnames()) == nil)
 
 			chunk(t, name, path)
-
 			waitsignal(path, system.suspend)
-			local names = system.channelnames("reset")
-			local key, value = next(names)
-			assert(string.match(key, "thread: 0x%x+") ~= nil)
+			local names = system.channelnames()
+			local name, value = next(names)
+			assert(next(names, name) == nil)
+			assert(string.match(name, "thread: 0x%x+") ~= nil)
 			assert(value == true)
-			assert(next(names, key) == nil)
+			local channel = system.channel(name)
+			channel:sync(nil, "reset")
+			channel:close()
 			waitsignal(path, system.suspend)
-			system.channelnames("reset")
+
+			assert(next(system.channelnames()) == nil)
 		end
 
 		assert(t:close())
@@ -636,7 +695,7 @@ do case "queueing on endpoints"
 					if producer then
 						local res, errmsg = channel:sync(endpoint)
 						assert(res == nil)
-						assert(errmsg == "no match")
+						assert(errmsg == "empty")
 						sendsignal(path)
 					end
 					assert(channel:await(endpoint) == true)
@@ -652,7 +711,7 @@ do case "queueing on endpoints"
 				if producer then
 					local res, errmsg = channel:sync(endpoint)
 					assert(res == nil)
-					assert(errmsg == "no match")
+					assert(errmsg == "empty")
 					sendsignal(path)
 				end
 				assert(channel:await(endpoint) == true)
@@ -674,7 +733,6 @@ do case "queueing on endpoints"
 		} do
 			local n, e1, e2 = case.n, case.e1, case.e2
 			local t = assert(system.threads(2*n))
-			system.channelnames("reset")
 
 			local channel = tostring(case)
 			for producer in combine(chunks, n) do
@@ -699,6 +757,9 @@ do case "queueing on endpoints"
 			end
 
 			assert(t:close())
+
+			io.write(".")
+			io.flush()
 		end
 		completed = true
 	end)
@@ -842,7 +903,6 @@ do case "transfer errors"
 	many[#many] = "{}"
 	local completed
 	spawn(function ()
-		system.channelnames("reset")
 		local t = assert(system.threads(1))
 		for _, case in ipairs({
 			{ arg = 2, values = { "nil", "coroutine.running()" } },

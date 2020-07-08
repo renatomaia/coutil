@@ -12,7 +12,7 @@ function newtest(title)
 end
 
 function case(title)
-	io.write("[",test,"]",string.rep(" ", 10-#test),title," ... ")
+	io.write("[",test,"]",string.rep(" ", 10-#test),title," ...")
 	io.flush()
 end
 
@@ -26,7 +26,7 @@ function done()
 	assert(spawnerr == nil)
 	collectgarbage("collect")
 	assert(next(garbage) == nil)
-	print("OK")
+	print(" OK")
 end
 
 dofile "event.lua"
