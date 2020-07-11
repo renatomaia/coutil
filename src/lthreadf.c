@@ -862,11 +862,13 @@ static int channel_close (lua_State *L) {
 /* res [, errmsg] = channel:await(endpoint, ...) */
 static int returnsynced (lua_State *L) {
 	LuaChannel *channel = chklchannel(L, 1);
-	int nret = lua_gettop(channel->L);
-	int err = lcuL_movefrom(L, channel->L, nret, "");
+	lua_State *cL = (lua_State *)lua_touserdata(L, 2);
+	channel->L = cL;
+	int nret = lua_gettop(cL);
+	int err = lcuL_movefrom(L, cL, nret, "");
 	lcu_assert(err == LUA_OK);
-	lua_pushnil(channel->L);
-	lua_setfield(channel->L, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
+	lua_pushnil(cL);
+	lua_setfield(cL, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
 	return nret;
 }
 
@@ -878,41 +880,46 @@ static void uv_onsynced (uv_async_t *handle) {
 typedef struct ArmSyncedArgs {
 	uv_loop_t *loop;
 	uv_async_t *async;
-	lua_State *L;
+	LuaChannel *channel;
 } ArmSyncedArgs;
 
 static lua_State *armsynced (lua_State *L, void *data) {
 	ArmSyncedArgs *args = (ArmSyncedArgs *)data;
+	lua_State *cL = args->channel->L;
 	int err;
-	lcu_assert(lua_gettop(args->L) == 0);
-	lua_pushlightuserdata(args->L, args->async);
-	lua_setfield(args->L, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
-	lua_settop(args->L, 2);  /* placeholder for 'channel' and 'endname' */
-	err = lcuL_movefrom(args->L, L, lua_gettop(L)-2, "argument");
+	lcu_assert(lua_gettop(cL) == 0);
+	lua_pushlightuserdata(cL, args->async);
+	lua_setfield(cL, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
+	lua_settop(cL, 2);  /* placeholder for 'channel' and 'endname' */
+	err = lcuL_movefrom(cL, L, lua_gettop(L)-2, "argument");
 	if (err != LUA_OK) {
-		const char *msg = lua_tostring(args->L, -1);
+		const char *msg = lua_tostring(cL, -1);
 		lua_settop(L, 0);
 		lua_pushnil(L);
 		lua_pushstring(L, msg);
-		lua_settop(args->L, 0);
+		lua_settop(cL, 0);
 		return NULL;
 	}
 	err = lcuT_armthrop(L, uv_async_init(args->loop, args->async, uv_onsynced));
 	if (err < 0) {
 		lua_settop(L, 0);
 		lcuL_pusherrres(L, err);
-		lua_settop(args->L, 0);
+		lua_settop(cL, 0);
 		return NULL;
 	}
-	return args->L;
+	lua_settop(L, 1);
+	lua_pushlightuserdata(L, cL);
+	args->channel->L = NULL;
+	return cL;
 }
 
 static int k_setupsynced (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
-	LuaChannel *channel = chklchannel(L, 1);
 	ArmSyncedArgs args;
+	LuaChannel *channel = chklchannel(L, 1);
+	luaL_argcheck(L, channel->L, 1, "already in use");
 	args.loop = loop;
 	args.async = (uv_async_t *)handle;
-	args.L = channel->L;
+	args.channel = channel;
 	if (channelsync(channel, L, armsynced, &args)) return lua_gettop(L);
 	return -1;
 }

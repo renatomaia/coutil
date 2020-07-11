@@ -532,6 +532,38 @@ end
 
 newtest "channels" --------------------------------------------------------------
 
+do case "errors"
+	asserterr("string expected", pcall(system.channel))
+	asserterr("table expected", pcall(system.channelnames, "all"))
+
+	done()
+end
+
+do case "already in use"
+	local channel = system.channel("some channel")
+
+	local a
+	spawn(function ()
+		a = 1
+		channel:await()
+		a = 2
+	end)
+	assert(a == 1)
+
+	local b
+	spawn(function ()
+		asserterr("already in use", pcall(channel.await, channel))
+		channel:sync()
+		b = 1
+	end)
+
+	assert(b == 1)
+	system.run()
+	assert(a == 2)
+
+	done()
+end
+
 do case "close channels"
 	spawn(function ()
 		local channel = system.channel("closing channel")
@@ -547,145 +579,43 @@ do case "close channels"
 	done()
 end
 
-do case "channels names"
-	for _, name in ipairs({
-		"",
-		"\0",
-		"\255",
-		string.rep("\0\1\2\3\4\5", 0x1p10),
-		"CoUtil"
-	}) do
-		local channel = system.channel(name)
-		assert(channel:getname() == name)
-		assert(channel:close())
-	end
+do case "collect suspended"
+	local name = tostring{}
 
-	done()
-end
-
-do case "list channels"
-	local empty = {}
-	local result = system.channelnames(empty)
-	assert(result == empty)
-
-	local channels = {}
-	for i = 1, 10 do
-		local name = tostring(i)
-		channels[name] = system.channel(name)
-	end
-	local names = system.channelnames()
-	for i = 1, 10 do
-		local name = tostring(i)
-		assert(names[name] == true)
-		names[name] = nil
-	end
-	assert(next(names) == nil)
-
-	for i = 1, 10 do
-		local name = tostring(i)
-		names[name] = name
-		if i%2 == 0 then
-			channels[name]:close()
-		end
-	end
-	local result = system.channelnames(names)
-	assert(result == names)
-	for i = 1, 10 do
-		local name = tostring(i)
-		if i%2 == 0 then
-			assert(names[name] == nil)
-		else
-			assert(names[name] == true)
-			channels[name]:close()
-		end
-		names[name] = nil
-	end
-	assert(next(names) == nil)
-
-	done()
-end
-
-do case "resume listed channels"
-	local body = [[
-		local name = tostring(coroutine.running())
-		local channel = system.channel(name)
-		sendsignal(path)
-		local res, errmsg = channel:await()
-		assert(res == true)
-		assert(errmsg == "reset")
-		channel:close()
-		sendsignal(path)
-	]]
-	local channelchunk = utilschunk..[[
-		local name, path = ...
-		local _ENV = require "_G"
-		local system = require "coutil.system"
-		spawn(function ()
-			local coroutine = require("coroutine")
-			]]..body..[[
-		end)
-		system.run()
-	]]
-	local chunks = {
-		function (t, ...)
-			local chunk = utilschunk..[[
-				local name, path = ...
-				local _ENV = require "_G"
-				local coroutine = require("coroutine")
-				local name = tostring(coroutine.running())
-				sendsignal(path)
-				local res, errmsg = coroutine.yield(name)
-				assert(res == true)
-				assert(errmsg == "reset")
-				sendsignal(path)
-			]]
-			assert(t:dostring(chunk, "@chunk", "t", ...))
-		end,
-		function (t, ...)
-			assert(t:dostring(channelchunk, "@chunk", "t", ...))
-		end,
-		function (_, ...)
-			spawn(function (...)
-				local sysco = assert(system.load(channelchunk, "@chunk", "t"))
-				assert(sysco:resume(...))
-			end, ...)
-		end,
-		function (_, name, path)
-			local main = assert(load("local system, name, path = ... "..body))
-			spawn(main, system, name, path)
-		end,
-	}
-
-	local completed
-	spawn(function ()
+	do
 		local t = assert(system.threads(1))
+		assert(t:dostring([[ require("coroutine").yield("]]..name..[[") ]]))
+		repeat until (checkcount(t, "s", 1))
+	end
 
-		for _, chunk in ipairs(chunks) do
-			local path = os.tmpname()
+	gc()
+	assert(system.channel(name):sync() == true)
 
-			assert(next(system.channelnames()) == nil)
+	done()
+end
 
-			chunk(t, name, path)
-			waitsignal(path, system.suspend)
-			local names = system.channelnames()
-			local name, value = next(names)
-			assert(next(names, name) == nil)
-			assert(string.match(name, "thread: 0x%x+") ~= nil)
-			assert(value == true)
-			local channel = system.channel(name)
-			channel:sync(nil, "reset")
-			channel:close()
-			waitsignal(path, system.suspend)
+do case "suspended without threads"
+	local name = tostring{}
 
-			assert(next(system.channelnames()) == nil)
-		end
+	local t = system.threads(1)
+	assert(t:dostring([[ require("coroutine").yield("]]..name..[[") ]]))
+	repeat until (checkcount(t, "s", 1))
+	assert(t:resize(0))
+	assert(t:close())
 
-		assert(t:close())
+	assert(system.channel(name):sync() == true)
 
-		completed = true
-	end)
-	system.run()
-	assert(completed == true)
+	done()
+end
+
+do case "collect channels with tasks"
+	runchunk([=[
+		local system = require "coutil.system"
+		local t = system.threads(1)
+		assert(t:dostring([[ require("coroutine").yield("channel01") ]]))
+		repeat until (t:count("s", 1))
+		assert(t:resize(0))
+	]=])
 
 	done()
 end
@@ -967,25 +897,145 @@ do case "transfer errors"
 	done()
 end
 
-do case "suspended tasks without threads"
-	local t = system.threads(1)
-	assert(t:dostring([[ require("coroutine").yield("channel01") ]]))
-	repeat until (checkcount(t, "s", 1))
-	assert(t:resize(0))
-	assert(t:close())
-	assert(system.channel("channel01"):sync() == true)
+do case "channels names"
+	for _, name in ipairs({
+		"",
+		"\0",
+		"\255",
+		string.rep("\0\1\2\3\4\5", 0x1p10),
+		"CoUtil"
+	}) do
+		local channel = system.channel(name)
+		assert(channel:getname() == name)
+		assert(channel:close())
+	end
 
 	done()
 end
 
-do case "collect channels with tasks"
-	runchunk([=[
+do case "list channels"
+	local empty = {}
+	local result = system.channelnames(empty)
+	assert(result == empty)
+
+	local channels = {}
+	for i = 1, 10 do
+		local name = tostring(i)
+		channels[name] = system.channel(name)
+	end
+	local names = system.channelnames()
+	for i = 1, 10 do
+		local name = tostring(i)
+		assert(names[name] == true)
+		names[name] = nil
+	end
+	assert(next(names) == nil)
+
+	for i = 1, 10 do
+		local name = tostring(i)
+		names[name] = name
+		if i%2 == 0 then
+			channels[name]:close()
+		end
+	end
+	local result = system.channelnames(names)
+	assert(result == names)
+	for i = 1, 10 do
+		local name = tostring(i)
+		if i%2 == 0 then
+			assert(names[name] == nil)
+		else
+			assert(names[name] == true)
+			channels[name]:close()
+		end
+		names[name] = nil
+	end
+	assert(next(names) == nil)
+
+	done()
+end
+
+do case "resume listed channels"
+	local body = [[
+		local name = tostring(coroutine.running())
+		local channel = system.channel(name)
+		sendsignal(path)
+		local res, errmsg = channel:await()
+		assert(res == true)
+		assert(errmsg == "reset")
+		channel:close()
+		sendsignal(path)
+	]]
+	local channelchunk = utilschunk..[[
+		local name, path = ...
+		local _ENV = require "_G"
 		local system = require "coutil.system"
-		local t = system.threads(1)
-		assert(t:dostring([[ require("coroutine").yield("channel01") ]]))
-		repeat until (t:count("s", 1))
-		assert(t:resize(0))
-	]=])
+		spawn(function ()
+			local coroutine = require("coroutine")
+			]]..body..[[
+		end)
+		system.run()
+	]]
+	local chunks = {
+		function (t, ...)
+			local chunk = utilschunk..[[
+				local name, path = ...
+				local _ENV = require "_G"
+				local coroutine = require("coroutine")
+				local name = tostring(coroutine.running())
+				sendsignal(path)
+				local res, errmsg = coroutine.yield(name)
+				assert(res == true)
+				assert(errmsg == "reset")
+				sendsignal(path)
+			]]
+			assert(t:dostring(chunk, "@chunk", "t", ...))
+		end,
+		function (t, ...)
+			assert(t:dostring(channelchunk, "@chunk", "t", ...))
+		end,
+		function (_, ...)
+			spawn(function (...)
+				local sysco = assert(system.load(channelchunk, "@chunk", "t"))
+				assert(sysco:resume(...))
+			end, ...)
+		end,
+		function (_, name, path)
+			local main = assert(load("local system, name, path = ... "..body))
+			spawn(main, system, name, path)
+		end,
+	}
+
+	local completed
+	spawn(function ()
+		local t = assert(system.threads(1))
+
+		for _, chunk in ipairs(chunks) do
+			local path = os.tmpname()
+
+			assert(next(system.channelnames()) == nil)
+
+			chunk(t, name, path)
+			waitsignal(path, system.suspend)
+			local names = system.channelnames()
+			local name, value = next(names)
+			assert(next(names, name) == nil)
+			assert(string.match(name, "thread: 0x%x+") ~= nil)
+			assert(value == true)
+			local channel = system.channel(name)
+			channel:sync(nil, "reset")
+			channel:close()
+			waitsignal(path, system.suspend)
+
+			assert(next(system.channelnames()) == nil)
+		end
+
+		assert(t:close())
+
+		completed = true
+	end)
+	system.run()
+	assert(completed == true)
 
 	done()
 end
