@@ -966,3 +966,26 @@ do case "transfer errors"
 
 	done()
 end
+
+do case "suspended tasks without threads"
+	local t = system.threads(1)
+	assert(t:dostring([[ require("coroutine").yield("channel01") ]]))
+	repeat until (checkcount(t, "s", 1))
+	assert(t:resize(0))
+	assert(t:close())
+	assert(system.channel("channel01"):sync() == true)
+
+	done()
+end
+
+do case "collect channels with tasks"
+	runchunk([=[
+		local system = require "coutil.system"
+		local t = system.threads(1)
+		assert(t:dostring([[ require("coroutine").yield("channel01") ]]))
+		repeat until (t:count("s", 1))
+		assert(t:resize(0))
+	]=])
+
+	done()
+end

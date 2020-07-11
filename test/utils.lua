@@ -91,6 +91,29 @@ function readfrom(path)
 	end
 end
 
+do
+	local scriptfile = os.tmpname()
+	local successfile = os.tmpname()
+
+	function runchunk(chunk, ...)
+		writeto(scriptfile, [[
+			local function main(...) ]], chunk, [[ end
+			local exitval = main(...)
+			local file = assert(io.open("]], successfile, [[", "w"))
+			assert(file:write("SUCCESS!"))
+			assert(file:close())
+			os.exit(exitval, true)
+		]])
+		local command = table.concat({ luabin, scriptfile, ... }, " ")
+		local ok, exitval = os.execute(command)
+		assert(ok == true)
+		assert(readfrom(successfile) == "SUCCESS!")
+		assert(os.remove(scriptfile))
+		os.remove(successfile)
+		return exitval
+	end
+end
+
 function waitsignal(path, yield)
 	local _G = require "_G"
 	local io = require "io"
