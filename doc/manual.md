@@ -1013,16 +1013,20 @@ Channels with the same name share the same two opposite [_endpoints_](#channelaw
 [Await function](#await) that awaits on an _endpoint_ of `channel` for a similar call on the opposite _endpoint_,
 either from another coroutine, [_task_](#threadsdostring-chunk--chunkname--mode-) or [_system coroutine_](#systemload-chunk--chunkname--mode).
 
-`endpoint` is a string that starts with either letter `"i"` or `"o"`,
+`endpoint` is either string `"in"` or `"out"`,
 each identifying an opposite _endpoint_.
 Therefore, the call `channel:await("in")` will await for a call like `channel:await("out")` on another channel with the same name.
 
-If `endpoint` is not a string or starts with neither  `"i"` nor `"o"`,
+Alternativelly,
+if `endpoint` is either `nil` or `"any"`,
 the call will await for a call on either _endpoints_.
-For instance, the call `channel:await("any")` will match any call on any channel with the same name.
+For instance, the call `channel:await("any")` will match either a call `channel:await("in")` or `channel:await("out")`.
 
 Returns `true` followed by the extra arguments `...` from the matching call.
-Otherwise, return `nil` followed by an error message.
+Otherwise, return `nil` followed by an error message related to obtaining the arguments from the matching call.
+In any case,
+if this call does not raise errors,
+the call resumed a coroutine, [_task_](#threadsdostring-chunk--chunkname--mode-) or [_system coroutine_](#systemload-chunk--chunkname--mode) of the matching call.
 
 ### `channel:sync (endpoint, ...)`
 

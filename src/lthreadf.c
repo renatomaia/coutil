@@ -244,17 +244,10 @@ typedef struct ChannelSync {
 typedef lua_State *(*GetAsyncState) (lua_State *L, void *userdata);
 
 static int channelsync_match (ChannelSync *sync,
-                              const char *endname,
+                              int endpoint,
                               lua_State *L,
                               GetAsyncState getstate,
                               void *userdata) {
-	int endpoint;
-	switch (*endname) {
-		case 'i': endpoint = LCU_ENDPOINTIN; break;
-		case 'o': endpoint = LCU_ENDPOINTOUT; break;
-		default: endpoint = LCU_ENDPOINTBOTH; break;
-	}
-
 	uv_mutex_lock(&sync->mutex);
 	if (sync->queue.head == NULL) {
 		sync->expected = endpoint == LCU_ENDPOINTBOTH ? LCU_ENDPOINTBOTH
@@ -376,6 +369,28 @@ static void channelmap_freesync (ChannelMap *map, const char *name) {
 
 
 
+static int checksyncargs (lua_State *L) {
+	static const char *const options[] = { "in", "out", "any" };
+	static const int endpoints[] = { LCU_ENDPOINTIN, LCU_ENDPOINTOUT, LCU_ENDPOINTBOTH };
+	const char *name = luaL_optstring(L, 2, "any");
+	int i;
+	for (i = 0; options[i]; i++) {
+		if (strcmp(options[i], name) == 0) {
+			int narg = lua_gettop(L);
+			if (narg < 2) {
+				lua_settop(L, 2);
+			} else if (!lcuL_canmove(L, narg-2, "argument")) {
+				return -1;
+			}
+			return endpoints[i];
+		}
+	}
+	lua_settop(L, 0);
+	lua_pushnil(L);
+	lua_pushfstring(L, "bad argument #2 (invalid option '%s')", name);
+	return -1;
+}
+
 static void threadmain (void *arg) {
 	ThreadPool *pool = (ThreadPool *)arg;
 	lua_State *L = NULL;
@@ -406,14 +421,9 @@ static void threadmain (void *arg) {
 			const char *channelname = lua_tostring(L, 1);
 			if (channelname) {
 				ChannelSync *sync = channelmap_getsync(pool->channels, channelname);
-				const char *endname = luaL_opt(L, lua_tostring, 2, "");
-				int narg = lua_gettop(L);
-				if (narg < 2) {
-					lua_settop(L, 2);
-				} else if (!lcuL_canmove(L, narg-2, "argument")) {
-					narg = 0;
-				}
-				if (narg && !channelsync_match(sync, endname, L, NULL, NULL)) L = NULL;
+				int endpoint = checksyncargs(L);
+				if (endpoint != -1 && !channelsync_match(sync, endpoint, L, NULL, NULL))
+					L = NULL;
 				channelmap_freesync(pool->channels, channelname);
 			} else {
 				lua_settop(L, 0);  /* discard returned values */
@@ -836,14 +846,9 @@ static int channelsync (LuaChannel *channel,
                         lua_State *L,
                         GetAsyncState getstate,
                         void *userdata) {
-	const char *endname = luaL_optstring(L, 2, "");
-	int narg = lua_gettop(L);
-	if (narg < 2) {
-		lua_settop(L, 2);
-	} else if (!lcuL_canmove(L, narg-2, "argument")) {
-		lua_error(L);
-	}
-	return channelsync_match(channel->sync, endname, L, getstate, userdata);
+	int endpoint = checksyncargs(L);
+	if (endpoint == -1) lua_error(L);
+	return channelsync_match(channel->sync, endpoint, L, getstate, userdata);
 }
 
 /* getmetatable(channel).__gc(channel) */

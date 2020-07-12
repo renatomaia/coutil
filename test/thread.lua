@@ -642,6 +642,7 @@ do case "queueing on endpoints"
 		system.run()
 	]]
 	local chunks = {
+		-- task yield
 		function (t, ...)
 			local chunk = utilschunk..[[
 				local name, endpoint, path, producer = ...
@@ -652,15 +653,18 @@ do case "queueing on endpoints"
 			]]
 			assert(t:dostring(chunk, "@chunk", "t", ...))
 		end,
+		-- task
 		function (t, ...)
 			assert(t:dostring(channelchunk, "@chunk", "t", ...))
 		end,
+		-- system coroutine
 		function (_, ...)
 			spawn(function (...)
 				local sysco = assert(system.load(channelchunk, "@chunk", "t"))
 				assert(sysco:resume(...))
 			end, ...)
 		end,
+		-- coroutine
 		function (_, name, endpoint, path, producer)
 			local main = assert(load("local system, name, endpoint, path, producer = ... "..body))
 			spawn(main, system, name, endpoint, path, producer)
@@ -670,13 +674,12 @@ do case "queueing on endpoints"
 	local completed
 	spawn(function ()
 		for _, case in pairs{
-			{ n = 2, e1 = "i", e2 = "o" },
-			{ n = 2, e1 = "o", e2 = "i" },
+			{ n = 2, e1 = "in", e2 = "out" },
+			{ n = 2, e1 = "out", e2 = "in" },
 			{ n = 2, e1 = "in", e2 = "any" },
 			{ n = 2, e1 = "out", e2 = "any" },
 			{ n = 1, e1 = "any", e2 = "any" },
 			{ n = 1, e1 = nil, e2 = nil },
-			{ n = 1, e1 = 1, e2 = 2 },
 		} do
 			local n, e1, e2 = case.n, case.e1, case.e2
 			local t = assert(system.threads(2*n))
@@ -759,6 +762,7 @@ do case "transfer values"
 	end
 
 	local chunks = {
+		-- task yield
 		function (t, args, rets, ...)
 			local chunk = chunkprefix..[[
 				local function assertvalues(...) ]]..assertvalues(rets)..[[ end
@@ -767,17 +771,20 @@ do case "transfer values"
 			]]
 			assert(t:dostring(chunk, "@chunk", "t", ...))
 		end,
+		-- task
 		function (t, args, rets, ...)
 			local chunk = makechannelchunk(args, rets)
 			assert(t:dostring(chunk, "@chunk", "t", ...))
 		end,
-		function (t, args, rets, ...)
+		-- system coroutine
+		function (_, args, rets, ...)
 			spawn(function (...)
 				local chunk = makechannelchunk(args, rets)
 				local sysco = assert(system.load(chunk, "@chunk", "t"))
 				assert(sysco:resume(...))
 			end, ...)
 		end,
+		-- coroutine
 		function (_, args, rets, name, path)
 			local makeargvals = assert(load(makeargvals(args, "return ")))
 			local assertvalues = assert(load(assertvalues(rets)))
@@ -839,6 +846,7 @@ do case "transfer errors"
 		]]
 	end
 	local chunks = {
+		-- task yield
 		function (t, args, errmsg, ...)
 			local chunk = chunkprefix..[[
 				asserterr("]]..errmsg..[[", require("coroutine").yield(name, nil, ]]..args..[[))
@@ -846,17 +854,20 @@ do case "transfer errors"
 			]]
 			assert(t:dostring(chunk, "@chunk", "t", ...))
 		end,
+		-- task
 		function (t, args, errmsg, ...)
 			local chunk = makechannelchunk(args, errmsg)
 			assert(t:dostring(chunk, "@chunk", "t", ...))
 		end,
-		function (t, args, errmsg, ...)
+		-- system coroutine
+		function (_, args, errmsg, ...)
 			local chunk = makechannelchunk(args, errmsg)
 			spawn(function (...)
 				local sysco = assert(system.load(chunk, "@chunk", "t"))
 				assert(sysco:resume(...))
 			end, ...)
 		end,
+		-- coroutine
 		function (_, args, errmsg, name, path)
 			spawn(function ()
 				local makeargvals = assert(load("return "..args))
@@ -885,6 +896,71 @@ do case "transfer errors"
 			local args = table.concat(case.values, ", ")
 			for _, task in ipairs(chunks) do
 				task(t, args, errmsg, name, path)
+				waitsignal(path, system.suspend)
+			end
+		end
+		assert(t:close())
+		completed = true
+	end)
+	system.run()
+	assert(completed == true)
+
+	done()
+end
+
+do case "invalid endpoint"
+	local chunkprefix = utilschunk..[[
+		local name, path = ...
+	]]
+	local function makechannelchunk(arg, errmsg)
+		return chunkprefix..[[
+			local system = require "coutil.system"
+			spawn(function ()
+				local channel = system.channel(name)
+				asserterr("]]..errmsg..[[", pcall(channel.await, channel, "]]..arg..[["))
+				sendsignal(path)
+			end)
+			system.run()
+		]]
+	end
+	local chunks = {
+		-- task yield
+		function (t, arg, errmsg, ...)
+			local chunk = chunkprefix..[[
+				asserterr("]]..errmsg..[[", require("coroutine").yield(name, "]]..arg..[["))
+				sendsignal(path)
+			]]
+			assert(t:dostring(chunk, "@chunk", "t", ...))
+		end,
+		-- task
+		function (t, arg, errmsg, ...)
+			local chunk = makechannelchunk(arg, errmsg)
+			assert(t:dostring(chunk, "@chunk", "t", ...))
+		end,
+		-- system coroutine
+		function (_, arg, errmsg, ...)
+			local chunk = makechannelchunk(arg, errmsg)
+			spawn(function (...)
+				local sysco = assert(system.load(chunk))
+				assert(sysco:resume(...))
+			end, ...)
+		end,
+		-- coroutine
+		function (_, arg, errmsg, name, path)
+			spawn(function ()
+				local channel = system.channel(name)
+				asserterr(errmsg, pcall(channel.await, channel, arg))
+				sendsignal(path)
+			end)
+		end,
+	}
+	spawn(function ()
+		local t = assert(system.threads(1))
+		for _, arg in ipairs({ "i", "o", "input", "output", "" }) do
+			local errmsg = string.format("bad argument #2 (invalid option '%s')", arg)
+			for _, task in ipairs(chunks) do
+				local path = os.tmpname()
+				task(t, arg, errmsg, tostring({}), path)
 				waitsignal(path, system.suspend)
 			end
 		end
