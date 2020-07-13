@@ -412,7 +412,7 @@ static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int system_findaddr (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupfindaddr, NULL);
+	return lcuT_resetreqopk(L, k_setupfindaddr, NULL, NULL);
 }
 
 /* name [, service] = system.nameaddr (address [, mode]) */
@@ -503,7 +503,7 @@ static int k_setupnameaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int system_nameaddr (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupnameaddr, NULL);
+	return lcuT_resetreqopk(L, k_setupnameaddr, NULL, NULL);
 }
 
 
@@ -784,7 +784,7 @@ static int k_setupsend (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int udp_send (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupsend, NULL);
+	return lcuT_resetreqopk(L, k_setupsend, NULL, NULL);
 }
 
 
@@ -912,7 +912,7 @@ static int k_setupshutdown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int active_shutdown (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupshutdown, NULL);
+	return lcuT_resetreqopk(L, k_setupshutdown, NULL, NULL);
 }
 
 
@@ -932,7 +932,7 @@ static int k_setupwrite (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int active_send (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupwrite, NULL);
+	return lcuT_resetreqopk(L, k_setupwrite, NULL, NULL);
 }
 
 
@@ -973,7 +973,7 @@ static int k_setupwriteobj (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int pipe_send (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupwriteobj, NULL);
+	return lcuT_resetreqopk(L, k_setupwriteobj, NULL, NULL);
 }
 
 /* bytes [, errmsg] = stream:receive(buffer [, i [, j]]) */
@@ -1282,7 +1282,7 @@ static int k_setuptcpconn (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int tcp_connect (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setuptcpconn, NULL);
+	return lcuT_resetreqopk(L, k_setuptcpconn, NULL, NULL);
 }
 
 
@@ -1394,7 +1394,7 @@ static int k_setuppipeconn (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int pipe_connect (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setuppipeconn, NULL);
+	return lcuT_resetreqopk(L, k_setuppipeconn, NULL, NULL);
 }
 
 

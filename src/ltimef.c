@@ -51,8 +51,11 @@ static int k_setuptimer (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 }
 static int system_suspend (lua_State *L) {
 	lua_Number delay = luaL_optnumber(L, 1, 0);
-	if (delay > 0) return lcuT_resetthropk(L, UV_TIMER, k_setuptimer, returntrue);
-	else return lcuT_resetthropk(L, UV_IDLE, k_setupidle, returntrue);
+	if (delay > 0) {
+		return lcuT_resetthropk(L, UV_TIMER, k_setuptimer, returntrue, NULL);
+	} else {
+		return lcuT_resetthropk(L, UV_IDLE, k_setupidle, returntrue, NULL);
+	}
 }
 
 

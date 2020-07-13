@@ -97,7 +97,7 @@ static int k_setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int system_awaitsig (lua_State *L) {
-	return lcuT_resetthropk(L, UV_SIGNAL, k_setupsignal, returnsignal);
+	return lcuT_resetthropk(L, UV_SIGNAL, k_setupsignal, returnsignal, NULL);
 }
 
 
@@ -288,7 +288,7 @@ static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int system_execute (lua_State *L) {
-	return lcuT_resetthropk(L, -1, k_setupproc, NULL);
+	return lcuT_resetthropk(L, -1, k_setupproc, NULL, NULL);
 }
 
 

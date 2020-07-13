@@ -7,7 +7,7 @@
 
 #define FLAG_REQUEST  0x01
 #define FLAG_PENDING  0x02
-#define FLAG_OBJOPON  0x04
+#define FLAG_CANCEL  0x04
 
 #define torequest(O) ((uv_req_t *)&((O)->kind.request))
 #define tohandle(O) ((uv_handle_t *)&((O)->kind.handle))
@@ -50,6 +50,7 @@ typedef struct Operation {
 	} kind;
 	int flags;
 	lua_CFunction results;
+	lua_CFunction cancel;
 } Operation;
 
 static Operation *tothrop (lua_State *L) {
@@ -91,7 +92,8 @@ static void cancelop (Operation *op) {
 		uv_cancel(request);
 	} else {
 		uv_handle_t *handle = tohandle(op);
-		if (!uv_is_closing(handle)) uv_close(handle, closedhdl);
+		if (!lcuL_maskflag(op, FLAG_CANCEL) && !uv_is_closing(handle))
+			uv_close(handle, closedhdl);
 	}
 }
 
@@ -100,8 +102,12 @@ static int endop (lua_State *L, int status, lua_KContext kctx) {
 	Operation *op = tothrop(L);
 	int narg = (int)kctx;
 	lcuL_clearflag(op, FLAG_PENDING);
-	if (haltedop(L, loop)) cancelop(op);
-	else if (op->results) return op->results(L);
+	if (haltedop(L, loop)) {
+		if (op->cancel == NULL || op->cancel(L)) cancelop(op);
+		else lcuL_setflag(op, FLAG_CANCEL);
+	} else if (op->results) {
+		return op->results(L);
+	}
 	return lua_gettop(L)-narg; /* return yield */
 }
 
@@ -153,14 +159,18 @@ static int yieldreset (lua_State *L, Operation *op, int mkreq, void *setup) {
 
 typedef enum { FREEOP, SAMEOP, WAITOP } opstatus;
 
-static opstatus checkreset (Operation *op, lua_CFunction results, int type) {
+static opstatus checkreset (Operation *op,
+                            lua_CFunction results,
+                            lua_CFunction cancel,
+                            int type) {
 	op->results = results;
+	op->cancel = cancel;
 	if (lcuL_maskflag(op, FLAG_REQUEST)) {
 		uv_req_t *request = torequest(op);
 		if (request->type == UV_UNKNOWN_REQ) return FREEOP;
 	} else {
 		uv_handle_t *handle = tohandle(op);
-		if (!uv_is_closing(handle)) {
+		if (!lcuL_maskflag(op, FLAG_CANCEL) && !uv_is_closing(handle)) {
 			if (type && handle->type == type) return SAMEOP;
 			uv_close(handle, closedhdl);
 		}
@@ -175,10 +185,11 @@ static opstatus checkreset (Operation *op, lua_CFunction results, int type) {
 
 LCUI_FUNC int lcuT_resetreqopk (lua_State *L,
                                 lcu_RequestSetup setup,
-                                lua_CFunction results) {
+                                lua_CFunction results,
+                                lua_CFunction cancel) {
 	if (lua_isyieldable(L)) {
 		Operation *op = tothrop(L);
-		switch (checkreset(op, results, 0)) {
+		switch (checkreset(op, results, cancel, 0)) {
 			case FREEOP: return startreqop(L, op, setup, lcu_toloop(L));
 			case WAITOP: return yieldreset(L, op, 1, (void *)setup);
 			default: return 0;
@@ -193,20 +204,23 @@ LCUI_FUNC lua_State *lcuU_endreqop (uv_loop_t *loop, uv_req_t *request) {
 	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST));
 	request->type = UV_UNKNOWN_REQ;
 	if (lcuL_maskflag(op, FLAG_PENDING)) return (lua_State *)request->data;
+	lcuL_clearflag(op, FLAG_CANCEL);
 	lcuT_freevalue(L, (void *)request);
 	return NULL;
 }
 
-LCUI_FUNC void lcuU_resumereqop (lua_State *thread,
-                                 uv_loop_t *loop,
-                                 uv_req_t *request) {
+LCUI_FUNC int lcuU_resumereqop (lua_State *thread,
+                                uv_loop_t *loop,
+                                uv_req_t *request) {
 	lua_State *L = (lua_State *)loop->data;
 	Operation *op = (Operation *)request;
+	int status;
 	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST));
 	lcu_assert(lcuL_maskflag(op, FLAG_PENDING));
-	resumethread(thread, L, loop);
+	status = resumethread(thread, L, loop);
 	if (lcuL_maskflag(op, FLAG_REQUEST) && request->type == UV_UNKNOWN_REQ)
 		lcuT_freevalue(L, (void *)request);
+	return status;
 }
 
 LCUI_FUNC void lcuU_completereqop (uv_loop_t *loop,
@@ -228,12 +242,13 @@ LCUI_FUNC void lcuU_completereqop (uv_loop_t *loop,
 LCUI_FUNC int lcuT_resetthropk (lua_State *L,
                                 uv_handle_type type,
                                 lcu_HandleSetup setup,
-                                lua_CFunction results) {
+                                lua_CFunction results,
+                                lua_CFunction cancel) {
 	if (lua_isyieldable(L)) {
 		Operation *op = tothrop(L);
 		uv_loop_t *loop = NULL;
 		lcu_assert(type);
-		switch (checkreset(op, results, type)) {
+		switch (checkreset(op, results, cancel, type)) {
 			case FREEOP: loop = lcu_toloop(L);
 			case SAMEOP: return startthrop(L, op, setup, loop);
 			case WAITOP: return yieldreset(L, op, 0, (void *)setup);
@@ -251,9 +266,17 @@ LCUI_FUNC int lcuT_armthrop (lua_State *L, int err) {
 		savethread(L, (void *)op);
 		handle->data = (void *)L;
 		lcuL_clearflag(op, FLAG_REQUEST);
-		//lcuL_setflag(op, FLAG_PENDING);
 	}
 	return err;
+}
+
+LCUI_FUNC int lcuU_endthrop (uv_handle_t *handle) {
+	Operation *op = (Operation *)handle;
+	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST));
+	if (lcuL_maskflag(op, FLAG_PENDING)) return 1;
+	lcuL_clearflag(op, FLAG_CANCEL);
+	cancelop(op);
+	return 0;
 }
 
 LCUI_FUNC int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle) {

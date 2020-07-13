@@ -30,6 +30,21 @@ typedef struct StateQ {
 	lua_State *tail;
 } StateQ;
 
+static lua_State *getnextstateq (lua_State *L) {
+	lua_State *next;
+	lcu_assert(lua_checkstack(L, 1));
+	lua_getfield(L, LUA_REGISTRYINDEX, LCU_NEXTSTATEREGKEY);
+	next = (lua_State *)lua_touserdata(L, -1);
+	lua_pop(L, 1);
+	return next;
+}
+
+static void setnextstateq (lua_State *L, lua_State *value) {
+	if (value) lua_pushlightuserdata(L, value);
+	else lua_pushnil(L);
+	lua_setfield(L, LUA_REGISTRYINDEX, LCU_NEXTSTATEREGKEY);
+}
+
 static void initstateq (StateQ *q) {
 	q->head = NULL;
 	q->tail = NULL;
@@ -38,8 +53,7 @@ static void initstateq (StateQ *q) {
 static void appendstateq (StateQ *q, StateQ *q2) {
 	if (q->head) {
 		lcu_assert(lua_checkstack(q->tail, 1));
-		lua_pushlightuserdata(q->tail, q2->head);
-		lua_setfield(q->tail, LUA_REGISTRYINDEX, LCU_NEXTSTATEREGKEY);
+		setnextstateq(q->tail, q2->head);
 	} else {
 		q->head = q2->head;
 	}
@@ -58,19 +72,41 @@ static void enqueuestateq (StateQ *q, lua_State *L) {
 static lua_State *dequeuestateq (StateQ *q) {
 	lua_State *L = q->head;
 	if (L) {
-		lcu_assert(lua_checkstack(L, 1));
 		if (L == q->tail) {
 			q->head = NULL;
 			q->tail = NULL;
 		} else {
-			lua_getfield(L, LUA_REGISTRYINDEX, LCU_NEXTSTATEREGKEY);
-			q->head = (lua_State *)lua_touserdata(L, -1);
-			lua_pop(L, 1);
+			q->head = getnextstateq(L);
 		}
-		lua_pushnil(L);
-		lua_setfield(L, LUA_REGISTRYINDEX, LCU_NEXTSTATEREGKEY);
+		setnextstateq(L, NULL);
 	}
 	return L;
+}
+
+static int removestateq (StateQ *q, lua_State *L) {
+	lua_State *prev = q->head;
+	if (prev != NULL) {
+		if (L == prev) {
+			dequeuestateq(q);
+			return 1;
+		}
+		while (prev != q->tail) {
+			lua_State *current = getnextstateq(prev);
+			if (current == L) {
+				if (L == q->tail) {
+					setnextstateq(prev, NULL);
+					q->tail = prev;
+				} else {
+					current = getnextstateq(L);
+					setnextstateq(prev, current);
+				}
+				setnextstateq(L, NULL);
+				return 1;
+			}
+			prev = current;
+		}
+	}
+	return 0;
 }
 
 
@@ -146,7 +182,6 @@ typedef struct ChannelSync ChannelSync;
 
 typedef struct ChannelControl {
 	uv_mutex_t mutex;
-	int pending;
 	lua_State *L;
 } ChannelControl;
 
@@ -214,7 +249,6 @@ static void rescheduletask (lua_State *L) {
 		async = (uv_async_t *)lua_touserdata(L, -1);
 		lua_pop(L, 1);
 		uv_mutex_lock(&channelctl->mutex);
-		channelctl->pending++;
 		L = channelctl->L;
 		channelctl->L = NULL;
 		uv_mutex_unlock(&channelctl->mutex);
@@ -819,7 +853,7 @@ typedef struct LuaChannel {
 #define tolchannel(L,I)	((LuaChannel *)luaL_checkudata(L,I,LCU_CHANNELCLS))
 
 static LuaChannel *chklchannel(lua_State *L, int arg) {
-	LuaChannel *channel = (LuaChannel *)luaL_checkudata(L, arg, LCU_CHANNELCLS);
+	LuaChannel *channel = tolchannel(L, arg);
 	int ltype = lua_getuservalue(L, arg);
 	luaL_argcheck(L, ltype == LUA_TSTRING, arg, "closed channel");
 	lua_pop(L, 1);
@@ -865,21 +899,48 @@ static int channel_close (lua_State *L) {
 }
 
 /* res [, errmsg] = channel:await(endpoint, ...) */
+static void restorechannel (LuaChannel * channel, lua_State *L) {
+	lua_settop(L, 0);  /* discard arguments */
+	lua_pushnil(L);
+	lua_setfield(L, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
+	channel->L = L;
+}
+
 static int returnsynced (lua_State *L) {
-	LuaChannel *channel = chklchannel(L, 1);
+	LuaChannel *channel = (LuaChannel *)lua_touserdata(L, 1);
 	lua_State *cL = (lua_State *)lua_touserdata(L, 2);
-	channel->L = cL;
 	int nret = lua_gettop(cL);
 	int err = lcuL_movefrom(L, cL, nret, "");
 	lcu_assert(err == LUA_OK);
-	lua_pushnil(cL);
-	lua_setfield(cL, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
+	restorechannel(channel, cL);
 	return nret;
 }
 
-static void uv_onsynced (uv_async_t *handle) {
+static int cancelsynced (lua_State *L) {
+	LuaChannel *channel = (LuaChannel *)lua_touserdata(L, 1);
+	ChannelSync *sync = channel->sync;
+	lua_State *cL = (lua_State *)lua_touserdata(L, 2);
+	int removed;
+	uv_mutex_lock(&sync->mutex);
+	removed = removestateq(&sync->queue, cL);
+	uv_mutex_unlock(&sync->mutex);
+	if (removed) {
+		restorechannel(channel, cL);
+		return 1;
+	}
+	return 0;
+}
+
+static void uv_onsynced (uv_async_t *async) {
+	uv_handle_t * handle = (uv_handle_t *)async;
 	lua_State *thread = (lua_State *)handle->data;
-	lcuU_resumethrop(thread, (uv_handle_t *)handle);
+	if (lcuU_endthrop(handle)) {
+		lcuU_resumethrop(thread, handle);
+	} else {
+		LuaChannel *channel = (LuaChannel *)lua_touserdata(thread, 1);
+		lua_State *cL = (lua_State *)lua_touserdata(thread, 2);
+		restorechannel(channel, cL);
+	}
 }
 
 typedef struct ArmSyncedArgs {
@@ -930,7 +991,7 @@ static int k_setupsynced (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 }
 
 static int channel_await (lua_State *L) {
-	return lcuT_resetthropk(L, -1, k_setupsynced, returnsynced);
+	return lcuT_resetthropk(L, -1, k_setupsynced, returnsynced, cancelsynced);
 }
 
 /* res [, errmsg] = channel:sync(endpoint) */
@@ -956,7 +1017,6 @@ static int channel_getname (lua_State *L) {
 static int channelctl_gc (lua_State *L) {
 	ChannelControl *channelctl = (ChannelControl *)lua_touserdata(L, 1);
 	uv_mutex_destroy(&channelctl->mutex);
-	/* channelctl->pending = 0; */
 	/* channelctl->L = NULL; */
 	return 0;
 }
@@ -975,7 +1035,6 @@ static int system_channel (lua_State *L) {
 
 	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELCTLREGKEY) == LUA_TNIL) {
 		channelctl = (ChannelControl *)lua_newuserdata(L, sizeof(ChannelControl));
-		channelctl->pending = 0;
 		channelctl->L = NULL;
 		int err = uv_mutex_init(&channelctl->mutex);
 		if (err) return lcuL_pusherrres(L, err);

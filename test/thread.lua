@@ -564,6 +564,225 @@ do case "already in use"
 	done()
 end
 
+do case "scheduled yield"
+	local name = tostring{}
+
+	local stage = 0
+	spawn(function ()
+		assert(system.channel(name):await() == true)
+		stage = 1
+		coroutine.yield()
+		stage = 2
+	end)
+	assert(stage == 0)
+
+	spawn(function ()
+		system.suspend()
+		assert(system.channel(name):sync() == true)
+	end)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 1)
+
+	done()
+end
+
+do case "reschedule same channel"
+	local name = tostring{}
+
+	local stage = 0
+	spawn(function ()
+		local channel = system.channel(name)
+		assert(channel:await() == true)
+		stage = 1
+		assert(channel:await() == true)
+		stage = 2
+	end)
+	assert(stage == 0)
+
+	spawn(function ()
+		system.suspend()
+		assert(system.channel(name):sync() == true)
+		system.suspend()
+		assert(system.channel(name):sync() == true)
+	end)
+
+	gc()
+	assert(system.run("step") == true)
+	assert(stage == 1)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 2)
+
+	done()
+end
+
+do case "reschedule different channels"
+	local name1 = tostring{}
+	local name2 = tostring{}
+
+	local stage = 0
+	spawn(function ()
+		assert(system.channel(name1):await() == true)
+		stage = 1
+		assert(system.channel(name2):await() == true)
+		stage = 2
+	end)
+	assert(stage == 0)
+
+	spawn(function ()
+		system.suspend()
+		assert(system.channel(name1):sync() == true)
+		system.suspend()
+		assert(system.channel(name2):sync() == true)
+	end)
+
+	gc()
+	assert(system.run("step") == true)
+	assert(stage == 1)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 2)
+
+	done()
+end
+
+do case "cancel schedule"
+	local stage = 0
+	spawn(function ()
+		garbage.coro = coroutine.running()
+		local a,b,c = system.channel(tostring{}):await()
+		assert(a == true)
+		assert(b == nil)
+		assert(c == 3)
+		stage = 1
+		coroutine.yield()
+		stage = 2
+	end)
+	assert(stage == 0)
+
+	coroutine.resume(garbage.coro, true,nil,3)
+	assert(stage == 1)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 1)
+
+	done()
+end
+
+do case "cancel and reschedule"
+	local name = tostring{}
+
+	local stage = 0
+	spawn(function ()
+		garbage.coro = coroutine.running()
+		local channel = system.channel(name)
+		local extra = channel:await()
+		assert(extra == nil)
+		stage = 1
+		assert(channel:await() == true)
+		stage = 2
+	end)
+	assert(stage == 0)
+
+	spawn(function ()
+		system.suspend() -- the first await is active.
+		system.suspend() -- the first await is being closed.
+		assert(system.channel(name):sync() == true)-- the second await is active.
+	end)
+
+	coroutine.resume(garbage.coro)
+	assert(stage == 1)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 2)
+
+	done()
+end
+
+do case "resume while closing"
+	local name = tostring{}
+
+	local stage = 0
+	spawn(function ()
+		garbage.coro = coroutine.running()
+		local channel = system.channel(name)
+		assert(channel:await() == nil)
+		stage = 1
+		local a,b,c = channel:await()
+		assert(a == .1)
+		assert(b == 2.2)
+		assert(c == 33.3)
+		stage = 2
+	end)
+	assert(stage == 0)
+
+	spawn(function ()
+		system.suspend()
+		coroutine.resume(garbage.coro, .1, 2.2, 33.3) -- while being closed.
+		assert(stage == 2)
+		stage = 3
+	end)
+
+	coroutine.resume(garbage.coro)
+	assert(stage == 1)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 3)
+
+	done()
+end
+
+do case "ignore errors"
+	local name = tostring{}
+
+	local stage = 0
+	pspawn(function ()
+		assert(system.channel(name):await() == true)
+		stage = 1
+		error("oops!")
+	end)
+	assert(stage == 0)
+
+	spawn(function ()
+		system.suspend()
+		assert(system.channel(name):sync() == true)-- the second await is active.
+	end)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 1)
+
+	done()
+end
+
+do case "ignore errors after cancel"
+
+	local stage = 0
+	pspawn(function ()
+		garbage.coro = coroutine.running()
+		assert(system.channel(tostring{}):await() == garbage)
+		stage = 1
+		error("oops!")
+	end)
+	assert(stage == 0)
+
+	coroutine.resume(garbage.coro, garbage)
+	assert(stage == 1)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 1)
+
+	done()
+end
+
 do case "close channels"
 	spawn(function ()
 		local channel = system.channel("closing channel")

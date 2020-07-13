@@ -158,7 +158,7 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int coroutine_resume (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupwork, returnvalues);
+	return lcuT_resetreqopk(L, k_setupwork, returnvalues, NULL);
 }
 
 LCUI_FUNC void lcuM_addcoroutc (lua_State *L) {

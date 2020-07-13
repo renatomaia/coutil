@@ -146,16 +146,16 @@ Thread
 |  2 |    | T | `lcuT_resetthropk+lcuT_armthrop` | UV handle initialized |
 |  2 |  7 | T | `resetop` | UV request used as UV handle |
 |  2 |  8 | T | `resetop` | UV handle reused |
-|  3 |    | U | `lcuU_resumereqop+endop` | resumed by UV request callback |
+|  3 |    | U | `lcuU_endreqop` | resumed by UV request callback |
 |  4 |    | T | `endop` | resumed by `coroutine.resume` |
-|  5 |  2 | T | `cancelthrop` | thread operation setup failed |
-|  5 | 10 | T | `endop+cancelthrop` | resumed by `coroutine.resume` |
-|  6 |    | U | `lcuU_resumethrop+endop` | resumed by UV handle callback |
+|  5 |  2 | T | `cancelop` | thread operation setup failed |
+|  5 | 10 | T | `endop+cancelop` | resumed by `coroutine.resume` |
+|  6 |    | U | `lcuU_resumethrop` | resumed by UV handle callback |
 |  7 |    | U | `endop` | UV request concluded |
 |  8 |    | U | `closedhdl` | UV handle closed |
-|  9 |  6 | U | `cancelthrop` | coroutine suspended or terminated |
-|  9 |  6 | T | `lcuT_resetopk+uv_close` | different UV handle is active |
-| 10 |  6 | T | `lcuT_resetopk` | coroutine repeats operation |
+|  9 |  6 | U | `cancelop` | coroutine suspended or terminated |
+|  9 |  6 | T | `lcuT_resetthropk+uv_close` | different UV handle is active |
+| 10 |  6 | T | `lcuT_resetthropk` | coroutine repeats operation |
 _______________________
 - P = Previous transition
 - S = Call scope (T = thread; U = UV loop)
@@ -165,7 +165,7 @@ _______________________
 - operation:
 ```c
 /* from Lua stack (inside module closure) */
-lcu_Operation *operation = lcuT_tothrop(L);
+lcu_Operation *operation = tothrop(L);
 /* from UV handle */
 lcu_Operation *operation = (lcu_Operation *)handle;
 /* from UV request */
@@ -173,17 +173,17 @@ lcu_Operation *operation = (lcu_Operation *)request;
 ```
 - handle/request:
 ```c
-if (lcu_testflag(op, LCU_OPFLAG_REQUEST)) {
-	uv_req_t *request = lcu_torequest(operation);
+if (lcuL_maskflag(op, FLAG_REQUEST)) {
+	uv_req_t *request = torequest(operation);
 } else {
-	uv_handle_t *handle = lcu_tohandle(operation);
+	uv_handle_t *handle = tohandle(operation);
 }
 ```
 - coroutine:
 ```c
-lua_State *thread = (lua_State *)( lcu_testflag(op, LCU_OPFLAG_REQUEST) ?
-                                   lcu_torequest(op)->data :
-                                   lcu_tohandle(op)->data );
+lua_State *thread = (lua_State *)( lcuL_maskflag(op, FLAG_REQUEST) ?
+                                   torequest(op)->data :
+                                   tohandle(op)->data );
 ```
 
 ### Conditions
@@ -191,10 +191,10 @@ lua_State *thread = (lua_State *)( lcu_testflag(op, LCU_OPFLAG_REQUEST) ?
 - Freed:
 ```c
 /* coroutine notification pending */
-lcu_assert(lcu_testflag(operation, LCU_OPFLAG_REQUEST));
-lcu_assert(!lcu_testflag(operation, LCU_OPFLAG_PENDING));
+lcu_assert(lcuL_maskflag(operation, FLAG_REQUEST));
+lcu_assert(!lcuL_maskflag(operation, FLAG_PENDING));
 /* no armed operation */
-uv_req_t *request = lcu_torequest(operation);
+uv_req_t *request = torequest(operation);
 lcu_assert(request->type == UV_UNKNOWN_REQ);
 /* coroutine is subject to garbage collection */
 lua_pushlightuserdata(L, (void *)operation);
@@ -203,10 +203,10 @@ lcu_assert(lua_gettable(L, LCU_COREGISTRY) == LUA_TNIL);
 - Armed:
 ```c
 /* coroutine notification pending */
-lcu_assert(!lcu_testflag(operation, LCU_OPFLAG_REQUEST));
-lcu_assert(lcu_testflag(operation, LCU_OPFLAG_PENDING));
+lcu_assert(!lcuL_maskflag(operation, FLAG_REQUEST));
+lcu_assert(lcuL_maskflag(operation, FLAG_PENDING));
 /* armed thread operation */
-uv_handle_t *handle = lcu_tohandle(operation);
+uv_handle_t *handle = tohandle(operation);
 lcu_assert(handle->type != UV_UNKNOWN_HANDLE);
 lcu_assert(!uv_is_closing(handle));
 /* LCU_COREGISTRY[&operation] == coroutine */
@@ -217,14 +217,14 @@ lcu_assert(lua_tothread(L, -1) == thread);
 - Await:
 ```c
 /* coroutine notification pending */
-lcu_assert(lcu_testflag(operation, LCU_OPFLAG_PENDING));
-if (lcu_testflag(op, LCU_OPFLAG_REQUEST)) {
+lcu_assert(lcuL_maskflag(operation, FLAG_PENDING));
+if (lcuL_maskflag(op, FLAG_REQUEST)) {
 	/* armed request operation */
-	uv_req_t *request = lcu_torequest(operation);
+	uv_req_t *request = torequest(operation);
 	lcu_assert(request->type != UV_UNKNOWN_REQ);
 } else {
 	/* armed thread operation */
-	uv_handle_t *handle = lcu_tohandle(operation);
+	uv_handle_t *handle = tohandle(operation);
 	lcu_assert(handle->type != UV_UNKNOWN_HANDLE);
 	lcu_assert(!uv_is_closing(handle));
 }
@@ -236,13 +236,13 @@ lcu_assert(lua_tothread(L, -1) == thread);
 - Close:
 ```c
 /* coroutine notification pending */
-if (lcu_testflag(op, LCU_OPFLAG_REQUEST)) {
+if (lcuL_maskflag(op, FLAG_REQUEST)) {
 	/* armed request operation */
-	uv_req_t *request = lcu_torequest(operation);
+	uv_req_t *request = torequest(operation);
 	lcu_assert(request->type != UV_UNKNOWN_REQ);
 } else {
 	/* thread operation close pending */
-	uv_handle_t *handle = lcu_tohandle(operation);
+	uv_handle_t *handle = tohandle(operation);
 	lcu_assert(handle->type != UV_UNKNOWN_HANDLE);
 	lcu_assert(uv_is_closing(handle));
 }
@@ -289,7 +289,7 @@ uv_handle_t *handle = &object->handle;
 ```
 - `flags`:
 ```c
-if (lcu_testflag(object, LCU_OBJFLAG_CLOSED))
+if (lcuL_maskflag(object, LCU_OBJFLAG_CLOSED))
 	lcu_clearflag(object, LCU_OBJFLAG_CLOSED);
 else
 	lcu_setflag(object, LCU_OBJFLAG_CLOSED);
@@ -300,7 +300,7 @@ else
 - Ready:
 ```c
 /* not being closed */
-lcu_assert(!lcu_testflag(object, LCU_OBJFLAG_CLOSED));
+lcu_assert(!lcuL_maskflag(object, LCU_OBJFLAG_CLOSED));
 /* no awaiting coroutine */
 lcu_assert(handle->data == NULL);
 /* object is subject to garbage collection */
@@ -308,7 +308,7 @@ lcu_assert(handle->data == NULL);
 - Await:
 ```c
 /* not being closed */
-lcu_assert(!lcu_testflag(object, LCU_OBJFLAG_CLOSED));
+lcu_assert(!lcuL_maskflag(object, LCU_OBJFLAG_CLOSED));
 /* awaiting coroutine */
 lua_State *thread = (lua_State *)handle->data;
 lcu_assert(thread);
@@ -321,7 +321,7 @@ lcu_assert(lua_tothread(L, -1) == thread);
 - Armed:
 ```c
 /* not being closed */
-lcu_assert(!lcu_testflag(object, LCU_OBJFLAG_CLOSED));
+lcu_assert(!lcuL_maskflag(object, LCU_OBJFLAG_CLOSED));
 /* no awaiting coroutine */
 lcu_assert(handle->data == NULL);
 /* object in coroutine stack */
@@ -333,7 +333,7 @@ lcu_assert(lua_tothread(L, -1) == thread);
 - Close:
 ```c
 /* not being closed */
-lcu_assert(lcu_testflag(object, LCU_OBJFLAG_CLOSED));
+lcu_assert(lcuL_maskflag(object, LCU_OBJFLAG_CLOSED));
 /* object is being closed */
 lcu_assert(uv_is_closing(handle));
 /* no awaiting coroutine */
@@ -346,7 +346,7 @@ lcu_assert(lua_touserdata(L, -1) == object);
 - Freed:
 ```c
 /* not being closed */
-lcu_assert(lcu_testflag(object, LCU_OBJFLAG_CLOSED));
+lcu_assert(lcuL_maskflag(object, LCU_OBJFLAG_CLOSED));
 /* no awaiting coroutine */
 lcu_assert(handle->data == NULL);
 /* object is subject to garbage collection */
