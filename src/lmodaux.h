@@ -9,7 +9,7 @@
 #include <lauxlib.h>
 
 
-#define LCU_CHANNELMAP  LCU_PREFIX"ChannelMap"
+#define LCU_CHANNELSREGKEY  LCU_PREFIX"ChannelMap"
 
 #define lcu_error(L,e)	luaL_error(L, uv_strerror(e))
 

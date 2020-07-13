@@ -17,12 +17,6 @@ function case(title)
 end
 
 function done()
-	do -- TODO: workaround for issue in libuv (https://mail.google.com/mail/u/0/#sent/QgrcJHsHqgXlgsCNsmZnpLGLcQtvmzLPFBv)
-		local system = require "coutil.system"
-		spawn(system.suspend)
-		assert(system.run("ready") == false)
-		gc()
-	end
 	assert(spawnerr == nil)
 	collectgarbage("collect")
 	assert(next(garbage) == nil)

@@ -157,9 +157,9 @@ static int yieldreset (lua_State *L, Operation *op, int mkreq, void *setup) {
 	return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), resetop);
 }
 
-typedef enum { FREEOP, SAMEOP, WAITOP } opstatus;
+typedef enum { FREEOP, SAMEOP, WAITOP } OpStatus;
 
-static opstatus checkreset (Operation *op,
+static OpStatus checkreset (Operation *op,
                             lua_CFunction results,
                             lua_CFunction cancel,
                             int type) {

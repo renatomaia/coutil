@@ -289,10 +289,10 @@ uv_handle_t *handle = &object->handle;
 ```
 - `flags`:
 ```c
-if (lcuL_maskflag(object, LCU_OBJFLAG_CLOSED))
-	lcu_clearflag(object, LCU_OBJFLAG_CLOSED);
+if (lcuL_maskflag(object, FLAG_CLOSED))
+	lcu_clearflag(object, FLAG_CLOSED);
 else
-	lcu_setflag(object, LCU_OBJFLAG_CLOSED);
+	lcu_setflag(object, FLAG_CLOSED);
 ```
 
 ### Conditions
@@ -300,7 +300,7 @@ else
 - Ready:
 ```c
 /* not being closed */
-lcu_assert(!lcuL_maskflag(object, LCU_OBJFLAG_CLOSED));
+lcu_assert(!lcuL_maskflag(object, FLAG_CLOSED));
 /* no awaiting coroutine */
 lcu_assert(handle->data == NULL);
 /* object is subject to garbage collection */
@@ -308,7 +308,7 @@ lcu_assert(handle->data == NULL);
 - Await:
 ```c
 /* not being closed */
-lcu_assert(!lcuL_maskflag(object, LCU_OBJFLAG_CLOSED));
+lcu_assert(!lcuL_maskflag(object, FLAG_CLOSED));
 /* awaiting coroutine */
 lua_State *thread = (lua_State *)handle->data;
 lcu_assert(thread);
@@ -321,7 +321,7 @@ lcu_assert(lua_tothread(L, -1) == thread);
 - Armed:
 ```c
 /* not being closed */
-lcu_assert(!lcuL_maskflag(object, LCU_OBJFLAG_CLOSED));
+lcu_assert(!lcuL_maskflag(object, FLAG_CLOSED));
 /* no awaiting coroutine */
 lcu_assert(handle->data == NULL);
 /* object in coroutine stack */
@@ -333,7 +333,7 @@ lcu_assert(lua_tothread(L, -1) == thread);
 - Close:
 ```c
 /* not being closed */
-lcu_assert(lcuL_maskflag(object, LCU_OBJFLAG_CLOSED));
+lcu_assert(lcuL_maskflag(object, FLAG_CLOSED));
 /* object is being closed */
 lcu_assert(uv_is_closing(handle));
 /* no awaiting coroutine */
@@ -346,7 +346,7 @@ lcu_assert(lua_touserdata(L, -1) == object);
 - Freed:
 ```c
 /* not being closed */
-lcu_assert(lcuL_maskflag(object, LCU_OBJFLAG_CLOSED));
+lcu_assert(lcuL_maskflag(object, FLAG_CLOSED));
 /* no awaiting coroutine */
 lcu_assert(handle->data == NULL);
 /* object is subject to garbage collection */
