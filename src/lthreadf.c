@@ -363,7 +363,7 @@ static ChannelSync *channelmap_getsync (ChannelMap *map, const char *name) {
 		lua_Alloc allocf = lua_getallocf(L, &allocud);
 		sync = (ChannelSync *)allocf(allocud, NULL, 0, sizeof(ChannelSync));
 		if (sync) {
-			uv_mutex_init_recursive(&sync->mutex);
+			uv_mutex_init(&sync->mutex);
 			sync->refcount = 1;
 			sync->expected = 0;
 			initstateq(&sync->queue);;
