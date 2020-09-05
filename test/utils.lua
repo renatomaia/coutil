@@ -95,7 +95,7 @@ do
 	local scriptfile = os.tmpname()
 	local successfile = os.tmpname()
 
-	function runchunk(chunk, ...)
+	function dostring(chunk, ...)
 		writeto(scriptfile, [[
 			local function main(...) ]], chunk, [[ end
 			local exitval = main(...)
@@ -105,12 +105,13 @@ do
 			os.exit(exitval, true)
 		]])
 		local command = table.concat({ luabin, scriptfile, ... }, " ")
-		local ok, exitval = os.execute(command)
+		local ok, exitmode, exitvalue = os.execute(command)
 		assert(ok == true)
+		assert(exitmode == "exit")
+		assert(exitvalue == 0)
 		assert(readfrom(successfile) == "SUCCESS!")
 		assert(os.remove(scriptfile))
 		os.remove(successfile)
-		return exitval
 	end
 end
 

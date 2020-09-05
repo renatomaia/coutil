@@ -11,8 +11,6 @@
 #define CLASS_CHANNELTASK	LCU_PREFIX"ChannelTask"
 #define CLASS_CHANNEL	LCU_PREFIX"channel"
 
-#define REGKEY_THREADPOOL	LCU_PREFIX"ThreadPool *taskThreadPool"
-#define REGKEY_CHANNELTASK	LCU_PREFIX"ChannelTask channelTask"
 #define REGKEY_CHANNELSYNC	LCU_PREFIX"uv_async_t channelWake"
 #define REGKEY_NEXTSTATE	LCU_PREFIX"lua_State nextQueuedTask"
 
@@ -80,13 +78,10 @@ static lua_State *dequeuestateq (StateQ *q) {
 	return L;
 }
 
-static int removestateq (StateQ *q, lua_State *L) {
+static lua_State *removestateq (StateQ *q, lua_State *L) {
 	lua_State *prev = q->head;
 	if (prev != NULL) {
-		if (L == prev) {
-			dequeuestateq(q);
-			return 1;
-		}
+		if (L == prev) return dequeuestateq(q);
 		while (prev != q->tail) {
 			lua_State *current = getnextstateq(prev);
 			if (current == L) {
@@ -98,12 +93,12 @@ static int removestateq (StateQ *q, lua_State *L) {
 					setnextstateq(prev, current);
 				}
 				setnextstateq(L, NULL);
-				return 1;
+				return L;
 			}
 			prev = current;
 		}
 	}
-	return 0;
+	return NULL;
 }
 
 
@@ -179,6 +174,7 @@ typedef struct ChannelSync ChannelSync;
 
 typedef struct ChannelTask {
 	uv_mutex_t mutex;
+	int wakes;
 	lua_State *L;
 } ChannelTask;
 
@@ -238,7 +234,7 @@ static int addthread_mx (ThreadPool *pool, lua_State *L) {
 static void rescheduletask (lua_State *L) {
 	ThreadPool *pool;
 	int added;
-	if (lua_getfield(L, LUA_REGISTRYINDEX, REGKEY_CHANNELTASK) == LUA_TLIGHTUSERDATA) {
+	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY) == LUA_TLIGHTUSERDATA) {
 		uv_async_t *async;
 		ChannelTask *channeltask = (ChannelTask *)lua_touserdata(L, -1);
 		lua_pop(L, 1);
@@ -248,13 +244,14 @@ static void rescheduletask (lua_State *L) {
 		uv_mutex_lock(&channeltask->mutex);
 		L = channeltask->L;
 		channeltask->L = NULL;
+		channeltask->wakes++;
 		uv_mutex_unlock(&channeltask->mutex);
 		uv_async_send(async);
 		if (L == NULL) return;
 	} else {
 		lua_pop(L, 1);
 	}
-	lua_getfield(L, LUA_REGISTRYINDEX, REGKEY_THREADPOOL);
+	lua_getfield(L, LUA_REGISTRYINDEX, LCU_TASKTPOOLREGKEY);
 	pool = *((ThreadPool **)lua_touserdata(L, -1));
 	lua_pop(L, 1);
 	uv_mutex_lock(&pool->mutex);
@@ -282,7 +279,7 @@ static int channelsync_match (ChannelSync *sync,
 	uv_mutex_lock(&sync->mutex);
 	if (sync->queue.head == NULL) {
 		sync->expected = endpoint == ENDPOINT_BOTH ? ENDPOINT_BOTH
-		                                              : endpoint^ENDPOINT_BOTH;
+		                                           : endpoint^ENDPOINT_BOTH;
 	} else if (sync->expected&endpoint) {
 		lua_State *match = dequeuestateq(&sync->queue);
 		uv_mutex_unlock(&sync->mutex);
@@ -457,7 +454,17 @@ static void threadmain (void *arg) {
 					L = NULL;
 				channelmap_freesync(pool->channels, channelname);
 			} else {
-				lua_settop(L, 0);  /* discard returned values */
+				ChannelTask *channeltask = (ChannelTask *)luaL_testudata(L, 1, CLASS_CHANNELTASK);
+				if (channeltask != NULL) {
+					uv_mutex_lock(&channeltask->mutex);
+					if (channeltask->wakes == 0) {
+						channeltask->L = L;
+						L = NULL;
+					}
+					uv_mutex_unlock(&channeltask->mutex);
+				} else {
+					lua_settop(L, 0);  /* discard returned values */
+				}
 			}
 		} else {
 			if (status != LUA_OK) {
@@ -465,7 +472,7 @@ static void threadmain (void *arg) {
 			}
 			/* avoid 'pool->tasks--' */
 			lua_settop(L, 0);
-			lua_getfield(L, LUA_REGISTRYINDEX, REGKEY_THREADPOOL);
+			lua_getfield(L, LUA_REGISTRYINDEX, LCU_TASKTPOOLREGKEY);
 			lua_pushnil(L);
 			lua_setmetatable(L, -2);
 			lua_close(L);
@@ -611,7 +618,7 @@ static int tpool_addtask (ThreadPool *pool, lua_State *L) {
 	lua_pushcfunction(L, collectthreadpool);
 	lua_setfield(L, -2, "__gc");
 	lua_setmetatable(L, -2);
-	lua_setfield(L, LUA_REGISTRYINDEX, REGKEY_THREADPOOL);
+	lua_setfield(L, LUA_REGISTRYINDEX, LCU_TASKTPOOLREGKEY);
 
 	uv_mutex_lock(&pool->mutex);
 	added = addthread_mx(pool, L);
@@ -694,9 +701,7 @@ static int threads_resize (lua_State *L) {
 	int create = lua_toboolean(L, 3);
 	luaL_argcheck(L, size >= 0, 2, "size cannot be negative");
 	err = tpool_resize(pool, size, create);
-	if (err) return lcuL_pusherrres(L, err);
-	lua_pushboolean(L, 1);
-	return 1;
+	return lcuL_pushresults(L, 0, err);
 }
 
 /* succ [, errmsg] = threads:count([option]) */
@@ -796,13 +801,13 @@ static int system_threads (lua_State *L) {
 		lua_insert(L, -2);
 		lua_settable(L, LUA_REGISTRYINDEX);
 	} else {
-		int type = lua_getfield(L, LUA_REGISTRYINDEX, REGKEY_THREADPOOL);
+		int type = lua_getfield(L, LUA_REGISTRYINDEX, LCU_TASKTPOOLREGKEY);
 		if (type == LUA_TNIL) return 1;
 		pool = *((ThreadPool **)lua_touserdata(L, -1));
 		lua_pop(L, 1);
 	}
 	{
-		ThreadPool **ref = (ThreadPool **)lua_newuserdata(L, sizeof(ThreadPool*));
+		ThreadPool **ref = (ThreadPool **)lua_newuserdata(L, sizeof(ThreadPool *));
 		*ref = pool;
 		luaL_setmetatable(L, CLASS_THREADS);
 	}
@@ -845,6 +850,7 @@ LCUI_FUNC void lcuM_addthreadf (lua_State *L) {
 typedef struct LuaChannel {
 	ChannelSync *sync;
 	lua_State *L;
+	uv_async_t *handle;
 } LuaChannel;
 
 #define tolchannel(L,I)	((LuaChannel *)luaL_checkudata(L,I,CLASS_CHANNEL))
@@ -857,15 +863,31 @@ static LuaChannel *chklchannel(lua_State *L, int arg) {
 	return channel;
 }
 
-static int channelclose (lua_State *L) {
+static int channelclose (lua_State *L, LuaChannel *channel) {
 	ChannelMap *map = channelmap_get(L);
-	LuaChannel *channel = tolchannel(L, 1);
 	if (lua_getuservalue(L, 1) == LUA_TSTRING) {
 		const char *name = lua_tostring(L, -1);
-		channelmap_freesync(map, name);
+		if (channel->handle) {
+			/* whole lua_State is closing, but still waiting on channel */
+			lua_State *cL;
+			ChannelSync *sync = channel->sync;
+			uv_mutex_lock(&sync->mutex);
+			cL = removestateq(&sync->queue, channel->L);
+			uv_mutex_unlock(&sync->mutex);
+			if (cL == NULL) {
+				uv_loop_t *loop = channel->handle->loop;
+				lcu_assert(loop->data == NULL);
+				loop->data = (void *)L;
+				do uv_run(loop, UV_RUN_ONCE);
+				while (channel->handle);
+				loop->data = NULL;
+			}
+		}
 		lua_close(channel->L);
+		channelmap_freesync(map, name);
 		/* DEBUG: channel->sync = NULL; */
 		/* DEBUG: channel->L = NULL; */
+		/* DEBUG: channel->handle = NULL; */
 		lua_pushnil(L);
 		lua_setuservalue(L, 1);
 		return 1;
@@ -884,59 +906,66 @@ static int channelsync (LuaChannel *channel,
 
 /* getmetatable(channel).__gc(channel) */
 static int channel_gc (lua_State *L) {
-	channelclose(L);
+	channelclose(L, tolchannel(L, 1));
 	return 0;
 }
 
-/* getmetatable(channel).__gc(channel) */
+/* channel:close() */
 static int channel_close (lua_State *L) {
-	int closed = channelclose(L);
-	lua_pushboolean(L, closed);
+	LuaChannel *channel = tolchannel(L, 1);
+	luaL_argcheck(L, channel->handle == NULL, 1, "in use");
+	lua_pushboolean(L, channelclose(L, channel));
 	return 1;
 }
 
 /* res [, errmsg] = channel:await(endpoint, ...) */
-static void restorechannel (LuaChannel * channel, lua_State *L) {
+static void restorechannel (LuaChannel * channel) {
+	lua_State *L = channel->L;
 	lua_settop(L, 0);  /* discard arguments */
 	lua_pushnil(L);
 	lua_setfield(L, LUA_REGISTRYINDEX, REGKEY_CHANNELSYNC);
-	channel->L = L;
+	channel->handle = NULL;
 }
 
 static int returnsynced (lua_State *L) {
 	LuaChannel *channel = (LuaChannel *)lua_touserdata(L, 1);
-	lua_State *cL = (lua_State *)lua_touserdata(L, 2);
+	lua_State *cL = channel->L;
 	int nret = lua_gettop(cL);
 	int err = lcuL_movefrom(L, cL, nret, "");
 	lcu_assert(err == LUA_OK);
-	restorechannel(channel, cL);
+	restorechannel(channel);
 	return nret;
 }
 
 static int cancelsynced (lua_State *L) {
 	LuaChannel *channel = (LuaChannel *)lua_touserdata(L, 1);
 	ChannelSync *sync = channel->sync;
-	lua_State *cL = (lua_State *)lua_touserdata(L, 2);
-	int removed;
+	lua_State *cL = channel->L;
 	uv_mutex_lock(&sync->mutex);
-	removed = removestateq(&sync->queue, cL);
+	cL = removestateq(&sync->queue, cL);
 	uv_mutex_unlock(&sync->mutex);
-	if (removed) {
-		restorechannel(channel, cL);
+	if (cL != NULL) {
+		restorechannel(channel);
 		return 1;
 	}
 	return 0;
 }
 
 static void uv_onsynced (uv_async_t *async) {
-	uv_handle_t * handle = (uv_handle_t *)async;
+	uv_handle_t *handle = (uv_handle_t *)async;
 	lua_State *thread = (lua_State *)handle->data;
+	ChannelTask *channeltask;
+	lua_getfield(thread, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY);
+	channeltask = (ChannelTask *)lua_touserdata(thread, -1);
+	lua_pop(thread, 1);
+	uv_mutex_lock(&channeltask->mutex);
+	channeltask->wakes--;
+	uv_mutex_unlock(&channeltask->mutex);
 	if (lcuU_endthrop(handle)) {
 		lcuU_resumethrop(thread, handle);
 	} else {
 		LuaChannel *channel = (LuaChannel *)lua_touserdata(thread, 1);
-		lua_State *cL = (lua_State *)lua_touserdata(thread, 2);
-		restorechannel(channel, cL);
+		restorechannel(channel);
 	}
 }
 
@@ -963,23 +992,25 @@ static lua_State *armsynced (lua_State *L, void *data) {
 		lua_settop(cL, 0);
 		return NULL;
 	}
-	err = lcuT_armthrop(L, uv_async_init(args->loop, args->async, uv_onsynced));
-	if (err < 0) {
-		lua_settop(L, 0);
-		lcuL_pusherrres(L, err);
-		lua_settop(cL, 0);
-		return NULL;
+	if (args->loop != NULL) {
+		err = lcuT_armthrop(L, uv_async_init(args->loop, args->async, uv_onsynced));
+		if (err < 0) {
+			lua_settop(L, 0);
+			lcuL_pusherrres(L, err);
+			lua_settop(cL, 0);
+			return NULL;
+		}
 	}
-	lua_settop(L, 1);
-	lua_pushlightuserdata(L, cL);
-	args->channel->L = NULL;
+
+	args->channel->handle = args->async;
+
 	return cL;
 }
 
 static int k_setupsynced (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	ArmSyncedArgs args;
 	LuaChannel *channel = chklchannel(L, 1);
-	luaL_argcheck(L, channel->L, 1, "already in use");
+	luaL_argcheck(L, channel->handle == NULL, 1, "in use");
 	args.loop = loop;
 	args.async = (uv_async_t *)handle;
 	args.channel = channel;
@@ -988,7 +1019,9 @@ static int k_setupsynced (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 }
 
 static int channel_await (lua_State *L) {
-	return lcuT_resetthropk(L, -1, k_setupsynced, returnsynced, cancelsynced);
+	return lcuT_resetthropk(L, UV_ASYNC, k_setupsynced,
+	                                     returnsynced,
+	                                     cancelsynced);
 }
 
 /* res [, errmsg] = channel:sync(endpoint) */
@@ -1014,7 +1047,6 @@ static int channel_getname (lua_State *L) {
 static int channeltask_gc (lua_State *L) {
 	ChannelTask *channeltask = (ChannelTask *)lua_touserdata(L, 1);
 	uv_mutex_destroy(&channeltask->mutex);
-	/* channeltask->L = NULL; */
 	return 0;
 }
 
@@ -1030,18 +1062,7 @@ static int system_channel (lua_State *L) {
 	lua_pushvalue(L, 1);
 	lua_setuservalue(L, -2);
 
-	if (lua_getfield(L, LUA_REGISTRYINDEX, REGKEY_CHANNELTASK) == LUA_TNIL) {
-		channeltask = (ChannelTask *)lua_newuserdata(L, sizeof(ChannelTask));
-		channeltask->L = NULL;
-		int err = uv_mutex_init(&channeltask->mutex);
-		if (err) return lcuL_pusherrres(L, err);
-		luaL_setmetatable(L, CLASS_CHANNELTASK);
-		lua_setfield(L, LUA_REGISTRYINDEX, REGKEY_CHANNELTASK);
-	} else {
-		channeltask = (ChannelTask *)lua_touserdata(L, -1);
-	}
-	lua_pop(L, 1);
-
+	channel->handle = NULL;
 	channel->L = lua_newstate(allocf, allocud);
 	if (channel->L == NULL) luaL_error(L, "not enough memory");
 	channel->sync = channelmap_getsync(map, name);
@@ -1051,8 +1072,22 @@ static int system_channel (lua_State *L) {
 	}
 	luaL_setmetatable(L, CLASS_CHANNEL);
 
+	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY) == LUA_TNIL) {
+		int err;
+		channeltask = (ChannelTask *)lua_newuserdata(L, sizeof(ChannelTask));
+		channeltask->wakes = 0;
+		channeltask->L = NULL;
+		err = uv_mutex_init(&channeltask->mutex);
+		if (err) return lcuL_pusherrres(L, err);
+		luaL_setmetatable(L, CLASS_CHANNELTASK);
+		lua_setfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY);
+	} else {
+		channeltask = (ChannelTask *)lua_touserdata(L, -1);
+	}
+	lua_pop(L, 1);
+
 	lua_pushlightuserdata(channel->L, channeltask);
-	lua_setfield(channel->L, LUA_REGISTRYINDEX, REGKEY_CHANNELTASK);
+	lua_setfield(channel->L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY);
 
 	return 1;
 }

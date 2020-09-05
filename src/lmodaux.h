@@ -9,7 +9,9 @@
 #include <lauxlib.h>
 
 
-#define LCU_CHANNELSREGKEY  LCU_PREFIX"ChannelMap"
+#define LCU_TASKTPOOLREGKEY	LCU_PREFIX"ThreadPool *taskThreadPool"
+#define LCU_CHANNELTASKREGKEY	LCU_PREFIX"ChannelTask channelTask"
+#define LCU_CHANNELSREGKEY	LCU_PREFIX"ChannelMap channelMap"
 
 #define lcu_error(L,e)	luaL_error(L, uv_strerror(e))
 

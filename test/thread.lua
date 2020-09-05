@@ -552,7 +552,7 @@ do case "already in use"
 
 	local b
 	spawn(function ()
-		asserterr("already in use", pcall(channel.await, channel))
+		asserterr("in use", pcall(channel.await, channel))
 		channel:sync()
 		b = 1
 	end)
@@ -798,6 +798,44 @@ do case "close channels"
 	done()
 end
 
+do case "collect while in use"
+	local t = system.threads(1)
+	t:dostring(utilschunk..[[
+		local system = require "coutil.system"
+		spawn(function () system.channel("c"):await() end)
+	]])
+	t:close()
+
+	local ok, err = system.channel("c"):sync()
+	assert(ok == nil)
+	assert(err == "empty")
+
+	dostring(utilschunk..[[
+		local system = require "coutil.system"
+		spawn(function () system.channel("c"):await() end)
+	]])
+
+	done()
+end
+
+do case "close while in use"
+	local channel = system.channel("c")
+	local ended = false
+	spawn(function ()
+		channel:await()
+		ended = true
+	end)
+	assert(not ended)
+	asserterr("in use", pcall(channel.close, channel))
+	assert(not ended)
+	assert(system.channel("c"):sync() == true)
+	assert(not ended)
+	assert(system.run() == false)
+	assert(ended)
+
+	done()
+end
+
 do case "collect suspended"
 	local name = tostring{}
 
@@ -828,7 +866,7 @@ do case "suspended without threads"
 end
 
 do case "collect channels with tasks"
-	runchunk([=[
+	dostring([=[
 		local system = require "coutil.system"
 		local t = system.threads(1)
 		assert(t:dostring([[ require("coroutine").yield("channel01") ]]))
@@ -1331,6 +1369,58 @@ do case "resume listed channels"
 	end)
 	system.run()
 	assert(completed == true)
+
+	done()
+end
+
+ -- DESTROYS TASK, LEAVES CHANNELS
+do case "end with channel left by ended task"
+	dostring(utilschunk..[=[
+		local system = require "coutil.system"
+		local t = system.threads(1)
+		t:dostring(utilschunk..[[
+			local system = require "coutil.system"
+			spawn(function ()
+				system.channel("My Channel"):await()
+			end)
+		]])
+		t:close()
+	]=])
+
+	done()
+end
+
+-- DESTROYS CHANNELS, LEAVES TASK
+do case "end with task waiting on channel"
+	dostring(utilschunk..[=[
+		local system = require "coutil.system"
+		local t = system.threads(1)
+		t:dostring(utilschunk..[[
+			local coroutine = require "coroutine"
+			coroutine.yield("My Channel")
+		]])
+		t:resize(0)
+		t:close()
+	]=])
+
+	done()
+end
+
+-- LEAVES TASK AND CHANNELS
+do case "end with task with coroutine waiting on channel"
+	dostring(utilschunk..[=[
+		local system = require "coutil.system"
+		local t = system.threads(1)
+		t:dostring(utilschunk..[[
+			local system = require "coutil.system"
+			spawn(function ()
+				system.channel("My Channel"):await()
+			end)
+			system.run()
+		]])
+		t:resize(0)
+		t:close()
+	]=])
 
 	done()
 end
