@@ -84,6 +84,7 @@ static void uv_onsignal (uv_signal_t *handle, int signum) {
 	lcu_assert(lua_gettop(thread) == 0);
 	lua_pushinteger(thread, signum);
 	lcuU_resumethrop(thread, (uv_handle_t *)handle);
+	lcuU_checksuspend(handle->loop);
 }
 static int k_setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_signal_t *signal = (uv_signal_t *)handle;

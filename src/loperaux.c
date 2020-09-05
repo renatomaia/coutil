@@ -77,8 +77,11 @@ static void closedhdl (uv_handle_t *handle) {
 	lua_State *L = (lua_State *)loop->data;
 	void *thread = handle->data;
 	uv_req_t *request = torequest(op);
+	lcu_ActiveOps *actops = lcu_toactops(L);
 	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST));
 	lcuT_freevalue(L, (void *)handle);
+	if (handle->type == UV_ASYNC) actops->asyncs--;
+	else actops->others--;
 	lcuL_setflag(op, FLAG_REQUEST);
 	request->type = UV_UNKNOWN_REQ;
 	request->data = thread;
@@ -112,7 +115,14 @@ static int endop (lua_State *L, int status, lua_KContext kctx) {
 }
 
 static int startedop (lua_State *L, Operation *op, int nret) {
+	lcu_ActiveOps *actops = lcu_toactops(L);
 	lcu_assert(!lcuL_maskflag(op, FLAG_PENDING));
+	if (lcuL_maskflag(op, FLAG_REQUEST)) {
+		uv_req_t *request = torequest(op);
+		if (request->type != UV_UNKNOWN_REQ) {
+			actops->others++;
+		}
+	}
 	if (nret < 0) {  /* shall yield, and wait for callback */
 		lcuL_setflag(op, FLAG_PENDING);
 		if (lcuL_maskflag(op, FLAG_REQUEST)) savethread(L, (void *)op);
@@ -179,6 +189,16 @@ static OpStatus checkreset (Operation *op,
 }
 
 
+LCUI_FUNC void lcuU_checksuspend(uv_loop_t *loop) {
+	lua_State *L = (lua_State *)loop->data;
+	lcu_ActiveOps *actops = lcu_toactops(L);
+	if (actops->others == 0 && actops->asyncs > 0) {
+		lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY);
+		uv_stop(loop);
+	}
+}
+
+
 /*
  * request operation
  */
@@ -201,6 +221,8 @@ LCUI_FUNC int lcuT_resetreqopk (lua_State *L,
 LCUI_FUNC lua_State *lcuU_endreqop (uv_loop_t *loop, uv_req_t *request) {
 	lua_State *L = (lua_State *)loop->data;
 	Operation *op = (Operation *)request;
+	lcu_ActiveOps *actops = lcu_toactops(L);
+	actops->others--;
 	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST));
 	request->type = UV_UNKNOWN_REQ;
 	if (lcuL_maskflag(op, FLAG_PENDING)) return (lua_State *)request->data;
@@ -263,9 +285,12 @@ LCUI_FUNC int lcuT_armthrop (lua_State *L, int err) {
 	if (err >= 0) {
 		Operation *op = tothrop(L);
 		uv_handle_t *handle = tohandle(op);
+		lcu_ActiveOps *actops = lcu_toactops(L);
 		savethread(L, (void *)op);
 		handle->data = (void *)L;
 		lcuL_clearflag(op, FLAG_REQUEST);
+		if (handle->type == UV_ASYNC) actops->asyncs++;
+		else actops->others++;
 	}
 	return err;
 }

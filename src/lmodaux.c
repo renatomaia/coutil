@@ -274,6 +274,11 @@ LCUI_FUNC void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
 	err = uv_loop_init(uv);
 	if (err < 0) lcu_error(L, err);
 	uv->data = NULL;
+	{
+		lcu_ActiveOps *ops = (lcu_ActiveOps *)lua_newuserdata(L, sizeof(lcu_ActiveOps));
+		ops->asyncs = 0;
+		ops->others = 0;
+	}
 }
 
 LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {

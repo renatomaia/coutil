@@ -12,6 +12,8 @@ LCUI_FUNC void lcuT_savevalue (lua_State *L, void *key);
 
 LCUI_FUNC void lcuT_freevalue (lua_State *L, void *key);
 
+LCUI_FUNC void lcuU_checksuspend(uv_loop_t *loop);
+
 /* request operations */
 
 typedef int (*lcu_RequestSetup) (lua_State *L, uv_req_t *r, uv_loop_t *l);

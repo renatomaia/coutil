@@ -356,6 +356,8 @@ or waits to resume at least one coroutine that becomes ready.
 Returns `true` if there are remaining awaiting coroutines,
 or `false` otherwise.
 
+__Note__: when called with mode `"loop"` from the main thread of a [_task_](#threadsdostring-chunk--chunkname--mode-) and there are only [`channel:await`](#channelawait-endpoint-) calls pending, the task is suspended until one of the pending calls are resolved.
+
 ### `system.isrunning ()`
 
 Returns `true` if [`system.run`](#systemrun-mode) is executing,

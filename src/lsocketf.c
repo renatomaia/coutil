@@ -360,6 +360,7 @@ static void uv_onresolved (uv_getaddrinfo_t *addrreq,
 		lcuU_resumereqop(thread, loop, request);
 	}
 	else if (!err) freeaddrinfo(results);
+	lcuU_checksuspend(loop);
 }
 static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_getaddrinfo_t *addrreq = (uv_getaddrinfo_t *)request;
@@ -432,6 +433,7 @@ static void uv_onaddrnamed (uv_getnameinfo_t *namereq,
 		else lcuL_pushresults(thread, 0, err);
 		lcuU_resumereqop(thread, loop, request);
 	}
+	lcuU_checksuspend(loop);
 }
 static void uv_onservnamed (uv_getnameinfo_t *namereq,
                             int err,
@@ -446,6 +448,7 @@ static void uv_onservnamed (uv_getnameinfo_t *namereq,
 		else lcuL_pushresults(thread, 0, err);
 		lcuU_resumereqop(thread, loop, request);
 	}
+	lcuU_checksuspend(loop);
 }
 static void uv_oncannonical (uv_getaddrinfo_t *addrreq,
                              int err,
@@ -768,7 +771,9 @@ static int udp_connect (lua_State *L) {
 
 /* sent [, errmsg] = udp:send(data [, i [, j [, address]]]) */
 static void uv_onsent (uv_udp_send_t *request, int err) {
-	lcuU_completereqop(request->handle->loop, (uv_req_t *)request, err);
+	uv_loop_t *loop = request->handle->loop;
+	lcuU_completereqop(loop, (uv_req_t *)request, err);
+	lcuU_checksuspend(loop);
 }
 static int k_setupsend (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_UdpSocket *udp = ownedudp(L, loop);
@@ -861,6 +866,7 @@ static void uv_onudprecv (uv_udp_t *udp,
 		lcuU_resumeobjop(thread, (uv_handle_t *)udp);
 	}
 	if (udp->data == NULL) stopudp(udp);
+	lcuU_checksuspend(udp->loop);
 }
 static void uv_ongetbuffer (uv_handle_t *handle,
                             size_t suggested_size,
@@ -901,7 +907,9 @@ static int udp_receive (lua_State *L) {
 
 /* succ [, errmsg] = stream:shutdown() */
 static void uv_onshutdown (uv_shutdown_t *request, int err) {
-	lcuU_completereqop(request->handle->loop, (uv_req_t *)request, err);
+	uv_loop_t *loop = request->handle->loop;
+	lcuU_completereqop(loop, (uv_req_t *)request, err);
+	lcuU_checksuspend(loop);
 }
 static int k_setupshutdown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_Object *object = ownedobj(L, loop, 1, toclass(L));
@@ -918,7 +926,9 @@ static int active_shutdown (lua_State *L) {
 
 /* sent [, errmsg] = stream:send(data [, i [, j]]) */
 static void uv_onwritten (uv_write_t *request, int err) {
-	lcuU_completereqop(request->handle->loop, (uv_req_t *)request, err);
+	uv_loop_t *loop = request->handle->loop;
+	lcuU_completereqop(loop, (uv_req_t *)request, err);
+	lcuU_checksuspend(loop);
 }
 static int k_setupwrite (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_Object *object = ownedobj(L, loop, 1, toclass(L));
@@ -1027,6 +1037,7 @@ static void uv_onrecvdata (uv_stream_t *stream,
 		lcuU_resumeobjop(thread, (uv_handle_t *)stream);
 	}
 	if (stream->data == NULL) stopread(stream);
+	lcuU_checksuspend(stream->loop);
 }
 static int active_receive (lua_State *L) {
 	lcu_Object *object = ownedobj(L, lcu_toloop(L), 1, toclass(L));
@@ -1129,6 +1140,7 @@ static void uv_onconnection (uv_stream_t *stream, int status) {
 		else lcu_assert(uv_has_ref(handle));
 	}
 	else lcu_addobjlisten(lcu_tohdlobj(handle));
+	lcuU_checksuspend(stream->loop);
 }
 static int passive_listen (lua_State *L) {
 	lcu_Object *object = ownedobj(L, lcu_toloop(L), 1, toclass(L));
@@ -1271,7 +1283,9 @@ static int tcp_getoption (lua_State *L) {
 
 /* succ [, errmsg] = tcp:connect(address) */
 static void uv_onconnected (uv_connect_t *request, int err) {
-	lcuU_completereqop(request->handle->loop, (uv_req_t *)request, err);
+	uv_loop_t *loop = request->handle->loop;
+	lcuU_completereqop(loop, (uv_req_t *)request, err);
+	lcuU_checksuspend(loop);
 }
 static int k_setuptcpconn (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcu_TcpSocket *tcp = ownedtcp(L, loop, LCU_TCPACTIVECLS);

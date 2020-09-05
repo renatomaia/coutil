@@ -24,6 +24,7 @@ static int returntrue (lua_State *L) {
 static void uv_onidle (uv_idle_t *handle) {
 	lcu_assert(lua_gettop((lua_State *)handle->data) == 0);
 	lcuU_resumethrop((lua_State *)handle->data, (uv_handle_t *)handle);
+	lcuU_checksuspend(handle->loop);
 }
 static int k_setupidle (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	if (loop) {
@@ -37,6 +38,7 @@ static int k_setupidle (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 static void uv_ontimer (uv_timer_t *handle) {
 	lcu_assert(lua_gettop((lua_State *)handle->data) == 0);
 	lcuU_resumethrop((lua_State *)handle->data, (uv_handle_t *)handle);
+	lcuU_checksuspend(handle->loop);
 }
 static int k_setuptimer (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_timer_t *timer = (uv_timer_t *)handle;

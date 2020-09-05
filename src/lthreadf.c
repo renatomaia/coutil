@@ -967,6 +967,7 @@ static void uv_onsynced (uv_async_t *async) {
 		LuaChannel *channel = (LuaChannel *)lua_touserdata(thread, 1);
 		restorechannel(channel);
 	}
+	lcuU_checksuspend(handle->loop);
 }
 
 typedef struct ArmSyncedArgs {

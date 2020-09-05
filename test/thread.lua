@@ -939,7 +939,7 @@ do case "queueing on endpoints"
 			{ n = 1, e1 = nil, e2 = nil },
 		} do
 			local n, e1, e2 = case.n, case.e1, case.e2
-			local t = assert(system.threads(2*n))
+			local t = assert(system.threads(1))
 
 			local channel = tostring(case)
 			for producer in combine(chunks, n) do
@@ -1054,7 +1054,7 @@ do case "transfer values"
 
 	local completed
 	spawn(function ()
-		local t = assert(system.threads(2))
+		local t = assert(system.threads(1))
 		local many = setmetatable({}, LargeArray)
 		for _, case in ipairs({
 			{ { "nil", "'error message'" }, {} },
@@ -1421,6 +1421,84 @@ do case "end with task with coroutine waiting on channel"
 		t:resize(0)
 		t:close()
 	]=])
+
+	done()
+end
+
+newtest "loop" -----------------------------------------------------------------
+
+do case "suspend with only channels"
+	spawn(function ()
+		local count = 3
+		local awaitchunk = [[
+			local system = require "coutil.system"
+			spawn(function ()
+				local channel = system.channel(%q)
+				channel:await()
+			end)
+			assert(system.run() == false)
+		]]
+		local t = system.threads(1)
+		for i = 1, count do
+			t:dostring(utilschunk..awaitchunk:format(i))
+		end
+		repeat until (checkcount(t, "s", count))
+		for i = count, 1, -1 do
+			local channel = system.channel(tostring(i))
+			assert(channel:await() == true)
+		end
+		t:close()
+	end)
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "don't suspend with other events"
+	spawn(function ()
+		local count = 3
+		local baseport = 65432
+		local awaitchunk = [[
+			local system = require "coutil.system"
+			local channel = system.channel(%q)
+			spawn(function ()
+				channel:await("out")
+			end)
+			spawn(function ()
+				local socket = system.socket("stream", "ipv4")
+				local address = system.address("ipv4", "127.0.0.1", ]]..baseport..[[+%d)
+				assert(socket:connect(address) == true)
+				assert(socket:close() == true)
+			end)
+			assert(system.run() == false)
+		]]
+
+		local sockets = {}
+		for i = 1, count do
+			sockets[i] = system.socket("passive", "ipv4")
+			local address = system.address("ipv4", "127.0.0.1", baseport+i)
+			assert(sockets[i]:bind(address) == true)
+			assert(sockets[i]:listen(count) == true)
+		end
+
+		local t = system.threads(count)
+		for i = 1, count do
+			t:dostring(utilschunk..awaitchunk:format(i, i))
+		end
+
+		for i = count, 1, -1 do
+			assert(sockets[i]:accept():close() == true)
+			assert(sockets[i]:close() == true)
+		end
+
+		repeat until (checkcount(t, "s", count))
+		assert(t:resize(1) == true)
+		for i = count, 1, -1 do
+			assert(system.channel(tostring(i)):await("in") == true)
+		end
+		t:close()
+	end)
+	assert(system.run() == false)
 
 	done()
 end
