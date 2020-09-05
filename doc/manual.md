@@ -916,12 +916,12 @@ The number of threads is given by environment variable [`UV_THREADPOOL_SIZE`](ht
 
 ### `syscoro:status ()`
 
-Like to [`coroutine.status`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume),
+Similar to [`coroutine.status`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume),
 but for [_system coroutines_](#systemload-chunk--chunkname--mode).
 
 ### `syscoro:close ()`
 
-Like to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
+Similar to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
 but for  [_system coroutines_](#systemload-chunk--chunkname--mode).
 
 ### `system.threads ([size])`
@@ -949,7 +949,7 @@ Returns numbers corresponding to the ammount of components in [_thread pool_](#s
 - `n`: the total number of [_tasks_](#threadsdostring-chunk--chunkname--mode-).
 - `r`: the number of _tasks_ currently executing.
 - `p`: the number of _tasks_ pending to be executed.
-- `s`: the number of _tasks_ not ready to execute.
+- `s`: the number of _tasks_ suspended on a [channel](#systemchannel-name).
 - `e`: the expected number of system threads.
 - `a`: the actual number of system threads.
 
@@ -1028,7 +1028,7 @@ Returns `true` followed by the extra arguments `...` from the matching call.
 Otherwise, return `nil` followed by an error message related to obtaining the arguments from the matching call.
 In any case,
 if this call does not raise errors,
-the call resumed a coroutine, [_task_](#threadsdostring-chunk--chunkname--mode-) or [_system coroutine_](#systemload-chunk--chunkname--mode) of the matching call.
+it resumed the coroutine, [_task_](#threadsdostring-chunk--chunkname--mode-) or [_system coroutine_](#systemload-chunk--chunkname--mode) of the matching call.
 
 ### `channel:sync (endpoint, ...)`
 

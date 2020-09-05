@@ -187,12 +187,12 @@ typedef struct ThreadPool {
 	uv_cond_t onwork;
 	uv_cond_t onterm;
 	TPoolStatus status;
-	int size;
-	int threads;
-	int idle;
-	int tasks;
-	int running;
-	int pending;
+	int size;  /* expected number of system threads */
+	int threads;  /* current number of system threads */
+	int idle;  /* number of system threads waiting on 'onwork' */
+	int tasks;  /* total number of tasks (coroutines) in the thread pool */
+	int running;  /* number of system threads running tasks */
+	int pending;  /* number of tasks in 'queue' */
 	StateQ queue;
 	ChannelMap *channels;
 } ThreadPool;
@@ -1060,6 +1060,7 @@ static int system_channel (lua_State *L) {
 	LuaChannel *channel = (LuaChannel *)lua_newuserdata(L, sizeof(LuaChannel));
 	ChannelTask *channeltask;
 
+	/* save channel name */
 	lua_pushvalue(L, 1);
 	lua_setuservalue(L, -2);
 
