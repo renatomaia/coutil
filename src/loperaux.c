@@ -29,10 +29,16 @@ static void savethread (lua_State *L, void *key) {
 	lcuT_savevalue(L, key);
 }
 
-static int resumethread (lua_State *thread, lua_State *L, uv_loop_t *loop) {
+static int resumethread (lua_State *thread,
+                         lua_State *L,
+                         int narg,
+                         uv_loop_t *loop) {
+	int nret, status;
 	lcu_assert(loop->data == (void *)L);
 	lua_pushlightuserdata(thread, loop);  /* token to sign scheduler resume */
-	return lua_resume(thread, L, lua_gettop(thread));
+	status = lua_resume(thread, L, narg+1, &nret);
+	lua_pop(thread, nret);  /* dicard yielded values */
+	return status;
 }
 
 static int haltedop (lua_State *L, uv_loop_t *loop) {
@@ -59,7 +65,7 @@ static Operation *tothrop (lua_State *L) {
 	if (lua_gettable(L, OPERATIONS) == LUA_TNIL) {
 		uv_req_t *request;
 		lua_pushthread(L);
-		op = (Operation *)lua_newuserdata(L, sizeof(Operation));
+		op = (Operation *)lua_newuserdatauv(L, sizeof(Operation), 0);
 		lua_settable(L, OPERATIONS);
 		op->flags = FLAG_REQUEST;
 		request = torequest(op);
@@ -75,7 +81,7 @@ static void closedhdl (uv_handle_t *handle) {
 	Operation *op = (Operation *)handle;
 	uv_loop_t *loop = handle->loop;
 	lua_State *L = (lua_State *)loop->data;
-	void *thread = handle->data;
+	lua_State *thread = (lua_State *)handle->data;
 	uv_req_t *request = torequest(op);
 	lcu_ActiveOps *actops = lcu_toactops(L);
 	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST));
@@ -86,7 +92,7 @@ static void closedhdl (uv_handle_t *handle) {
 	request->type = UV_UNKNOWN_REQ;
 	request->data = thread;
 	if (lcuL_maskflag(op, FLAG_PENDING))
-		resumethread((lua_State *)thread, L, loop);
+		resumethread(thread, L, 0, loop);
 }
 
 static void cancelop (Operation *op) {
@@ -231,7 +237,7 @@ LCUI_FUNC lua_State *lcuU_endreqop (uv_loop_t *loop, uv_req_t *request) {
 	return NULL;
 }
 
-LCUI_FUNC int lcuU_resumereqop (lua_State *thread,
+LCUI_FUNC int lcuU_resumereqop (lua_State *thread, int narg,
                                 uv_loop_t *loop,
                                 uv_req_t *request) {
 	lua_State *L = (lua_State *)loop->data;
@@ -239,7 +245,7 @@ LCUI_FUNC int lcuU_resumereqop (lua_State *thread,
 	int status;
 	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST));
 	lcu_assert(lcuL_maskflag(op, FLAG_PENDING));
-	status = resumethread(thread, L, loop);
+	status = resumethread(thread, L, narg, loop);
 	if (lcuL_maskflag(op, FLAG_REQUEST) && request->type == UV_UNKNOWN_REQ)
 		lcuT_freevalue(L, (void *)request);
 	return status;
@@ -250,9 +256,8 @@ LCUI_FUNC void lcuU_completereqop (uv_loop_t *loop,
                                    int err) {
 	lua_State *thread = lcuU_endreqop(loop, request);
 	if (thread) {
-		lcu_assert(lua_gettop(thread) == 0);
-		lcuL_pushresults(thread, 0, err);
-		lcuU_resumereqop(thread, loop, request);
+		int nret = lcuL_pushresults(thread, 0, err);
+		lcuU_resumereqop(thread, nret, loop, request);
 	}
 }
 
@@ -304,14 +309,15 @@ LCUI_FUNC int lcuU_endthrop (uv_handle_t *handle) {
 	return 0;
 }
 
-LCUI_FUNC int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle) {
+LCUI_FUNC int lcuU_resumethrop (lua_State *thread, int narg,
+                                uv_handle_t *handle) {
 	uv_loop_t *loop = handle->loop;
 	lua_State *L = (lua_State *)loop->data;
 	Operation *op = (Operation *)handle;
 	int status;
 	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST));
 	lcu_assert(lcuL_maskflag(op, FLAG_PENDING));
-	status = resumethread(thread, L, loop);
+	status = resumethread(thread, L, narg, loop);
 	if (status != LUA_YIELD || !lcuL_maskflag(op, FLAG_PENDING)) cancelop(op);
 	return status;
 }
@@ -328,11 +334,12 @@ static void closedobj (uv_handle_t *handle) {
 LCUI_FUNC void lcuT_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle) {
 	lua_State *thread = (lua_State *)handle->data;
 	if (thread) {
-		lcu_assert(lua_gettop(thread) == 0);
+		int nret;
 		handle->data = NULL;
 		lua_pushnil(thread);
 		lua_pushliteral(thread, "closed");
-		lua_resume(thread, L, 2);
+		lua_resume(thread, L, 2, &nret);
+		lua_pop(thread, nret);  /* dicard yielded values */
 	}
 	lua_pushvalue(L, idx);  /* get the object */
 	lua_pushlightuserdata(L, (void *)handle);
@@ -357,12 +364,13 @@ LCUI_FUNC int lcuT_haltedobjop (lua_State *L, uv_handle_t *handle) {
 	return 1;
 }
 
-LCUI_FUNC int lcuU_resumeobjop (lua_State *thread, uv_handle_t *handle) {
+LCUI_FUNC int lcuU_resumeobjop (lua_State *thread, int narg,
+                                uv_handle_t *handle) {
 	uv_loop_t *loop = handle->loop;
 	lua_State *L = (lua_State *)loop->data;
 	int status;
 	handle->data = NULL;
-	status = resumethread(thread, L, loop);
+	status = resumethread(thread, L, narg, loop);
 	if (handle->data == NULL) lcuT_freevalue(L, (void *)handle);
 	return status;
 }
