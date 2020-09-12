@@ -111,14 +111,14 @@ for type, expected in pairs(cases) do
 
 	do case("bad field "..type)
 		local a = system.address(type)
-		asserterr("bad argument #2 to '__index' (invalid option 'wrongfield')",
+		asserterr("bad argument #2 to 'index' (invalid option 'wrongfield')",
 			pcall(function () return a.wrongfield end))
-		asserterr("bad argument #2 to '__newindex' (invalid option 'wrongfield')",
+		asserterr("bad argument #2 to 'newindex' (invalid option 'wrongfield')",
 			pcall(function () a.wrongfield = true end))
-		asserterr("bad argument #2 to '__newindex' (invalid option 'type')",
+		asserterr("bad argument #2 to 'newindex' (invalid option 'type')",
 			pcall(function () a.type = true end))
 		if type == "file" then
-			asserterr("bad argument #2 to '__newindex' (invalid option 'port')",
+			asserterr("bad argument #2 to 'newindex' (invalid option 'port')",
 				pcall(function () a.port = 1234 end))
 		end
 
@@ -204,17 +204,17 @@ end
 newtest "findaddr" -------------------------------------------------------------
 
 local hosts = {
-	localhost = { ["127.0.0.1"] = "ipv4" },
+	localhost = {
+		["127.0.0.1"] = "ipv4",
+		["::1"] = "ipv6",
+	},
 	["ip6-localhost"] = { ["::1"] = "ipv6" },
 	["*"] = {
 		["0.0.0.0"] = "ipv4",
 		["::"] = "ipv6",
 	},
-	[false] = {
-		["127.0.0.1"] = "ipv4",
-		["::1"] = "ipv6",
-	},
 }
+hosts[false] = hosts.localhost
 local servs = {
 	ssh = 22,
 	http = 80,
@@ -357,8 +357,10 @@ end
 newtest "nameaddr" -------------------------------------------------------------
 
 local hosts = {
-	localhost = { ipv4 = "127.0.0.1" },
-	["ip6-localhost"] = { ipv6 = "::1" },
+	localhost = {
+		ipv4 = "127.0.0.1",
+		ipv6 = "::1",
+	},
 }
 local servs = {
 	ssh = 22,

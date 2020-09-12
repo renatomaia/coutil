@@ -76,15 +76,14 @@ Index
 		- [`syscoro:close`](#syscoroclose-)
 	- [`system.threads`](#systemthreads-size)
 		- [`threads:resize`](#threadsresize-size--create)
-		- [`threads:count`](#threadsgetcount-option)
+		- [`threads:count`](#threadscount-options)
 		- [`threads:dostring`](#threadsdostring-chunk--chunkname--mode-)
 		- [`threads:dofile`](#threadsdofile-filepath--mode-)
 		- [`threads:close`](#threadsclose-)
-	- [`system.channelnames`](#systemchannelnames-action-)
+	- [`system.channelnames`](#systemchannelnames-names)
 	- [`system.channel`](#systemchannel-name)
+		- [`channel:await`](#channelawait-endpoint-)
 		- [`channel:sync`](#channelsync-endpoint-)
-		- [`channel:trysync`](#channeltrysync-endpoint-)
-		- [`channel:probe`](#channelprobe-endpoint)
 		- [`channel:close`](#channelclose-)
 
 Contents
@@ -614,13 +613,14 @@ end
 ```
 
 Finally,
-an example that fills existing addreses objects with the results
+an example that one address value of each domain to obtain the results and print them.
 
 ```lua
 address = { ipv4 = system.address("ipv4"), ipv6 = system.address("ipv6") }
 getnext, nextdomain = assert(system.findaddr("www.lua.org", "http", "s"))
 repeat
 	addr, scktype, nextdomain = getnext(address[nextdomain])
+	print(addr, scktype)
 until nextdomain == nil
 ```
 
@@ -639,7 +639,7 @@ The string `mode` can contain any of the following characters:
 
 - `l`: for local names instead of _Fully Qualified Domain Names_ (FQDN).
 - `d`: for names of datagram services instead of stream services.
-- `i`: for names the _Internationalized Domain Name_ (IDN) format.
+- `i`: for names in the _Internationalized Domain Name_ (IDN) format.
 - `u`: allows unassigned Unicode code points
 (implies `i`).
 - `a`: checks host name is conforming to STD3
@@ -826,7 +826,7 @@ Otherwise it returns `nil` plus an error message.
 
 ### `socket:leavegroup (multicast [, interface])`
 
-Removed network interface with address `interface` from the multicast group of address `multicast`
+Removes network interface with address `interface` from the multicast group of address `multicast`
 (see [`socket:joingroup`](#socketjoingroup-multicast--interface)).
 
 This operation is only available for UDP sockets.
@@ -875,7 +875,7 @@ which provides function [`require`](http://www.lua.org/manual/5.3/manual.html#pd
 This function can be called in the _system coroutine_ to load all other standard modules.
 In particular, [basic functions](http://www.lua.org/manual/5.3/manual.html#6.1) can be loaded using `require "_G"`.
 
-Moreover, the standard modules does not set global variables for their module tables.
+Just bare in mind that requiring the standard modules does not set the global variables for their module tables.
 To mimic the set up of the standard standalone interpreter use a code like below:
 
 ```lua
@@ -955,7 +955,7 @@ Returns numbers corresponding to the ammount of components in [_thread pool_](#s
 
 ### `threads:dostring (chunk [, chunkname [, mode, ...]])`
 
-Loads a chunk as a new _task_ that executes in an independent state just like [_system coroutines_](#systemload-chunk--chunkname--mode).
+Loads a chunk as a new _task_ that executes in an independent state in the same fashion of [_system coroutines_](#systemload-chunk--chunkname--mode).
 However, such _tasks_ executes on system threads from [_thread pool_](#systemthreads-size) `threads`,
 and starts as soon as a system thread is available.
 
@@ -971,7 +971,7 @@ and a message is written to the current process [standard error](https://en.wiki
 
 Returns `true` if `chunk` is loaded successfully.
 
-__Note__: A _task_ can yield a channel name followed by the arguments of [`channel:await`](#channelawait-endpoint-) to be suspended without the need to create a _channel_ nor coroutines.
+__Note__: A _task_ can yield a channel name followed by the arguments of [`channel:await`](#channelawait-endpoint-) to be suspended awaiting on a channel without the need to load CoUtil modules.
 
 ### `threads:dofile (filepath [, mode, ...])`
 
@@ -982,7 +982,7 @@ The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.
 
 When this function is called from a _task_ of [_thread pool_](#systemthreads-size) `threads`
 (_i.e._ using a reference obtained by calling [`system.threads()`](#systemthreads-size) with no arguments),
-it has no effect other than prevent further use of reference `threads`.
+it has no effect other than prevent further use of functions of `threads`.
 
 Otherwise, it waits until there are either no more _tasks_ or no more system threads,
 and closes `threads` releasing all of its underlying resources.
@@ -1002,7 +1002,8 @@ If table `names` is provided,
 returns `names`,
 but first sets each of its string keys to either `true`,
 if there is a channel with that name,
-or `nil`(removing it from `names`).
+or `nil`,
+thus removing it from `names`.
 
 ### `system.channel (name)`
 

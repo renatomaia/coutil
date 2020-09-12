@@ -81,9 +81,8 @@ static int returnsignal (lua_State *L) {
 }
 static void uv_onsignal (uv_signal_t *handle, int signum) {
 	lua_State *thread = (lua_State *)handle->data;
-	lcu_assert(lua_gettop(thread) == 0);
 	lua_pushinteger(thread, signum);
-	lcuU_resumethrop(thread, (uv_handle_t *)handle);
+	lcuU_resumethrop(thread, 1, (uv_handle_t *)handle);
 	lcuU_checksuspend(handle->loop);
 }
 static int k_setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
@@ -109,7 +108,7 @@ static const char* getstrfield (lua_State *L, const char *field, int required) {
 	if (required || !lua_isnil(L, -1)) {
 		value = lua_tostring(L, -1);
 		if (value == NULL)
-			luaL_error(L, "bad field "LUA_QS" (must be a string)", field);
+			luaL_error(L, "bad field %s (must be a string)", field);
 	}
 	lua_pop(L, 1);
 	return value;
@@ -147,7 +146,7 @@ static void getstreamfield (lua_State *L,
 		}
 		lua_pop(L, 1); /* remove value's metatable */
 		if (stream->flags == UV_IGNORE)
-			luaL_error(L, "bad field "LUA_QS" (must be a stream)", field);
+			luaL_error(L, "bad field %s (must be a stream)", field);
 	}
 	lua_pop(L, 1); /* remove value */
 }
@@ -160,7 +159,7 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 		int argc = lua_gettop(L);
 		if (argc > LCU_EXECARGCOUNT) {
 			size_t argsz = (argc+1)*sizeof(char *);  /* arguments + NULL */
-			procopts->args = (char **)lua_newuserdata(L, argsz);
+			procopts->args = (char **)lua_newuserdatauv(L, argsz, 0);
 		}
 		for (i = 0; i < argc; ++i)
 			procopts->args[i] = (char *)luaL_checkstring(L, i+1);
@@ -192,17 +191,17 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 			lua_pop(L, 1);  /* pop arguments count */
 			if (argc > LCU_EXECARGCOUNT) {
 				size_t argsz = (argc+1)*sizeof(char *);  /* arguments + NULL */
-				procopts->args = (char **)lua_newuserdata(L, argsz);
+				procopts->args = (char **)lua_newuserdatauv(L, argsz, 0);
 			}
 			for (i = 1; i < argc; ++i) {
 				lua_geti(L, 2, i);
 				procopts->args[i] = (char *)lua_tostring(L, -1);
 				if (!procopts->args[i]) return luaL_error(L,
-					"bad value #%d in field "LUA_QL("arguments")" (must be a string)", i);
+					"bad value #%d in field 'arguments' (must be a string)", i);
 				lua_pop(L, 1);
 			}
 		} else if (!lua_isnil(L, 2)) {
-			return luaL_argerror(L, 1, "field "LUA_QL("arguments")" must be a table");
+			return luaL_argerror(L, 1, "field 'arguments' must be a table");
 		}
 
 		if (lua_istable(L, 3)) {
@@ -217,14 +216,13 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 				const char *name = lua_tostring(L, -2);
 				const char *value = lua_tostring(L, -1);
 				if (name && (value == NULL || strchr(name, '='))) return luaL_error(L,
-					"bad name "LUA_QS" in field "LUA_QL("environment")
-					" (must be a string without "LUA_QL("=")")", name);
+					"bad name '%s' in field 'environment' (cannot contain '=')", name);
 				++envc;
 				envsz += sizeof(char *)+sizeof(char)*(strlen(name)+1+strlen(value)+1);
 				lua_pop(L, 1);
 			}
 
-			mem = lua_newuserdata(L, envsz);
+			mem = lua_newuserdatauv(L, envsz, 0);
 			envl = (char **)mem;
 			envv = (char *)(mem+(envc+1)*sizeof(char *));  /* variables + NULL */
 			lua_pushnil(L);  /* first key */
@@ -243,7 +241,7 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 			procopts->env = NULL;
 		} else {
 			return luaL_argerror(L, 1,
-				"field "LUA_QL("environment")" must be a table");
+				"field 'environment' must be a table");
 		}
 
 		procopts->args[0] = (char *)procopts->file;
@@ -255,14 +253,13 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 }
 static void uv_procexited (uv_process_t *process, int64_t exitval, int signum) {
 	lua_State *thread = (lua_State *)process->data;
-	lcu_assert(lua_gettop(thread) == 0);
 	if (signum) {
 		pushsignal(thread, signum);
 	} else {
 		lua_pushliteral(thread, "exit");
 		lua_pushinteger(thread, exitval);
 	}
-	lcuU_resumethrop(thread, (uv_handle_t *)process);
+	lcuU_resumethrop(thread, 2, (uv_handle_t *)process);
 }
 static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_process_t *process = (uv_process_t *)handle;
