@@ -26,6 +26,12 @@ LCUI_FUNC int lcuL_pusherrres (lua_State *L, int err);
 
 LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err);
 
+LCUI_FUNC void lcuL_warnerror (lua_State *L, const char *msg, int err);
+
+LCUI_FUNC void lcuL_setfinalizer (lua_State *L,
+                                  lua_CFunction finalizer,
+                                  int nup);
+
 #define lcuL_maskflag(O,F) ((O)->flags&(F))
 #define lcuL_setflag(O,F) ((O)->flags |= (F))
 #define lcuL_clearflag(O,F) ((O)->flags &= ~(F))
@@ -48,9 +54,9 @@ LCUI_FUNC int lcuL_movefrom (lua_State *to,
 
 #define LCU_MODUPVS	4
 
-#define lcu_toloop(L)	(uv_loop_t *)lua_touserdata(L, lua_upvalueindex(3))
+#define lcu_toactops(L)	(lcu_ActiveOps *)lua_touserdata(L, lua_upvalueindex(3))
 
-#define lcu_toactops(L)	(lcu_ActiveOps *)lua_touserdata(L, lua_upvalueindex(4))
+#define lcu_toloop(L)   (uv_loop_t *)lua_touserdata(L, lua_upvalueindex(4))
 
 LCUI_FUNC void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv);
 

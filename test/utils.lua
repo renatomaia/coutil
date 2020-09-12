@@ -133,7 +133,7 @@ end
 
 function sendsignal(path)
 	local io = require "io"
-	local file = io.open(path, "w")
+	local file = assert(io.open(path, "w"))
 	file:write(path)
 	file:close()
 	--while true do
