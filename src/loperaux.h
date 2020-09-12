@@ -25,7 +25,7 @@ LCUI_FUNC int lcuT_resetreqopk (lua_State *L,
 
 LCUI_FUNC lua_State *lcuU_endreqop (uv_loop_t *loop, uv_req_t *request);
 
-LCUI_FUNC int lcuU_resumereqop (lua_State *thread,
+LCUI_FUNC int lcuU_resumereqop (lua_State *thread, int narg,
                                 uv_loop_t *loop,
                                 uv_req_t *request);
 
@@ -47,7 +47,8 @@ LCUI_FUNC int lcuT_armthrop (lua_State *L, int err);
 
 LCUI_FUNC int lcuU_endthrop (uv_handle_t *handle);
 
-LCUI_FUNC int lcuU_resumethrop (lua_State *thread, uv_handle_t *handle);
+LCUI_FUNC int lcuU_resumethrop (lua_State *thread, int narg,
+                                uv_handle_t *handle);
 
 /* object operations */
 
@@ -57,7 +58,8 @@ LCUI_FUNC void lcuT_awaitobj (lua_State *L, uv_handle_t *handle);
 
 LCUI_FUNC int lcuT_haltedobjop (lua_State *L, uv_handle_t *handle);
 
-LCUI_FUNC int lcuU_resumeobjop (lua_State *thread, uv_handle_t *handle);
+LCUI_FUNC int lcuU_resumeobjop (lua_State *thread, int narg,
+                                uv_handle_t *handle);
 
 
 #endif
