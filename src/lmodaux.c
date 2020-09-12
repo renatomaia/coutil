@@ -21,6 +21,22 @@ LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err) {
 	return n;
 }
 
+LCUI_FUNC void lcuL_warnerror (lua_State *L, const char *msg, int err) {
+	lua_warning(L, LCU_WARNPREFIX, 1);
+	lua_warning(L, msg, 1);
+	lua_warning(L, uv_strerror(err), 0);
+}
+
+LCUI_FUNC void lcuL_setfinalizer (lua_State *L,
+                                  lua_CFunction finalizer,
+                                  int nup) {
+	lua_pushcclosure(L, finalizer, nup);
+	lua_createtable(L, 0, 1);
+	lua_insert(L, -2);
+	lua_setfield(L, -2, "__gc");
+	lua_setmetatable(L, -2);
+}
+
 
 static const luaL_Reg stdlibs[] = {
 	{"_G", luaopen_base},
@@ -233,14 +249,12 @@ static void pushhandlemap (lua_State *L) {
 	}
 }
 
-#define LCU_UVLOOPCLS	LCU_PREFIX"uv_loop_t"
-
 static void closehandle (uv_handle_t* handle, void* arg) {
 	if (!uv_is_closing(handle)) uv_close(handle, NULL);
 }
 
 static int terminateloop (lua_State *L) {
-	uv_loop_t *loop = (uv_loop_t *)luaL_checkudata(L, 1, LCU_UVLOOPCLS);
+	uv_loop_t *loop = (uv_loop_t *)lua_touserdata(L, 1);
 	int err = uv_loop_close(loop);
 	if (err == UV_EBUSY) {
 		uv_walk(loop, closehandle, NULL);
@@ -260,25 +274,22 @@ LCUI_FUNC void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
 	int err;
 	lua_newtable(L);  /* LCU_COREGISTRY */
 	pushhandlemap(L);  /* LCU_HANDLEMAP */
-	if (uv) lua_pushlightuserdata(L, uv);
-	else {
-		uv = (uv_loop_t *)lua_newuserdata(L, sizeof(uv_loop_t));
-		if (luaL_newmetatable(L, LCU_UVLOOPCLS)) {
-			lua_pushvalue(L, -4);
-			lua_pushvalue(L, -4);
-			lua_pushcclosure(L, terminateloop, 2);
-			lua_setfield(L, -2, "__gc");
-		}
-		lua_setmetatable(L, -2);
-	}
-	err = uv_loop_init(uv);
-	if (err < 0) lcu_error(L, err);
-	uv->data = NULL;
 	{
-		lcu_ActiveOps *ops = (lcu_ActiveOps *)lua_newuserdata(L, sizeof(lcu_ActiveOps));
+		lcu_ActiveOps *ops =
+			(lcu_ActiveOps *)lua_newuserdatauv(L, sizeof(lcu_ActiveOps), 0);
 		ops->asyncs = 0;
 		ops->others = 0;
 	}
+	if (uv) lua_pushlightuserdata(L, uv);
+	else {
+		int i;
+		uv = (uv_loop_t *)lua_newuserdatauv(L, sizeof(uv_loop_t), 0);
+		for (i = 0; i < LCU_MODUPVS; ++i) lua_pushvalue(L, -5);
+		lcuL_setfinalizer(L, terminateloop, LCU_MODUPVS);
+		err = uv_loop_init(uv);
+		if (err < 0) lcu_error(L, err);
+	}
+	uv->data = NULL;
 }
 
 LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {

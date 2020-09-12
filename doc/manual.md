@@ -76,15 +76,14 @@ Index
 		- [`syscoro:close`](#syscoroclose-)
 	- [`system.threads`](#systemthreads-size)
 		- [`threads:resize`](#threadsresize-size--create)
-		- [`threads:count`](#threadsgetcount-option)
+		- [`threads:count`](#threadscount-options)
 		- [`threads:dostring`](#threadsdostring-chunk--chunkname--mode-)
 		- [`threads:dofile`](#threadsdofile-filepath--mode-)
 		- [`threads:close`](#threadsclose-)
-	- [`system.channelnames`](#systemchannelnames-action-)
+	- [`system.channelnames`](#systemchannelnames-names)
 	- [`system.channel`](#systemchannel-name)
+		- [`channel:await`](#channelawait-endpoint-)
 		- [`channel:sync`](#channelsync-endpoint-)
-		- [`channel:trysync`](#channeltrysync-endpoint-)
-		- [`channel:probe`](#channelprobe-endpoint)
 		- [`channel:close`](#channelclose-)
 
 Contents
@@ -93,10 +92,10 @@ Contents
 Await
 -----
 
-An _await function_ [suspends](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield) the execution of the calling coroutine,
+An _await function_ [suspends](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) the execution of the calling coroutine,
 but also implies that the coroutine will be resumed on some specitic condition.
 
-Coroutines executing an _await function_ can be resumed explicitly by [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
+Coroutines executing an _await function_ can be resumed explicitly by [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume).
 In such case,
 the _await function_ returns the values provided to the resume.
 Otherwise,
@@ -278,10 +277,10 @@ Such coroutines can be resumed by emitting an event on the promise.
 In such case,
 the additional values to [`emitone`](#eventemitone-e-) or [`emitall`](#eventemitall-e-) will be returned by the promise.
 Similarly,
-the coroutines can be resumed prematurely by [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
+the coroutines can be resumed prematurely by [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume).
 In such case,
 the promisse returns the values provided to the resume
-(like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)).
+(like [`coroutine.yield`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield)).
 In either case,
 the promise will remain unfulfilled.
 Therefore,
@@ -615,13 +614,14 @@ end
 ```
 
 Finally,
-an example that fills existing addreses objects with the results
+an example that one address value of each domain to obtain the results and print them.
 
 ```lua
 address = { ipv4 = system.address("ipv4"), ipv6 = system.address("ipv6") }
 getnext, nextdomain = assert(system.findaddr("www.lua.org", "http", "s"))
 repeat
 	addr, scktype, nextdomain = getnext(address[nextdomain])
+	print(addr, scktype)
 until nextdomain == nil
 ```
 
@@ -640,7 +640,7 @@ The string `mode` can contain any of the following characters:
 
 - `l`: for local names instead of _Fully Qualified Domain Names_ (FQDN).
 - `d`: for names of datagram services instead of stream services.
-- `i`: for names the _Internationalized Domain Name_ (IDN) format.
+- `i`: for names in the _Internationalized Domain Name_ (IDN) format.
 - `u`: allows unassigned Unicode code points
 (implies `i`).
 - `a`: checks host name is conforming to STD3
@@ -827,7 +827,7 @@ Otherwise it returns `nil` plus an error message.
 
 ### `socket:leavegroup (multicast [, interface])`
 
-Removed network interface with address `interface` from the multicast group of address `multicast`
+Removes network interface with address `interface` from the multicast group of address `multicast`
 (see [`socket:joingroup`](#socketjoingroup-multicast--interface)).
 
 This operation is only available for UDP sockets.
@@ -867,16 +867,17 @@ Returns a new stream socket for the accepted connection.
 
 ### `system.load (chunk [, chunkname [, mode]])`
 
-Returns a _system coroutine_ with [independent state](http://www.lua.org/manual/5.3/manual.html#lua_newstate) that executes in a separate system thread.
+Returns a _system coroutine_ with [independent state](http://www.lua.org/manual/5.4/manual.html#lua_newstate) that executes in a separate system thread.
 The code to be executed is given by the arguments `chunk`, `chunkname`, `mode`,
-which are the same arguments of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
+which are the same arguments of [`load`](http://www.lua.org/manual/5.4/manual.html#pdf-load).
 
-The new _system coroutine_ has only the [`package`](http://www.lua.org/manual/5.3/manual.html#6.3) module loaded,
-which provides function [`require`](http://www.lua.org/manual/5.3/manual.html#pdf-require).
-This function can be called in the _system coroutine_ to load all other standard modules.
-In particular, [basic functions](http://www.lua.org/manual/5.3/manual.html#6.1) can be loaded using `require "_G"`.
+The new _system coroutine_ has only the [`package`](http://www.lua.org/manual/5.4/manual.html#6.3) module loaded,
+but have all [standard modules](http://www.lua.org/manual/5.4/manual.html#6) preloaded,
+and also inherits any [preloaded](http://www.lua.org/manual/5.4/manual.html#pdf-package.preload) modules from the caller.
+Therefore function [`require`](http://www.lua.org/manual/5.4/manual.html#pdf-require) can be called in the _system coroutine_ to load all other standard modules.
+In particular, [basic functions](http://www.lua.org/manual/5.4/manual.html#6.1) can be loaded using `require "_G"`.
 
-Moreover, the standard modules does not set global variables for their module tables.
+Just bare in mind that requiring the standard modules does not set the global variables for their module tables.
 To mimic the set up of the standard standalone interpreter use a code like below:
 
 ```lua
@@ -893,23 +894,23 @@ debug = require "debug"
 ```
 
 __Note__: These _system coroutines_ run in a separate thread,
-but share the same [memory allocation](http://www.lua.org/manual/5.3/manual.html#lua_Alloc) and [panic function](http://www.lua.org/manual/5.3/manual.html#lua_atpanic) of the caller.
+but share the same [memory allocation](http://www.lua.org/manual/5.4/manual.html#lua_Alloc) and [panic function](http://www.lua.org/manual/5.4/manual.html#lua_atpanic) of the caller.
 Therefore, it is required that thread-safe implementations are used,
-such as the ones used in the [Lua standalone interpreter](http://www.lua.org/manual/5.3/manual.html#7).
+such as the ones used in the [Lua standalone interpreter](http://www.lua.org/manual/5.4/manual.html#7).
 
 ### `system.loadfile ([filepath [, mode]])`
 
 Similar to [`system.load`](#systemload-chunk--chunkname--mode), but gets the chunk from a file.
-The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.3/manual.html#pdf-loadfile).
+The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.4/manual.html#pdf-loadfile).
 
 ### `syscoro:resume (...)`
 
-[Await function](#await) that is like [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume), but executes the [_system coroutine_](#systemload-chunk--chunkname--mode) `syscoro` on a separate system thread and awaits for its completion or [suspension](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield).
+[Await function](#await) that is like [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume), but executes the [_system coroutine_](#systemload-chunk--chunkname--mode) `syscoro` on a separate system thread and awaits for its completion or [suspension](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
 Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values can be passed as arguments or returned from `syscoro`.
 
 If the coroutine executing this [await function](#await) is explicitly resumed,
 the execution of `syscoro` continues in the separate thread,
-and it will not be able to be resumed again until it [suspends](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield).
+and it will not be able to be resumed again until it [suspends](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
 In such case the results of the execution are discarted.
 
 _System coroutines_ are executed using a limited set of threads that are also used by the underlying system.
@@ -917,7 +918,7 @@ The number of threads is given by environment variable [`UV_THREADPOOL_SIZE`](ht
 
 ### `syscoro:status ()`
 
-Similar to [`coroutine.status`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume),
+Similar to [`coroutine.status`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
 but for [_system coroutines_](#systemload-chunk--chunkname--mode).
 
 ### `syscoro:close ()`
@@ -956,15 +957,15 @@ Returns numbers corresponding to the ammount of components in [_thread pool_](#s
 
 ### `threads:dostring (chunk [, chunkname [, mode, ...]])`
 
-Loads a chunk as a new _task_ that executes in an independent state just like [_system coroutines_](#systemload-chunk--chunkname--mode).
+Loads a chunk as a new _task_ that executes in an independent state in the same fashion of [_system coroutines_](#systemload-chunk--chunkname--mode).
 However, such _tasks_ executes on system threads from [_thread pool_](#systemthreads-size) `threads`,
 and starts as soon as a system thread is available.
 
-Arguments `chunk`, `chunkname`, `mode` are the same of [`load`](http://www.lua.org/manual/5.3/manual.html#pdf-load).
+Arguments `chunk`, `chunkname`, `mode` are the same of [`load`](http://www.lua.org/manual/5.4/manual.html#pdf-load).
 Arguments `...` are passed to the loaded chunk,
 but only _nil_, _boolean_, _number_, _string_ and _light userdata_ values are allowed as such arguments.
 
-Whenever the loaded `chunk` [yields](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield) it reschedules itself as pending to be resumed,
+Whenever the loaded `chunk` [yields](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) it reschedules itself as pending to be resumed,
 and releases its running system thread.
 
 Execution errors in the loaded `chunk` terminate the _task_,
@@ -972,18 +973,18 @@ and a message is written to the current process [standard error](https://en.wiki
 
 Returns `true` if `chunk` is loaded successfully.
 
-__Note__: A _task_ can yield a channel name followed by the arguments of [`channel:await`](#channelawait-endpoint-) to be suspended without the need to create a _channel_ nor coroutines.
+__Note__: A _task_ can yield a channel name followed by the arguments of [`channel:await`](#channelawait-endpoint-) to be suspended awaiting on a channel without the need to load CoUtil modules.
 
 ### `threads:dofile (filepath [, mode, ...])`
 
 Similar to [`threads:dostring`](#threadsdostring-chunk--chunkname--mode-), but gets the chunk from a file.
-The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.3/manual.html#pdf-loadfile).
+The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.4/manual.html#pdf-loadfile).
 
 ### `threads:close ()`
 
 When this function is called from a _task_ of [_thread pool_](#systemthreads-size) `threads`
 (_i.e._ using a reference obtained by calling [`system.threads()`](#systemthreads-size) with no arguments),
-it has no effect other than prevent further use of reference `threads`.
+it has no effect other than prevent further use of functions of `threads`.
 
 Otherwise, it waits until there are either no more _tasks_ or no more system threads,
 and closes `threads` releasing all of its underlying resources.
@@ -1003,7 +1004,8 @@ If table `names` is provided,
 returns `names`,
 but first sets each of its string keys to either `true`,
 if there is a channel with that name,
-or `nil`(removing it from `names`).
+or `nil`,
+thus removing it from `names`.
 
 ### `system.channel (name)`
 

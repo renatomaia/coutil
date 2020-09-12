@@ -919,6 +919,7 @@ do case "queueing on endpoints"
 			spawn(function (...)
 				local sysco = assert(system.load(channelchunk, "@chunk", "t"))
 				assert(sysco:resume(...))
+				assert(sysco:close(...))
 			end, ...)
 		end,
 		-- coroutine

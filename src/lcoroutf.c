@@ -80,8 +80,9 @@ static void uv_onworking(uv_work_t* req) {
 	int narg = lua_gettop(co);
 	int status;
 	if (lua_status(co) == LUA_OK) --narg;  /* function on stack */
-	status = lua_resume(co, NULL, narg);
-	lcu_assert(lua_checkstack(co, 1));
+	status = lua_resume(co, NULL, narg, &narg);
+	lcu_assert(lua_checkstack(co, 2));
+	lua_pushinteger(co, narg);
 	lua_pushinteger(co, status);
 }
 static void uv_onworked(uv_work_t* work, int status) {
@@ -94,30 +95,34 @@ static void uv_onworked(uv_work_t* work, int status) {
 	request->data = lcu_tosyscoparent(sysco);  /* restore 'lua_State' on conclusion */
 	thread = lcuU_endreqop(loop, request);
 	if (thread) {
+		int nret;
 		if (status == UV_ECANCELED) {
 			lua_settop(co, lua_status(co) == LUA_OK);  /* keep function on stack */
 			lua_pushboolean(thread, 0);
 			lua_pushliteral(thread, "cancelled");
+			nret = 2;
 		} else {
 			int lstatus = (int)lua_tointeger(co, -1);
-			lua_pop(co, 1);  /* remove lstatus value */
+			nret = (int)lua_tointeger(co, -2);
+			lua_pop(co, 2);  /* remove lstatus and nret values */
 			if (lstatus == LUA_OK || lstatus == LUA_YIELD) {
-				int nres = lua_gettop(co);
 				lua_pushboolean(thread, 1);  /* return 'true' to signal success */
-				if (lcuL_movefrom(thread, co, nres, "return value") != LUA_OK) {
-					lua_pop(co, nres);  /* remove results anyway */
+				if (lcuL_movefrom(thread, co, nret, "return value") != LUA_OK) {
+					lua_pop(co, nret);  /* remove results anyway */
 					lua_pushboolean(thread, 0);
 					lua_replace(thread, -3);  /* remove pushed 'true' that signals success */
+					nret = 2;
 				}
 			} else {
 				lua_pushboolean(thread, 0);
 				if (lcuL_pushfrom(thread, co, -1, "error") != LUA_OK) {
 					lua_pop(co, 1);  /* remove error anyway */
 				}
+				nret = 2;
 			}
 		}
 		lcuT_stopsysco(L, sysco);  /* frees 'co' if closed */
-		lcuU_resumereqop(thread, loop, request);
+		lcuU_resumereqop(thread, nret, loop, request);
 	}
 	else lcuT_stopsysco(L, sysco);  /* frees 'co' if closed */
 	lcuU_checksuspend(loop);

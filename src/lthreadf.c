@@ -444,7 +444,7 @@ static void threadmain (void *arg) {
 		uv_mutex_unlock(&pool->mutex);
 		narg = lua_gettop(L);
 		if (lua_status(L) == LUA_OK) narg--;
-		status = lua_resume(L, NULL, narg);
+		status = lua_resume(L, NULL, narg, &narg);
 		if (status == LUA_YIELD) {
 			const char *channelname = lua_tostring(L, 1);
 			if (channelname) {
@@ -612,12 +612,9 @@ static int tpool_addtask (ThreadPool *pool, lua_State *L) {
 	int added;
 	int hasspace = lua_checkstack(L, 1);
 	lcu_assert(hasspace);
-	poolref = (ThreadPool **)lua_newuserdata(L, sizeof(ThreadPool *));
+	poolref = (ThreadPool **)lua_newuserdatauv(L, sizeof(ThreadPool *), 0);
 	*poolref = pool;
-	lua_createtable(L, 0, 1);
-	lua_pushcfunction(L, collectthreadpool);
-	lua_setfield(L, -2, "__gc");
-	lua_setmetatable(L, -2);
+	lcuL_setfinalizer(L, collectthreadpool, 0);
 	lua_setfield(L, LUA_REGISTRYINDEX, LCU_TASKTPOOLREGKEY);
 
 	uv_mutex_lock(&pool->mutex);
@@ -783,7 +780,8 @@ static int system_threads (lua_State *L) {
 	if (lua_gettop(L) > 0) {
 		int err, size = (int)luaL_checkinteger(L, 1);
 		ChannelMap *map = channelmap_get(L);
-		ThreadPool **ref = (ThreadPool **)lua_newuserdata(L, sizeof(ThreadPool *));
+		ThreadPool **ref =
+			(ThreadPool **)lua_newuserdatauv(L, sizeof(ThreadPool *), 0);
 		void *allocud;
 		lua_Alloc allocf = lua_getallocf(L, &allocud);
 		err = tpool_create(ref, allocf, allocud, map);
@@ -807,7 +805,8 @@ static int system_threads (lua_State *L) {
 		lua_pop(L, 1);
 	}
 	{
-		ThreadPool **ref = (ThreadPool **)lua_newuserdata(L, sizeof(ThreadPool *));
+		ThreadPool **ref =
+			(ThreadPool **)lua_newuserdatauv(L, sizeof(ThreadPool *), 0);
 		*ref = pool;
 		luaL_setmetatable(L, CLASS_THREADS);
 	}
@@ -857,7 +856,7 @@ typedef struct LuaChannel {
 
 static LuaChannel *chklchannel(lua_State *L, int arg) {
 	LuaChannel *channel = tolchannel(L, arg);
-	int ltype = lua_getuservalue(L, arg);
+	int ltype = lua_getiuservalue(L, arg, 1);
 	luaL_argcheck(L, ltype == LUA_TSTRING, arg, "closed channel");
 	lua_pop(L, 1);
 	return channel;
@@ -895,13 +894,13 @@ static int channelclose (lua_State *L, LuaChannel *channel) {
 	return 0;
 }
 
-static int channelsync (LuaChannel *channel,
+static int channelsync (ChannelSync *sync,
                         lua_State *L,
                         GetAsyncState getstate,
                         void *userdata) {
 	int endpoint = checksyncargs(L);
 	if (endpoint == -1) lua_error(L);
-	return channelsync_match(channel->sync, endpoint, L, getstate, userdata);
+	return channelsync_match(sync, endpoint, L, getstate, userdata);
 }
 
 /* getmetatable(channel).__gc(channel) */
@@ -962,7 +961,7 @@ static void uv_onsynced (uv_async_t *async) {
 	channeltask->wakes--;
 	uv_mutex_unlock(&channeltask->mutex);
 	if (lcuU_endthrop(handle)) {
-		lcuU_resumethrop(thread, handle);
+		lcuU_resumethrop(thread, 0, handle);
 	} else {
 		LuaChannel *channel = (LuaChannel *)lua_touserdata(thread, 1);
 		restorechannel(channel);
@@ -1015,7 +1014,7 @@ static int k_setupsynced (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	args.loop = loop;
 	args.async = (uv_async_t *)handle;
 	args.channel = channel;
-	if (channelsync(channel, L, armsynced, &args)) return lua_gettop(L);
+	if (channelsync(channel->sync, L, armsynced, &args)) return lua_gettop(L);
 	return -1;
 }
 
@@ -1035,7 +1034,7 @@ static lua_State *cancelsuspension (lua_State *L, void *data) {
 
 static int channel_sync (lua_State *L) {
 	LuaChannel *channel = chklchannel(L, 1);
-	channelsync(channel, L, cancelsuspension, NULL);
+	channelsync(channel->sync, L, cancelsuspension, NULL);
 	return lua_gettop(L);
 }
 
@@ -1057,12 +1056,12 @@ static int system_channel (lua_State *L) {
 	const char *name = luaL_checkstring(L, 1);
 	void *allocud;
 	lua_Alloc allocf = lua_getallocf(L, &allocud);
-	LuaChannel *channel = (LuaChannel *)lua_newuserdata(L, sizeof(LuaChannel));
+	LuaChannel *channel = (LuaChannel *)lua_newuserdatauv(L, sizeof(LuaChannel), 1);
 	ChannelTask *channeltask;
 
 	/* save channel name */
 	lua_pushvalue(L, 1);
-	lua_setuservalue(L, -2);
+	lua_setiuservalue(L, -2, 1);
 
 	channel->handle = NULL;
 	channel->L = lua_newstate(allocf, allocud);
@@ -1076,7 +1075,7 @@ static int system_channel (lua_State *L) {
 
 	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY) == LUA_TNIL) {
 		int err;
-		channeltask = (ChannelTask *)lua_newuserdata(L, sizeof(ChannelTask));
+		channeltask = (ChannelTask *)lua_newuserdatauv(L, sizeof(ChannelTask), 0);
 		channeltask->wakes = 0;
 		channeltask->L = NULL;
 		err = uv_mutex_init(&channeltask->mutex);
@@ -1156,14 +1155,11 @@ LCUI_FUNC void lcuM_addchanelc (lua_State *L) {
 	lua_pop(L, 1);
 
 	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELSREGKEY) == LUA_TNIL) {
-		ChannelMap *map = (ChannelMap *)lua_newuserdata(L, sizeof(ChannelMap));
+		ChannelMap *map = (ChannelMap *)lua_newuserdatauv(L, sizeof(ChannelMap), 0);
 		void *allocud;
 		lua_Alloc allocf = lua_getallocf(L, &allocud);
 		map->L = NULL;
-		lua_createtable(L, 0, 1);
-		lua_pushcfunction(L, channelmap_gc);
-		lua_setfield(L, -2, "__gc");
-		lua_setmetatable(L, -2);
+		lcuL_setfinalizer(L, channelmap_gc, 0);
 		map->L = lua_newstate(allocf, allocud);
 		if (map->L == NULL) luaL_error(L, "not enough memory");
 		uv_mutex_init(&map->mutex);

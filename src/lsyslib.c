@@ -20,7 +20,7 @@ LCULIB_API struct sockaddr *lcu_newaddress (lua_State *L, int type) {
 		case AF_INET6: sz = sizeof(struct sockaddr_in6); break;
 		default: luaL_error(L, "invalid address type"); return NULL;
 	}
-	na = (struct sockaddr *)lua_newuserdata(L, sz);
+	na = (struct sockaddr *)lua_newuserdatauv(L, sz, 0);
 	memset(na, 0, sz);
 	luaL_setmetatable(L, LCU_NETADDRCLS);
 	return na;
@@ -37,7 +37,8 @@ struct lcu_AddressList {
 };
 
 LCULIB_API lcu_AddressList *lcu_newaddrlist (lua_State *L) {
-	lcu_AddressList *l = (lcu_AddressList *)lua_newuserdata(L, sizeof(lcu_AddressList));
+	lcu_AddressList *l =
+		(lcu_AddressList *)lua_newuserdatauv(L, sizeof(lcu_AddressList), 0);
 	lcu_setaddrlist(l, NULL);
 	luaL_setmetatable(L, LCU_NETADDRLISTCLS);
 	return l;
@@ -128,7 +129,7 @@ struct lcu_IpcPipe {
 };
 
 static lcu_Object *createobj (lua_State *L, size_t size, const char *cls) {
-	lcu_Object *object = (lcu_Object *)lua_newuserdata(L, size);
+	lcu_Object *object = (lcu_Object *)lua_newuserdatauv(L, size, 0);
 	object->handle.data = NULL;
 	object->flags = FLAG_CLOSED;
 	luaL_setmetatable(L, cls);
@@ -298,7 +299,8 @@ static void freecoroutine (lcu_SysCoro *sysco) {
 }
 
 LCULIB_API lcu_SysCoro *lcu_newsysco (lua_State *L, lua_State *co) {
-	lcu_SysCoro *sysco = (lcu_SysCoro *)lua_newuserdata(L, sizeof(lcu_SysCoro));
+	lcu_SysCoro *sysco =
+		(lcu_SysCoro *)lua_newuserdatauv(L, sizeof(lcu_SysCoro), 0);
 	sysco->flags = 0;
 	sysco->thread = NULL;
 	sysco->coroutine = co;

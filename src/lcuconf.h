@@ -23,6 +23,10 @@
 #define LCU_PREFIX	"coutil:"
 #endif
 
+#ifndef LCU_WARNPREFIX
+#define LCU_WARNPREFIX	"[coutil] "
+#endif
+
 #ifndef LCU_PIPEADDRBUF
 #define LCU_PIPEADDRBUF	128
 #endif

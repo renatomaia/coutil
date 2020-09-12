@@ -1,7 +1,7 @@
 dofile "utils.lua"
 
-local memory = require "memory"
-local system = require "coutil.system"
+local memory<const> = require "memory"
+local system<const> = require "coutil.system"
 
 local function timedresume(timeout, thread)
 	if system.suspend(timeout) then
@@ -33,13 +33,14 @@ local function readbytes(conn, buffer, bytes, expected)
 	return bytes
 end
 
-local function doconn(conn)
+local function doconn(...)
+	local conn<close> = ...
 	log("new client request\n")
 	local timeout = spawn(timedresume, maxtime, coroutine.running())
 	local buffer = memory.create(szlen+maxlen)
 	local res, errmsg = readbytes(conn, buffer, 0, szlen)
 	if res ~= nil then
-		local size, index = memory.unpack(buffer, szfmt)
+		local size = memory.unpack(buffer, szfmt)
 		if size <= maxlen then
 			res, errmsg = readbytes(conn, buffer, res, szlen+size)
 			if res ~= nil then
@@ -69,14 +70,13 @@ local function doconn(conn)
 	local _, index = memory.pack(buffer, "s"..szlen, 1, res or errmsg)
 	conn:send(buffer, 1, index-1)
 	conn:shutdown()
-	conn:close()
 	log("client request complete (res=",res or errmsg,")\n")
 end
 
 spawn(function ()
 	log("starting server ... ")
 	local address = assert(system.findaddr("*", port, "s6"))()
-	local server = assert(system.socket("passive", address.type))
+	local server<close> = assert(system.socket("passive", address.type))
 	assert(server:bind(address))
 	assert(server:listen(32))
 	spawn(function (thread)
@@ -94,7 +94,6 @@ spawn(function ()
 			error(errmsg)
 		end
 	until conn == nil
-	server:close()
 end)
 
 system.run()
