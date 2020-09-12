@@ -39,5 +39,4 @@ TODO
 
 - TTY support.
 - File system support (events and operations).
-- Threading support.
 - File descriptor/handler polling suport.
