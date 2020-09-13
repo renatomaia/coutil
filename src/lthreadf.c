@@ -1134,6 +1134,21 @@ static int system_channelnames (lua_State *L) {
 
 
 
+LCUI_FUNC void lcuM_addchanelg (lua_State *L) {
+	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELSREGKEY) == LUA_TNIL) {
+		ChannelMap *map = (ChannelMap *)lua_newuserdatauv(L, sizeof(ChannelMap), 0);
+		void *allocud;
+		lua_Alloc allocf = lua_getallocf(L, &allocud);
+		map->L = NULL;
+		lcuL_setfinalizer(L, channelmap_gc, 0);
+		map->L = lua_newstate(allocf, allocud);
+		if (map->L == NULL) luaL_error(L, "not enough memory");
+		uv_mutex_init(&map->mutex);
+		lua_setfield(L, LUA_REGISTRYINDEX, LCU_CHANNELSREGKEY);
+	}
+	lua_pop(L, 1);
+}
+
 LCUI_FUNC void lcuM_addchanelc (lua_State *L) {
 	static const luaL_Reg channeltaskf[] = {
 		{"__gc", channeltask_gc},
@@ -1152,19 +1167,6 @@ LCUI_FUNC void lcuM_addchanelc (lua_State *L) {
 	lua_pop(L, 1);
 	lcuM_newclass(L, CLASS_CHANNEL);
 	lcuM_setfuncs(L, channelf, LCU_MODUPVS);
-	lua_pop(L, 1);
-
-	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELSREGKEY) == LUA_TNIL) {
-		ChannelMap *map = (ChannelMap *)lua_newuserdatauv(L, sizeof(ChannelMap), 0);
-		void *allocud;
-		lua_Alloc allocf = lua_getallocf(L, &allocud);
-		map->L = NULL;
-		lcuL_setfinalizer(L, channelmap_gc, 0);
-		map->L = lua_newstate(allocf, allocud);
-		if (map->L == NULL) luaL_error(L, "not enough memory");
-		uv_mutex_init(&map->mutex);
-		lua_setfield(L, LUA_REGISTRYINDEX, LCU_CHANNELSREGKEY);
-	}
 	lua_pop(L, 1);
 }
 
