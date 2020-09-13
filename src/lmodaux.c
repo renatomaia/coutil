@@ -278,7 +278,7 @@ LCUI_FUNC void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
 	else {
 		int i;
 		uv = (uv_loop_t *)lua_newuserdatauv(L, sizeof(uv_loop_t), 0);
-		for (i = 0; i < LCU_MODUPVS; ++i) lua_pushvalue(L, -5);
+		for (i = 0; i < LCU_MODUPVS; ++i) lua_pushvalue(L, -4);
 		lcuL_setfinalizer(L, terminateloop, LCU_MODUPVS);
 		err = uv_loop_init(uv);
 		if (err < 0) lcu_error(L, err);
