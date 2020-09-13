@@ -1426,6 +1426,25 @@ do case "end with task with coroutine waiting on channel"
 	done()
 end
 
+do case "collect running sysco waiting channel"
+	dostring(utilschunk..[=[
+		local system = require "coutil.system"
+		spawn(function ()
+			local sysco = assert(system.load(utilschunk..[[
+				local coroutine = require "coroutine"
+				local system = require "coutil.system"
+				spawn(function ()
+					system.channel("channel"):await()
+				end)
+				system.run()
+			]]))
+			assert(sysco:resume())
+		end)
+		local channel = system.channel("channel")
+		repeat until channel:sync()
+	]=])
+end
+
 newtest "loop" -----------------------------------------------------------------
 
 do case "suspend with only channels"
