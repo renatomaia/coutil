@@ -26,6 +26,8 @@ LCUI_FUNC int lcuL_pusherrres (lua_State *L, int err);
 
 LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err);
 
+LCUI_FUNC void lcuL_warnerror (lua_State *L, const char *msg, int err);
+
 LCUI_FUNC void lcuL_setfinalizer (lua_State *L,
                                   lua_CFunction finalizer,
                                   int nup);

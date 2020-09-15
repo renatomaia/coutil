@@ -21,6 +21,12 @@ LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err) {
 	return n;
 }
 
+LCUI_FUNC void lcuL_warnerror (lua_State *L, const char *msg, int err) {
+	lua_warning(L, LCU_WARNPREFIX, 1);
+	lua_warning(L, msg, 1);
+	lua_warning(L, uv_strerror(err), 0);
+}
+
 LCUI_FUNC void lcuL_setfinalizer (lua_State *L,
                                   lua_CFunction finalizer,
                                   int nup) {

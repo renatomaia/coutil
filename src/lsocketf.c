@@ -802,14 +802,14 @@ static int udp_send (lua_State *L) {
 
 
 /* bytes [, errmsg] = udp:receive(buffer [, i [, j [, address]]]) */
-static int stopudp (uv_udp_t *udp) {
+static void stopudp (uv_udp_t *udp) {
 	int err = uv_udp_recv_stop(udp);
 	if (err < 0) {
 		lua_State *L = (lua_State *)udp->loop->data;
 		lcuT_closeobjhdl(L, 1, (uv_handle_t *)udp);
+		lcuL_warnerror(L, "datagram:receive: ", err);
 	}
 	lcu_setobjarmed(lcu_tohdlobj((uv_handle_t *)udp), 0);
-	return err;
 }
 static int k_udpbuffer (lua_State *L, int status, lua_KContext ctx);
 static int k_udprecv (lua_State *L, int status, lua_KContext ctx) {
@@ -818,8 +818,7 @@ static int k_udprecv (lua_State *L, int status, lua_KContext ctx) {
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
 	if (lcuT_haltedobjop(L, (uv_handle_t *)handle)) {
-		int err = stopudp(handle);
-		if (err < 0) return lcuL_pushresults(L, 0, err);
+		stopudp(handle);
 	} else if (lua_isinteger(L, 6)) {
 		const struct sockaddr *src = (const struct sockaddr *)lua_touserdata(L, -1);
 		lua_pop(L, 1);  /* discard 'addr' lightuserdata */
@@ -851,8 +850,7 @@ static int k_udpbuffer (lua_State *L, int status, lua_KContext ctx) {
 		lcuT_awaitobj(L, (uv_handle_t *)handle);
 		return lua_yieldk(L, 0, 0, k_udprecv);
 	} else {
-		int err = stopudp(handle);
-		if (err < 0) return lcuL_pushresults(L, 0, err);
+		stopudp(handle);
 	}
 	return lua_gettop(L)-5;
 }
@@ -995,24 +993,21 @@ static int pipe_send (lua_State *L) {
 }
 
 /* bytes [, errmsg] = stream:receive(buffer [, i [, j]]) */
-static int stopread (uv_stream_t *stream) {
+static void stopread (uv_stream_t *stream) {
 	int err = uv_read_stop(stream);
 	if (err < 0) {
 		lua_State *L = (lua_State *)stream->loop->data;
 		lcuT_closeobjhdl(L, 1, (uv_handle_t *)stream);
+		lcuL_warnerror(L, "stream:receive: ", err);
 	}
 	lcu_setobjarmed(lcu_tohdlobj((uv_handle_t *)stream), 0);
-	return err;
 }
 static int k_recvdata (lua_State *L, int status, lua_KContext ctx) {
 	lcu_Object *object = lua_touserdata(L, 1);
 	uv_handle_t *handle = lcu_toobjhdl(object);
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
-	if (lcuT_haltedobjop(L, handle)) {
-		int err = stopread((uv_stream_t *)handle);
-		if (err < 0) return lcuL_pushresults(L, 0, err);
-	}
+	if (lcuT_haltedobjop(L, handle)) stopread((uv_stream_t *)handle);
 	return lua_gettop(L)-4;
 }
 static int k_getbuffer (lua_State *L, int status, lua_KContext ctx) {
@@ -1027,10 +1022,8 @@ static int k_getbuffer (lua_State *L, int status, lua_KContext ctx) {
 		getbufarg(L, buf);
 		lcuT_awaitobj(L, handle);
 		return lua_yieldk(L, 0, 0, cont);
-	} else {
-		int err = stopread((uv_stream_t *)handle);
-		if (err < 0) return lcuL_pushresults(L, 0, err);
 	}
+	else stopread((uv_stream_t *)handle);
 	return lua_gettop(L)-4;
 }
 static void uv_onrecvdata (uv_stream_t *stream,
@@ -1102,8 +1095,7 @@ static int k_recvpipedata (lua_State *L, int status, lua_KContext ctx) {
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(!ctx);
 	if (lcuT_haltedobjop(L, handle)) {
-		int err = stopread((uv_stream_t *)handle);
-		if (err < 0) return lcuL_pushresults(L, 0, err);
+		stopread((uv_stream_t *)handle);
 	} else {
 		uv_pipe_t *pipe = (uv_pipe_t *)handle;
 		if (uv_pipe_pending_count(pipe)) {  /* only if read was successful? */
