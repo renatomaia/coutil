@@ -251,16 +251,6 @@ LCUI_FUNC int lcuU_resumereqop (lua_State *thread, int narg,
 	return status;
 }
 
-LCUI_FUNC void lcuU_completereqop (uv_loop_t *loop,
-                                   uv_req_t *request,
-                                   int err) {
-	lua_State *thread = lcuU_endreqop(loop, request);
-	if (thread) {
-		int nret = lcuL_pushresults(thread, 0, err);
-		lcuU_resumereqop(thread, nret, loop, request);
-	}
-}
-
 
 /*
  * thread operation
