@@ -260,6 +260,7 @@ static void uv_procexited (uv_process_t *process, int64_t exitval, int signum) {
 		lua_pushinteger(thread, exitval);
 	}
 	lcuU_resumethrop(thread, 2, (uv_handle_t *)process);
+	lcuU_checksuspend(process->loop);
 }
 static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_process_t *process = (uv_process_t *)handle;
