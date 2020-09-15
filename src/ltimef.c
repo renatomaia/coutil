@@ -22,7 +22,8 @@ static int returntrue (lua_State *L) {
 	return 1;
 }
 static void uv_onidle (uv_idle_t *handle) {
-	lcuU_resumethrop((lua_State *)handle->data, 0, (uv_handle_t *)handle);
+	lua_State *thread = (lua_State *)handle->data;
+	lcuU_resumethrop(thread, 0, (uv_handle_t *)handle);
 	lcuU_checksuspend(handle->loop);
 }
 static int k_setupidle (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
