@@ -2,7 +2,6 @@
 #include "loperaux.h"
 
 
-#define COREGISTRY	lua_upvalueindex(1)
 #define OPERATIONS	lua_upvalueindex(2)
 
 #define FLAG_REQUEST  0x01
@@ -15,13 +14,13 @@
 LCUI_FUNC void lcuT_savevalue (lua_State *L, void *key) {
 	lua_pushlightuserdata(L, key);
 	lua_insert(L, -2);
-	lua_settable(L, COREGISTRY);
+	lua_settable(L, LUA_REGISTRYINDEX);
 }
 
 LCUI_FUNC void lcuT_freevalue (lua_State *L, void *key) {
 	lua_pushlightuserdata(L, key);
 	lua_pushnil(L);
-	lua_settable(L, COREGISTRY);
+	lua_settable(L, LUA_REGISTRYINDEX);
 }
 
 static void savethread (lua_State *L, void *key) {
@@ -334,7 +333,7 @@ LCUI_FUNC void lcuT_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle) {
 	lua_pushvalue(L, idx);  /* get the object */
 	lua_pushlightuserdata(L, (void *)handle);
 	lua_insert(L, -2);  /* place it below the object */
-	lua_settable(L, COREGISTRY);  /* also 'lcuT_freevalue' */
+	lua_settable(L, LUA_REGISTRYINDEX);  /* also 'lcuT_freevalue' */
 	uv_close(handle, closedobj);
 }
 
