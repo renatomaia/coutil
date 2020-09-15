@@ -8,7 +8,7 @@ do case "cached time"
 
 		local cached = system.time("update")*factor
 		assert(cached > 0, cached)
-		assert(cached%1 < 1, cached)
+		--assert(cached%1 < 1, cached)
 
 		local actual = system.nanosecs()
 		repeat until system.nanosecs() > actual+1e6
@@ -16,7 +16,7 @@ do case "cached time"
 		assert(cached == system.time()*factor)
 		local updated = system.time("update")*factor
 		assert(updated-cached <= 1, updated-cached)
-		assert(updated%1 < 1, updated)
+		--assert(updated%1 < 1, updated)
 	end
 
 	testtime()
