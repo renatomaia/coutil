@@ -193,7 +193,7 @@ end
 do case "environment illegal char"
 	spawn(function ()
 		asserterr(
-			"bad name '=ENV' in field 'environment' (cannot contain '=')",
+			"bad name '=ENV' in field 'environment' (must be a string without '=')",
 			pcall(system.execute, {
 				execfile = luabin,
 				environment = { ["=ENV"] = "illegal" },

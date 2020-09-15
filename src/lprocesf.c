@@ -216,7 +216,8 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 				const char *name = lua_tostring(L, -2);
 				const char *value = lua_tostring(L, -1);
 				if (name && (value == NULL || strchr(name, '='))) return luaL_error(L,
-					"bad name '%s' in field 'environment' (cannot contain '=')", name);
+					"bad name '%s' in field 'environment' (must be a string without '=')",
+					name);
 				++envc;
 				envsz += sizeof(char *)+sizeof(char)*(strlen(name)+1+strlen(value)+1);
 				lua_pop(L, 1);
