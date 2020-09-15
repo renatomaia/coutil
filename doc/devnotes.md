@@ -8,7 +8,7 @@ CoUtil categorizes UV asynchronous operations into the following categories:
 
 ### Request Operations (`reqop`)
 
-Asynchronous operation perfomed over a UV request.
+Asynchronous operation perfomed over a UV request (`uv_req_t`).
 
 | Operation | Request | Callback |
 | --------- | ------- | -------- |
@@ -116,6 +116,161 @@ Auxiliary functions for implementation of Lua modules.
 
 Auxiliary functions for implementation of module operations,
 specially [await functions](manual.md#await).
+
+```c
+void lcuT_savevalue (lua_State *L, void *key);
+```
+
+```c
+void lcuT_freevalue (lua_State *L, void *key);
+```
+
+```c
+void lcuU_checksuspend(uv_loop_t *loop);
+```
+
+```c
+typedef int (*lcu_RequestSetup) (lua_State *L, uv_req_t *r, uv_loop_t *l);
+```
+
+```c
+int lcuT_resetreqopk (lua_State *L,
+                      uv_loop_t *loop,
+                      lcu_RequestSetup setup,
+                      lua_CFunction results,
+                      lua_CFunction cancel);
+```
+
+Function used to implement an await function that setups a UV callback using a `uv_req_t` to later resume the calling coroutine.
+
+It yields the current coroutine repeatedly until its correponding `uv_req_t` is no longer in use.
+Then it executes function `setup`,
+providing `L` with the same stack values,
+and the `uv_req_t` to be initated,
+and the `uv_loop_t` provided as argument `loop`.
+
+`setup` shall return -1 when it succesfully set up the `uv_req_t`,
+to signal that this function shall yield,
+expecting to be resumed by `lcuU_resumereqop` from a UV callback.
+Otherwise this function returns the value returned by `setup`,
+which shall place on the stack of `L` the values to be returned by function calling this function.
+
+If `results` and `cancel` are not `NULL`,
+they are registered to be called when the coroutine is resumed,
+much like a continuation.
+`results` is called if the coroutine is resumed by `lcuU_resumereqop`.
+Otherwise,
+`cancel` is called,
+and shall return 0 if the `uv_req_t` shall not be cancelled by a `uv_cancel`.
+
+```c
+lua_State *lcuU_endreqop (uv_loop_t *loop, uv_req_t *request);
+```
+
+Function called from a UV callback to release the used `uv_req_t`.
+It releases `request` to be reused (_e.g._ `lcuT_resetreqopk`).
+Returns `NULL` if there is no coroutine waiting on the `request` anymore.
+Otherwise,
+returns the coroutine that should be resumed by `lcuU_resumereqop`.
+
+```c
+int lcuU_resumereqop (uv_loop_t *loop, uv_req_t *request,
+                      lua_State *thread, int narg);
+```
+
+Function called from a UV callback to resume the awating coroutine obtained by `lcuU_endreqop`.
+It resumes `thread` providing the `narg` values of the top of the stack as arguments,
+and using the `lua_State` executing `loop` as parent.
+Returns the same status of `lua_resume`.
+
+
+```c
+typedef int (*lcu_HandleSetup) (lua_State *L, uv_handle_t *h, uv_loop_t *l);
+```
+
+```c
+int lcuT_resetthropk (lua_State *L,
+                      uv_handle_type type,
+                      uv_loop_t *loop,
+                      lcu_HandleSetup setup,
+                      lua_CFunction results,
+                      lua_CFunction cancel);
+```
+
+Function used to implement an await function that setups a UV callback using a `uv_handle_t` to later resume the calling coroutine.
+
+It yields the current coroutine repeatedly until its correponding `uv_handle_t` is no longer in use,
+or is of the same type as `type`.
+Then it executes function `setup`,
+providing `L` with the same stack values,
+and the `uv_handle_t` to be initated.
+The `uv_loop_t` is only provided if the `uv_handle_t` is not currently active as a UV handle of type `type`,
+and is the same value as argument `loop`.
+
+`setup` shall return -1 when it succesfully set up the `uv_handle_t`,
+to signal that this function shall yield,
+expecting to be resumed by `lcuU_resumereqop` from a UV callback.
+Otherwise this function returns the value returned by `setup`,
+which shall place on the stack of `L` the values to be returned by function calling this function.
+
+If `results` and `cancel` are not `NULL`,
+they are registered to be called when the coroutine is resumed,
+much like a continuation.
+`results` is called if the coroutine is resumed by `lcuU_resumethrop`.
+Otherwise,
+`cancel` is called,
+and shall return 0 if the `uv_handle_t` shall not be cancelled by a `uv_close`.
+
+```c
+int lcuT_armthrop (lua_State *L, int err);
+```
+
+Function used in `setup` function passed to `lcuT_resetthropk` to mark the `uv_handle_t` as active,
+according to the return value `err` of a UV set up function.
+
+This function should only be called when argument `loop` of function `setup` is provided.
+Otherwise,
+the UV handle is already active.
+Returns the `err` return code.
+
+```c
+int lcuU_endthrop (uv_handle_t *handle);
+```
+
+Function called from a UV callback to release the used `uv_handle_t`.
+It releases `handle` to be reused (_e.g._ `lcuT_resetthropk`).
+Returns 0 if there is no coroutine waiting on the `request` anymore.
+Otherwise,
+returns 1.
+
+This function is usually not necessary because the handle is closed using `uv_close` whenever the coroutine is resumed explicitly.
+This function must be used only when the continuation `cancel` of `lcuT_resetthropk` is used and it returns 0 signaling that the handle shall not be closed even when the coroutine is not awaiting for it anymore.
+
+```c
+int lcuU_resumethrop (uv_loop_t *loop, uv_handle_t *handle,
+                      lua_State *thread, int narg);
+```
+Function called from a UV callback to resume the awating coroutine obtained from `uv_handle_t.data`.
+It resumes `thread` providing the `narg` values of the top of the stack as arguments,
+and using the `lua_State` executing `loop` as parent.
+Returns the same status of `lua_resume`.
+
+```c
+void lcuT_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle);
+```
+
+```c
+void lcuT_awaitobj (lua_State *L, uv_handle_t *handle);
+```
+
+```c
+int lcuT_haltedobjop (lua_State *L, uv_handle_t *handle);
+```
+
+```c
+int lcuU_resumeobjop (lua_State *thread, int narg,
+                      uv_handle_t *handle);
+```
 
 API
 ---
