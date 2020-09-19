@@ -38,5 +38,6 @@ dofile "pipe.lua"
 dofile "process.lua"
 dofile "coroutine.lua"
 dofile "thread.lua"
+dofile "operation.lua"
 
 print "\nSuccess!\n"
