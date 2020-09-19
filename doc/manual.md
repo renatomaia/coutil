@@ -1,12 +1,16 @@
 Summary
 =======
 
-- [Await Functions](#await)
+- [Await Function](#await-function)
+- [Independent State](#independent-state)
 - [Events](#events)
 - [Queued Events](#queued-events)
 - [Mutexes](#mutex)
 - [Promises](#promises)
 - [Coroutine Finalizers](#spawn)
+- [Preemptive Coroutines](#preemptive-coroutines)
+- [Thread Pools](#thread-pools)
+- [Channels](#channels)
 - [System Features](#system)
 
 Index
@@ -41,6 +45,23 @@ Index
 - [`coutil.spawn`](#spawn)
 	- [`spawn.catch`](#spawncatch-h-f-)
 	- [`spawn.trap`](#spawntrap-h-f-)
+- [`coutil.coroutine`](#preemptive-coroutines)
+	- [`coroutine.load`](#coroutineload-chunk--chunkname--mode)
+	- [`coroutine.loadfile`](#coroutineloadfile-filepath--mode)
+	- [`coroutine.status`](#coroutinestatus-preemptco)
+	- [`coroutine.close`](#coroutineclose-preemptco)
+- [`coutil.threads`](#thread-pools)
+	- [`threads.create`](#threadscreate-size)
+	- [`threads.resize`](#threadsresize-pool-size--create)
+	- [`threads.count`](#threadscount-pool-options)
+	- [`threads.dostring`](#threadsdostring-pool-chunk--chunkname--mode-)
+	- [`threads.dofile`](#threadsdofile-pool-filepath--mode-)
+	- [`threads.close`](#threadsclose-pool)
+- [`coutil.channel`](#channels)
+	- [`channel.getnames`](#channelgetnames-names)
+	- [`channel.create`](#channelcreate-name)
+	- [`channel.sync`](#channelsync-ch-endpoint-)
+	- [`channel.close`](#channelclose-ch)
 - [`coutil.system`](#system)
 	- [`system.run`](#systemrun-mode)
 	- [`system.isrunning`](#systemisrunning-)
@@ -48,6 +69,7 @@ Index
 	- [`system.time`](#systemtime-update)
 	- [`system.nanosecs`](#systemnanosecs-)
 	- [`system.suspend`](#systemsuspend-delay)
+	- [`system.getpid`](#systemgetpid-which)
 	- [`system.emitsig`](#systememitsig-pid-signal)
 	- [`system.awaitsig`](#systemawaitsig-signal)
 	- [`system.execute`](#systemexecute-cmd-)
@@ -58,7 +80,6 @@ Index
 		- [`socket:close`](#socketclose-)
 		- [`socket:getdomain`](#socketgetdomain-)
 		- [`socket:setoption`](#socketsetoption-name-value)
-		- [`socket:getoption`](#socketgetoption-name)
 		- [`socket:bind`](#socketbind-address)
 		- [`socket:connect`](#socketconnect-address)
 		- [`socket:getaddress`](#socketgetaddress-site--address)
@@ -69,31 +90,18 @@ Index
 		- [`socket:shutdown`](#socketshutdown-)
 		- [`socket:listen`](#socketlisten-backlog)
 		- [`socket:accept`](#socketaccept-)
-	- [`system.load`](#systemload-chunk--chunkname--mode)
-	- [`system.loadfile`](#systemloadfile-filepath--mode)
-		- [`syscoro:resume`](#syscororesume-)
-		- [`syscoro:status`](#syscorostatus-)
-		- [`syscoro:close`](#syscoroclose-)
-	- [`system.threads`](#systemthreads-size)
-		- [`threads:resize`](#threadsresize-size--create)
-		- [`threads:count`](#threadscount-options)
-		- [`threads:dostring`](#threadsdostring-chunk--chunkname--mode-)
-		- [`threads:dofile`](#threadsdofile-filepath--mode-)
-		- [`threads:close`](#threadsclose-)
-	- [`system.channelnames`](#systemchannelnames-names)
-	- [`system.channel`](#systemchannel-name)
-		- [`channel:await`](#channelawait-endpoint-)
-		- [`channel:sync`](#channelsync-endpoint-)
-		- [`channel:close`](#channelclose-)
+	- [`system.resume`](#systemresume-preemptco-)
+	- [`system.awaitch`](#systemawaitch-ch-endpoint-)
 
 Contents
 ========
 
-Await
------
+Await Function
+--------------
 
-An _await function_ [suspends](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) the execution of the calling coroutine,
-but also implies that the coroutine will be resumed on some specitic condition.
+An _await function_ [suspends](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) the execution of the calling coroutine
+(yields no value),
+and also implies that the coroutine will be resumed on some specitic condition.
 
 Coroutines executing an _await function_ can be resumed explicitly by [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume).
 In such case,
@@ -102,6 +110,41 @@ Otherwise,
 the _await function_ returns as described in the following sections.
 In any case,
 the coroutine will not be implicitly resumed after the _await function_ returns.
+
+Independent State
+-----------------
+
+Code chunks that run on a separate system thread are loaded into an [independent state](http://www.lua.org/manual/5.4/manual.html#lua_newstate) with only the [`package`](http://www.lua.org/manual/5.4/manual.html#6.3) library loaded.
+This independent state inherits any [preloaded modules](http://www.lua.org/manual/5.4/manual.html#pdf-package.preload) from the caller of the function that creates the independent state.
+Moreover,
+all other [standard libraries](http://www.lua.org/manual/5.4/manual.html#6) are also provided as preloaded modules.
+Therefore function [`require`](http://www.lua.org/manual/5.4/manual.html#pdf-require) can be called in the independent state to load all other standard libraries.
+In particular, [basic functions](http://www.lua.org/manual/5.4/manual.html#6.1) can be loaded using `require "_G"`.
+
+Just bare in mind that requiring the preloaded modules for the standard libraries does not set their corresponding global tables.
+To mimic the set up of the [standard standalone interpreter](http://www.lua.org/manual/5.4/manual.html#7) use a code like below:
+
+```lua
+for _, module in ipairs{
+	"_G",
+	"package", -- loaded, but no global 'package'
+	"coroutine",
+	"table",
+	"io",
+	"os",
+	"string",
+	"math",
+	"utf8",
+	"debug",
+} do
+	_ENV[module] = require(module)
+end
+```
+
+__Note__: These independent states run in a separate thread,
+but share the same [memory allocation](http://www.lua.org/manual/5.4/manual.html#lua_Alloc) and [panic function](http://www.lua.org/manual/5.4/manual.html#lua_atpanic) of the caller.
+Therefore, it is required that thread-safe implementations are used,
+such as the ones used in the [standard standalone interpreter](http://www.lua.org/manual/5.4/manual.html#7).
 
 Events
 ------
@@ -114,11 +157,11 @@ but the coroutine will not be collected as long as the value does not become gar
 
 ### `event.await (e)`
 
-Equivalent to [`event.awaitany`](#eventawait-e)`(e)`.
+Equivalent to [`event.awaitany`](#eventawaitany-e1-)`(e)`.
 
 ### `event.awaitall ([e1, ...])`
 
-[Await function](#await) that awaits an event on every one of values `e1, ...`.
+[Await function](#await-function) that awaits an event on every one of values `e1, ...`.
 Any `nil` in `e1, ...` is ignored.
 Any repeated values in `e1, ...` are treated as a single one.
 If `e1, ...` are not provided or are all `nil`, this function has no effect.
@@ -128,7 +171,7 @@ or if `e1, ...` are not provided or are all `nil`.
 
 ### `event.awaitany (e1, ...)`
 
-[Await function](#await) that awaits an event on any of the values `e1, ...`.
+[Await function](#await-function) that awaits an event on any of the values `e1, ...`.
 Any `nil` in `e1, ...` is ignored.
 At least one value in `e1, ...` must not be `nil`.
 
@@ -244,13 +287,13 @@ But once a promise is fulfilled its results become readily available for those t
 
 ### `promise.awaitall ([p, ...])`
 
-[Await function](#await) that awaits the fulfillment of all promises `p, ...`.
+[Await function](#await-function) that awaits the fulfillment of all promises `p, ...`.
 Returns `true` if all promises `p, ...` are fulfilled.
 Otherwise it returns like [`event.await`](#eventawait-e).
 
 ### `promise.awaitany (p, ...)`
 
-[Await function](#await) that awaits the fulfillment of any of the promises in `p, ...`,
+[Await function](#await-function) that awaits the fulfillment of any of the promises in `p, ...`,
 if there are no fulfilled promises in `p, ...`.
 Otherwise it returns immediately.
 In any case, it returns a fulfilled promise.
@@ -324,13 +367,168 @@ Returns the new coroutine.
 ### `spawn.trap (h, f, ...)`
 
 Calls function `f` with the given arguments in a new coroutine.
-If `f` executes without any error, the coroutine executes function `h` passing as arguments the `true` followed by all the results from `f`.
+If `f` executes without any error, the coroutine executes function `h` passing as arguments `true` followed by all the results from `f`.
 In case of any error,
 `h` is executed with arguments `false` and the error message.
 In the latter case,
 `h` is executed in the calling context of the raised error,
 just like a error message handler in `xpcall`.
 Returns the new coroutine.
+
+Preemptive Coroutines
+---------------------
+
+Module `coutil.coroutine` provides functions for manipulation of _preemptive coroutines_,
+which execute a chunk in an [independent state](#independent-state) in a separate system thread (see [`system.resume`](#systemresume-preemptco-)).
+
+This library also sets a metatable for the _preemtive coroutines_,
+where the `__index` field points to the table with all its functions.
+Therefore, you can use the library functions in object-oriented style.
+For instance, `coroutine.resume(co, ...)` can be written as `co:resume(...)`, where `co` is a _preemtive coroutine_.
+
+### `coroutine.load (chunk [, chunkname [, mode]])`
+
+Returns a _preemptive coroutine_ with the code given by the arguments `chunk`, `chunkname`, `mode`,
+which are the same arguments of [`load`](http://www.lua.org/manual/5.4/manual.html#pdf-load).
+
+### `coroutine.loadfile ([filepath [, mode]])`
+
+Similar to [`system.load`](#coroutineload-chunk--chunkname--mode), but gets the chunk from a file.
+The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.4/manual.html#pdf-loadfile).
+
+### `coroutine.status (preemptco)`
+
+Similar to [`coroutine.status`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
+but for [_prepemtive coroutines_](#coroutineload-chunk--chunkname--mode).
+
+### `coroutine.close (preemptco)`
+
+Similar to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
+but for  [_prepemtive coroutines_](#coroutineload-chunk--chunkname--mode).
+
+Thread Pools
+------------
+
+Module `coutil.threads` provides functions for manipulation of _thread pools_ that execute code chunks loaded as _tasks_ using a set of distinct system threads.
+
+This library also sets a metatable for the _thread pools_,
+where the `__index` field points to the table with all its functions.
+Therefore, you can use the library functions in object-oriented style.
+For instance, `threads.dostring(pool, ...)` can be written as `pool:dostring(...)`, where `pool` is a _thread pool_.
+
+### `threads.create ([size])`
+
+Returns a new _thread pool_ with `size` system threads to execute its [_tasks_](#threadsdostring-pool-chunk--chunkname--mode-).
+
+If `size` is omitted,
+returns a new reference to the _thread pool_ where the calling code is executing,
+or `nil` if it is not executing in a _thread pool_ (_e.g._ the main process thread).
+
+### `threads.resize (pool, size [, create])`
+
+Defines that [_thread pool_](#threadscreate-size) `pool` shall keep `size` system threads to execute its [_tasks_](#threadsdostring-pool-chunk--chunkname--mode-).
+
+If `size` is smaller than the current number of threads,
+the exceeding threads are destroyed at the rate they are released from the _tasks_ currently executing in `pool`.
+Otherwise, new threads are created on demand until the defined value is reached.
+Unless `create` evaluates to `true`,
+in which case the new threads are created immediatelly.
+
+### `threads.count (pool, options)`
+
+Returns numbers corresponding to the ammount of components in [_thread pool_](#threadscreate-size) `pool` according to the following characters present in string `options`:
+
+- `n`: the total number of [_tasks_](#threadsdostring-pool-chunk--chunkname--mode-).
+- `r`: the number of _tasks_ currently executing.
+- `p`: the number of _tasks_ pending to be executed.
+- `s`: the number of _tasks_ suspended on a [channel](#channelcreate-name).
+- `e`: the expected number of system threads.
+- `a`: the actual number of system threads.
+
+### `threads.dostring (pool, chunk [, chunkname [, mode, ...]])`
+
+Loads a chunk in an [independent state](#independent-state) as a new _task_ to be executed by the system threads from [_thread pool_](#threadscreate-size) `pool`.
+It starts as soon as a system thread is available.
+
+Arguments `chunk`, `chunkname`, `mode` are the same of [`load`](http://www.lua.org/manual/5.4/manual.html#pdf-load).
+Arguments `...` are passed to the loaded chunk,
+but only _nil_, _boolean_, _number_, _string_ and _light userdata_ values are allowed as such arguments.
+
+Whenever the loaded `chunk` [yields](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) it reschedules itself as pending to be resumed,
+and releases its running system thread.
+
+Execution errors in the loaded `chunk` terminate the _task_,
+and gerenate a [warning](http://www.lua.org/manual/5.4/manual.html#pdf-warn).
+
+Returns `true` if `chunk` is loaded successfully.
+
+__Note__: A _task_ can yield a channel name followed by an endpoint name and the other arguments of [`system.awaitch`](#systemawaitch-ch-endpoint-) to be suspended awaiting on a channel without the need to load other modules.
+
+### `threads.dofile (pool, filepath [, mode, ...])`
+
+Similar to [`threads:dostring`](#threadsdostring-pool-chunk--chunkname--mode-), but gets the chunk from a file.
+The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.4/manual.html#pdf-loadfile).
+
+### `threads.close (pool)`
+
+When this function is called from a _task_ of [_thread pool_](#threadscreate-size) `pool`
+(_i.e._ using a reference obtained by calling [`system.threads()`](#threadscreate-size) with no arguments),
+it has no effect other than prevent further use of `pool`.
+
+Otherwise, it waits until there are either no more _tasks_ or no more system threads,
+and closes `pool` releasing all of its underlying resources.
+
+Note that when `pool` is garbage collected before this functions is called,
+it will retain minimum resources until the termination of the Lua state they were created.
+To avoid accumulative resource consumption by creation of multiple _thread pools_,
+call this function on every _thread pool_.
+
+Moreover, a _thread pool_ that is not closed will prevent the current Lua state to terminate (_i.e._ `lua_close` to return) until it has either no more tasks or no more system threads.
+
+Channels
+--------
+
+Module `coutil.channel` provides functions for manipulation of _channels_ to be used to synchronize and copy values between [independent-states](#independent-state).
+
+This library also sets a metatable for the _channels_,
+where the `__index` field points to the table with all its functions.
+Therefore, you can use the library functions in object-oriented style.
+For instance, `channel.sync(ch, ...)` can be written as `ch:sync(...)`, where `ch` is a _channel_.
+
+### `channel.getnames ([names])`
+
+Returns a table mapping each name of existing channels to `true`.
+
+If table `names` is provided,
+returns `names`,
+but first sets each of its string keys to either `true`,
+if there is a channel with that name,
+or `nil`.
+In other words,
+any non existent channel name as a key in `names` is removed from it.
+
+### `channel.create (name)`
+
+Returns a new _channel_ with name `name`.
+
+Channels with the same name share the same two opposite [_endpoints_](#systemawaitch-ch-endpoint-).
+
+### `channel.sync (ch, endpoint, ...)`
+
+Similar to [`system.awaitch`](#systemawaitch-ch-endpoint-),
+but does not await for a matching call.
+In such case,
+it returns `nil` followed by message "empty".
+
+### `channel.close (ch)`
+
+Closes channel `ch`.
+Note that channels are automatically closed when they are garbage collected,
+but that takes an unpredictable amount of time to happen. 
+
+In case of success,
+this function returns `true`.
+Otherwise it returns `nil` plus an error message.
 
 System
 ------
@@ -344,11 +542,13 @@ and some value different from `nil` on success.
 
 ### `system.run ([mode])`
 
-Resumes coroutines awaiting to system condition.
+Resumes coroutines awaiting system conditions.
 
 `mode` is a string that defines how `run` executes, as described below:
 
-- `"loop"` (default): it executes continously resuming every awaiting coroutine that becomes ready to be resumed until there are no more awaiting coroutines.
+- `"loop"` (default): it executes continously resuming every awaiting coroutine when their system condition is satisfied,
+until there are no more awaiting coroutines,
+or [`system.halt`](#systemhalt-) is called.
 - `"step"`: it resumes every ready coroutine once,
 or waits to resume at least one coroutine that becomes ready.
 - `"ready"`: it resumes only coroutines that are currently ready.
@@ -356,7 +556,7 @@ or waits to resume at least one coroutine that becomes ready.
 Returns `true` if there are remaining awaiting coroutines,
 or `false` otherwise.
 
-__Note__: when called with mode `"loop"` from the main thread of a [_task_](#threadsdostring-chunk--chunkname--mode-) and there are only [`channel:await`](#channelawait-endpoint-) calls pending, the task is suspended until one of the pending calls are resolved.
+__Note__: when called with mode `"loop"` from the main thread of a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) and there are only [`system.awaitch`](#systemawaitch-ch-endpoint-) calls pending, the task is suspended until one of the pending calls are resolved.
 
 ### `system.isrunning ()`
 
@@ -385,7 +585,7 @@ and is not subject to clock drift.
 
 ### `system.suspend ([delay])`
 
-[Await function](#await) that awaits `delay` seconds since timestamp provided by [`system.time`](#systemtime-update).
+[Await function](#await-function) that awaits `delay` seconds since timestamp provided by [`system.time`](#systemtime-update).
 
 If `delay` is not provided,
 is `nil`,
@@ -395,14 +595,23 @@ so the calling coroutine will be resumed as soon as possible.
 
 Returns `true` in case of success.
 
+### `system.getpid ([which])`
+
+Returns the process identifier,
+as indicated by `which`,
+which can be:
+
+- `"self"`: for the current process (the default).
+- `"parent"`: for the current process parent.
+
 ### `system.emitsig (pid, signal)`
 
-Emits signal indicated by string `signal` to process with id `pid`.
+Emits signal indicated by string `signal` to process with identifier `pid`.
 The strings that represent signals are described in [`system.awaitsig`](#systemawaitsig-signal).
 
 ### `system.awaitsig (signal)`
 
-[Await function](#await) that awaits for the process to receive the signal indicated by string `signal`,
+[Await function](#await-function) that awaits for the process to receive the signal indicated by string `signal`,
 as listed below:
 
 - Process Commands
@@ -418,7 +627,7 @@ as listed below:
 | `signal`      | UNIX Name | Action    | Indication |
 | ------------- | --------- | --------- | ---------- |
 | `"bgread"`    | SIGTTIN   | stop      | **Read** from terminal while in **background**. |
-| `"bgwrite"`   | SIGTTOU   | stop      | **Write** to terminal while in **backgroun**d. |
+| `"bgwrite"`   | SIGTTOU   | stop      | **Write** to terminal while in **background**. |
 | `"hangup"`    | SIGHUP    | terminate | Terminal was closed. |
 | `"interrupt"` | SIGINT    | terminate | Terminal requests the process to terminate. (_e.g._ Ctrl+`C`) |
 | `"quit"`      | SIGQUIT   | core dump | Terminal requests the process to **quit** with a [core dump](https://en.wikipedia.org/wiki/Core_dump). (_e.g._ Ctrl+`\`) |
@@ -443,11 +652,11 @@ as listed below:
 | `"user1"`     | SIGUSR1   | terminate | User-defined conditions. |
 | `"user2"`     | SIGUSR2   | terminate | User-defined conditions. |
 
-Returns string `signal`.
+Returns string `signal` in case of success.
 
 ### `system.execute (cmd, ...)`
 
-[Await function](#await) that executes a new process,
+[Await function](#await-function) that executes a new process,
 and awaits its termination.
 `cmd` is the path of the executable image for the new process.
 Every other extra arguments are strings to be used as command-line arguments for the executable image of the new process.
@@ -490,7 +699,7 @@ only the variables defined will be available for the new process.
 
 If `cmd` is a table,
 the field `pid` is set with a number that identifies the new process
-(_e.g._ UNIX process identifier)
+(see [`system.emitsig`](#systememitsig-pid-signal))
 before the calling coroutine is suspended.
 
 Returns the string `"exit"`,
@@ -526,7 +735,7 @@ The default is `"t"`.
 
 The returned object provides the following fields:
 
-- `type`: is either the string `"ipv4"` or `"ipv6"`,
+- `type`: (read-only) is either the string `"ipv4"` or `"ipv6"`,
 to indicate the address is a IPv4 or IPv6 address,
 respectively.
 - `literal`: is the text (literal) representation of the address,
@@ -541,7 +750,7 @@ like `"192.0.2.128:80"` (IPv4) or `[::ffff:c000:0280]:80` (IPv6).
 
 ### `system.findaddr (name [, service [, mode]])`
 
-[Await function](#await) that searches for the addresses of network name `name`,
+[Await function](#await-function) that searches for the addresses of network name `name`,
 and awaits for the addresses found.
 If `name` is `nil`,
 the loopback address is searched.
@@ -627,7 +836,7 @@ until nextdomain == nil
 
 ### `system.nameaddr (address [, mode])`
 
-[Await function](#await) that searches for a network name for `address`,
+[Await function](#await-function) that searches for a network name for `address`,
 and awaits for the names found.
 If `address` is an address object,
 it returns a host name and a port service name for the address.
@@ -669,8 +878,7 @@ or pipe names on Windows.
 but allows for transmission of stream sockets.
 
 In case of success,
-it returns the new socket,
-Otherwise it returns `nil` plus an error message.
+it returns the new socket.
 
 ### `socket:close ()`
 
@@ -678,9 +886,7 @@ Closes socket `socket`.
 Note that sockets are automatically closed when they are garbage collected,
 but that takes an unpredictable amount of time to happen. 
 
-In case of success,
-this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Returns `true` in case of success.
 
 ### `socket:getdomain ()`
 
@@ -693,17 +899,7 @@ or `"local"`.
 
 Sets `value` as the value of option `name` for socket `socket`.
 This operation is not available for passive TCP sockets.
-The available options are the same as defined in operation [`socket:getoption`](#socketgetoption-name).
-
-In case of success,
-this function returns `true`.
-Otherwise it returns `nil` plus an error message.
-
-### `socket:getoption (name)`
-
-Returns the value of option `name` of socket `socket`.
-This operation is not available for passive TCP sockets.
-There available options are:
+The available options are:
 
 #### UDP Socket
 
@@ -731,32 +927,34 @@ It can contain the following characters:
 	- `r` indicate processes have permission to read from the socket.
 	- `w` indicate processes have permission to write to the socket.
 
+Returns `true` in case of success.
+
 ### `socket:bind (address)`
 
 Binds socket `socket` to the address provided as `address`.
 
-For non-local sockets `address` must be an [IP address object](#systemaddress-type--data--port--mode).
+For non-local sockets `address` must be an [IP address](#systemaddress-type--data--port--mode).
 For local sockets `address` must be a string
 (either a path on Unix or a pipe name on Windows).
 
-In case of success,
-this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Returns `true` in case of success.
 
 ### `socket:connect ([address])`
 
 Binds socket `socket` to the peer address provided as `address`,
 thus any data send over the socket is targeted to that `address`.
 
-For non-local domain sockets `address` must be an [IP address object](#systemaddress-type--data--port--mode).
-For local domain sockets `address` must be a string
+For non-local domain sockets,
+`address` must be an [IP address](#systemaddress-type--data--port--mode).
+For local domain sockets,
+`address` must be a string
 (either a path on Unix or a pipe name on Windows).
 
 If `address` is not provided and `socket` is a datagram socket then it is unbinded from its previous binded peer address
 (_i.e._ it is disconnected).
 For stream sockets argument `address` is mandatory,
 and it is necessary to bind the socket to a peer address before sending any data.
-It is a [await function](#await) that awaits for the connection establishment on stream sockets.
+It is an [await function](#await-function) that awaits for the connection establishment on stream sockets.
 This operation is not available for passive sockets.
 
 Returns `true` in case of success.
@@ -767,25 +965,20 @@ Returns the address associated with socket `socket`,
 as indicated by `site`,
 which can be:
 
-- `"this"`: The socket's address (the default).
+- `"self"`: The socket's address (the default).
 - `"peer"`: The socket's peer address.
 
 For non-local domain sockets,
-`address` can be an [IP address object](#systemaddress-type--data--port--mode) to store the result,
+`address` can be an [IP address](#systemaddress-type--data--port--mode) to store the result,
 otherwise a new object is returned with the result data.
-
-In case of errors,
-it returns `nil` plus an error message.
 
 ### `socket:send (data [, i [, j [, address]]])`
 
-[Await function](#await) that awaits until it sends through socket `socket` the substring of `data` that starts at `i` and continues until `j`,
+[Await function](#await-function) that awaits until it sends through socket `socket` the substring of `data` that starts at `i` and continues until `j`,
 following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
 
-For unbinded datagram sockets `address` must be provided
-(_i.e._ disconnected UDP sockets),
-and it must be omitted for datagram sockets binded to a peer address
-(_i.e._ connected UDP sockets).
+For unbinded datagram sockets `address` must be destination address,
+but it must be omitted for datagram sockets binded to a peer address.
 For stream sockets `address` is ignored.
 This operation is not available for passive sockets.
 
@@ -796,7 +989,7 @@ it is not converted to a Lua string prior to have its specified contents transfe
 
 ### `socket:receive (buffer [, i [, j [, address]]])`
 
-[Await function](#await) that awaits until it receives from socket `socket` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
+[Await function](#await-function) that awaits until it receives from socket `socket` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
 following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
 
 For datagram sockets,
@@ -806,7 +999,8 @@ For stream sockets,
 `address` is ignored.
 This operation is not available for passive sockets.
 
-Returns the number of bytes copied to `buffer`.
+In case of success,
+this function returns the number of bytes copied to `buffer`.
 For datagram sockets,
 it also returns a boolean indicating whether the copied data was truncated.
 
@@ -821,9 +1015,7 @@ Both `multicast` and `interface` are string containing either textual (literal) 
 
 This operation is only available for UDP sockets.
 
-In case of success,
-this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Returns `true` in case of success.
 
 ### `socket:leavegroup (multicast [, interface])`
 
@@ -832,9 +1024,7 @@ Removes network interface with address `interface` from the multicast group of a
 
 This operation is only available for UDP sockets.
 
-In case of success,
-this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Returns `true` in case of success.
 
 ### `socket:shutdown ()`
 
@@ -842,9 +1032,7 @@ Shuts down the write side of stream socket `socket`.
 
 This operation is only available for stream sockets.
 
-In case of success,
-this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Returns `true` in case of success.
 
 ### `socket:listen (backlog)`
 
@@ -853,170 +1041,38 @@ Starts listening for new connections on passive socket `socket`.
 
 This operation is only available for passive sockets.
 
-In case of success,
-this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Returns `true` in case of success.
 
 ### `socket:accept ()`
 
-[Await function](#await) that awaits until passive socket `socket` accepts a new connection.
+[Await function](#await-function) that awaits until passive socket `socket` accepts a new connection.
 
 This operation is only available for passive sockets.
 
-Returns a new stream socket for the accepted connection.
+In case of success,
+this function returns a new stream socket for the accepted connection.
 
-### `system.load (chunk [, chunkname [, mode]])`
+### `system.resume (preemptco, ...)`
 
-Returns a _system coroutine_ with [independent state](http://www.lua.org/manual/5.4/manual.html#lua_newstate) that executes in a separate system thread.
-The code to be executed is given by the arguments `chunk`, `chunkname`, `mode`,
-which are the same arguments of [`load`](http://www.lua.org/manual/5.4/manual.html#pdf-load).
+[Await function](#await-function) that is like [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
+but executes the [_preemptive coroutine_](#coroutineload-chunk--chunkname--mode) `preemptco` on a separate system thread,
+and awaits for its completion or [suspension](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
+Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values can be passed as arguments or returned from `preemptco`.
 
-The new _system coroutine_ has only the [`package`](http://www.lua.org/manual/5.4/manual.html#6.3) module loaded,
-but have all [standard modules](http://www.lua.org/manual/5.4/manual.html#6) preloaded,
-and also inherits any [preloaded](http://www.lua.org/manual/5.4/manual.html#pdf-package.preload) modules from the caller.
-Therefore function [`require`](http://www.lua.org/manual/5.4/manual.html#pdf-require) can be called in the _system coroutine_ to load all other standard modules.
-In particular, [basic functions](http://www.lua.org/manual/5.4/manual.html#6.1) can be loaded using `require "_G"`.
-
-Just bare in mind that requiring the standard modules does not set the global variables for their module tables.
-To mimic the set up of the standard standalone interpreter use a code like below:
-
-```lua
-_G = require "_G"
-package = require "package" -- loaded, but no global 'package'
-coroutine = require "coroutine"
-table = require "table"
-io = require "io"
-os = require "os"
-string = require "string"
-math = require "math"
-utf8 = require "utf8"
-debug = require "debug"
-```
-
-__Note__: These _system coroutines_ run in a separate thread,
-but share the same [memory allocation](http://www.lua.org/manual/5.4/manual.html#lua_Alloc) and [panic function](http://www.lua.org/manual/5.4/manual.html#lua_atpanic) of the caller.
-Therefore, it is required that thread-safe implementations are used,
-such as the ones used in the [Lua standalone interpreter](http://www.lua.org/manual/5.4/manual.html#7).
-
-### `system.loadfile ([filepath [, mode]])`
-
-Similar to [`system.load`](#systemload-chunk--chunkname--mode), but gets the chunk from a file.
-The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.4/manual.html#pdf-loadfile).
-
-### `syscoro:resume (...)`
-
-[Await function](#await) that is like [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume), but executes the [_system coroutine_](#systemload-chunk--chunkname--mode) `syscoro` on a separate system thread and awaits for its completion or [suspension](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
-Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values can be passed as arguments or returned from `syscoro`.
-
-If the coroutine executing this [await function](#await) is explicitly resumed,
-the execution of `syscoro` continues in the separate thread,
+If the coroutine executing this [await function](#await-function) is explicitly resumed,
+the execution of `preemptco` continues in the separate thread,
 and it will not be able to be resumed again until it [suspends](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
-In such case the results of the execution are discarted.
+In such case the results of the execution of `preemptco` are discarded.
+Finally,
+the explicitly resumed coroutine may not complete await functions until `preemptco` yields or terminates.
 
-_System coroutines_ are executed using a limited set of threads that are also used by the underlying system.
+_Preemptive coroutines_ are executed using a limited set of threads that are also used by the underlying system.
 The number of threads is given by environment variable [`UV_THREADPOOL_SIZE`](http://docs.libuv.org/en/v1.x/threadpool.html).
 
-### `syscoro:status ()`
+### `system.awaitch (ch, endpoint, ...)`
 
-Similar to [`coroutine.status`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
-but for [_system coroutines_](#systemload-chunk--chunkname--mode).
-
-### `syscoro:close ()`
-
-Similar to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
-but for  [_system coroutines_](#systemload-chunk--chunkname--mode).
-
-### `system.threads ([size])`
-
-Returns a new _thread pool_ with `size` system threads to execute its [_tasks_](#threadsdostring-chunk--chunkname--mode-).
-
-If `size` is omitted,
-returns a new reference to the _thread pool_ where the calling code is executing,
-or `nil` if it is not executing in a _thread pool_ (_e.g._ the main process thread).
-
-### `threads:resize (size [, create])`
-
-Defines that [_thread pool_](#systemthreads-size) `threads` shall keep `size` system threads to execute its [_tasks_](#threadsdostring-chunk--chunkname--mode-).
-
-If `size` is smaller than the current number of threads,
-the exceeding threads are destroyed at the rate they are released from the _tasks_ currently executing in `threads`.
-Otherwise, new threads are created on demand until the defined value is reached.
-Unless `create` evaluates to `true`,
-in which case the new threads are created immediatelly.
-
-### `threads:count (options)`
-
-Returns numbers corresponding to the ammount of components in [_thread pool_](#systemthreads-size) `threads` according to the following characters present in string `options`:
-
-- `n`: the total number of [_tasks_](#threadsdostring-chunk--chunkname--mode-).
-- `r`: the number of _tasks_ currently executing.
-- `p`: the number of _tasks_ pending to be executed.
-- `s`: the number of _tasks_ suspended on a [channel](#systemchannel-name).
-- `e`: the expected number of system threads.
-- `a`: the actual number of system threads.
-
-### `threads:dostring (chunk [, chunkname [, mode, ...]])`
-
-Loads a chunk as a new _task_ that executes in an independent state in the same fashion of [_system coroutines_](#systemload-chunk--chunkname--mode).
-However, such _tasks_ executes on system threads from [_thread pool_](#systemthreads-size) `threads`,
-and starts as soon as a system thread is available.
-
-Arguments `chunk`, `chunkname`, `mode` are the same of [`load`](http://www.lua.org/manual/5.4/manual.html#pdf-load).
-Arguments `...` are passed to the loaded chunk,
-but only _nil_, _boolean_, _number_, _string_ and _light userdata_ values are allowed as such arguments.
-
-Whenever the loaded `chunk` [yields](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) it reschedules itself as pending to be resumed,
-and releases its running system thread.
-
-Execution errors in the loaded `chunk` terminate the _task_,
-and a message is written to the current process [standard error](https://en.wikipedia.org/wiki/Standard_streams#Standard_error_(stderr)) with prefix `[COUTIL PANIC]`.
-
-Returns `true` if `chunk` is loaded successfully.
-
-__Note__: A _task_ can yield a channel name followed by the arguments of [`channel:await`](#channelawait-endpoint-) to be suspended awaiting on a channel without the need to load CoUtil modules.
-
-### `threads:dofile (filepath [, mode, ...])`
-
-Similar to [`threads:dostring`](#threadsdostring-chunk--chunkname--mode-), but gets the chunk from a file.
-The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.4/manual.html#pdf-loadfile).
-
-### `threads:close ()`
-
-When this function is called from a _task_ of [_thread pool_](#systemthreads-size) `threads`
-(_i.e._ using a reference obtained by calling [`system.threads()`](#systemthreads-size) with no arguments),
-it has no effect other than prevent further use of functions of `threads`.
-
-Otherwise, it waits until there are either no more _tasks_ or no more system threads,
-and closes `threads` releasing all of its underlying resources.
-
-Note that when _thread pool_ `threads` is garbage collected before this functions is called,
-it will retain minimum resources until the termination of the Lua state they were created.
-To avoid accumulative resource consumption by creation of multiple _thread pools_,
-call this function on every _thread pool_.
-
-Moreover, a _thread pool_ that is not closed will prevent the current Lua state to terminate (_i.e._ `lua_close` to return) until it has either no more tasks or no more system threads.
-
-### `system.channelnames ([names])`
-
-Returns a table mapping each name of existing channels to `true`.
-
-If table `names` is provided,
-returns `names`,
-but first sets each of its string keys to either `true`,
-if there is a channel with that name,
-or `nil`,
-thus removing it from `names`.
-
-### `system.channel (name)`
-
-Returns a new _channel_ with name `name`.
-
-Channels with the same name share the same two opposite [_endpoints_](#channelawait-endpoint-).
-
-### `channel:await (endpoint, ...)`
-
-[Await function](#await) that awaits on an _endpoint_ of `channel` for a similar call on the opposite _endpoint_,
-either from another coroutine, [_task_](#threadsdostring-chunk--chunkname--mode-) or [_system coroutine_](#systemload-chunk--chunkname--mode).
+[Await function](#await-function) that awaits on an _endpoint_ of channel `ch` for a similar call on the opposite _endpoint_,
+either from another coroutine, [_task_](#threadsdostring-pool-chunk--chunkname--mode-) or [_preemptive coroutine_](#coroutineload-chunk--chunkname--mode).
 
 `endpoint` is either string `"in"` or `"out"`,
 each identifying an opposite _endpoint_.
@@ -1031,22 +1087,4 @@ Returns `true` followed by the extra arguments `...` from the matching call.
 Otherwise, return `nil` followed by an error message related to obtaining the arguments from the matching call.
 In any case,
 if this call does not raise errors,
-it resumed the coroutine, [_task_](#threadsdostring-chunk--chunkname--mode-) or [_system coroutine_](#systemload-chunk--chunkname--mode) of the matching call.
-
-### `channel:sync (endpoint, ...)`
-
-Similar to [`channel:await`](#channelawait-endpoint-),
-but does not await for a matching call.
-In such case,
-it returns `nil` followed by message "empty".
-
-### `channel:close ()`
-
-Closes channel `channel`.
-Note that channels are automatically closed when they are garbage collected,
-but that takes an unpredictable amount of time to happen. 
-
-In case of success,
-this function returns `true`.
-Otherwise it returns `nil` plus an error message.
-
+it resumed the coroutine, [_task_](#threadsdostring-pool-chunk--chunkname--mode-) or [_preemptive coroutine_](#coroutineload-chunk--chunkname--mode) of the matching call.

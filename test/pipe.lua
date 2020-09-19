@@ -25,14 +25,14 @@ do case "getaddress"
 
 	local addr = sock:getaddress()
 	assert(addr == pipenames.free)
-	local addr = sock:getaddress("this")
+	local addr = sock:getaddress("self")
 	assert(addr == pipenames.free)
 	asserterr("socket is not connected", sock:getaddress("peer"))
 
 	local a = sock:getaddress(nil, addr)
 	assert(rawequal(a, addr))
 	assert(a == pipenames.free)
-	local a = sock:getaddress("this", addr)
+	local a = sock:getaddress("self", addr)
 	assert(rawequal(a, addr))
 	assert(a == pipenames.free)
 	asserterr("socket is not connected", sock:getaddress("peer", addr))
