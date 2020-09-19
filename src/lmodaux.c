@@ -21,18 +21,19 @@ LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err) {
 	return n;
 }
 
-LCUI_FUNC void lcuL_warnerror (lua_State *L, const char *msg, int err) {
+LCUI_FUNC void lcuL_warnmsg (lua_State *L, const char *prefix, const char *msg) {
 	lua_warning(L, LCU_WARNPREFIX, 1);
-	lua_warning(L, msg, 1);
-	lua_warning(L, uv_strerror(err), 0);
+	lua_warning(L, prefix, 1);
+	lua_warning(L, msg, 0);
 }
 
-LCUI_FUNC void lcuL_setfinalizer (lua_State *L,
-                                  lua_CFunction finalizer,
-                                  int nup) {
-	lua_pushcclosure(L, finalizer, nup);
+LCUI_FUNC void lcuL_warnerr (lua_State *L, const char *prefix, int err) {
+	lcuL_warnmsg(L, prefix, uv_strerror(err));
+}
+
+LCUI_FUNC void lcuL_setfinalizer (lua_State *L, lua_CFunction finalizer) {
 	lua_createtable(L, 0, 1);
-	lua_insert(L, -2);
+	lua_pushcfunction(L, finalizer);
 	lua_setfield(L, -2, "__gc");
 	lua_setmetatable(L, -2);
 }
@@ -60,15 +61,23 @@ static int writer (lua_State *L, const void *b, size_t size, void *B) {
 	return 0;
 }
 
+static void warnf (void *ud, const char *message, int tocont);
+
 LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
 	const luaL_Reg *lib;
 	void *allocud;
 	lua_Alloc allocf = lua_getallocf(L, &allocud);
 	lua_CFunction panic = lua_atpanic(L, NULL);  /* changes panic function */
 	lua_State *NL = lua_newstate(allocf, allocud);
+	int *warnstate;  /* space for warning state */
 
 	lua_atpanic(L, panic);  /* restore panic function */
 	lua_atpanic(NL, panic);
+
+	warnstate = (int *)lua_newuserdatauv(NL, sizeof(int), 0);
+	luaL_ref(NL, LUA_REGISTRYINDEX);  /* make sure it won't be collected */
+	*warnstate = 0;  /* default is warnings off */
+	lua_setwarnf(NL, warnf, warnstate);
 
 	luaL_checkstack(NL, 3, "not enough memory");
 
@@ -167,7 +176,8 @@ static void pushfrom (lua_State *to,
 			lua_pushboolean(to, lua_toboolean(from, idx));
 		} break;
 		case LUA_TNUMBER: {
-			lua_pushnumber(to, lua_tonumber(from, idx));
+			if (lua_isinteger(from, idx)) lua_pushinteger(to, lua_tointeger(from, idx));
+			else lua_pushnumber(to, lua_tonumber(from, idx));
 		} break;
 		case LUA_TSTRING: {
 			size_t l;
@@ -234,64 +244,6 @@ LCUI_FUNC int lcuL_movefrom (lua_State *to,
 }
 
 
-static void pushhandlemap (lua_State *L) {
-	lua_pushlightuserdata(L, pushhandlemap);
-	if (lua_gettable(L, LUA_REGISTRYINDEX) != LUA_TTABLE) {
-		lua_pop(L, 1);
-		lua_newtable(L);
-		lua_pushlightuserdata(L, pushhandlemap);
-		lua_pushvalue(L, -2);
-		lua_createtable(L, 0, 1);
-		lua_pushliteral(L, "k");
-		lua_setfield(L, -2, "__mode");
-		lua_setmetatable(L, -2);
-		lua_settable(L, LUA_REGISTRYINDEX);
-	}
-}
-
-static void closehandle (uv_handle_t* handle, void* arg) {
-	if (!uv_is_closing(handle)) uv_close(handle, NULL);
-}
-
-static int terminateloop (lua_State *L) {
-	uv_loop_t *loop = (uv_loop_t *)lua_touserdata(L, 1);
-	int err = uv_loop_close(loop);
-	if (err == UV_EBUSY) {
-		uv_walk(loop, closehandle, NULL);
-		loop->data = (void *)L;
-		err = uv_run(loop, UV_RUN_DEFAULT);
-		loop->data = NULL;
-		if (!err) err = uv_loop_close(loop);
-
-else {fprintf(stderr, "WARN: close failed!\n"); uv_print_all_handles(loop, stderr);}
-
-	}
-	lcu_assert(!err);
-	return 0;
-}
-
-LCUI_FUNC void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
-	int err;
-	lua_newtable(L);  /* LCU_COREGISTRY */
-	pushhandlemap(L);  /* LCU_HANDLEMAP */
-	{
-		lcu_ActiveOps *ops =
-			(lcu_ActiveOps *)lua_newuserdatauv(L, sizeof(lcu_ActiveOps), 0);
-		ops->asyncs = 0;
-		ops->others = 0;
-	}
-	if (uv) lua_pushlightuserdata(L, uv);
-	else {
-		int i;
-		uv = (uv_loop_t *)lua_newuserdatauv(L, sizeof(uv_loop_t), 0);
-		for (i = 0; i < LCU_MODUPVS; ++i) lua_pushvalue(L, -4);
-		lcuL_setfinalizer(L, terminateloop, LCU_MODUPVS);
-		err = uv_loop_init(uv);
-		if (err < 0) lcu_error(L, err);
-	}
-	uv->data = NULL;
-}
-
 LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
 	luaL_checkstack(L, nup, "too many upvalues");
 	for (; l->name != NULL; l++) {  /* fill the table with given functions */
@@ -345,3 +297,55 @@ LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
 	}
 	printf("\n");
 }
+
+
+/******************************************************************************
+* The code below is copied from the source of Lua 5.4.0 by
+* R. Ierusalimschy, L. H. de Figueiredo, W. Celes - Lua.org, PUC-Rio.
+*
+* Copyright (C) 1994-2020 Lua.org, PUC-Rio.
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+******************************************************************************/
+
+#include <string.h>
+
+static void warnf (void *ud, const char *message, int tocont) {
+	int *warnstate = (int *)ud;
+	if (*warnstate != 2 && !tocont && *message == '@') {  /* control message? */
+		if (strcmp(message, "@off") == 0)
+			*warnstate = 0;
+		else if (strcmp(message, "@on") == 0)
+			*warnstate = 1;
+		return;
+	}
+	else if (*warnstate == 0)  /* warnings off? */
+		return;
+	if (*warnstate == 1)  /* previous message was the last? */
+		lua_writestringerror("%s", "Lua warning: ");  /* start a new warning */
+	lua_writestringerror("%s", message);  /* write message */
+	if (tocont)  /* not the last part? */
+		*warnstate = 2;  /* to be continued */
+	else {  /* last part */
+		lua_writestringerror("%s", "\n");  /* finish message with end-of-line */
+		*warnstate = 1;  /* ready to start a new message */
+	}
+}
+

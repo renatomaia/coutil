@@ -1,35 +1,63 @@
-CoUtil Library
-==============
+CoUtil Libraries
+================
 
-`coutil` is a collection of modules that provide utility functions to support [cooperative multithreading](https://en.wikipedia.org/wiki/Cooperative_multitasking) using coroutines.
+`coutil` provides a set of Lua libraries to support multithreading in Lua using coroutines,
+in particular, to support:
+
+- Coroutine execution finalizers.
+- Coroutine syncronization abstractions:
+	- [events](https://en.wikipedia.org/wiki/Async/await);
+	- [mutexes](https://en.wikipedia.org/wiki/Mutex);
+	- [promises](https://en.wikipedia.org/wiki/Futures_and_promises).
+- Coroutine resumption on conditions on system features (and API to such features):
+	- Measure of time lapse;
+	- Signals of system processes;
+	- Program execution;
+	- Data transmission over network and IPC sockets;
+	- DNS lookups;
+	- Code chunk execution on separate system threads:
+		- Preemptive coroutines;
+		- Thread pools;
+		- Copy values between code chunks.
+
+**Note:** The support for system features is implemented over [`libuv`](https://libuv.org/) library,
+therefore they should be available in all plataforms supported by such library.
 
 Documentation
 -------------
 
-- [Manual](doc/manual.md)
 - [License](LICENSE)
+- [Manual](doc/manual.md)
+- [Source](doc/devnotes.md)
 
 History
 -------
 
 ### Version 2.1:
-- Schedule to resume coroutines using [`libuv`](https://libuv.org/).
+- Suspension of coroutines awaiting on system conditions provided by [`libuv`](https://libuv.org/) library, like time lapses, process signals, command executions, DNS lookups, data tranfers over socket, etc.
+- Execution of code using preemptive system threads.
+- Transmission of values between code executing on preemptive system threads.
 
 ### Version 2.0:
 - `event.awaiteach` function removed.
 - `await*` functions can be resumed using `coroutine.resume` and now return an additonal boolean indicating whether it was resumed by an event or not.
 
 ### Version 1.0:
-- Abstractions for syncronization of coroutines: [events](https://en.wikipedia.org/wiki/Async/await), [promises](https://en.wikipedia.org/wiki/Futures_and_promises) and [mutexes](https://en.wikipedia.org/wiki/Mutex).
 - Creation of coroutines with finalizers.
+- Syncronization abstractions for [cooperative multitasking](https://en.wikipedia.org/wiki/Cooperative_multitasking) using coroutines: [events](https://en.wikipedia.org/wiki/Async/await), [promises](https://en.wikipedia.org/wiki/Futures_and_promises) and [mutexes](https://en.wikipedia.org/wiki/Mutex).
 
 TODO
 ----
 
 ### Improvements
 
-- Remove support to `getoption` on sockets and the like.
+- Protect all 'lua_*' calls in 'uv_*' callbacks from raising errors (use 'pcall'?)
+- Replacement for package.cpath searcher that saves the 'luaopen_*' function to 'package.preload', so it can be shared by other threads (saves opened file descriptors).
+- Support metamethod 'transfer' containing a _light userdata_ to a C function that "transfers" a userdata between independet Lua states.
+	- Transferable coroutines that are closed on the source and move to the destiny.
+	- Transferable memories that are resized to zero in the source and move to the destiny.
 - User and group definition of process started with `system.execute`.
+- Add option to 'system.execute{await=false,...}' to avoid suspending until the program terminates.
 - Function to create an envionment variables set to be used in `system.execute`.
 - Support `std{in,out,err}`in `system.execute` to be `"rw"` to create a pipe. See `UV_CREATE_PIPE`.
 - Support for datagram UNIX domain sockets (not on Windows).
