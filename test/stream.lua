@@ -52,8 +52,8 @@ function teststream(create, addresses)
 
 		asserterr("not listening", pspawn(passive.accept, passive))
 		asserterr("number expected, got no value", pcall(passive.listen, passive))
-		asserterr("large backlog", pcall(passive.listen, passive, -1))
-		asserterr("large backlog", pcall(passive.listen, passive, 1<<31))
+		asserterr("out of range", pcall(passive.listen, passive, -1))
+		asserterr("out of range", pcall(passive.listen, passive, 1<<31))
 		assert(passive:bind(addresses.bindable))
 		assert(passive:listen(backlog))
 		asserterr("already listening", pcall(passive.listen, passive, backlog))
@@ -137,7 +137,7 @@ function teststream(create, addresses)
 
 		local complete = false
 		spawn(function ()
-			asserterr("already used", pcall(server.accept, server))
+			asserterr("already in use", pcall(server.accept, server))
 			thread = coroutine.running()
 			coroutine.yield()
 			local stream = assert(server:accept())
@@ -783,7 +783,7 @@ function teststream(create, addresses)
 		assert(stage1 == 2)
 		assert(stage2 == 3)
 
-		asserterr("unable to yield", pcall(accepted.receive, accepted, buffer))
+		asserterr("already in use", pcall(accepted.receive, accepted, buffer))
 
 		gc()
 		assert(system.run() == false)

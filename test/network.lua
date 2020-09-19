@@ -1,9 +1,7 @@
 local system = require "coutil.system"
 
 local function testbooloption(sock, name)
-	assert(sock:getoption(name) == false)
 	assert(sock:setoption(name, true) == true)
-	assert(sock:getoption(name) == true)
 	assert(sock:setoption(name, false) == true)
 end
 
@@ -51,14 +49,14 @@ local function testsockaddr(create, domain, ...)
 
 		local addr = sock:getaddress()
 		assert(addr == ipaddr[domain].free)
-		local addr = sock:getaddress("this")
+		local addr = sock:getaddress("self")
 		assert(addr == ipaddr[domain].free)
 		asserterr("socket is not connected", sock:getaddress("peer"))
 
 		local a = sock:getaddress(nil, addr)
 		assert(rawequal(a, addr))
 		assert(a == ipaddr[domain].free)
-		local a = sock:getaddress("this", addr)
+		local a = sock:getaddress("self", addr)
 		assert(rawequal(a, addr))
 		assert(a == ipaddr[domain].free)
 		asserterr("socket is not connected", sock:getaddress("peer", addr))
@@ -105,10 +103,8 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 	do case "errors"
 		local socket = assert(create())
 
-		asserterr("string expected, got no value", pcall(socket.getoption, socket))
 		asserterr("string expected, got no value", pcall(socket.setoption, socket))
 		asserterr("number expected, got no value", pcall(socket.setoption, socket, "mcastttl"))
-		asserterr("invalid option", pcall(socket.getoption, socket, "MCastTTL"))
 		asserterr("invalid option", pcall(socket.setoption, socket, "MCastTTL", 1))
 
 		done()
@@ -123,10 +119,8 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 
 	do case "mcastttl"
 		local stream = assert(create())
-		assert(stream:getoption("mcastttl") == 1)
 		for _, value in ipairs{ 1, 2, 3, 123, 128, 255 } do
 			assert(stream:setoption("mcastttl", value) == true)
-			assert(stream:getoption("mcastttl") == value)
 		end
 
 		for _, value in ipairs{ -1, 0, 256, 257, math.maxinteger } do
@@ -207,11 +201,17 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			local unconnected = assert(create())
 			assert(unconnected:bind(ipaddr[domain].bindable))
 			local buffer = memory.create(128)
-			assert(unconnected:receive(buffer) == 64)
+			local bytes, trunced = unconnected:receive(buffer)
+			assert(bytes == 64)
+			assert(trunced == false)
 			assertfilled(buffer, 64)
-			assert(unconnected:receive(buffer, 65, 96) == 32)
+			local bytes, trunced = unconnected:receive(buffer, 65, 96)
+			assert(bytes == 32)
+			assert(trunced == true)
 			assertfilled(buffer, 96)
-			assert(unconnected:receive(buffer, 97) == 0)
+			local bytes, trunced = unconnected:receive(buffer, 97)
+			assert(bytes == 0)
+			assert(trunced == false)
 			assertfilled(buffer, 96)
 			done1 = true
 		end)
@@ -774,10 +774,8 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 	do case "errors"
 		local socket = assert(create("stream"))
 
-		asserterr("string expected, got no value", pcall(socket.getoption, socket))
 		asserterr("string expected, got no value", pcall(socket.setoption, socket))
 		asserterr("value expected", pcall(socket.setoption, socket, "keepalive"))
-		asserterr("invalid option", pcall(socket.getoption, socket, "KeepAlive"))
 		asserterr("invalid option", pcall(socket.setoption, socket, "KeepAlive", 1))
 
 		done()
@@ -790,13 +788,10 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 
 	do case "keepalive"
 		local stream = assert(create("stream"))
-		assert(stream:getoption("keepalive") == nil)
 		for _, value in ipairs{ 1, 2, 3, 123, 128, 255 } do
 			assert(stream:setoption("keepalive", value) == true)
-			assert(stream:getoption("keepalive") == value)
 		end
 		assert(stream:setoption("keepalive", false) == true)
-		assert(stream:getoption("keepalive") == nil)
 
 		for _, value in ipairs{ -1, 0 } do
 			asserterr("invalid argument",
@@ -808,4 +803,38 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 
 	teststream(create, ipaddr[domain])
 
+end
+
+
+do case "used after library collection"
+	dostring(utilschunk..[===[
+		local system = require "coutil.system"
+		local addr = system.address("ipv4", "127.0.0.1:65432")
+		local path = os.tmpname()
+		local cases = {}
+		table.insert(cases, { socket = system.socket("datagram", addr.type), op = "send", "xxx", nil, nil, addr })
+		table.insert(cases, { socket = system.socket("stream", addr.type), op = "connect", addr })
+		table.insert(cases, { socket = system.socket("stream", "local"), op = "connect", path })
+		table.insert(cases, { socket = system.socket("stream", "ipc"), op = "connect", path })
+
+		garbage.system = system
+		system = nil
+		package.loaded["coutil.system"] = nil
+		gc()
+		assert(garbage.system == nil)
+
+		for _, case in ipairs(cases) do
+			spawn(function ()
+				local ok, err = case.socket[case.op](case.socket, table.unpack(case))
+				if case.op == "send" then
+					assert(ok)
+				else
+					assert(not ok)
+					assert(err == "operation canceled")
+				end
+			end)
+		end
+	]===])
+
+	done()
 end

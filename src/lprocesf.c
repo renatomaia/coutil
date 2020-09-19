@@ -1,4 +1,3 @@
-#include "lsyslib.h"
 #include "lmodaux.h"
 #include "loperaux.h"
 
@@ -62,6 +61,15 @@ static int checksignal (lua_State *L, int arg) {
 }
 
 
+/* success [, errmsg] = system.getpid ([which]) */
+static int system_getpid (lua_State *L) {
+	static const char *const options[] = {"self", "parent", NULL};
+	int parent = luaL_checkoption(L, 1, "self", options);
+	lua_pushinteger(L, (lua_Integer)(parent ? uv_os_getppid() : uv_os_getpid()));
+	return 1;
+}
+
+
 /* success [, errmsg] = system.emitsig (process, signal) */
 static int system_emitsig (lua_State *L) {
 	int err = uv_kill(luaL_checkinteger(L, 1), checksignal(L, 2));
@@ -82,8 +90,7 @@ static int returnsignal (lua_State *L) {
 static void uv_onsignal (uv_signal_t *handle, int signum) {
 	lua_State *thread = (lua_State *)handle->data;
 	lua_pushinteger(thread, signum);
-	lcuU_resumethrop(thread, 1, (uv_handle_t *)handle);
-	lcuU_checksuspend(handle->loop);
+	lcuU_resumethrop((uv_handle_t *)handle, 1);
 }
 static int k_setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_signal_t *signal = (uv_signal_t *)handle;
@@ -97,7 +104,8 @@ static int k_setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int system_awaitsig (lua_State *L) {
-	return lcuT_resetthropk(L, UV_SIGNAL, k_setupsignal, returnsignal, NULL);
+	lcu_Scheduler *sched = lcu_getsched(L);
+	return lcuT_resetthropk(L, UV_SIGNAL, sched, k_setupsignal, returnsignal, NULL);
 }
 
 
@@ -134,13 +142,10 @@ static void getstreamfield (lua_State *L,
 				luaL_Stream *lstream = (luaL_Stream *)lua_touserdata(L, -2);
 				stream->data.fd = fileno(lstream->f);
 				stream->flags = UV_INHERIT_FD;
-			} else if (ismetatable(L, LCU_TCPACTIVECLS)) {
-				lcu_TcpSocket *tcp = (lcu_TcpSocket *)lua_touserdata(L, -2);
-				stream->data.stream = (uv_stream_t *)lcu_totcphdl(tcp);
-				stream->flags = UV_INHERIT_STREAM;
-			} else if (ismetatable(L, LCU_PIPEACTIVECLS)) {
-				lcu_IpcPipe *pipe = (lcu_IpcPipe *)lua_touserdata(L, -2);
-				stream->data.stream = (uv_stream_t *)lcu_topipehdl(pipe);
+			} else if (ismetatable(L, LCU_TCPACTIVECLS) ||
+			           ismetatable(L, LCU_PIPEACTIVECLS)) {
+				lcu_Object *obj = (lcu_Object *)lua_touserdata(L, -2);
+				stream->data.stream = (uv_stream_t *)lcu_toobjhdl(obj);
 				stream->flags = UV_INHERIT_STREAM;
 			}
 		}
@@ -152,7 +157,6 @@ static void getstreamfield (lua_State *L,
 }
 static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 	procopts->flags = 0;
-	procopts->stdio_count = 0;
 
 	if (lua_isstring(L, 1)) {
 		int i;
@@ -167,7 +171,11 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 		procopts->file = procopts->args[0];
 		procopts->env = NULL;
 		procopts->cwd = NULL;
-		procopts->stdio = NULL;
+		procopts->stdio_count = 3;
+		for (i = 0; i < procopts->stdio_count; i++) {
+			procopts->stdio[i].data.fd = i;
+			procopts->stdio[i].flags = UV_INHERIT_FD;
+		}
 
 		return 0;
 	} else if (lua_istable(L, 1)) {
@@ -177,6 +185,7 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 		lua_settop(L, 1);  /* discard all other arguments */
 		procopts->file = getstrfield(L, "execfile", 1);
 		procopts->cwd = getstrfield(L, "runpath", 0);
+		procopts->stdio_count = 0;
 		for (; streamfields[procopts->stdio_count]; ++procopts->stdio_count)
 			getstreamfield(L, streamfields[procopts->stdio_count],
 			                  procopts->stdio+procopts->stdio_count,
@@ -260,8 +269,7 @@ static void uv_procexited (uv_process_t *process, int64_t exitval, int signum) {
 		lua_pushliteral(thread, "exit");
 		lua_pushinteger(thread, exitval);
 	}
-	lcuU_resumethrop(thread, 2, (uv_handle_t *)process);
-	lcuU_checksuspend(process->loop);
+	lcuU_resumethrop((uv_handle_t *)process, 2);
 }
 static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_process_t *process = (uv_process_t *)handle;
@@ -288,12 +296,14 @@ static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int system_execute (lua_State *L) {
-	return lcuT_resetthropk(L, -1, k_setupproc, NULL, NULL);
+	lcu_Scheduler *sched = lcu_getsched(L);
+	return lcuT_resetthropk(L, -1, sched, k_setupproc, NULL, NULL);
 }
 
 
 LCUI_FUNC void lcuM_addsignalf (lua_State *L) {
 	static const luaL_Reg luaf[] = {
+		{"getpid", system_getpid},
 		{"emitsig", system_emitsig},
 		{NULL, NULL}
 	};

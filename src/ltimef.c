@@ -4,7 +4,8 @@
 
 /* timestamp = system.time([update]) */
 static int system_time (lua_State *L) {
-	uv_loop_t *loop = lcu_toloop(L);
+	lcu_Scheduler *sched = lcu_getsched(L);
+	uv_loop_t *loop = lcu_toloop(sched);
 	if (lua_toboolean(L, 1)) uv_update_time(loop);
 	lua_pushnumber(L, (lua_Number)(uv_now(loop))/1e3);
 	return 1;
@@ -22,8 +23,7 @@ static int returntrue (lua_State *L) {
 	return 1;
 }
 static void uv_onidle (uv_idle_t *handle) {
-	lcuU_resumethrop((lua_State *)handle->data, 0, (uv_handle_t *)handle);
-	lcuU_checksuspend(handle->loop);
+	lcuU_resumethrop((uv_handle_t *)handle, 0);
 }
 static int k_setupidle (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	if (loop) {
@@ -35,9 +35,7 @@ static int k_setupidle (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static void uv_ontimer (uv_timer_t *handle) {
-	lua_State *thread = (lua_State *)handle->data;
-	lcuU_resumethrop(thread, 0, (uv_handle_t *)handle);
-	lcuU_checksuspend(handle->loop);
+	lcuU_resumethrop((uv_handle_t *)handle, 0);
 }
 static int k_setuptimer (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_timer_t *timer = (uv_timer_t *)handle;
@@ -51,11 +49,12 @@ static int k_setuptimer (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int system_suspend (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);
 	lua_Number delay = luaL_optnumber(L, 1, 0);
 	if (delay > 0) {
-		return lcuT_resetthropk(L, UV_TIMER, k_setuptimer, returntrue, NULL);
+		return lcuT_resetthropk(L, UV_TIMER, sched, k_setuptimer, returntrue, NULL);
 	} else {
-		return lcuT_resetthropk(L, UV_IDLE, k_setupidle, returntrue, NULL);
+		return lcuT_resetthropk(L, UV_IDLE, sched, k_setupidle, returntrue, NULL);
 	}
 }
 

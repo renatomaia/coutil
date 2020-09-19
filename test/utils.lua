@@ -13,8 +13,6 @@ local vararg = require "vararg"
 
 garbage = setmetatable({ thread = nil }, { __mode = "v" })
 
-local spawnerr
-
 function gc()
 	for i = 1, 3 do collectgarbage("collect") end
 end
@@ -37,10 +35,7 @@ end
 
 do
 	local function catcherr(errmsg)
-		if spawnerr == nil then
-			spawnerr = debug.traceback(errmsg)
-			io.stderr:write(spawnerr, "\n")
-		end
+		io.stderr:write(debug.traceback(errmsg), "\n")
 		return errmsg
 	end
 

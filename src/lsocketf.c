@@ -1,8 +1,9 @@
-#include "lsyslib.h"
 #include "lmodaux.h"
 #include "loperaux.h"
 
 #include <string.h>
+#include <netinet/in.h>  /* network addresses */
+#include <arpa/inet.h>  /* IP addresses */
 #include <lmemlib.h>
 
 
@@ -25,6 +26,15 @@
 #ifndef LCU_ADDRMAXLITERAL
 #define LCU_ADDRMAXLITERAL  47
 #endif
+
+
+#define LCU_NETADDRCLS LCU_PREFIX"netaddress"
+
+#define checknetaddr(L,i)  ((struct sockaddr *) \
+                           luaL_checkudata(L, i, LCU_NETADDRCLS))
+
+#define tonetaddr(L,i)  ((struct sockaddr *) \
+                        luaL_testudata(L, i, LCU_NETADDRCLS))
 
 
 static int mem2port (const char *s, const char *e, in_port_t *pn) {
@@ -150,13 +160,29 @@ static const char *const AddrTypeName[] = { "ipv4", "ipv6", NULL };
 static const int AddrTypeId[] = { AF_INET, AF_INET6 };
 
 
+static struct sockaddr *newaddress (lua_State *L, int type) {
+	struct sockaddr *na;
+	size_t sz;
+	switch (type) {
+		case AF_INET: sz = sizeof(struct sockaddr_in); break;
+		case AF_INET6: sz = sizeof(struct sockaddr_in6); break;
+		default: luaL_error(L, "invalid address type"); return NULL;
+	}
+	na = (struct sockaddr *)lua_newuserdatauv(L, sz, 0);
+	memset(na, 0, sz);
+	luaL_setmetatable(L, LCU_NETADDRCLS);
+	return na;
+}
+
+
 /* address [, errmsg] = system.address(type, [data [, port [, format]]]) */
 static int system_address (lua_State *L) {
 	int type = AddrTypeId[luaL_checkoption(L, 1, NULL, AddrTypeName)];
 	int n = lua_gettop(L);
 	struct sockaddr *na;
 	lua_settop(L, 4);
-	na = lcu_newaddress(L, type);
+	na = newaddress(L, type);
+	luaL_setmetatable(L, LCU_NETADDRCLS);
 	lcu_assert(na);
 	na->sa_family = type;
 	if (n > 1) {
@@ -169,18 +195,18 @@ static int system_address (lua_State *L) {
 			const char *c, *e = data+sz;
 			switch (type) {
 				case AF_INET: {
-					c = memchr(data, ':', sz - 1);  /* at least one port digit */
+					c = memchr(data, ':', sz-1);  /* at least one port digit */
 					luaL_argcheck(L, c, 2, "invalid URI format");
 					sz = c-data;
 				} break;
 				case AF_INET6: {
-					c = memchr(++data, ']', sz - 3);  /* intial '[' and final ':?' */
+					c = memchr(++data, ']', sz-3);  /* intial '[' and final ':?' */
 					luaL_argcheck(L, c && c[1] == ':', 2, "invalid URI format");
 					sz = (c++)-data;
 				} break;
 				default: return lcu_error(L, UV_EAFNOSUPPORT);
 			}
-			luaL_argcheck(L, sz < LCU_ADDRMAXLITERAL, 2, "invalid URI format");
+			luaL_argcheck(L, sz <= LCU_ADDRMAXLITERAL, 2, "invalid URI format");
 			luaL_argcheck(L, mem2port(c+1, e, &port), 2, "invalid port");
 			memcpy(literal, data, sz);
 			literal[sz] = '\0';
@@ -207,7 +233,7 @@ static int system_address (lua_State *L) {
 
 /* uri = tostring(address) */
 static int addr_tostring (lua_State *L) {
-	struct sockaddr *na = lcu_checkaddress(L, 1);
+	struct sockaddr *na = checknetaddr(L, 1);
 	char s[LCU_ADDRMAXLITERAL];
 	int err = getaddrliteral(na, s);
 	if (err) lcu_pusherror(L, err);
@@ -221,8 +247,8 @@ static int addr_tostring (lua_State *L) {
 
 /* addr1 == addr2 */
 static int addr_eq (lua_State *L) {
-	struct sockaddr *a1 = lcu_toaddress(L, 1);
-	struct sockaddr *a2 = lcu_toaddress(L, 2);
+	struct sockaddr *a1 = tonetaddr(L, 1);
+	struct sockaddr *a2 = tonetaddr(L, 2);
 	if ( a1 && a2 && (a1->sa_family == a2->sa_family) &&
 	                 (getaddrport(a1) == getaddrport(a2)) ) {
 		size_t sz;
@@ -242,7 +268,7 @@ static int addr_eq (lua_State *L) {
  */
 static int addr_index (lua_State *L) {
 	static const char *const fields[] = {"port","binary","literal","type",NULL};
-	struct sockaddr *na = lcu_checkaddress(L, 1);
+	struct sockaddr *na = checknetaddr(L, 1);
 	int field = luaL_checkoption(L, 2, NULL, fields);
 	switch (field) {
 		case 0: {  /* port */
@@ -274,7 +300,7 @@ static int addr_index (lua_State *L) {
  */
 static int addr_newindex (lua_State *L) {
 	static const char *const fields[] = { "port", "binary", "literal", NULL };
-	struct sockaddr *na = lcu_checkaddress(L, 1);
+	struct sockaddr *na = checknetaddr(L, 1);
 	int field = luaL_checkoption(L, 2, NULL, fields);
 	switch (field) {
 		case 0: {  /* port */
@@ -301,28 +327,46 @@ static int addr_newindex (lua_State *L) {
  * Names
  */
 
-#define tofound(L) ((losi_AddressFound *)luaL_checkudata(L, 1, \
-                                         LOSI_NETADDRFOUNDCLS))
+#define LCU_NETADDRLISTCLS LCU_PREFIX"netaddrlist"
 
-#define chkaddrdom(L,I,A,D) luaL_argcheck(L, (A)->sa_family == D, I, "wrong domain")
+#define chkaddrdom(L,I,A,D) luaL_argcheck(L, (A)->sa_family == D, I, \
+                                             "wrong domain")
+
+typedef struct lcu_AddressList {
+	struct addrinfo *start;
+	struct addrinfo *current;
+} lcu_AddressList;
+
+
+static struct addrinfo *findvalidaddr (lcu_AddressList *l) {
+	for (; l->current; l->current = l->current->ai_next) {
+		switch (l->current->ai_socktype) {
+			case SOCK_DGRAM:
+			case SOCK_STREAM: return l->current;
+		}
+	}
+	return NULL;
+}
 
 /* [address, socktype, nextdomain =] found:next([address]) */
 static int found_next (lua_State *L) {
-	lcu_AddressList *list = lcu_checkaddrlist(L, 1);
-	struct addrinfo *found = lcu_peekaddrlist(list);
+	lcu_AddressList *list = (lcu_AddressList *)luaL_checkudata(L, 1,
+	                                                           LCU_NETADDRLISTCLS);
+	struct addrinfo *found = list->current;
 	if (found) {
-		struct sockaddr *addr = lcu_toaddress(L, 2);
+		struct sockaddr *addr = tonetaddr(L, 2);
 		if (addr) {
 			chkaddrdom(L, 2, addr, found->ai_family);
 			lua_settop(L, 2);
 		} else {
 			lua_settop(L, 1);
-			addr = lcu_newaddress(L, found->ai_family);
+			addr = newaddress(L, found->ai_family);
 		}
 		memcpy(addr, found->ai_addr, found->ai_addrlen);
 		lua_pushstring(L, (found->ai_socktype == SOCK_DGRAM ? "datagram" :
 		                  (found->ai_flags&AI_PASSIVE ? "passive" : "stream" )));
-		found = lcu_nextaddrlist(list);
+		list->current = list->current->ai_next;
+		found = findvalidaddr(list);
 		if (found) pushaddrtype(L, found->ai_family);
 		else lua_pushnil(L);
 		return 3;
@@ -331,18 +375,20 @@ static int found_next (lua_State *L) {
 }
 
 static int found_close (lua_State *L) {
-	lcu_AddressList *list = lcu_toaddrlist(L, 1);
+	lcu_AddressList *list = (lcu_AddressList *)luaL_testudata(L, 1,
+	                                                          LCU_NETADDRLISTCLS);
 	if (list) {
-		struct addrinfo* results = lcu_getaddrlist(list);
+		struct addrinfo* results = list->start;
 		if (results) {
 			freeaddrinfo(results);
-			lcu_setaddrlist(list, NULL);
+			list->start = NULL;
+			list->current = NULL;
 		}
 	}
 	return 0;
 }
 
-/* next, domain = system.resolveaddr (name [, service [, mode]]) */
+/* next, domain = system.findaddr (name [, service [, mode]]) */
 static void uv_onresolved (uv_getaddrinfo_t *addrreq,
                            int err,
                            struct addrinfo* results) {
@@ -352,16 +398,21 @@ static void uv_onresolved (uv_getaddrinfo_t *addrreq,
 	if (thread) {
 		int nret;
 		if (!err) {
-			lcu_AddressList *list = lcu_newaddrlist(thread);
-			lcu_setaddrlist(list, results);
+			lcu_AddressList *list = (lcu_AddressList *)
+				lua_newuserdatauv(thread, sizeof(lcu_AddressList), 0);
+			list->start = NULL;
+			list->current = NULL;
+			luaL_setmetatable(thread, LCU_NETADDRLISTCLS);
+			list->start = results;
+			list->current = results;
+			findvalidaddr(list);
 			pushaddrtype(thread, results->ai_family);
 			nret = 2;
 		}
 		else nret = lcuL_pushresults(thread, 0, err);
-		lcuU_resumereqop(thread, nret, loop, request);
+		lcuU_resumereqop(loop, request, nret);
 	}
 	else if (!err) freeaddrinfo(results);
-	lcuU_checksuspend(loop);
 }
 static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_getaddrinfo_t *addrreq = (uv_getaddrinfo_t *)request;
@@ -414,7 +465,8 @@ static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int system_findaddr (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupfindaddr, NULL, NULL);
+	lcu_Scheduler *sched = lcu_getsched(L);
+	return lcuT_resetreqopk(L, sched, k_setupfindaddr, NULL, NULL);
 }
 
 /* name [, service] = system.nameaddr (address [, mode]) */
@@ -433,9 +485,8 @@ static void uv_onaddrnamed (uv_getnameinfo_t *namereq,
 			nret = 2;
 		}
 		else nret = lcuL_pushresults(thread, 0, err);
-		lcuU_resumereqop(thread, nret, loop, request);
+		lcuU_resumereqop(loop, request, nret);
 	}
-	lcuU_checksuspend(loop);
 }
 static void uv_onservnamed (uv_getnameinfo_t *namereq,
                             int err,
@@ -451,9 +502,8 @@ static void uv_onservnamed (uv_getnameinfo_t *namereq,
 			nret = 1;
 		}
 		else nret = lcuL_pushresults(thread, 0, err);
-		lcuU_resumereqop(thread, nret, loop, request);
+		lcuU_resumereqop(loop, request, nret);
 	}
-	lcuU_checksuspend(loop);
 }
 static void uv_oncannonical (uv_getaddrinfo_t *addrreq,
                              int err,
@@ -468,7 +518,7 @@ static void uv_oncannonical (uv_getaddrinfo_t *addrreq,
 			nret = 1;
 		}
 		else nret = lcuL_pushresults(thread, 0, err);
-		lcuU_resumereqop(thread, nret, loop, request);
+		lcuU_resumereqop(loop, request, nret);
 	}
 	freeaddrinfo(results);
 }
@@ -505,7 +555,7 @@ static int k_setupnameaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 			addrbuf.sin_port = htons(port);
 			err = uv_getnameinfo(loop, namereq, uv_onservnamed, addr, flags);
 		} else {
-			struct sockaddr *addr = lcu_checkaddress(L, 1);
+			struct sockaddr *addr = checknetaddr(L, 1);
 			flags |= NI_NAMEREQD;
 			err = uv_getnameinfo(loop, namereq, uv_onaddrnamed, addr, flags);
 		}
@@ -514,7 +564,8 @@ static int k_setupnameaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int system_nameaddr (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupnameaddr, NULL, NULL);
+	lcu_Scheduler *sched = lcu_getsched(L);
+	return lcuT_resetreqopk(L, sched, k_setupnameaddr, NULL, NULL);
 }
 
 
@@ -522,25 +573,29 @@ static int system_nameaddr (lua_State *L) {
  * Buffer
  */
 
-static size_t posrelat (ptrdiff_t pos, size_t len) {
-	if (pos >= 0) return (size_t)pos;
-	else if (0u - (size_t)pos > len) return 0;
-	else return len - ((size_t)-pos) + 1;
+static size_t posrelatI (lua_Integer pos, size_t len) {
+	if (pos > 0) return (size_t)pos;
+	else if (pos == 0) return 1;
+	else if (pos < -(lua_Integer)len) return 1;
+	else return len + (size_t)pos + 1;
 }
 
-static int getbufarg (lua_State *L, uv_buf_t *buf) {
+static size_t getendpos (lua_State *L, int arg, lua_Integer def, size_t len) {
+	lua_Integer pos = luaL_optinteger(L, arg, def);
+	if (pos > (lua_Integer)len) return len;
+	else if (pos >= 0) return (size_t)pos;
+	else if (pos < -(lua_Integer)len) return 0;
+	else return len+(size_t)pos+1;
+}
+
+static void getbufarg (lua_State *L, uv_buf_t *buf) {
 	size_t sz;
 	const char *data = luamem_checkstring(L, 2, &sz);
-	if (data) {
-		size_t start = posrelat(luaL_optinteger(L, 3, 1), sz);
-		size_t end = posrelat(luaL_optinteger(L, 4, -1), sz);
-		if (start < 1) start = 1;
-		if (end > sz) end = sz;
-		buf->len = end-start+1;
-		buf->base = (char *)(data+start-1);
-		return 1;
-	}
-	return 0;
+	size_t start = posrelatI(luaL_optinteger(L, 3, 1), sz);
+	size_t end = getendpos(L, 4, -1, sz);
+	if (start <= end) buf->len = end-start+1;
+	else buf->len = 0;
+	buf->base = (char *)(data+start-1);
 }
 
 
@@ -548,15 +603,45 @@ static int getbufarg (lua_State *L, uv_buf_t *buf) {
  * Socket
  */
 
+typedef struct UdpSocket {
+	int flags;
+	lcu_ObjectAction stop;
+	lua_CFunction step;
+	uv_udp_t handle;
+} UdpSocket;
+
+typedef struct TcpSocket {
+	int flags;
+	lcu_ObjectAction stop;
+	lua_CFunction step;
+	uv_tcp_t handle;
+} TcpSocket;
+
+typedef struct IpcPipe {
+	int flags;
+	lcu_ObjectAction stop;
+	lua_CFunction step;
+	uv_pipe_t handle;
+} IpcPipe;
+
+
+#define FLAG_IPV6DOM 0x02  /* used for network sockets */
+#define FLAG_SOCKTRANF 0x02  /* used for local|ipc sockets */
+
+#define FLAG_UDPCONNECTED 0x04
+
+
+#define newobject(L,T,C)	(T *)lcuT_createobj(L,sizeof(T),C)
+
+
 /* socket [, errmsg] = system.socket(type, domain) */
 static int system_socket (lua_State *L) {
-	static const char *const SockTypeName[] = { "stream", "passive", "datagram",
-	                                            NULL };
-	static const char *const SockDomainName[] = { "ipv4", "ipv6", "local", "ipc",
-	                                              NULL };
-	uv_loop_t *loop = lcu_toloop(L);
-	int type = luaL_checkoption(L, 1, NULL, SockTypeName);
-	int domain = luaL_checkoption(L, 2, NULL, SockDomainName);
+	static const char *const types[] = { "stream", "passive", "datagram", NULL };
+	static const char *const domains[] = { "ipv4", "ipv6", "local", "ipc", NULL };
+	lcu_Scheduler *sched = lcu_getsched(L);
+	uv_loop_t *loop = lcu_toloop(sched);
+	int type = luaL_checkoption(L, 1, NULL, types);
+	int domain = luaL_checkoption(L, 2, NULL, domains);
 	int err = UV_EAI_SOCKTYPE;
 	if (domain < 2) {
 		domain = AddrTypeId[domain];
@@ -565,60 +650,53 @@ static int system_socket (lua_State *L) {
 			case 1: {
 				static const char *const classes[] = { LCU_TCPACTIVECLS,
 				                                       LCU_TCPPASSIVECLS };
-				lcu_TcpSocket *tcp = lcu_newtcp(L, classes[type], domain);
-				err = uv_tcp_init_ex(loop, lcu_totcphdl(tcp), domain);
-				if (!err) lcu_enableobj((lcu_Object *)tcp);
+				TcpSocket *tcp = newobject(L, TcpSocket, classes[type]);
+				err = uv_tcp_init_ex(loop, lcu_toobjhdl(tcp), domain);
+				if (!err) tcp->flags = (domain == AF_INET6) ? FLAG_IPV6DOM : 0;
 			} break;
 			case 2: {
-				lcu_UdpSocket *udp = lcu_newudp(L, domain);
-				err = uv_udp_init_ex(loop, lcu_toudphdl(udp), domain);
-				if (!err) lcu_enableobj((lcu_Object *)udp);
+				UdpSocket *udp = newobject(L, UdpSocket, LCU_UDPSOCKETCLS);
+				err = uv_udp_init_ex(loop, lcu_toobjhdl(udp), domain);
+				if (!err) udp->flags = (domain == AF_INET6) ? FLAG_IPV6DOM : 0;
 			} break;
 		}
 	} else {
 		switch (type) {
 			case 0:
 			case 1: {
+				int socktranf = domain-2;
 				static const char *const classes[] = { LCU_PIPEACTIVECLS,
 				                                       LCU_PIPEPASSIVECLS };
-				lcu_IpcPipe *pipe = lcu_newpipe(L, classes[type], domain-2);
-				err = uv_pipe_init(loop, lcu_topipehdl(pipe), domain-2);
-				if (!err) lcu_enableobj((lcu_Object *)pipe);
+				IpcPipe *pipe = newobject(L, IpcPipe, classes[type]);
+				err = uv_pipe_init(loop, lcu_toobjhdl(pipe), socktranf);
+				if (!err) pipe->flags = socktranf ? FLAG_SOCKTRANF : 0;
 			} break;
 		}
 	}
 	return lcuL_pushresults(L, 1, err);
 }
 
-#define toclass(L) lua_tostring(L, lua_upvalueindex(LCU_MODUPVS+1))
+#define toclass(L) lua_tostring(L, lua_upvalueindex(1))
 
-static lcu_Object *openedobj (lua_State *L, int arg, const char *class) {
+LCUI_FUNC lcu_Object *lcu_openedobj (lua_State *L, int arg, const char *class) {
 	lcu_Object *object = (lcu_Object *)luaL_checkudata(L, arg, class);
-	luaL_argcheck(L, !lcu_isobjclosed(object), arg, "closed object");
-	return object;
-}
-
-static lcu_Object *ownedobj (lua_State *L,
-                             uv_loop_t *loop,
-                             int arg,
-                             const char *class) {
-	lcu_Object *object = openedobj(L, arg, class);
-	luaL_argcheck(L, lcu_toobjhdl(object)->loop == loop, arg, "foreign object");
+	luaL_argcheck(L, !lcuL_maskflag(object, LCU_OBJCLOSEDFLAG), arg, "closed object");
 	return object;
 }
 
 
 /* getmetatable(object).__gc(object) */
 static int object_gc (lua_State *L) {
-	lcuT_closeobj(L, 1, toclass(L));
+	luaL_checkudata(L, 1, toclass(L));
+	lcu_closeobj(L, 1);
 	return 0;
 }
 
 
 /* succ [, errmsg] = object:close() */
 static int object_close (lua_State *L) {
-	int closed = lcuT_closeobj(L, 1, toclass(L));
-	lua_pushboolean(L, closed);
+	luaL_checkudata(L, 1, toclass(L));
+	lua_pushboolean(L, lcu_closeobj(L, 1));
 	return 1;
 }
 
@@ -627,33 +705,33 @@ static int object_close (lua_State *L) {
  * IP Sockets
  */
 
-static const char *const AddrSites[] = {"this", "peer", NULL};
+static const char *const AddrSites[] = {"self", "peer", NULL};
+
+#define netdomainof(O)	(lcuL_maskflag(O, FLAG_IPV6DOM) ? AF_INET6 : AF_INET)
 
 static struct sockaddr *getaddrarg (lua_State *L, int domain, int *sz) {
-	struct sockaddr *addr = lcu_toaddress(L, 3);
+	struct sockaddr *addr = tonetaddr(L, 3);
 	if (addr) {
 		lua_settop(L, 3);
 		chkaddrdom(L, 3, addr, domain);
 	} else {
 		lua_settop(L, 2);
-		addr = lcu_newaddress(L, domain);
+		addr = newaddress(L, domain);
 	}
 	*sz = (int)lua_rawlen(L, 3);
 	return addr;
 }
 
-static const struct sockaddr *toobjaddr (lua_State *L,
-                                         int idx,
-                                         lcu_Object *object) {
-	struct sockaddr *address = lcu_checkaddress(L, idx);
-	chkaddrdom(L, idx, address, lcu_getobjdomain(object));
+static const struct sockaddr *toobjaddr (lua_State *L, int idx, int domain) {
+	struct sockaddr *address = checknetaddr(L, idx);
+	chkaddrdom(L, idx, address, domain);
 	return address;
 }
 
 /* domain = ipsock:getdomain() */
 static int ipsock_getdomain (lua_State *L) {
 	lcu_Object *object = (lcu_Object *)luaL_checkudata(L, 1, toclass(L));
-	pushaddrtype(L, lcu_getobjdomain(object));
+	pushaddrtype(L, netdomainof(object));
 	return 1;
 }
 
@@ -661,26 +739,23 @@ static void completereqop (uv_loop_t *loop, uv_req_t *request, int err) {
 	lua_State *thread = lcuU_endreqop(loop, request);
 	if (thread) {
 		int nret = lcuL_pushresults(thread, 0, err);
-		lcuU_resumereqop(thread, nret, loop, request);
+		lcuU_resumereqop(loop, request, nret);
 	}
-	lcuU_checksuspend(loop);
 }
 
 /*
  * UDP
  */
 
-#define openedudp(L)	((lcu_UdpSocket *)openedobj(L, 1, LCU_UDPSOCKETCLS))
-
-#define ownedudp(L,l)	((lcu_UdpSocket *)ownedobj(L, l, 1, LCU_UDPSOCKETCLS))
+#define openedudp(L)	((UdpSocket *)lcu_openedobj(L,1,LCU_UDPSOCKETCLS))
 
 
 /* address [, errmsg] = udp:getaddress([site [, address]]) */
 static int udp_getaddress (lua_State *L) {
-	lcu_UdpSocket *udp = openedudp(L);
-	uv_udp_t *handle = lcu_toudphdl(udp);
-	int peer = luaL_checkoption(L, 2, "this", AddrSites);
-	int domain = lcu_getobjdomain((lcu_Object *)udp);
+	UdpSocket *udp = openedudp(L);
+	uv_udp_t *handle = lcu_toobjhdl(udp);
+	int peer = luaL_checkoption(L, 2, "self", AddrSites);
+	int domain = netdomainof(udp);
 	int addrsz;
 	struct sockaddr *addr = getaddrarg(L, domain, &addrsz);
 	int err = peer ? uv_udp_getpeername(handle, addr, &addrsz)
@@ -692,94 +767,62 @@ static int udp_getaddress (lua_State *L) {
 
 /* succ [, errmsg] = udp:bind(address) */
 static int udp_bind (lua_State *L) {
-	lcu_UdpSocket *udp = openedudp(L);
-	const struct sockaddr *addr = toobjaddr(L, 2, (lcu_Object *)udp);
-	int err = uv_udp_bind(lcu_toudphdl(udp), addr, 0);
+	UdpSocket *udp = openedudp(L);
+	const struct sockaddr *addr = toobjaddr(L, 2, netdomainof(udp));
+	int err = uv_udp_bind(lcu_toobjhdl(udp), addr, 0);
 	return lcuL_pushresults(L, 0, err);
 }
 
 
-static const char * const UdpOptions[] = {
-	"broadcast",
-	"mcastloop",
-	"mcastttl",
-	"mcastiface",
-	NULL
-};
 
 /* succ [, errmsg] = udp:setoption(name, value) */
 static int udp_setoption (lua_State *L) {
-	lcu_UdpSocket *udp = openedudp(L);
-	uv_udp_t *handle = lcu_toudphdl(udp);
-	int opt = luaL_checkoption(L, 2, NULL, UdpOptions);
+	static const char * const options[] = {"broadcast", "mcastloop",
+	                                       "mcastttl", "mcastiface", NULL };
+	UdpSocket *udp = openedudp(L);
+	uv_udp_t *handle = lcu_toobjhdl(udp);
+	int opt = luaL_checkoption(L, 2, NULL, options);
 	int err;
 	switch (opt) {
 		case 0: {  /* broadcast */
 			int enabled = lua_toboolean(L, 3);
 			err = uv_udp_set_broadcast(handle, enabled);
-			if (err >= 0) lcu_setudpbroadcast(udp, enabled);
 		}; break;
 		case 1: {  /* mcastloop */
 			int enabled = lua_toboolean(L, 3);
 			err = uv_udp_set_multicast_loop(handle, enabled);
-			if (err >= 0) lcu_setudpmcastloop(udp, enabled);
 		}; break;
 		case 2: {  /* mcastttl */
 			lua_Integer value = luaL_checkinteger(L, 3);
 			luaL_argcheck(L, 0 < value && value < 256, 3, "must be from 1 upto 255");
 			err = uv_udp_set_multicast_ttl(handle, (int)value);
-			if (err >= 0) lcu_setudpmcastttl(udp, (int)value);
 		}; break;
 		case 3: {  /* mcastiface */
-			int domain = lcu_getobjdomain((lcu_Object *)udp);
+			int domain = netdomainof(udp);
 			size_t len;
 			const char *addr = luaL_checklstring(L, 3, &len);
 			char buffer[LCU_ADDRMAXLITERAL];
 			int err = 0;
 			luaL_argcheck(L, len == addrbinsz(domain), 3, "invalid binary address");
 			err = uv_inet_ntop(domain, (void *)addr, buffer, LCU_ADDRMAXLITERAL);
-			if (err >= 0) {
-				err = uv_udp_set_multicast_interface(handle, buffer);
-				if (err >= 0) lcu_setudpmcastiface(udp, addr, len);
-			}
+			if (err >= 0) err = uv_udp_set_multicast_interface(handle, buffer);
 		}; break;
 		default: return 0;
 	}
 	return lcuL_pushresults(L, 0, err);
 }
 
-/* value = udp:getoption(name) */
-static int udp_getoption (lua_State *L) {
-	lcu_UdpSocket *udp = openedudp(L);
-	int opt = luaL_checkoption(L, 2, NULL, UdpOptions);
-	switch (opt) {
-		case 0: {  /* broadcast */
-			lua_pushboolean(L, lcu_getudpbroadcast(udp));
-		}; break;
-		case 1: {  /* mcastloop */
-			lua_pushboolean(L, lcu_getudpmcastloop(udp));
-		}; break;
-		case 2: {  /* mcastttl */
-			lua_pushinteger(L, lcu_getudpmcastttl(udp));
-		}; break;
-		case 3: {  /* mcastiface */
-			size_t sz;
-			const char *value = lcu_getudpmcastiface(udp, &sz);
-			lua_pushlstring(L, value, sz);
-		}; break;
-		default: return 0;
-	}
-	return 1;
-}
-
 
 /* succ [, errmsg] = udp:connect([address]) */
 static int udp_connect (lua_State *L) {
-	lcu_UdpSocket *udp = openedudp(L);
+	UdpSocket *udp = openedudp(L);
 	const struct sockaddr *addr = lua_isnil(L, 2) ?
-	                              NULL : toobjaddr(L, 2, (lcu_Object *)udp);
-	int err = uv_udp_connect(lcu_toudphdl(udp), addr);
-	if (err >= 0) lcu_setudpconnected(udp, addr != NULL);
+	                              NULL : toobjaddr(L, 2, netdomainof(udp));
+	int err = uv_udp_connect(lcu_toobjhdl(udp), addr);
+	if (err >= 0) {
+		if (addr) lcuL_setflag(udp, FLAG_UDPCONNECTED);
+		else lcuL_clearflag(udp, FLAG_UDPCONNECTED);;
+	}
 	return lcuL_pushresults(L, 0, err);
 }
 
@@ -790,12 +833,12 @@ static void uv_onsent (uv_udp_send_t *request, int err) {
 	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
 static int k_setupsend (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
-	lcu_UdpSocket *udp = ownedudp(L, loop);
+	UdpSocket *udp = (UdpSocket *)lua_touserdata(L, 1);
 	uv_udp_send_t *send = (uv_udp_send_t *)request;
-	uv_udp_t *handle = (uv_udp_t *)lcu_toudphdl(udp);
+	uv_udp_t *handle = (uv_udp_t *)lcu_toobjhdl(udp);
 	uv_buf_t bufs[1];
-	const struct sockaddr *addr = lcu_getudpconnected(udp) ?
-	                              NULL : toobjaddr(L, 5, (lcu_Object *)udp);
+	const struct sockaddr *addr = lcuL_maskflag(udp, FLAG_UDPCONNECTED) ?
+	                              NULL : toobjaddr(L, 5, netdomainof(udp));
 	int err;
 	getbufarg(L, bufs);
 	err = uv_udp_send(send, handle, bufs, 1, addr, uv_onsent);
@@ -803,83 +846,64 @@ static int k_setupsend (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int udp_send (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupsend, NULL, NULL);
+	UdpSocket *udp = openedudp(L);
+	uv_udp_t *handle = (uv_udp_t *)lcu_toobjhdl(udp);
+	lcu_Scheduler *sched = lcu_tosched(handle->loop);
+	return lcuT_resetreqopk(L, sched, k_setupsend, NULL, NULL);
 }
 
 
 /* bytes [, errmsg] = udp:receive(buffer [, i [, j [, address]]]) */
-static void stopudp (uv_udp_t *udp) {
-	int err = uv_udp_recv_stop(udp);
-	if (err < 0) {
-		lua_State *L = (lua_State *)udp->loop->data;
-		lcuT_closeobjhdl(L, 1, (uv_handle_t *)udp);
-		lcuL_warnerror(L, "datagram:receive: ", err);
-	}
-	lcu_setobjarmed(lcu_tohdlobj((uv_handle_t *)udp), 0);
-}
-static int k_udpbuffer (lua_State *L, int status, lua_KContext ctx);
-static int k_udprecv (lua_State *L, int status, lua_KContext ctx) {
-	lcu_UdpSocket *udp = openedudp(L);
-	uv_udp_t *handle = lcu_toudphdl(udp);
-	lcu_assert(status == LUA_YIELD);
-	lcu_assert(!ctx);
-	if (lcuT_haltedobjop(L, (uv_handle_t *)handle)) {
-		stopudp(handle);
-	} else if (lua_isinteger(L, 6)) {
-		const struct sockaddr *src = (const struct sockaddr *)lua_touserdata(L, -1);
+static int k_udprecv (lua_State *L) {
+	UdpSocket *udp = (UdpSocket *)lua_touserdata(L, 1);
+	if (lua_isinteger(L, 6)) {
+		const struct sockaddr *src = (const struct sockaddr *)lua_touserdata(L, 8);
 		lua_pop(L, 1);  /* discard 'addr' lightuserdata */
-		if (src) {
-			struct sockaddr *dst = lcu_toaddress(L, 5);
-			if (dst) {
-				lcu_assert(src->sa_family == lcu_getobjdomain((lcu_Object *)udp));
-				memcpy(dst, src, src->sa_family == AF_INET ? sizeof(struct sockaddr_in)
-				                                           : sizeof(struct sockaddr_in6));
-			}
-		} else {  /* libuv indication of datagram end, just try again */
-			lcuT_awaitobj(L, (uv_handle_t *)handle);
-			lua_settop(L, 5);
-			return lua_yieldk(L, 0, 0, k_udpbuffer);
+		struct sockaddr *dst = tonetaddr(L, 5);
+		if (dst) {
+			lcu_assert(src->sa_family == netdomainof(udp));
+			memcpy(dst, src, src->sa_family == AF_INET ? sizeof(struct sockaddr_in)
+			                                           : sizeof(struct sockaddr_in6));
 		}
 	}
 	return lua_gettop(L)-5;
 }
-static int k_udpbuffer (lua_State *L, int status, lua_KContext ctx) {
-	lcu_UdpSocket *udp = openedudp(L);
-	uv_udp_t *handle = lcu_toudphdl(udp);
-	lcu_assert(status == LUA_YIELD);
-	lcu_assert(!ctx);
-	if (!lcuT_haltedobjop(L, (uv_handle_t *)handle)) {
-		uv_buf_t *buf = (uv_buf_t *)lua_touserdata(L, -1);
-		lcu_assert(buf);
-		lua_pop(L, 1);  /* discard 'buf' */
-		getbufarg(L, buf);
-		lcuT_awaitobj(L, (uv_handle_t *)handle);
-		return lua_yieldk(L, 0, 0, k_udprecv);
-	} else {
-		stopudp(handle);
-	}
-	return lua_gettop(L)-5;
+static int k_udpbuffer (lua_State *L) {
+	lcu_Object *object = (lcu_Object *)lua_touserdata(L, 1);
+	uv_buf_t *buf = (uv_buf_t *)lua_touserdata( L, -1);
+	lcu_assert(buf);
+	lua_pop(L, 1);  /* discard 'buf' */
+	getbufarg(L, buf);
+	if (buf->len > 65536) buf->len = 65536;  /* avoid use of recvmmsg by libuv */
+	object->step = k_udprecv;  /* update continuation function */
+	return -1;  /* yield on success */
 }
 static void uv_onudprecv (uv_udp_t *udp,
                           ssize_t nread,
                           const uv_buf_t *buf,
                           const struct sockaddr *addr,
                           unsigned int flags) {
-	if (buf->base != (char *)buf) {
-		lua_State *thread = (lua_State *)udp->data;
-		int nret = 0;
+	uv_handle_t *handle = (uv_handle_t *)udp;
+	if (nread == 0 && addr == NULL) {
+		/* 'libuv' indication of datagram end (meaning?!), ignore it and */
+		/* get ready to restart all over again from obtaining the buffer */
+		lcu_Object *object = lcu_tohdlobj(handle);
+		object->step = k_udpbuffer;
+	} else {
+		lua_State *thread = (lua_State *)handle->data;
+		int nret;
 		lcu_assert(thread);
+		lcu_assert(buf->base != (char *)buf);
+		lcu_assert(addr);
 		if (nread >= 0) {
 			lua_pushinteger(thread, nread);
 			lua_pushboolean(thread, flags&UV_UDP_PARTIAL);
 			lua_pushlightuserdata(thread, (void *)addr);
 			nret = 3;
 		}
-		else if (nread != UV_EOF) nret = lcuL_pushresults(thread, 0, nread);
-		lcuU_resumeobjop(thread, nret, (uv_handle_t *)udp);
+		else nret = lcuL_pusherrres(thread, nread);
+		lcuU_resumeobjop(handle, nret);
 	}
-	if (udp->data == NULL) stopudp(udp);
-	lcuU_checksuspend(udp->loop);
 }
 static void uv_ongetbuffer (uv_handle_t *handle,
                             size_t suggested_size,
@@ -887,31 +911,25 @@ static void uv_ongetbuffer (uv_handle_t *handle,
 	(void)suggested_size;
 	do {
 		lua_State *thread = (lua_State *)handle->data;
-		lcu_assert(thread);
 		buf->base = (char *)buf;
 		buf->len = 0;
+		lcu_assert(thread);
 		lua_pushlightuserdata(thread, buf);
-		lcuU_resumeobjop(thread, 1, handle);
-	} while (buf->base == (char *)buf && handle->data);
+		lcuU_resumeobjop(handle, 1);
+	} /* while 'socket:receive' is called again after error getting buffer */
+	while (handle->data && buf->base == (char *)buf);
+}
+static int udpstoprecv (uv_handle_t *handle) {
+	return uv_udp_recv_stop((uv_udp_t *)handle);
+}
+static int udpstartrecv (uv_handle_t *handle) {
+	return uv_udp_recv_start((uv_udp_t *)handle, uv_ongetbuffer, uv_onudprecv);
 }
 static int udp_receive (lua_State *L) {
-	lcu_UdpSocket *udp = ownedudp(L, lcu_toloop(L));
-	uv_udp_t *handle = lcu_toudphdl(udp);
-	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
-	if (handle->data) luaL_argcheck(L, handle->data == L, 1, "already in use");
-	else {
-		lcu_Object *obj = (lcu_Object *)udp;
-		if (!lcu_getobjarmed(obj)) {
-			int err = uv_udp_recv_start(handle, uv_ongetbuffer, uv_onudprecv);
-			if (err < 0) return lcuL_pushresults(L, 0, err);
-			lcu_setobjarmed(obj, 1);
-		}
-		lcuT_awaitobj(L, (uv_handle_t *)handle);
-	}
+	lcu_Object *object = lcu_openedobj(L, 1, LCU_UDPSOCKETCLS);
 	lua_settop(L, 5);
-	return lua_yieldk(L, 0, 0, k_udpbuffer);
+	return lcuT_resetobjopk(L, object, udpstartrecv, udpstoprecv, k_udpbuffer);
 }
-
 
 /*
  * Stream
@@ -922,7 +940,7 @@ static void uv_onshutdown (uv_shutdown_t *request, int err) {
 	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
 static int k_setupshutdown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
-	lcu_Object *object = ownedobj(L, loop, 1, toclass(L));
+	lcu_Object *object = (lcu_Object *)lua_touserdata(L, 1);
 	uv_stream_t *stream = (uv_stream_t *)lcu_toobjhdl(object);
 	uv_shutdown_t *shutdown = (uv_shutdown_t *)request;
 	int err = uv_shutdown(shutdown, stream, uv_onshutdown);
@@ -930,7 +948,10 @@ static int k_setupshutdown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int active_shutdown (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupshutdown, NULL, NULL);
+	lcu_Object *object = lcu_openedobj(L, 1, toclass(L));
+	uv_handle_t *handle = lcu_toobjhdl(object);
+	lcu_Scheduler *sched = lcu_tosched(handle->loop);
+	return lcuT_resetreqopk(L, sched, k_setupshutdown, NULL, NULL);
 }
 
 
@@ -939,7 +960,7 @@ static void uv_onwritten (uv_write_t *request, int err) {
 	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
 static int k_setupwrite (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
-	lcu_Object *object = ownedobj(L, loop, 1, toclass(L));
+	lcu_Object *object = (lcu_Object *)lua_touserdata(L, 1);
 	uv_stream_t *stream = (uv_stream_t *)lcu_toobjhdl(object);
 	uv_write_t *write = (uv_write_t *)request;
 	uv_buf_t bufs[1];
@@ -950,13 +971,16 @@ static int k_setupwrite (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int active_send (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupwrite, NULL, NULL);
+	lcu_Object *object = lcu_openedobj(L, 1, toclass(L));
+	uv_handle_t *handle = lcu_toobjhdl(object);
+	lcu_Scheduler *sched = lcu_tosched(handle->loop);
+	return lcuT_resetreqopk(L, sched, k_setupwrite, NULL, NULL);
 }
 
 
 /* sent [, errmsg] = pipe:send(data [, i [, j [, object]]]) */
 static int k_setupwriteobj (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
-	lcu_Object *object = ownedobj(L, loop, 1, LCU_PIPEIPCCLS);
+	lcu_Object *object = (lcu_Object *)lua_touserdata(L, 1);
 	uv_stream_t *stream = (uv_stream_t *)lcu_toobjhdl(object);
 	uv_write_t *write = (uv_write_t *)request;
 	uv_buf_t bufs[1];
@@ -991,80 +1015,65 @@ static int k_setupwriteobj (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int pipe_send (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupwriteobj, NULL, NULL);
+	lcu_Object *object = lcu_openedobj(L, 1, LCU_PIPEIPCCLS);
+	uv_handle_t *handle = lcu_toobjhdl(object);
+	lcu_Scheduler *sched = lcu_tosched(handle->loop);
+	return lcuT_resetreqopk(L, sched, k_setupwriteobj, NULL, NULL);
 }
 
 /* bytes [, errmsg] = stream:receive(buffer [, i [, j]]) */
-static void stopread (uv_stream_t *stream) {
-	int err = uv_read_stop(stream);
-	if (err < 0) {
-		lua_State *L = (lua_State *)stream->loop->data;
-		lcuT_closeobjhdl(L, 1, (uv_handle_t *)stream);
-		lcuL_warnerror(L, "stream:receive: ", err);
-	}
-	lcu_setobjarmed(lcu_tohdlobj((uv_handle_t *)stream), 0);
-}
-static int k_recvdata (lua_State *L, int status, lua_KContext ctx) {
-	lcu_Object *object = lua_touserdata(L, 1);
-	uv_handle_t *handle = lcu_toobjhdl(object);
-	lcu_assert(status == LUA_YIELD);
-	lcu_assert(!ctx);
-	if (lcuT_haltedobjop(L, handle)) stopread((uv_stream_t *)handle);
+static int k_recvdata (lua_State *L) {
 	return lua_gettop(L)-4;
 }
-static int k_getbuffer (lua_State *L, int status, lua_KContext ctx) {
-	lcu_Object *object = lua_touserdata(L, 1);
-	uv_handle_t *handle = lcu_toobjhdl(object);
-	lua_KFunction cont = (lua_KFunction)ctx;
-	lcu_assert(status == LUA_YIELD);
-	if (!lcuT_haltedobjop(L, handle)) {
-		uv_buf_t *buf = (uv_buf_t *)lua_touserdata(L, -1);
-		lcu_assert(buf);
-		lua_pop(L, 1);  /* discard 'buf' */
-		getbufarg(L, buf);
-		lcuT_awaitobj(L, handle);
-		return lua_yieldk(L, 0, 0, cont);
-	}
-	else stopread((uv_stream_t *)handle);
-	return lua_gettop(L)-4;
+static int k_getbuffer (lua_State *L) {
+	lcu_Object *object = (lcu_Object *)lua_touserdata(L, 1);
+	lua_CFunction nextstep = (lua_CFunction)lua_touserdata(L, -2);
+	uv_buf_t *buf = (uv_buf_t *)lua_touserdata(L, -1);
+	lua_pop(L, 2);  /* discard 'nextsteṕ' and 'buf' */
+	lcu_assert(nextstep);
+	lcu_assert(buf);
+	getbufarg(L, buf);
+	object->step = nextstep;
+	return -1;
 }
 static void uv_onrecvdata (uv_stream_t *stream,
                            ssize_t nread,
                            const uv_buf_t *buf) {
-	if (buf->base != (char *)buf) {
-		lua_State *thread = (lua_State *)stream->data;
-		int nret = 0;
+	uv_handle_t *handle = (uv_handle_t *)stream;
+	lua_State *thread = (lua_State *)handle->data;
+	if (nread == 0) {
+		/* 'libuv' indication of EGAIN or EWOULDBLOCK, ignore it and */
+		/* get ready to restart all over again from obtaining the buffer */
+		lcu_Object *object = lcu_tohdlobj(handle);
+		lua_pushlightuserdata(thread, object->step);
+		object->step = k_getbuffer;
+	} else {
+		int nret;
 		lcu_assert(thread);
+		lcu_assert(buf->base != (char *)buf);
 		if (nread >= 0) {
 			lua_pushinteger(thread, nread);
 			nret = 1;
 		}
-		else if (nread != UV_EOF) nret = lcuL_pushresults(thread, 0, nread);
-		lcuU_resumeobjop(thread, nret, (uv_handle_t *)stream);
+		else nret = lcuL_pusherrres(thread, nread);
+		lcuU_resumeobjop(handle, nret);
 	}
-	if (stream->data == NULL) stopread(stream);
-	lcuU_checksuspend(stream->loop);
+}
+static int stoprecvdata (uv_handle_t *handle) {
+	return uv_read_stop((uv_stream_t *)handle);
+}
+static int startrecvdata (uv_handle_t *handle) {
+	return uv_read_start((uv_stream_t *)handle, uv_ongetbuffer, uv_onrecvdata);
 }
 static int active_receive (lua_State *L) {
-	lcu_Object *object = ownedobj(L, lcu_toloop(L), 1, toclass(L));
-	uv_handle_t *handle = lcu_toobjhdl(object);
-	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
-	if (handle->data) luaL_argcheck(L, handle->data == L, 1, "already in use");
-	else {
-		if (!lcu_getobjarmed(object)) {
-			uv_stream_t *stream = (uv_stream_t *)handle;
-			int err = uv_read_start(stream, uv_ongetbuffer, uv_onrecvdata);
-			if (err < 0) return lcuL_pushresults(L, 0, err);
-			lcu_setobjarmed(object, 1);
-		}
-		lcuT_awaitobj(L, handle);
-	}
+	lcu_Object *object = lcu_openedobj(L, 1, toclass(L));
 	lua_settop(L, 4);
-	return lua_yieldk(L, 0, (lua_KContext)k_recvdata, k_getbuffer);
+	lua_pushlightuserdata(L, k_recvdata);
+	return lcuT_resetobjopk(L, object, startrecvdata, stoprecvdata, k_getbuffer);
 }
 
 
-/* bytes [, errmsg] = stream:receive(buffer [, i [, j]]) */
+/* bytes [, errmsg] = pipe:receive(buffer [, i [, j]]) */
 static int pushstreamread (lua_State *L, uv_pipe_t *pipe) {
 	uv_handle_type type = uv_pipe_pending_type(pipe);
 	lcu_Object *object;
@@ -1072,15 +1081,15 @@ static int pushstreamread (lua_State *L, uv_pipe_t *pipe) {
 	int err;
 	switch (type) {
 		case UV_NAMED_PIPE: {
-			lcu_IpcPipe *newpipe = lcu_newpipe(L, LCU_PIPEACTIVECLS, 0);
-			uv_pipe_t *handle = lcu_topipehdl(newpipe);
+			IpcPipe *newpipe = newobject(L, IpcPipe, LCU_PIPEACTIVECLS);
+			uv_pipe_t *handle = lcu_toobjhdl(newpipe);
 			err = uv_pipe_init(pipe->loop, handle, 0);
 			object = (lcu_Object*)newpipe;
 			stream = (uv_stream_t *)handle;
 		} break;
 		case UV_TCP: {
-			lcu_TcpSocket *tcp = lcu_newtcp(L, LCU_TCPACTIVECLS, AF_UNSPEC);
-			uv_tcp_t *handle = (uv_tcp_t *)lcu_totcphdl(tcp);
+			TcpSocket *tcp = newobject(L, TcpSocket, LCU_TCPACTIVECLS);
+			uv_tcp_t *handle = lcu_toobjhdl(tcp);
 			err = uv_tcp_init(pipe->loop, handle);
 			object = (lcu_Object*)tcp;
 			stream = (uv_stream_t *)handle;
@@ -1088,27 +1097,21 @@ static int pushstreamread (lua_State *L, uv_pipe_t *pipe) {
 		default: return UV_EAI_SOCKTYPE;
 	}
 	if (err) return err;
-	lcu_enableobj(object);
+	lcuL_clearflag(object, LCU_OBJCLOSEDFLAG);
 	return uv_accept((uv_stream_t *)pipe, stream);
 }
-static int k_recvpipedata (lua_State *L, int status, lua_KContext ctx) {
+static int k_recvpipedata (lua_State *L) {
 	lcu_Object *object = lua_touserdata(L, 1);
 	uv_handle_t *handle = lcu_toobjhdl(object);
-	lcu_assert(status == LUA_YIELD);
-	lcu_assert(!ctx);
-	if (lcuT_haltedobjop(L, handle)) {
-		stopread((uv_stream_t *)handle);
-	} else {
-		uv_pipe_t *pipe = (uv_pipe_t *)handle;
-		if (uv_pipe_pending_count(pipe)) {  /* only if read was successful? */
-			int err = pushstreamread(L, pipe);
-			return lcuL_pushresults(L, lua_gettop(L)-4, err);
-		}
+	uv_pipe_t *pipe = (uv_pipe_t *)handle;
+	if (uv_pipe_pending_count(pipe)) {  /* only if read was successful? */
+		int err = pushstreamread(L, pipe);
+		return lcuL_pushresults(L, lua_gettop(L)-4, err);
 	}
 	return lua_gettop(L)-4;
 }
 static int pipe_receive (lua_State *L) {
-	lcu_Object *object = ownedobj(L, lcu_toloop(L), 1, LCU_PIPEIPCCLS);
+	lcu_Object *object = lcu_openedobj(L, 1, LCU_PIPEIPCCLS);
 	uv_handle_t *handle = lcu_toobjhdl(object);
 	uv_pipe_t *pipe = (uv_pipe_t *)handle;
 	if (uv_pipe_pending_count(pipe)) {
@@ -1117,46 +1120,49 @@ static int pipe_receive (lua_State *L) {
 		err = pushstreamread(L, pipe);
 		return lcuL_pushresults(L, 2, err);
 	}
-	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
-	if (handle->data) luaL_argcheck(L, handle->data == L, 1, "already in use");
-	else {
-		if (!lcu_getobjarmed(object)) {
-			uv_stream_t *stream = (uv_stream_t *)handle;
-			int err = uv_read_start(stream, uv_ongetbuffer, uv_onrecvdata);
-			if (err < 0) return lcuL_pushresults(L, 0, err);
-			lcu_setobjarmed(object, 1);
-		}
-		lcuT_awaitobj(L, handle);
-	}
 	lua_settop(L, 4);
-	return lua_yieldk(L, 0, (lua_KContext)k_recvpipedata, k_getbuffer);
+	lua_pushlightuserdata(L, k_recvpipedata);
+	return lcuT_resetobjopk(L, object, startrecvdata, stoprecvdata, k_getbuffer);
 }
 
 
-/* succ [, errmsg] = listen:listen(backlog) */
+#define LISTENCONN_UNIT 0x04
+
+#define islisteningconn(O)	((O)->flags >= LISTENCONN_UNIT)
+
+#define addlistenedconn(O)	((O)->flags += LISTENCONN_UNIT)
+
+static int picklistenedconn (lcu_Object *object) {
+	if (object->flags < 2*LISTENCONN_UNIT) return 0;
+	object->flags -= LISTENCONN_UNIT;
+	return 1;
+}
+
+
+/* succ [, errmsg] = passive:listen(backlog) */
 static void uv_onconnection (uv_stream_t *stream, int status) {
 	uv_handle_t *handle = (uv_handle_t *)stream;
-	lua_State *thread = (lua_State *)stream->data;
+	lua_State *thread = (lua_State *)handle->data;
 	if (thread) {
 		lua_pushinteger(thread, status);
-		lcuU_resumeobjop(thread, 1, handle);
-		if (stream->data == NULL) uv_unref(handle);
+		lcuU_resumeobjop(handle, 1);
+		if (handle->data == NULL) uv_unref(handle);
 		else lcu_assert(uv_has_ref(handle));
 	}
-	else lcu_addobjlisten(lcu_tohdlobj(handle));
-	lcuU_checksuspend(stream->loop);
+	else addlistenedconn(lcu_tohdlobj(handle));
+	lcuU_checksuspend(handle->loop);
 }
 static int passive_listen (lua_State *L) {
-	lcu_Object *object = ownedobj(L, lcu_toloop(L), 1, toclass(L));
+	lcu_Object *object = lcu_openedobj(L, 1, toclass(L));
 	uv_handle_t *handle = lcu_toobjhdl(object);
 	lua_Integer backlog = luaL_checkinteger(L, 2);
 	int err;
-	luaL_argcheck(L, !lcu_isobjlisten(object), 1, "already listening");
-	luaL_argcheck(L, 0 <= backlog && backlog <= INT_MAX, 2, "large backlog");
+	luaL_argcheck(L, !islisteningconn(object), 1, "already listening");
+	luaL_argcheck(L, 0 <= backlog && backlog <= INT_MAX, 2, "out of range");
 	err = uv_listen((uv_stream_t *)handle, (int)backlog, uv_onconnection);
 	if (err >= 0) {
-		lcu_markobjlisten(object);
-		uv_unref(handle); /* uv_listen_stop */
+		addlistenedconn(object);  /* mark socket as listening */
+		uv_unref(handle);  /* emulate a 'uv_listen_stop(uv_stream_t *)' */
 	}
 	return lcuL_pushresults(L, 0, err);
 }
@@ -1167,42 +1173,41 @@ typedef int (*NewAcceptFunc) (lua_State *L,
                               lcu_Object *object,
                               lcu_Object **newobj);
 
-/* stream [, errmsg] = listen:accept() */
-static int k_acceptstream (lua_State *L, int status, lua_KContext ctx) {
+/* stream [, errmsg] = passive:accept() */
+static int k_acceptstream (lua_State *L) {
 	lcu_Object *object = (lcu_Object *)lua_touserdata(L, 1);
 	uv_handle_t *handle = lcu_toobjhdl(object);
-	lcu_assert(status == LUA_YIELD);
-	if (!lcuT_haltedobjop(L, handle)) {
-		NewAcceptFunc newaccept = (NewAcceptFunc)ctx;
-		lcu_Object *newobj;
-		int err = newaccept(L, handle->loop, object, &newobj);
+	NewAcceptFunc newaccept = (NewAcceptFunc)lua_touserdata(L, 2);
+	lcu_Object *newobj;
+	int err = (int)lua_tointeger(L, 3);
+	if (err >= 0) {
+		err = newaccept(L, handle->loop, object, &newobj);
 		if (err >= 0) {
-			lcu_enableobj(newobj);
 			err = uv_accept((uv_stream_t *)handle,
 			                (uv_stream_t *)lcu_toobjhdl(newobj));
+			if (err >= 0) lcuL_clearflag(newobj, LCU_OBJCLOSEDFLAG);
 		}
-		else lcu_addobjlisten(object);
-		return lcuL_pushresults(L, 1, err);
+		else addlistenedconn(object);
 	}
-	uv_unref(handle);  /* uv_listen_stop */
-	return lua_gettop(L)-1;
+	return lcuL_pushresults(L, 1, err);
+}
+static int stoplisten (uv_handle_t *handle) {
+	uv_unref(handle);  /* emulate a 'uv_listen_stop(uv_stream_t *)' */
+	return 0;
+}
+static int startlisten (uv_handle_t *handle) {
+	uv_ref(handle);  /* emulate a 'uv_listen_start(uv_stream_t *)' */
+	return 0;
 }
 static int listen_accept (lua_State *L,
                           const char *class,
                           NewAcceptFunc newaccept) {
-	uv_loop_t *loop = lcu_toloop(L);
-	lcu_Object *object = ownedobj(L, loop, 1, class);
-	luaL_argcheck(L, lcu_isobjlisten(object), 1, "not listening");
-	if (!lcu_pickobjlisten(object)) {
-		uv_handle_t *handle = lcu_toobjhdl(object);
-		luaL_argcheck(L, handle->data == NULL, 1, "already used");
-		if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
-		uv_ref(handle);  /* uv_listen_start */
-		lcuT_awaitobj(L, handle);
-		return lua_yieldk(L, 0, (lua_KContext)newaccept, k_acceptstream);
-	}
-	lua_pushlightuserdata(L, loop);  /* token to sign scheduled */
-	return k_acceptstream(L, LUA_YIELD, (lua_KContext)newaccept);
+	lcu_Object *object = lcu_openedobj(L, 1, class);
+	luaL_argcheck(L, islisteningconn(object), 1, "not listening");
+	lua_settop(L, 1);
+	lua_pushlightuserdata(L, newaccept);
+	if (picklistenedconn(object)) return k_acceptstream(L);
+	return lcuT_resetobjopk(L, object, startlisten, stoplisten, k_acceptstream);
 }
 
 
@@ -1210,17 +1215,15 @@ static int listen_accept (lua_State *L,
  * TCP
  */
 
-#define openedtcp(L,c)	((lcu_TcpSocket *)openedobj(L, 1, c))
-
-#define ownedtcp(L,l,c)	((lcu_TcpSocket *)ownedobj(L, l, 1, c))
+#define openedtcp(L,C)	((TcpSocket *)lcu_openedobj(L,1,C))
 
 
 /* address [, errmsg] = tcp:getaddress([site [, address]]) */
 static int tcp_getaddress (lua_State *L) {
-	lcu_TcpSocket *tcp = openedtcp(L, toclass(L));
-	uv_tcp_t *handle = lcu_totcphdl(tcp);
-	int peer = luaL_checkoption(L, 2, "this", AddrSites);
-	int domain = lcu_getobjdomain((lcu_Object *)tcp);
+	TcpSocket *tcp = openedtcp(L, toclass(L));
+	uv_tcp_t *handle = lcu_toobjhdl(tcp);
+	int peer = luaL_checkoption(L, 2, "self", AddrSites);
+	int domain = netdomainof(tcp);
 	int addrsz;
 	struct sockaddr *addr = getaddrarg(L, domain, &addrsz);
 	int err = peer ? uv_tcp_getpeername(handle, addr, &addrsz)
@@ -1232,9 +1235,9 @@ static int tcp_getaddress (lua_State *L) {
 
 /* succ [, errmsg] = tcp:bind(address) */
 static int tcp_bind (lua_State *L) {
-	lcu_TcpSocket *tcp = openedtcp(L, toclass(L));
-	const struct sockaddr *addr = toobjaddr(L, 2, (lcu_Object *)tcp);
-	int err = uv_tcp_bind(lcu_totcphdl(tcp), addr, 0);
+	TcpSocket *tcp = openedtcp(L, toclass(L));
+	const struct sockaddr *addr = toobjaddr(L, 2, netdomainof(tcp));
+	int err = uv_tcp_bind(lcu_toobjhdl(tcp), addr, 0);
 	return lcuL_pushresults(L, 0, err);
 }
 
@@ -1243,7 +1246,7 @@ static const char * const TcpOptions[] = {"keepalive", "nodelay", NULL};
 
 /* succ [, errmsg] = tcp:setoption(name, value) */
 static int tcp_setoption (lua_State *L) {
-	lcu_TcpSocket *tcp = openedtcp(L, LCU_TCPACTIVECLS);
+	TcpSocket *tcp = openedtcp(L, LCU_TCPACTIVECLS);
 	int opt = luaL_checkoption(L, 2, NULL, TcpOptions);
 	int err, enabled = lua_toboolean(L, 3);
 	luaL_checkany(L, 3);
@@ -1254,34 +1257,14 @@ static int tcp_setoption (lua_State *L) {
 				delay = (int)luaL_checkinteger(L, 3);
 				luaL_argcheck(L, delay > 0, 3, "invalid argument");
 			}
-			err = uv_tcp_keepalive(lcu_totcphdl(tcp), enabled, delay);
-			if (err >= 0) lcu_settcpkeepalive(tcp, delay);
+			err = uv_tcp_keepalive(lcu_toobjhdl(tcp), enabled, delay);
 		}; break;
 		case 1: {  /* nodelay */
-			err = uv_tcp_nodelay(lcu_totcphdl(tcp), enabled);
-			if (err >= 0) lcu_settcpnodelay(tcp, enabled);
+			err = uv_tcp_nodelay(lcu_toobjhdl(tcp), enabled);
 		}; break;
 		default: return 0;
 	}
 	return lcuL_pushresults(L, 0, err);
-}
-
-/* value = tcp:getoption(name) */
-static int tcp_getoption (lua_State *L) {
-	lcu_TcpSocket *tcp = openedtcp(L, LCU_TCPACTIVECLS);
-	int opt = luaL_checkoption(L, 2, NULL, TcpOptions);
-	switch (opt) {
-		case 0: {  /* keepalive */
-			int delay = lcu_gettcpkeepalive(tcp);
-			if (delay < 0) lua_pushnil(L);
-			else lua_pushinteger(L, delay);
-		}; break;
-		case 1: {  /* nodelay */
-			lua_pushboolean(L, lcu_gettcpnodelay(tcp));
-		}; break;
-		default: return 0;
-	}
-	return 1;
 }
 
 
@@ -1290,15 +1273,18 @@ static void uv_onconnected (uv_connect_t *request, int err) {
 	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
 static int k_setuptcpconn (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
-	lcu_TcpSocket *tcp = ownedtcp(L, loop, LCU_TCPACTIVECLS);
-	const struct sockaddr *addr = toobjaddr(L, 2, (lcu_Object *)tcp);
+	TcpSocket *tcp = (TcpSocket *)lua_touserdata(L, 1);
+	const struct sockaddr *addr = toobjaddr(L, 2, netdomainof(tcp));
 	uv_connect_t *connect = (uv_connect_t *)request;
-	int err = uv_tcp_connect(connect, lcu_totcphdl(tcp), addr, uv_onconnected);
+	int err = uv_tcp_connect(connect, lcu_toobjhdl(tcp), addr, uv_onconnected);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
 static int tcp_connect (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setuptcpconn, NULL, NULL);
+	TcpSocket *tcp = openedtcp(L, LCU_TCPACTIVECLS);
+	uv_tcp_t *handle = lcu_toobjhdl(tcp);
+	lcu_Scheduler *sched = lcu_tosched(handle->loop);
+	return lcuT_resetreqopk(L, sched, k_setuptcpconn, NULL, NULL);
 }
 
 
@@ -1307,9 +1293,13 @@ static int newtcpaccept (lua_State *L,
                          uv_loop_t *loop,
                          lcu_Object *object,
                          lcu_Object **newobj) {
-	int domain = lcu_getobjdomain(object);
-	*newobj = (lcu_Object *)lcu_newtcp(L, LCU_TCPACTIVECLS, domain);
-	return uv_tcp_init(loop, (uv_tcp_t *)lcu_toobjhdl(*newobj));
+	TcpSocket *tcp = newobject(L, TcpSocket, LCU_TCPACTIVECLS);
+	int err = uv_tcp_init(loop, lcu_toobjhdl(tcp));
+	if (!err) {
+		tcp->flags |= lcuL_maskflag(object, FLAG_IPV6DOM);
+		*newobj = (lcu_Object *)tcp;
+	}
+	return err;
 }
 static int tcp_accept (lua_State *L) {
 	return listen_accept(L, LCU_TCPPASSIVECLS, newtcpaccept);
@@ -1320,16 +1310,14 @@ static int tcp_accept (lua_State *L) {
  * Pipe
  */
 
-#define openedpipe(L,c)	((lcu_IpcPipe *)openedobj(L, 1, c))
-
-#define ownedpipe(L,l,c)	((lcu_IpcPipe *)ownedobj(L, l, 1, c))
+#define openedpipe(L,c)	((IpcPipe *)lcu_openedobj(L, 1, c))
 
 
 /* address [, errmsg] = pipe:getaddress([site]) */
 static int pipe_getaddress (lua_State *L) {
-	lcu_IpcPipe *pipe = openedpipe(L, toclass(L));
-	uv_pipe_t *handle = lcu_topipehdl(pipe);
-	int peer = luaL_checkoption(L, 2, "this", AddrSites);
+	IpcPipe *pipe = openedpipe(L, toclass(L));
+	uv_pipe_t *handle = lcu_toobjhdl(pipe);
+	int peer = luaL_checkoption(L, 2, "self", AddrSites);
 	char mem[LCU_PIPEADDRBUF];
 	size_t bufsz = LCU_PIPEADDRBUF;
 	char *buf = mem;
@@ -1349,9 +1337,9 @@ static int pipe_getaddress (lua_State *L) {
 
 /* succ [, errmsg] = pipe:bind(address) */
 static int pipe_bind (lua_State *L) {
-	lcu_IpcPipe *pipe = openedpipe(L, toclass(L));
+	IpcPipe *pipe = openedpipe(L, toclass(L));
 	const char *addr = luaL_checkstring(L, 2);
-	int err = uv_pipe_bind(lcu_topipehdl(pipe), addr);
+	int err = uv_pipe_bind(lcu_toobjhdl(pipe), addr);
 	return lcuL_pushresults(L, 0, err);
 }
 
@@ -1360,8 +1348,8 @@ static const char * const PipeOptions[] = {"permission", NULL};
 
 /* succ [, errmsg] = pipe:setoption(name, value) */
 static int pipe_setoption (lua_State *L) {
-	lcu_IpcPipe *pipe = openedpipe(L, toclass(L));
-	uv_pipe_t *handle = lcu_topipehdl(pipe);
+	IpcPipe *pipe = openedpipe(L, toclass(L));
+	uv_pipe_t *handle = lcu_toobjhdl(pipe);
 	int opt = luaL_checkoption(L, 2, NULL, PipeOptions);
 	int err;
 	switch (opt) {
@@ -1374,43 +1362,26 @@ static int pipe_setoption (lua_State *L) {
 				default: return luaL_error(L, "unknown option (got '%c')", *mode);
 			}
 			err = uv_pipe_chmod(handle, flags);
-			if (!err) lcu_setpipeperm(pipe, flags);
 		}; break;
 		default: return 0;
 	}
 	return lcuL_pushresults(L, 0, err);
 }
 
-/* value = pipe:getoption(name) */
-static int pipe_getoption (lua_State *L) {
-	lcu_IpcPipe *pipe = openedpipe(L, toclass(L));
-	int opt = luaL_checkoption(L, 2, NULL, PipeOptions);
-	switch (opt) {
-		case 0: {  /* permission */
-			int flags = lcu_getpipeperm(pipe);
-			switch (flags) {
-				case UV_READABLE: lua_pushliteral(L, "r");
-				case UV_WRITABLE: lua_pushliteral(L, "w");
-				case UV_READABLE|UV_WRITABLE: lua_pushliteral(L, "rw");
-				default: lua_pushliteral(L, "");
-			}
-		}; break;
-		default: return 0;
-	}
-	return 1;
-}
-
 
 /* succ [, errmsg] = pipe:connect(address) */
 static int k_setuppipeconn (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
-	lcu_IpcPipe *pipe = ownedpipe(L, loop, toclass(L));
+	IpcPipe *pipe = (IpcPipe *)lua_touserdata(L, 1);
 	const char *addr = luaL_checkstring(L, 2);
 	uv_connect_t *connect = (uv_connect_t *)request;
-	uv_pipe_connect(connect, lcu_topipehdl(pipe), addr, uv_onconnected);
+	uv_pipe_connect(connect, lcu_toobjhdl(pipe), addr, uv_onconnected);
 	return -1;  /* yield on success */
 }
 static int pipe_connect (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setuppipeconn, NULL, NULL);
+	IpcPipe *pipe = openedpipe(L, toclass(L));
+	uv_pipe_t *handle = lcu_toobjhdl(pipe);
+	lcu_Scheduler *sched = lcu_tosched(handle->loop);
+	return lcuT_resetreqopk(L, sched, k_setuppipeconn, NULL, NULL);
 }
 
 
@@ -1418,9 +1389,14 @@ static int newpipeaccept (lua_State *L,
                           uv_loop_t *loop,
                           lcu_Object *object,
                           lcu_Object **newobj) {
-	int ipc = lcu_getobjdomain(object) == AF_INET6;
-	*newobj = (lcu_Object *)lcu_newpipe(L, LCU_PIPEACTIVECLS, ipc);
-	return uv_pipe_init(loop, (uv_pipe_t *)lcu_toobjhdl(*newobj), ipc);
+	int socktranf = lcuL_maskflag(object, FLAG_SOCKTRANF);
+	IpcPipe *pipe = newobject(L, IpcPipe, LCU_PIPEACTIVECLS);
+	int err = uv_pipe_init(loop, lcu_toobjhdl(pipe), socktranf);
+	if (!err) {
+		pipe->flags |= socktranf;
+		*newobj = (lcu_Object *)pipe;
+	}
+	return err;
 }
 static int pipe_accept (lua_State *L) {
 	return listen_accept(L, LCU_PIPEPASSIVECLS, newpipeaccept);
@@ -1447,6 +1423,7 @@ static const luaL_Reg found[] = {
 
 static const luaL_Reg object[] = {
 	{"__gc", object_gc},
+	{"__close", object_gc},
 	{"close", object_close},
 	{NULL, NULL}
 };
@@ -1459,7 +1436,6 @@ static const luaL_Reg ip[] = {
 static const luaL_Reg udp[] = {
 	{"getaddress", udp_getaddress},
 	{"bind", udp_bind},
-	{"getoption", udp_getoption},
 	{"setoption", udp_setoption},
 	{"connect", udp_connect},
 	{"send", udp_send},
@@ -1486,7 +1462,6 @@ static const luaL_Reg tcp[] = {
 };
 
 static const luaL_Reg tcpactive[] = {
-	{"getoption", tcp_getoption},
 	{"setoption", tcp_setoption},
 	{"connect", tcp_connect},
 	{NULL, NULL}
@@ -1501,7 +1476,6 @@ static const luaL_Reg pipe[] = {
 	{"getaddress", pipe_getaddress},
 	{"bind", pipe_bind},
 	{"setoption", pipe_setoption},
-	{"getoption", pipe_getoption},
 	{NULL, NULL}
 };
 
@@ -1523,78 +1497,80 @@ static const luaL_Reg pipeipc[] = {
 
 static const luaL_Reg modf[] = {
 	{"address", system_address},
+};
+
+static const luaL_Reg upvf[] = {
 	{"findaddr", system_findaddr},
 	{"nameaddr", system_nameaddr},
 	{"socket", system_socket},
 	{NULL, NULL}
 };
 
-LCUI_FUNC void lcuM_addcommunc (lua_State *L) {
-	lcuM_newclass(L, LCU_NETADDRCLS);
-	lcuM_setfuncs(L, addr, 0);
+LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
+	luaL_newmetatable(L, LCU_NETADDRCLS);
+	luaL_setfuncs(L, addr, 0);
 	lua_pop(L, 1);
 
-	lcuM_newclass(L, LCU_NETADDRLISTCLS);
-	lcuM_setfuncs(L, found, 0);
+	luaL_newmetatable(L, LCU_NETADDRLISTCLS);
+	luaL_setfuncs(L, found, 0);
 	lua_pop(L, 1);
 
 	lua_pushstring(L, LCU_UDPSOCKETCLS);
 	lcuM_newclass(L, LCU_UDPSOCKETCLS);
-	lcuM_setfuncs(L, object, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, ip, LCU_MODUPVS+1);
+	lcuM_setfuncs(L, object, 1);
+	lcuM_setfuncs(L, ip, 1);
 	lua_remove(L, -2);
-	lcuM_setfuncs(L, udp, LCU_MODUPVS);
+	lcuM_setfuncs(L, udp, 0);
 	lua_pop(L, 1);
 
 	lua_pushstring(L, LCU_TCPACTIVECLS);
 	lcuM_newclass(L, LCU_TCPACTIVECLS);
-	lcuM_setfuncs(L, object, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, ip, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, tcp, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, active, LCU_MODUPVS+1);
+	lcuM_setfuncs(L, object, 1);
+	lcuM_setfuncs(L, ip, 1);
+	lcuM_setfuncs(L, tcp, 1);
+	lcuM_setfuncs(L, active, 1);
 	lua_remove(L, -2);
-	lcuM_setfuncs(L, tcpactive, LCU_MODUPVS);
+	lcuM_setfuncs(L, tcpactive, 0);
 	lua_pop(L, 1);
 
 	lua_pushstring(L, LCU_TCPPASSIVECLS);
 	lcuM_newclass(L, LCU_TCPPASSIVECLS);
-	lcuM_setfuncs(L, object, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, ip, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, tcp, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, passive, LCU_MODUPVS+1);
+	lcuM_setfuncs(L, object, 1);
+	lcuM_setfuncs(L, ip, 1);
+	lcuM_setfuncs(L, tcp, 1);
+	lcuM_setfuncs(L, passive, 1);
 	lua_remove(L, -2);
-	lcuM_setfuncs(L, tcppassive, LCU_MODUPVS);
+	lcuM_setfuncs(L, tcppassive, 0);
 	lua_pop(L, 1);
 
 	lua_pushstring(L, LCU_PIPEIPCCLS);
 	lcuM_newclass(L, LCU_PIPEIPCCLS);
-	lcuM_setfuncs(L, object, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, pipe, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, active, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, pipeactive, LCU_MODUPVS+1);
+	lcuM_setfuncs(L, object, 1);
+	lcuM_setfuncs(L, pipe, 1);
+	lcuM_setfuncs(L, active, 1);
+	lcuM_setfuncs(L, pipeactive, 1);
 	lua_remove(L, -2);
-	lcuM_setfuncs(L, pipeipc, LCU_MODUPVS);
+	lcuM_setfuncs(L, pipeipc, 0);
 	lua_pop(L, 1);
 
 	lua_pushstring(L, LCU_PIPEACTIVECLS);
 	lcuM_newclass(L, LCU_PIPEACTIVECLS);
-	lcuM_setfuncs(L, object, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, pipe, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, active, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, pipeactive, LCU_MODUPVS+1);
+	lcuM_setfuncs(L, object, 1);
+	lcuM_setfuncs(L, pipe, 1);
+	lcuM_setfuncs(L, active, 1);
+	lcuM_setfuncs(L, pipeactive, 1);
 	lua_remove(L, -2);
 	lua_pop(L, 1);
 
 	lua_pushstring(L, LCU_PIPEPASSIVECLS);
 	lcuM_newclass(L, LCU_PIPEPASSIVECLS);
-	lcuM_setfuncs(L, object, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, pipe, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, passive, LCU_MODUPVS+1);
+	lcuM_setfuncs(L, object, 1);
+	lcuM_setfuncs(L, pipe, 1);
+	lcuM_setfuncs(L, passive, 1);
 	lua_remove(L, -2);
-	lcuM_setfuncs(L, pipepassive, LCU_MODUPVS);
+	lcuM_setfuncs(L, pipepassive, 0);
 	lua_pop(L, 1);
-}
 
-LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
-	lcuM_setfuncs(L, modf, LCU_MODUPVS);
+	luaL_setfuncs(L, modf, 0);
+	lcuM_setfuncs(L, upvf, LCU_MODUPVS);
 }

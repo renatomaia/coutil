@@ -1,13 +1,14 @@
 #include "lmodaux.h"
+#include "loperaux.h"
 
 
-static int k_resumeall (lua_State *L, int status, lua_KContext ctx) {
-	uv_loop_t *loop = (uv_loop_t *)ctx;
+static int k_resumeall (lua_State *L, int status, lua_KContext kctx) {
+	uv_loop_t *loop = (uv_loop_t *)kctx;
 	int pending;
 	lua_settop(L, 0);
 	pending = uv_run(loop, UV_RUN_DEFAULT);
 	if (pending && lua_isuserdata(L, 1))
-		return lua_yieldk(L, 1, ctx, k_resumeall);
+		return lua_yieldk(L, 1, kctx, k_resumeall);
 	loop->data = NULL;
 	lua_pushboolean(L, pending);
 	return 1;
@@ -15,7 +16,8 @@ static int k_resumeall (lua_State *L, int status, lua_KContext ctx) {
 
 static int lcuM_run (lua_State *L) {
 	static const char *const opts[] = {"loop", "step", "ready", NULL};
-	uv_loop_t *loop = lcu_toloop(L);
+	lcu_Scheduler *sched = lcu_getsched(L);
+	uv_loop_t *loop = lcu_toloop(sched);
 	int pending;
 	uv_run_mode mode = luaL_checkoption(L, 1, "loop", opts);
 	if (loop->data != NULL) luaL_error(L, "already running");
@@ -29,14 +31,13 @@ static int lcuM_run (lua_State *L) {
 			mainL = lua_tothread(L, -1);
 			lua_pop(L, 1);
 			if (L == mainL) {
-				lua_KContext ctx = (lua_KContext)loop;
-				lcu_ActiveOps *actops = lcu_toactops(L);
+				lua_KContext kctx = (lua_KContext)loop;
 				loop->data = (void *)L;
-				if (actops->others == 0 && actops->asyncs > 0) {
+				if (lcu_shallsuspend(sched)) {
 					lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY);
-					return lua_yieldk(L, 1, ctx, k_resumeall);
+					return lua_yieldk(L, 1, kctx, k_resumeall);
 				}
-				return k_resumeall(L, LUA_YIELD, ctx);
+				return k_resumeall(L, LUA_YIELD, kctx);
 			}
 		}
 	}
@@ -48,20 +49,23 @@ static int lcuM_run (lua_State *L) {
 }
 
 static int lcuM_isrunning (lua_State *L) {
-	uv_loop_t *loop = lcu_toloop(L);
+	lcu_Scheduler *sched = lcu_getsched(L);
+	uv_loop_t *loop = lcu_toloop(sched);
 	lua_pushboolean(L, loop->data != NULL);
 	return 1;
 }
 
 static int lcuM_halt (lua_State *L) {
-	uv_loop_t *loop = lcu_toloop(L);
+	lcu_Scheduler *sched = lcu_getsched(L);
+	uv_loop_t *loop = lcu_toloop(sched);
 	if (!loop->data) luaL_error(L, "not running");
 	uv_stop(loop);
 	return 0;
 }
 
 static int lcuM_printall (lua_State *L) {
-	uv_loop_t *loop = lcu_toloop(L);
+	lcu_Scheduler *sched = lcu_getsched(L);
+	uv_loop_t *loop = lcu_toloop(sched);
 	uv_print_all_handles(loop, stderr);
 	return 0;
 }
