@@ -21,18 +21,19 @@ LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err) {
 	return n;
 }
 
-LCUI_FUNC void lcuL_warnerror (lua_State *L, const char *msg, int err) {
+LCUI_FUNC void lcuL_warnmsg (lua_State *L, const char *prefix, const char *msg) {
 	lua_warning(L, LCU_WARNPREFIX, 1);
-	lua_warning(L, msg, 1);
-	lua_warning(L, uv_strerror(err), 0);
+	lua_warning(L, prefix, 1);
+	lua_warning(L, msg, 0);
 }
 
-LCUI_FUNC void lcuL_setfinalizer (lua_State *L,
-                                  lua_CFunction finalizer,
-                                  int nup) {
-	lua_pushcclosure(L, finalizer, nup);
+LCUI_FUNC void lcuL_warnerr (lua_State *L, const char *prefix, int err) {
+	lcuL_warnmsg(L, prefix, uv_strerror(err));
+}
+
+LCUI_FUNC void lcuL_setfinalizer (lua_State *L, lua_CFunction finalizer) {
 	lua_createtable(L, 0, 1);
-	lua_insert(L, -2);
+	lua_pushcfunction(L, finalizer);
 	lua_setfield(L, -2, "__gc");
 	lua_setmetatable(L, -2);
 }
@@ -254,7 +255,8 @@ static void closehandle (uv_handle_t* handle, void* arg) {
 }
 
 static int terminateloop (lua_State *L) {
-	uv_loop_t *loop = (uv_loop_t *)lua_touserdata(L, 1);
+	lcu_Scheduler *sched = (lcu_Scheduler *)lua_touserdata(L, 1);
+	uv_loop_t *loop = lcu_toloop(sched);
 	int err = uv_loop_close(loop);
 	if (err == UV_EBUSY) {
 		uv_walk(loop, closehandle, NULL);
@@ -262,34 +264,28 @@ static int terminateloop (lua_State *L) {
 		err = uv_run(loop, UV_RUN_DEFAULT);
 		loop->data = NULL;
 		if (!err) err = uv_loop_close(loop);
-
-else {fprintf(stderr, "WARN: close failed!\n"); uv_print_all_handles(loop, stderr);}
-
+		else {
+			lcuL_warnerr(L, "system.run", err);
+			uv_print_all_handles(loop, stderr);
+		}
 	}
 	lcu_assert(!err);
 	return 0;
 }
 
-LCUI_FUNC void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv) {
+LCUI_FUNC void lcuM_newmodupvs (lua_State *L) {
 	int err;
-	lua_newtable(L);  /* LCU_COREGISTRY */
+	lcu_Scheduler *sched;
+	uv_loop_t *loop;
 	pushhandlemap(L);  /* LCU_HANDLEMAP */
-	{
-		lcu_ActiveOps *ops =
-			(lcu_ActiveOps *)lua_newuserdatauv(L, sizeof(lcu_ActiveOps), 0);
-		ops->asyncs = 0;
-		ops->others = 0;
-	}
-	if (uv) lua_pushlightuserdata(L, uv);
-	else {
-		int i;
-		uv = (uv_loop_t *)lua_newuserdatauv(L, sizeof(uv_loop_t), 0);
-		for (i = 0; i < LCU_MODUPVS; ++i) lua_pushvalue(L, -4);
-		lcuL_setfinalizer(L, terminateloop, LCU_MODUPVS);
-		err = uv_loop_init(uv);
-		if (err < 0) lcu_error(L, err);
-	}
-	uv->data = NULL;
+	sched = (lcu_Scheduler *)lua_newuserdatauv(L, sizeof(lcu_Scheduler), 0);
+	sched->nasync = 0;
+	sched->nactive = 0;
+	loop = lcu_toloop(sched);
+	err = uv_loop_init(loop);
+	if (err < 0) lcu_error(L, err);
+	lcuL_setfinalizer(L, terminateloop);
+	loop->data = NULL;
 }
 
 LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {

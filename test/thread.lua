@@ -1474,12 +1474,15 @@ do case "suspend with only channels"
 	done()
 end
 
+--TODO: suspend awaiting channel after each other event
+
 do case "don't suspend with other events"
 	spawn(function ()
 		local count = 3
 		local baseport = 65432
 		local awaitchunk = [[
 			local system = require "coutil.system"
+			local memory = require "memory"
 			local channel = system.channel(%q)
 			spawn(function ()
 				channel:await("out")
@@ -1488,6 +1491,7 @@ do case "don't suspend with other events"
 				local socket = system.socket("stream", "ipv4")
 				local address = system.address("ipv4", "127.0.0.1", ]]..baseport..[[+%d)
 				assert(socket:connect(address) == true)
+				assert(socket:receive(memory.create(8192)) == true)
 				assert(socket:close() == true)
 			end)
 			assert(system.run() == false)
@@ -1506,8 +1510,15 @@ do case "don't suspend with other events"
 			t:dostring(utilschunk..awaitchunk:format(i, i))
 		end
 
+		local conns = {}
 		for i = count, 1, -1 do
-			assert(sockets[i]:accept():close() == true)
+			conns[i] = assert(sockets[i]:accept())
+		end
+
+		--repeat until (checkcount(t, "r", count))
+		for i = count, 1, -1 do
+			assert(conns[i]:send(string.rep("x", 8192)) == true)
+			assert(conns[i]:close() == true)
 			assert(sockets[i]:close() == true)
 		end
 

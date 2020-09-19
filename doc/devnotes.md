@@ -135,7 +135,7 @@ typedef int (*lcu_RequestSetup) (lua_State *L, uv_req_t *r, uv_loop_t *l);
 
 ```c
 int lcuT_resetreqopk (lua_State *L,
-                      uv_loop_t *loop,
+                      lcu_Scheduler *sched,
                       lcu_RequestSetup setup,
                       lua_CFunction results,
                       lua_CFunction cancel);
@@ -147,7 +147,7 @@ It yields the current coroutine repeatedly until its correponding `uv_req_t` is 
 Then it executes function `setup`,
 providing `L` with the same stack values,
 and the `uv_req_t` to be initated,
-and the `uv_loop_t` provided as argument `loop`.
+and the `uv_loop_t` of `sched`.
 
 `setup` shall return -1 when it succesfully set up the `uv_req_t`,
 to signal that this function shall yield,
@@ -174,8 +174,7 @@ Otherwise,
 returns the coroutine that should be resumed by `lcuU_resumereqop`.
 
 ```c
-int lcuU_resumereqop (uv_loop_t *loop, uv_req_t *request,
-                      lua_State *thread, int narg);
+int lcuU_resumereqop (uv_loop_t *loop, uv_req_t *request, int narg);
 ```
 
 Function called from a UV callback to resume the awating coroutine obtained by `lcuU_endreqop`.
@@ -191,7 +190,7 @@ typedef int (*lcu_HandleSetup) (lua_State *L, uv_handle_t *h, uv_loop_t *l);
 ```c
 int lcuT_resetthropk (lua_State *L,
                       uv_handle_type type,
-                      uv_loop_t *loop,
+                      lcu_Scheduler *sched,
                       lcu_HandleSetup setup,
                       lua_CFunction results,
                       lua_CFunction cancel);
@@ -247,12 +246,11 @@ This function is usually not necessary because the handle is closed using `uv_cl
 This function must be used only when the continuation `cancel` of `lcuT_resetthropk` is used and it returns 0 signaling that the handle shall not be closed even when the coroutine is not awaiting for it anymore.
 
 ```c
-int lcuU_resumethrop (uv_loop_t *loop, uv_handle_t *handle,
-                      lua_State *thread, int narg);
+int lcuU_resumethrop (uv_handle_t *handle, int narg);
 ```
 Function called from a UV callback to resume the awating coroutine obtained from `uv_handle_t.data`.
-It resumes `thread` providing the `narg` values of the top of the stack as arguments,
-and using the `lua_State` executing `loop` as parent.
+It resumes this coroutine providing the `narg` values of the top of the stack as arguments,
+and using the `lua_State` executing the UV loop that triggered `handle` as parent.
 Returns the same status of `lua_resume`.
 
 ```c
@@ -314,6 +312,117 @@ Thread
 _______________________
 - P = Previous transition
 - S = Call scope (T = thread; U = UV loop)
+
+### Template
+
+- Request Operation
+
+```c
+LCUI_FUNC void lcuM_addmyawaitf (lua_State *L) {
+	static const luaL_Reg modf[] = {
+		{"myawait", lua_myawait},
+		{NULL, NULL}
+	};
+	lcuM_setfuncs(L, modf, LCU_MODUPVS);
+}
+
+static int lua_myawait (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);  /* requires 'LCU_MODUPVS' upvalues */
+	return lcuT_resetreqopk(L, sched, k_setupfunc, onreturn, cancancel);
+}
+
+static int k_setupfunc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
+	uv_myevent_t *myevent = (uv_myevent_t *)handle;
+	/* check argments and obtain desired configs for myevent */
+	/* leave on the stack values required to produce the results */
+	int err = uv_myevent(loop, myevent, uv_onmyevent, /* configs */);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
+}
+
+static int cancancel (lua_State *L) {
+	/* we know the thread is not awaiting for this myevent anymore */
+	/* inpect any global state that might need clean up */
+	if (/* we still need 'uv_onmyevent' to be called for some clean up */)
+		return 0;
+	else
+		return 1;
+}
+
+static void uv_onmyevent (uv_myevent_t *myrequest, /* myevent details */) {
+	uv_loop_t *loop = myrequest->loop;
+	uv_req_t *request = (uv_req_t *)myrequest;
+	lua_State *thread = lcuU_endreqop(loop, request);
+	if (thread) {
+		/* push values to yield to 'thread', for 'onreturn' to process */
+		lcuU_resumereqop(loop, request, /* number of pushed values */);
+	} else {
+		/* request wasn't cancelled, we can do the clean up now */
+	}
+}
+
+static int onreturn (lua_State *L) {
+	/* use values left on the stack by 'k_setupfunc' and the ones yielded */
+	/* by 'uv_onmyevent' to produce the values to be returned */
+	return /* number of values to return from the top of the stack */;
+}
+```
+
+- Thread Operation
+
+```c
+LCUI_FUNC void lcuM_addmyawaitf (lua_State *L) {
+	static const luaL_Reg modf[] = {
+		{"myawait", lua_myawait},
+		{NULL, NULL}
+	};
+	lcuM_setfuncs(L, modf, LCU_MODUPVS);
+}
+
+static int lua_myawait (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);  /* requires 'LCU_MODUPVS' upvalues */
+	return lcuT_resetthropk(L, UV_MYEVENT, sched, k_setupfunc, onreturn, cancancel);
+}
+
+static int k_setupfunc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
+	uv_myevent_t *myevent = (uv_myevent_t *)handle;
+	/* check argments and obtain desired configs for myevent */
+	/* leave on the stack values required to produce the results */
+	int err = 0;
+	if (loop) err = lcuT_armthrop(L, uv_myevent_init(loop, myevent));
+	else if (/* myevent is misconfigured? */) err = uv_myevent_stop(myevent);
+	else return -1;  /* yield on success */
+	if (err >= 0) err = uv_myevent_start(myevent, uv_onmyevent, /* configs */);
+	// TODO: close 'myevent' when 'uv_myevent_start' fails!
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
+}
+
+static int cancancel (lua_State *L) {
+	/* we know the thread is not awaiting for this myevent anymore */
+	/* inpect any global state that might need clean up */
+	if (/* we still need 'uv_onmyevent' to be called for some clean up */)
+		return 0;
+	else
+		return 1;
+}
+
+static void uv_onmyevent (uv_myevent_t *handle, /* myevent details */) {
+	if (lcuU_endthrop(handle)) {
+		lua_State *thread = (lua_State *)handle->data;
+		/* push values to yield to 'thread', for 'onreturn' to process */
+		lcuU_resumethrop((uv_handle_t *)handle, /* number of pushed values */);
+	} else {
+		/* 'cancancel' returned 0, and we can do the clean up now */
+	}
+}
+
+static int onreturn (lua_State *L) {
+	/* use values left on the stack by 'k_setupfunc' and the ones yielded */
+	/* by 'uv_onmyevent' to produce the values to be returned */
+	return /* number of values to return from the top of the stack */;
+}
+```
 
 ### Resources
 
@@ -428,6 +537,104 @@ Object
 _______________________
 - P = Previous transition
 - S = Call scope (T = Thread; U = UV loop)
+
+### Template
+
+```c
+#define MYOBJECT_CLASS	LCU_PREFIX"MyObject"
+
+LCUI_FUNC void lcuM_addmyawaitf (lua_State *L) {
+	static const luaL_Reg modf[] = {
+		{"myobject", lua_myobject},
+		{NULL, NULL}
+	};
+	lcuM_setfuncs(L, modf, LCU_MODUPVS);
+}
+
+typedef struct MyObject {
+	int flags;
+	uv_myobject_t handle;
+	/* any extra fields */
+}
+
+static int lua_myobject (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);  /* requires 'LCU_MODUPVS' upvalues */
+
+	MyObject *myobj = (MyObject *)lua_newuserdatauv(L, sizeof(MyObject), 0);
+	myobj->handle.data = NULL;
+	myobj->flags = FLAG_CLOSED;
+	luaL_setmetatable(L, MYOBJECT_CLASS);
+
+	/* check argments and obtain desired configs for 'myobj' */
+	int err = uv_myobject_init(loop, &myobj->handle, /* configs */);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	/* initialize any extra fields */
+	
+	lcu_enableobj((lcu_Object *)myobj);
+	return 1;
+}
+
+static int myobj_gc (lua_State *L) {
+	MyObject *myobj = (MyObject *)luaL_checkudata(L, 1, MYOBJECT_CLASS);
+	if (!lcu_isobjclosed((lcu_Object *)myobj);) {
+		lcuL_closeobjhdl(L, 1, (uv_handle_t *)&myobj->handle);
+		myobj->closed = 1;
+	}
+	return 0;
+}
+
+static int myobj_await (lua_State *L) {
+	MyObject *myobj = (MyObject *)luaL_checkudata(L, 1, MYOBJECT_CLASS);
+	uv_myobject_t *handle = &myobj->handle;
+	lcu_Object *obj = (lcu_Object *)myobj;
+	luaL_argcheck(L, handle->data == NULL, 1, "already in use");
+	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
+	if (!lcu_getobjarmed(obj)) {
+		int err = uv_myobj_myevent_start(handle, uv_onmyevent);
+		if (err < 0) return lcuL_pushresults(L, 0, err);
+		lcu_setobjarmed(obj, 1);
+	}
+	lcuT_awaitobj(L, (uv_handle_t *)handle);
+	/* leave on the stack values required for the results */
+	return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), k_onreturn);
+}
+
+static void uv_onmyevent (uv_myobject_t *myobjhdl, /* myevent details */) {
+	uv_handle_t *handle = (uv_handle_t *)myobjhdl;
+	lua_State *thread = (lua_State *)handle->data;
+	lcu_assert(thread);
+	/* push values to yield to 'thread', for 'onreturn' to process */
+	lcuU_resumeobjop(handle, /* number of pushed values */);
+	if (handle->data == NULL) {
+		stop_myobj_myevent(myobjhdl);
+	}
+	lcuU_checksuspend(handle->loop);
+}
+
+static int k_onreturn (lua_State *L, int status, lua_KContext ctx) {
+	lcu_assert(status == LUA_YIELD);
+	if (lcuT_haltedobjop(L, (uv_handle_t *)handle)) {
+		stop_myobj_myevent(handle);
+	} else if (lua_isinteger(L, 6)) {
+		handle->data = NULL;
+		/* use values left on the stack by 'myobj_await' and the ones yielded */
+		/* by 'uv_onmyevent' to produce the values to be returned */
+		return /* number of values to return from the top of the stack */;
+	}
+	return lua_gettop(L)-((int)ctx);
+}
+
+static int stop_myobj_myevent (uv_myobject_t *myobjhdl) {
+	uv_handle_t *handle = (uv_handle_t *)myobjhdl;
+	int err = uv_myobj_myevent_stop(myobjhdl);
+	if (err < 0) {
+		lua_State *L = (lua_State *)handle->loop->data;
+		lcuT_closeobjhdl(L, 1, handle);
+		lcuL_warnerr(L, "myobject:await: ", err);
+	}
+	lcu_setobjarmed(lcu_tohdlobj(handle), 0);
+}
+```
 
 ### Resources
 

@@ -61,9 +61,9 @@ LCULIB_API uv_handle_t *lcu_toobjhdl (lcu_Object *object);
 
 LCULIB_API lcu_Object *lcu_tohdlobj (uv_handle_t *handle);
 
-LCULIB_API int lcu_getobjarmed(lcu_Object *object);
+LCULIB_API int lcu_getobjarmed (lcu_Object *object);
 
-LCULIB_API void lcu_setobjarmed(lcu_Object *object, int enabled);
+LCULIB_API void lcu_setobjarmed (lcu_Object *object, int enabled);
 
 LCULIB_API void lcu_addobjlisten (lcu_Object *object);
 

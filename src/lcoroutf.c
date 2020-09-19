@@ -122,7 +122,7 @@ static void uv_onworked(uv_work_t* work, int status) {
 			}
 		}
 		lcuT_stopsysco(L, sysco);  /* frees 'co' if closed */
-		lcuU_resumereqop(thread, nret, loop, request);
+		lcuU_resumereqop(loop, request, nret);
 	}
 	else lcuT_stopsysco(L, sysco);  /* frees 'co' if closed */
 	lcuU_checksuspend(loop);
@@ -164,7 +164,8 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int coroutine_resume (lua_State *L) {
-	return lcuT_resetreqopk(L, k_setupwork, returnvalues, NULL);
+	lcu_Scheduler *sched = lcu_getsched(L);
+	return lcuT_resetreqopk(L, sched, k_setupwork, returnvalues, NULL);
 }
 
 LCUI_FUNC void lcuM_addcoroutc (lua_State *L) {

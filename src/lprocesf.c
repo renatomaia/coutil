@@ -82,8 +82,7 @@ static int returnsignal (lua_State *L) {
 static void uv_onsignal (uv_signal_t *handle, int signum) {
 	lua_State *thread = (lua_State *)handle->data;
 	lua_pushinteger(thread, signum);
-	lcuU_resumethrop(thread, 1, (uv_handle_t *)handle);
-	lcuU_checksuspend(handle->loop);
+	lcuU_resumethrop((uv_handle_t *)handle, 1);
 }
 static int k_setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_signal_t *signal = (uv_signal_t *)handle;
@@ -97,7 +96,8 @@ static int k_setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int system_awaitsig (lua_State *L) {
-	return lcuT_resetthropk(L, UV_SIGNAL, k_setupsignal, returnsignal, NULL);
+	lcu_Scheduler *sched = lcu_getsched(L);
+	return lcuT_resetthropk(L, UV_SIGNAL, sched, k_setupsignal, returnsignal, NULL);
 }
 
 
@@ -260,8 +260,7 @@ static void uv_procexited (uv_process_t *process, int64_t exitval, int signum) {
 		lua_pushliteral(thread, "exit");
 		lua_pushinteger(thread, exitval);
 	}
-	lcuU_resumethrop(thread, 2, (uv_handle_t *)process);
-	lcuU_checksuspend(process->loop);
+	lcuU_resumethrop((uv_handle_t *)process, 2);
 }
 static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_process_t *process = (uv_process_t *)handle;
@@ -288,7 +287,8 @@ static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int system_execute (lua_State *L) {
-	return lcuT_resetthropk(L, -1, k_setupproc, NULL, NULL);
+	lcu_Scheduler *sched = lcu_getsched(L);
+	return lcuT_resetthropk(L, -1, sched, k_setupproc, NULL, NULL);
 }
 
 

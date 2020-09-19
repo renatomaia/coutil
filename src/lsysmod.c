@@ -22,7 +22,7 @@ LCUI_FUNC void lcuM_addchanelf (lua_State *L);
 LCUMOD_API int luaopen_coutil_system (lua_State *L) {
 	lcuM_addchanelg(L);
 
-	lcuM_newmodupvs(L, NULL);
+	lcuM_newmodupvs(L);
 
 	lcuM_addcommunc(L);
 	lcuM_addcoroutc(L);

@@ -468,7 +468,7 @@ static void threadmain (void *arg) {
 			}
 		} else {
 			if (status != LUA_OK) {
-				lua_writestringerror("[COUTIL PANIC] %s\n", lua_tostring(L, -1));
+				lcuL_warnmsg(L, "system.threads", lua_tostring(L, -1));
 			}
 			/* avoid 'pool->tasks--' */
 			lua_settop(L, 0);
@@ -614,7 +614,7 @@ static int tpool_addtask (ThreadPool *pool, lua_State *L) {
 	lcu_assert(hasspace);
 	poolref = (ThreadPool **)lua_newuserdatauv(L, sizeof(ThreadPool *), 0);
 	*poolref = pool;
-	lcuL_setfinalizer(L, collectthreadpool, 0);
+	lcuL_setfinalizer(L, collectthreadpool);
 	lua_setfield(L, LUA_REGISTRYINDEX, LCU_TASKTPOOLREGKEY);
 
 	uv_mutex_lock(&pool->mutex);
@@ -961,12 +961,12 @@ static void uv_onsynced (uv_async_t *async) {
 	channeltask->wakes--;
 	uv_mutex_unlock(&channeltask->mutex);
 	if (lcuU_endthrop(handle)) {
-		lcuU_resumethrop(thread, 0, handle);
+		lcuU_resumethrop(handle, 0);
 	} else {
 		LuaChannel *channel = (LuaChannel *)lua_touserdata(thread, 1);
 		restorechannel(channel);
+		lcuU_checksuspend(handle->loop);
 	}
-	lcuU_checksuspend(handle->loop);
 }
 
 typedef struct ArmSyncedArgs {
@@ -1018,10 +1018,11 @@ static int k_setupsynced (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	return -1;
 }
 
-static int channel_await (lua_State *L) {
-	return lcuT_resetthropk(L, UV_ASYNC, k_setupsynced,
-	                                     returnsynced,
-	                                     cancelsynced);
+static int system_awaitch (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);
+	return lcuT_resetthropk(L, UV_ASYNC, sched, k_setupsynced,
+	                                            returnsynced,
+	                                            cancelsynced);
 }
 
 /* res [, errmsg] = channel:sync(endpoint) */
@@ -1140,7 +1141,7 @@ LCUI_FUNC void lcuM_addchanelg (lua_State *L) {
 		void *allocud;
 		lua_Alloc allocf = lua_getallocf(L, &allocud);
 		map->L = NULL;
-		lcuL_setfinalizer(L, channelmap_gc, 0);
+		lcuL_setfinalizer(L, channelmap_gc);
 		map->L = lua_newstate(allocf, allocud);
 		if (map->L == NULL) luaL_error(L, "not enough memory");
 		uv_mutex_init(&map->mutex);
@@ -1157,7 +1158,6 @@ LCUI_FUNC void lcuM_addchanelc (lua_State *L) {
 	static const luaL_Reg channelf[] = {
 		{"__gc", channel_gc},
 		{"close", channel_close},
-		{"await", channel_await},
 		{"sync", channel_sync},
 		{"getname", channel_getname},
 		{NULL, NULL}
@@ -1174,6 +1174,7 @@ LCUI_FUNC void lcuM_addchanelf (lua_State *L) {
 	static const luaL_Reg modf[] = {
 		{"channelnames", system_channelnames},
 		{"channel", system_channel},
+		{"awaitch", system_awaitch},
 		{NULL, NULL}
 	};
 	lcuM_setfuncs(L, modf, 0);
