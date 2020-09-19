@@ -13,11 +13,6 @@
 #define LCU_CHANNELTASKREGKEY	LCU_PREFIX"ChannelTask channelTask"
 #define LCU_CHANNELSREGKEY	LCU_PREFIX"ChannelMap channelMap"
 
-typedef struct lcu_ActiveOps {
-	int asyncs;
-	int others;
-} lcu_ActiveOps;
-
 #define lcu_error(L,e)	luaL_error(L, uv_strerror(e))
 
 #define lcu_pusherror(L,e)	lua_pushstring(L, uv_strerror(e))
@@ -26,11 +21,11 @@ LCUI_FUNC int lcuL_pusherrres (lua_State *L, int err);
 
 LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err);
 
-LCUI_FUNC void lcuL_warnerror (lua_State *L, const char *msg, int err);
+LCUI_FUNC void lcuL_warnmsg (lua_State *L, const char *prefix, const char *msg);
 
-LCUI_FUNC void lcuL_setfinalizer (lua_State *L,
-                                  lua_CFunction finalizer,
-                                  int nup);
+LCUI_FUNC void lcuL_warnerr (lua_State *L, const char *prefix, int err);
+
+LCUI_FUNC void lcuL_setfinalizer (lua_State *L, lua_CFunction finalizer);
 
 #define lcuL_maskflag(O,F) ((O)->flags&(F))
 #define lcuL_setflag(O,F) ((O)->flags |= (F))
@@ -52,19 +47,12 @@ LCUI_FUNC int lcuL_movefrom (lua_State *to,
                              int n,
                              const char *msg);
 
-#define LCU_MODUPVS	4
-
-#define lcu_toactops(L)	(lcu_ActiveOps *)lua_touserdata(L, lua_upvalueindex(3))
-
-#define lcu_toloop(L)   (uv_loop_t *)lua_touserdata(L, lua_upvalueindex(4))
-
-LCUI_FUNC void lcuM_newmodupvs (lua_State *L, uv_loop_t *uv);
-
 LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup);
 
 LCUI_FUNC void lcuM_newclass (lua_State *L, const char *name);
 
 LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
                                               const char *func);
+
 
 #endif
