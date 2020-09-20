@@ -51,7 +51,9 @@ LCULIB_API struct addrinfo *lcu_nextaddrlist (lcu_AddressList *list);
 
 typedef struct lcu_Object lcu_Object;
 
-LCULIB_API int lcuT_closeobj (lua_State *L, int idx, const char *cls);
+typedef int (*lcu_ObjectAction) (uv_handle_t *h);
+
+LCULIB_API int lcuT_closeobj (lua_State *L, int idx);
 
 LCULIB_API void lcu_enableobj (lcu_Object *object);
 
@@ -61,9 +63,13 @@ LCULIB_API uv_handle_t *lcu_toobjhdl (lcu_Object *object);
 
 LCULIB_API lcu_Object *lcu_tohdlobj (uv_handle_t *handle);
 
-LCULIB_API int lcu_getobjarmed (lcu_Object *object);
+LCULIB_API lcu_ObjectAction lcu_getobjstop (lcu_Object *object);
 
-LCULIB_API void lcu_setobjarmed (lcu_Object *object, int enabled);
+LCULIB_API void lcu_setobjstop (lcu_Object *object, lcu_ObjectAction value);
+
+LCULIB_API lua_CFunction lcu_getobjstep (lcu_Object *object);
+
+LCULIB_API void lcu_setobjstep (lcu_Object *object, lua_CFunction value);
 
 LCULIB_API void lcu_addobjlisten (lcu_Object *object);
 

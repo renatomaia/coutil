@@ -1,7 +1,23 @@
 CoUtil Library
 ==============
 
-`coutil` is a collection of modules that provide utility functions to support multithreading in Lua.
+`coutil` is a collection of Lua modules that provide utility functions for multithreading using coroutines. It provides support for:
+
+- Coroutine execution finalizers.
+- Coroutine syncronization abstractions:
+	- [events](https://en.wikipedia.org/wiki/Async/await);
+	- [mutexes](https://en.wikipedia.org/wiki/Mutex);
+	- [promises](https://en.wikipedia.org/wiki/Futures_and_promises).
+- Coroutine suspension until conditions on system features (and API to such features):
+	- Measure of time lapse;
+	- Signals to system processes;
+	- Program execution;
+	- Network and inter-process sockets;
+	- DNS lookups;
+	- Code chunk execution on separate system threads:
+		- Preemptive coroutines;
+		- Thread pools;
+		- Channels to copy values between system threads.
 
 Documentation
 -------------
@@ -30,6 +46,8 @@ TODO
 
 ### Improvements
 
+- Call 'lua_warn' whenever 'lua_resume' fails.
+- Protect all 'lua_*' calls in 'uv_*' callbacks from raising errors (use 'pcall'?)
 - Remove support to `getoption` on sockets and the like.
 - User and group definition of process started with `system.execute`.
 - Function to create an envionment variables set to be used in `system.execute`.

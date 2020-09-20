@@ -615,7 +615,7 @@ static int k_onreturn (lua_State *L, int status, lua_KContext ctx) {
 	lcu_assert(status == LUA_YIELD);
 	if (lcuT_haltedobjop(L, (uv_handle_t *)handle)) {
 		stop_myobj_myevent(handle);
-	} else if (lua_isinteger(L, 6)) {
+	} else {
 		handle->data = NULL;
 		/* use values left on the stack by 'myobj_await' and the ones yielded */
 		/* by 'uv_onmyevent' to produce the values to be returned */

@@ -3,6 +3,7 @@
 
 
 #include "lcuconf.h"
+#include "lsyslib.h"
 
 #include <uv.h>
 #include <lua.h>
@@ -49,9 +50,11 @@ LCUI_FUNC int lcuU_resumethrop (uv_handle_t *handle, int narg);
 
 LCUI_FUNC void lcuT_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle);
 
-LCUI_FUNC void lcuT_awaitobj (lua_State *L, uv_handle_t *handle);
-
-LCUI_FUNC int lcuT_haltedobjop (lua_State *L, uv_handle_t *handle);
+LCUI_FUNC int lcuT_resetobjopk (lua_State *L,
+                                lcu_Object *obj,
+                                lcu_ObjectAction start,
+                                lcu_ObjectAction stop,
+                                lua_CFunction step);
 
 LCUI_FUNC int lcuU_resumeobjop (uv_handle_t *handle, int narg);
 

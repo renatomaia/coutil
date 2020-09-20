@@ -125,7 +125,6 @@ static void uv_onworked(uv_work_t* work, int status) {
 		lcuU_resumereqop(loop, request, nret);
 	}
 	else lcuT_stopsysco(L, sysco);  /* frees 'co' if closed */
-	lcuU_checksuspend(loop);
 }
 static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_work_t *work = (uv_work_t *)request;

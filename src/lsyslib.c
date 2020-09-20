@@ -106,11 +106,15 @@ LCULIB_API struct addrinfo *lcu_nextaddrlist (lcu_AddressList *l) {
 
 struct lcu_Object {
 	int flags;
+	lcu_ObjectAction stop;
+	lua_CFunction step;
 	uv_handle_t handle;
 };
 
 struct lcu_UdpSocket {
 	int flags;
+	lcu_ObjectAction stop;
+	lua_CFunction step;
 	uv_udp_t handle;
 	union {
 		struct in_addr ipv4;
@@ -120,26 +124,32 @@ struct lcu_UdpSocket {
 
 struct lcu_TcpSocket {
 	int flags;
+	lcu_ObjectAction stop;
+	lua_CFunction step;
 	uv_tcp_t handle;
 };
 
 struct lcu_IpcPipe {
 	int flags;
+	lcu_ObjectAction stop;
+	lua_CFunction step;
 	uv_pipe_t handle;
 };
 
 static lcu_Object *createobj (lua_State *L, size_t size, const char *cls) {
 	lcu_Object *object = (lcu_Object *)lua_newuserdatauv(L, size, 0);
-	object->handle.data = NULL;
 	object->flags = FLAG_CLOSED;
+	object->stop = NULL;
+	object->step = NULL;
+	object->handle.data = NULL;
 	luaL_setmetatable(L, cls);
 	return object;
 }
 
-LCULIB_API int lcuT_closeobj (lua_State *L, int idx, const char *cls) {
-	lcu_Object *object = (lcu_Object *)luaL_checkudata(L, idx, cls);
+LCULIB_API int lcuT_closeobj (lua_State *L, int idx) {
+	lcu_Object *object = (lcu_Object *)lua_touserdata(L, idx);
 	if (object && !lcuL_maskflag(object, FLAG_CLOSED)) {
-		lcuT_closeobjhdl(L, idx, &object->handle);
+		lcuT_closeobjhdl(L, idx, lcu_toobjhdl(object));
 		lcuL_setflag(object, FLAG_CLOSED);
 		return 1;
 	}
@@ -163,6 +173,22 @@ LCULIB_API uv_handle_t *lcu_toobjhdl (lcu_Object *object) {
 LCULIB_API lcu_Object *lcu_tohdlobj (uv_handle_t *handle) {
 	const char *ptr = (const char *)handle;
 	return (lcu_Object *)(ptr - offsetof(lcu_Object, handle));
+}
+
+LCULIB_API lcu_ObjectAction lcu_getobjstop (lcu_Object *object) {
+	return object->stop;
+}
+
+LCULIB_API void lcu_setobjstop (lcu_Object *object, lcu_ObjectAction value) {
+	object->stop = value;
+}
+
+LCULIB_API lua_CFunction lcu_getobjstep (lcu_Object *object) {
+	return object->step;
+}
+
+LCULIB_API void lcu_setobjstep (lcu_Object *object, lua_CFunction value) {
+	object->step = value;
 }
 
 LCULIB_API int lcu_getobjdomain (lcu_Object *obj) {
@@ -224,7 +250,6 @@ LCULIB_API lcu_IpcPipe *lcu_newpipe (lua_State *L,
 		else lcuL_clearflag(obj, flag); \
 	}
 
-newbooloption(objarmed, lcu_Object, FLAG_OBJOPON);
 newbooloption(udpconnected, lcu_UdpSocket, FLAG_CONNECTED);
 newbooloption(udpbroadcast, lcu_UdpSocket, FLAG_BROADCAST);
 newbooloption(udpmcastloop, lcu_UdpSocket, FLAG_MCASTLOOP);
