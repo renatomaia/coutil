@@ -162,7 +162,7 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lcuT_startsysco(L, sysco);
 	return -1;  /* yield on success */
 }
-static int coroutine_resume (lua_State *L) {
+static int system_resume (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
 	return lcuT_resetreqopk(L, sched, k_setupwork, returnvalues, NULL);
 }
@@ -172,11 +172,10 @@ LCUI_FUNC void lcuM_addcoroutc (lua_State *L) {
 		{"__gc", coroutine_gc},
 		{"close", coroutine_close},
 		{"status", coroutine_status},
-		{"resume", coroutine_resume},
 		{NULL, NULL}
 	};
 	lcuM_newclass(L, LCU_SYSCOROCLS);
-	lcuM_setfuncs(L, clsf, LCU_MODUPVS);
+	lcuM_setfuncs(L, clsf, 0);
 	lua_pop(L, 1);
 }
 
@@ -186,5 +185,10 @@ LCUI_FUNC void lcuM_addcoroutf (lua_State *L) {
 		{"loadfile", system_loadfile},
 		{NULL, NULL}
 	};
-	lcuM_setfuncs(L, modf, LCU_MODUPVS);
+	static const luaL_Reg upvf[] = {
+		{"resume", system_resume},
+		{NULL, NULL}
+	};
+	lcuM_setfuncs(L, modf, 0);
+	lcuM_setfuncs(L, upvf, LCU_MODUPVS);
 }

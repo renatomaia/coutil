@@ -523,7 +523,7 @@ do case "system coroutine"
 			assert(system.threads() == nil)
 			return true
 		]]
-		local ok, res = syscoro:resume()
+		local ok, res = system.resume(syscoro)
 		assert(ok == true and res == true)
 	end)
 
@@ -921,7 +921,7 @@ do case "queueing on endpoints"
 		function (_, ...)
 			spawn(function (...)
 				local sysco = assert(system.load(channelchunk, "@chunk", "t"))
-				assert(sysco:resume(...))
+				assert(system.resume(sysco, ...))
 				assert(sysco:close(...))
 			end, ...)
 		end,
@@ -1042,7 +1042,7 @@ do case "transfer values"
 			spawn(function (...)
 				local chunk = makechannelchunk(args, rets)
 				local sysco = assert(system.load(chunk, "@chunk", "t"))
-				assert(sysco:resume(...))
+				assert(system.resume(sysco, ...))
 			end, ...)
 		end,
 		-- coroutine
@@ -1125,7 +1125,7 @@ do case "transfer errors"
 			local chunk = makechannelchunk(args, errmsg)
 			spawn(function (...)
 				local sysco = assert(system.load(chunk, "@chunk", "t"))
-				assert(sysco:resume(...))
+				assert(system.resume(sysco, ...))
 			end, ...)
 		end,
 		-- coroutine
@@ -1203,7 +1203,7 @@ do case "invalid endpoint"
 			local chunk = makechannelchunk(arg, errmsg)
 			spawn(function (...)
 				local sysco = assert(system.load(chunk))
-				assert(sysco:resume(...))
+				assert(system.resume(sysco, ...))
 			end, ...)
 		end,
 		-- coroutine
@@ -1334,7 +1334,7 @@ do case "resume listed channels"
 		function (_, ...)
 			spawn(function (...)
 				local sysco = assert(system.load(channelchunk, "@chunk", "t"))
-				assert(sysco:resume(...))
+				assert(system.resume(sysco, ...))
 			end, ...)
 		end,
 		function (_, name, path)
@@ -1441,7 +1441,7 @@ do case "collect running sysco waiting channel"
 				end)
 				system.run()
 			]]))
-			assert(sysco:resume())
+			assert(system.resume(sysco))
 		end)
 		local channel = system.channel("channel")
 		repeat until channel:sync()

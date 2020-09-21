@@ -243,59 +243,6 @@ LCUI_FUNC int lcuL_movefrom (lua_State *to,
 }
 
 
-static void pushhandlemap (lua_State *L) {
-	lua_pushlightuserdata(L, pushhandlemap);
-	if (lua_gettable(L, LUA_REGISTRYINDEX) != LUA_TTABLE) {
-		lua_pop(L, 1);
-		lua_newtable(L);
-		lua_pushlightuserdata(L, pushhandlemap);
-		lua_pushvalue(L, -2);
-		lua_createtable(L, 0, 1);
-		lua_pushliteral(L, "k");
-		lua_setfield(L, -2, "__mode");
-		lua_setmetatable(L, -2);
-		lua_settable(L, LUA_REGISTRYINDEX);
-	}
-}
-
-static void closehandle (uv_handle_t* handle, void* arg) {
-	if (!uv_is_closing(handle)) uv_close(handle, NULL);
-}
-
-static int terminateloop (lua_State *L) {
-	lcu_Scheduler *sched = (lcu_Scheduler *)lua_touserdata(L, 1);
-	uv_loop_t *loop = lcu_toloop(sched);
-	int err = uv_loop_close(loop);
-	if (err == UV_EBUSY) {
-		uv_walk(loop, closehandle, NULL);
-		loop->data = (void *)L;
-		err = uv_run(loop, UV_RUN_DEFAULT);
-		loop->data = NULL;
-		if (!err) err = uv_loop_close(loop);
-		else {
-			lcuL_warnerr(L, "system.run: ", err);
-			uv_print_all_handles(loop, stderr);
-		}
-	}
-	lcu_assert(!err);
-	return 0;
-}
-
-LCUI_FUNC void lcuM_newmodupvs (lua_State *L) {
-	int err;
-	lcu_Scheduler *sched;
-	uv_loop_t *loop;
-	pushhandlemap(L);  /* LCU_HANDLEMAP */
-	sched = (lcu_Scheduler *)lua_newuserdatauv(L, sizeof(lcu_Scheduler), 0);
-	sched->nasync = 0;
-	sched->nactive = 0;
-	loop = lcu_toloop(sched);
-	err = uv_loop_init(loop);
-	if (err < 0) lcu_error(L, err);
-	lcuL_setfinalizer(L, terminateloop);
-	loop->data = NULL;
-}
-
 LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
 	luaL_checkstack(L, nup, "too many upvalues");
 	for (; l->name != NULL; l++) {  /* fill the table with given functions */

@@ -9,6 +9,22 @@
 #include <lua.h>
 
 
+#define LCU_MODUPVS	1
+
+typedef struct lcu_Scheduler {
+	uv_loop_t loop;
+	int nasync;  /* number of active 'uv_async_t' handles */
+	int nactive;  /* number of other active handles */
+} lcu_Scheduler;
+
+#define lcu_getsched(L)	(lcu_Scheduler *)lua_touserdata(L, lua_upvalueindex(1))
+
+#define lcu_toloop(S)	(&((S)->loop))
+
+#define lcu_tosched(U)	((lcu_Scheduler *)U)
+
+LCUI_FUNC void lcuM_newmodupvs (lua_State *L);
+
 LCUI_FUNC void lcuT_savevalue (lua_State *L, void *key);
 
 LCUI_FUNC void lcuT_freevalue (lua_State *L, void *key);

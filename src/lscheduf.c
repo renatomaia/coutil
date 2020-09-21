@@ -1,4 +1,5 @@
 #include "lmodaux.h"
+#include "loperaux.h"
 
 
 static int k_resumeall (lua_State *L, int status, lua_KContext ctx) {

@@ -1165,7 +1165,7 @@ LCUI_FUNC void lcuM_addchanelc (lua_State *L) {
 	lcuM_setfuncs(L, channeltaskf, 0);
 	lua_pop(L, 1);
 	lcuM_newclass(L, CLASS_CHANNEL);
-	lcuM_setfuncs(L, channelf, LCU_MODUPVS);
+	lcuM_setfuncs(L, channelf, 0);
 	lua_pop(L, 1);
 }
 
@@ -1173,8 +1173,12 @@ LCUI_FUNC void lcuM_addchanelf (lua_State *L) {
 	static const luaL_Reg modf[] = {
 		{"channelnames", system_channelnames},
 		{"channel", system_channel},
+		{NULL, NULL}
+	};
+	static const luaL_Reg upvf[] = {
 		{"awaitch", system_awaitch},
 		{NULL, NULL}
 	};
-	lcuM_setfuncs(L, modf, LCU_MODUPVS);
+	lcuM_setfuncs(L, modf, 0);
+	lcuM_setfuncs(L, upvf, LCU_MODUPVS);
 }

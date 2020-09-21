@@ -1,4 +1,4 @@
-#include "lmodaux.h"
+#include "loperaux.h"
 
 LCUI_FUNC void lcuM_addscheduf (lua_State *L);
 
@@ -22,13 +22,12 @@ LCUI_FUNC void lcuM_addchanelf (lua_State *L);
 LCUMOD_API int luaopen_coutil_system (lua_State *L) {
 	lcuM_addchanelg(L);
 
-	lcuM_newmodupvs(L);
-
 	lcuM_addcommunc(L);
 	lcuM_addcoroutc(L);
 	lcuM_addthreadc(L);
 	lcuM_addchanelc(L);
 
+	lcuM_newmodupvs(L);
 	lua_newtable(L);
 	lcuM_addtimef(L);
 	lcuM_addsignalf(L);

@@ -2,14 +2,66 @@
 #include "loperaux.h"
 
 
-#define OPERATIONS	lua_upvalueindex(1)
-
 #define FLAG_REQUEST  0x01
 #define FLAG_PENDING  0x02
 #define FLAG_CANCEL  0x04
 
 #define torequest(O) ((uv_req_t *)&((O)->kind.request))
 #define tohandle(O) ((uv_handle_t *)&((O)->kind.handle))
+
+static void pushhandlemap (lua_State *L) {
+	lua_pushlightuserdata(L, pushhandlemap);
+	if (lua_gettable(L, LUA_REGISTRYINDEX) != LUA_TTABLE) {
+		lua_pop(L, 1);
+		lua_newtable(L);
+		lua_pushlightuserdata(L, pushhandlemap);
+		lua_pushvalue(L, -2);
+		lua_createtable(L, 0, 1);
+		lua_pushliteral(L, "k");
+		lua_setfield(L, -2, "__mode");
+		lua_setmetatable(L, -2);
+		lua_settable(L, LUA_REGISTRYINDEX);
+	}
+}
+
+static void closehandle (uv_handle_t* handle, void* arg) {
+	if (!uv_is_closing(handle)) uv_close(handle, NULL);
+}
+
+static int terminateloop (lua_State *L) {
+	lcu_Scheduler *sched = (lcu_Scheduler *)lua_touserdata(L, 1);
+	uv_loop_t *loop = lcu_toloop(sched);
+	int err = uv_loop_close(loop);
+	if (err == UV_EBUSY) {
+		uv_walk(loop, closehandle, NULL);
+		loop->data = (void *)L;
+		err = uv_run(loop, UV_RUN_DEFAULT);
+		loop->data = NULL;
+		if (!err) err = uv_loop_close(loop);
+		else {
+			lcuL_warnerr(L, "system.run: ", err);
+			uv_print_all_handles(loop, stderr);
+		}
+	}
+	lcu_assert(!err);
+	return 0;
+}
+
+LCUI_FUNC void lcuM_newmodupvs (lua_State *L) {
+	int err;
+	lcu_Scheduler *sched;
+	uv_loop_t *loop;
+	pushhandlemap(L);  /* to be collected after the 'lcu_Scheduler' */
+	lua_pop(L, 1);
+	sched = (lcu_Scheduler *)lua_newuserdatauv(L, sizeof(lcu_Scheduler), 0);
+	sched->nasync = 0;
+	sched->nactive = 0;
+	loop = lcu_toloop(sched);
+	err = uv_loop_init(loop);
+	if (err < 0) lcu_error(L, err);
+	lcuL_setfinalizer(L, terminateloop);
+	loop->data = NULL;
+}
 
 LCUI_FUNC void lcuT_savevalue (lua_State *L, void *key) {
 	lua_pushlightuserdata(L, key);
@@ -65,19 +117,20 @@ typedef struct Operation {
 
 static Operation *tothrop (lua_State *L) {
 	Operation *op;
+	pushhandlemap(L);
 	lua_pushthread(L);
-	if (lua_gettable(L, OPERATIONS) == LUA_TNIL) {
+	if (lua_gettable(L, -2) == LUA_TNIL) {
 		uv_req_t *request;
 		lua_pushthread(L);
 		op = (Operation *)lua_newuserdatauv(L, sizeof(Operation), 0);
-		lua_settable(L, OPERATIONS);
+		lua_settable(L, -4);
 		op->flags = FLAG_REQUEST;
 		request = torequest(op);
 		request->type = UV_UNKNOWN_REQ;
 		request->data = (void *)L;
 	}
 	else op = (Operation *)lua_touserdata(L, -1);
-	lua_pop(L, 1);
+	lua_pop(L, 2);  /* pops 'Operation' and 'handlemap' */
 	return op;
 }
 

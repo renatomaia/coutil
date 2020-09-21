@@ -24,7 +24,7 @@ end
 
 do case "runtime errors"
 	local co = system.load[[ return 1, 2, 3 ]]
-	asserterr("unable to yield", pcall(co.resume, co))
+	asserterr("unable to yield", pcall(system.resume, co))
 	assert(co:status() == "normal")
 
 	local co = system.load([[
@@ -35,20 +35,20 @@ do case "runtime errors"
 	local stage
 	spawn(function ()
 		stage = 0
-		asserterr("bytecodes:2: Oops!", co:resume())
+		asserterr("bytecodes:2: Oops!", system.resume(co))
 		assert(co:status() == "dead")
-		asserterr("cannot resume dead coroutine", co:resume())
+		asserterr("cannot resume dead coroutine", system.resume(co))
 		stage = 2
 	end)
 	assert(stage == 0)
 
 	spawn(function ()
-		asserterr("cannot resume running coroutine", co:resume())
+		asserterr("cannot resume running coroutine", system.resume(co))
 		stage = 1
-		local res, errval = system.load[[
+		local res, errval = system.resume(system.load[[
 			require "_G"
 			error(true)
-		]]:resume()
+		]])
 		assert(res == false)
 		assert(errval == true)
 		stage = 3
@@ -69,22 +69,22 @@ do case "type errors"
 			error{}
 		end))
 		assert(co:status() == "normal")
-		asserterr("unable to transfer argument #2 (got table)", co:resume(table))
+		asserterr("unable to transfer argument #2 (got table)", system.resume(co, table))
 		assert(co:status() == "normal")
-		asserterr("unable to transfer argument #3 (got function)", co:resume(1, print))
+		asserterr("unable to transfer argument #3 (got function)", system.resume(co, 1, print))
 		assert(co:status() == "normal")
-		asserterr("unable to transfer argument #4 (got thread)", co:resume(1, 2, coroutine.running()))
+		asserterr("unable to transfer argument #4 (got thread)", system.resume(co, 1, 2, coroutine.running()))
 		assert(co:status() == "normal")
-		asserterr("unable to transfer argument #5 (got userdata)", co:resume(1, 2, 3, co))
+		asserterr("unable to transfer argument #5 (got userdata)", system.resume(co, 1, 2, 3, co))
 		assert(co:status() == "normal")
 		stage = 1
-		asserterr("unable to transfer error (got table)", co:resume())
+		asserterr("unable to transfer error (got table)", system.resume(co))
 		assert(co:status() == "dead")
 		co = system.load[[ return 1, {2}, 3 ]]
-		asserterr("unable to transfer return value #2 (got table)", co:resume())
+		asserterr("unable to transfer return value #2 (got table)", system.resume(co))
 		assert(co:status() == "dead")
 		co = system.load[[ return 1, 2, 3, require ]]
-		asserterr("unable to transfer return value #4 (got function)", co:resume())
+		asserterr("unable to transfer return value #4 (got function)", system.resume(co))
 		assert(co:status() == "dead")
 		stage = 2
 	end)
@@ -121,7 +121,7 @@ do case "preemptive execution"
 
 	local stage = 0
 	spawn(function ()
-		assert(co:resume())
+		assert(system.resume(co))
 		stage = 1
 	end)
 	assert(co:status() == "running")
@@ -189,18 +189,18 @@ do case "transfer values"
 				assert(select(i, ...) == select(count+1+i, ...))
 			end
 		end
-		assertreturn(0, co:resume(nil, false, 123, 0xfacep-8, "\001"))
-		assertreturn(1, nil, co:resume())
-		assertreturn(1, false, co:resume(nil))
-		assertreturn(1, true, co:resume(false))
-		assertreturn(1, 0, co:resume(true))
-		assertreturn(1, 1, co:resume(0))
-		assertreturn(1, -1, co:resume(1))
-		assertreturn(1, 0xadap-16, co:resume(-1))
-		assertreturn(1, '', co:resume(0xadap-16))
-		assertreturn(1, 'Lua 5.4', co:resume(''))
-		assertreturn(1, '\\0', co:resume('Lua 5.4'))
-		assertreturn(5, nil, false, 123, 0xfacep-8, "\001", co:resume('\\0'))
+		assertreturn(0, system.resume(co, nil, false, 123, 0xfacep-8, "\001"))
+		assertreturn(1, nil, system.resume(co))
+		assertreturn(1, false, system.resume(co, nil))
+		assertreturn(1, true, system.resume(co, false))
+		assertreturn(1, 0, system.resume(co, true))
+		assertreturn(1, 1, system.resume(co, 0))
+		assertreturn(1, -1, system.resume(co, 1))
+		assertreturn(1, 0xadap-16, system.resume(co, -1))
+		assertreturn(1, '', system.resume(co, 0xadap-16))
+		assertreturn(1, 'Lua 5.4', system.resume(co, ''))
+		assertreturn(1, '\\0', system.resume(co, 'Lua 5.4'))
+		assertreturn(5, nil, false, 123, 0xfacep-8, "\001", system.resume(co, '\\0'))
 	end)
 
 	assert(system.run() == false)
@@ -216,12 +216,12 @@ do case "resume closed"
 			coroutine.yield("hello")
 		]]
 		stage = 0
-		local ok, res = co:resume()
+		local ok, res = system.resume(co)
 		assert(ok == true)
 		assert(res == "hello")
 		assert(co:close() == true)
 		assert(co:status() == "dead")
-		asserterr("cannot resume dead coroutine", co:resume())
+		asserterr("cannot resume dead coroutine", system.resume(co))
 		stage = 1
 	end)
 
@@ -240,7 +240,7 @@ do case "collect suspended"
 			coroutine.yield("hello")
 		]]
 		stage = 0
-		local ok, res = garbage.co:resume()
+		local ok, res = system.resume(garbage.co)
 		assert(ok == true)
 		assert(res == "hello")
 		gc()
@@ -264,7 +264,7 @@ do case "collect cancelled"
 			coroutine.yield("hello")
 		]]
 		stage = 0
-		local ok, res = garbage.co:resume()
+		local ok, res = system.resume(garbage.co)
 		assert(ok == nil)
 		assert(res == "cancelled")
 		gc()
@@ -285,10 +285,10 @@ do case "running unreferenced"
 	local stage
 	spawn(function ()
 		stage = 0
-		local ok, res = system.load[[
+		local ok, res = system.resume(system.load[[
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
-		]]:resume()
+		]])
 		assert(ok == true)
 		assert(res == "hello")
 		stage = 1
@@ -312,10 +312,10 @@ do case "close running"
 
 	spawn(function ()
 		stage = 0
-		local ok, res = co:resume()
+		local ok, res = system.resume(co)
 		assert(ok == true)
 		assert(res == "hello")
-		asserterr("cannot resume dead coroutine", co:resume())
+		asserterr("cannot resume dead coroutine", system.resume(co))
 		stage = 1
 	end)
 
@@ -336,7 +336,7 @@ do case "yield values"
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
 		]]
-		local res, extra = co:resume("testing", 1, 2, 3)
+		local res, extra = system.resume(co, "testing", 1, 2, 3)
 		assert(res == true)
 		assert(extra == "hello")
 		stage = 1
@@ -359,7 +359,7 @@ do case "scheduled yield"
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
 		]]
-		co:resume()
+		system.resume(co)
 		stage = 1
 		coroutine.yield()
 		stage = 2
@@ -380,10 +380,10 @@ do case "resume same coroutine"
 
 	local stage = 0
 	spawn(function ()
-		co:resume()
+		system.resume(co)
 		assert(co:status() == "suspended")
 		stage = 1
-		co:resume()
+		system.resume(co)
 		assert(co:status() == "dead")
 		stage = 2
 	end)
@@ -412,11 +412,11 @@ do case "resume different coroutines"
 
 	local stage = 0
 	spawn(function ()
-		co1:resume()
+		system.resume(co1)
 		assert(co1:status() == "suspended")
 		assert(co2:status() == "normal")
 		stage = 1
-		co2:resume()
+		system.resume(co2)
 		assert(co1:status() == "suspended")
 		assert(co2:status() == "suspended")
 		stage = 2
@@ -447,7 +447,7 @@ do case "resume transfer"
 			return "bye"
 		]]
 		stage = 0
-		local res, extra = co:resume()
+		local res, extra = system.resume(co)
 		assert(res == true)
 		assert(extra == "hello")
 		assert(co:status() == "suspended")
@@ -462,7 +462,7 @@ do case "resume transfer"
 		stage = 1
 		local co = coroutine.yield()
 		stage = 3
-		local res, extra = co:resume()
+		local res, extra = system.resume(co)
 		assert(res == true)
 		assert(extra == "bye")
 		assert(co:status() == "dead")
@@ -487,7 +487,7 @@ do case "cancel resume"
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
 		]]
-		local a,b,c = co:resume()
+		local a,b,c = system.resume(co)
 		assert(a == true)
 		assert(b == nil)
 		assert(c == 3)
@@ -515,12 +515,12 @@ do case "cancel and resume again"
 			coroutine.yield("hello")
 			return "bye"
 		]]
-		local res, extra = co:resume()
+		local res, extra = system.resume(co)
 		assert(res == nil)
 		assert(extra == "cancelled")
 		assert(co:status() == "running")
 		stage = 1
-		local res, extra = co:resume()
+		local res, extra = system.resume(co)
 		assert(res == true)
 		if extra == "hello" then
 			assert(co:status() == "suspended")
@@ -553,7 +553,7 @@ do case "cancel and resume by other"
 			return "bye"
 		]]
 		stage = 0
-		local res, extra = co:resume()
+		local res, extra = system.resume(co)
 		assert(res == nil)
 		assert(extra == "cancelled")
 		assert(co:status() == "running")
@@ -566,13 +566,13 @@ do case "cancel and resume by other"
 		thread = coroutine.running()
 		stage = 1
 		local co = coroutine.yield()
-		asserterr("cannot resume running coroutine", co:resume())
+		asserterr("cannot resume running coroutine", system.resume(co))
 		stage = 2
 		while co:status() == "running" do
 			system.suspend()
 		end
 		local status = co:status()
-		local res, extra = co:resume()
+		local res, extra = system.resume(co)
 		assert(res == true)
 		if status == "normal" then
 			assert(extra == "hello")
@@ -600,10 +600,10 @@ do case "ignore errors"
 
 	local stage = 0
 	pspawn(function ()
-		assert(system.load[[
+		assert(system.resume(system.load[[
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
-		]]:resume())
+		]]))
 		stage = 1
 		error("oops!")
 	end)
@@ -620,10 +620,10 @@ do case "ignore errors after cancel"
 	local stage = 0
 	pspawn(function ()
 		garbage.coro = coroutine.running()
-		assert(system.load[[
+		assert(system.resume(system.load[[
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
-		]]:resume())
+		]]))
 		stage = 1
 		error("oops!")
 	end)
@@ -652,12 +652,12 @@ do case "chunk from file"
 	local stage
 	spawn(function ()
 		stage = 0
-		local res, extra = co:resume()
+		local res, extra = system.resume(co)
 		assert(res == true)
 		assert(extra == "hello")
 		assert(co:status() == "suspended")
 		stage = 1
-		local res, extra = co:resume()
+		local res, extra = system.resume(co)
 		assert(res == true)
 		assert(extra == "bye")
 		assert(co:status() == "dead")
@@ -695,7 +695,7 @@ do case "inherit preload"
 		package.preload["coutil.spawn"] = nil
 		package.preload["coutil.system"] = nil
 
-		local ok, res = co:resume()
+		local ok, res = system.resume(co)
 		assert(ok == true and res == true)
 	end)
 

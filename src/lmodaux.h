@@ -47,22 +47,6 @@ LCUI_FUNC int lcuL_movefrom (lua_State *to,
                              int n,
                              const char *msg);
 
-#define LCU_MODUPVS	2
-
-typedef struct lcu_Scheduler {
-	uv_loop_t loop;
-	int nasync;  /* number of active 'uv_async_t' handles */
-	int nactive;  /* number of other active handles */
-} lcu_Scheduler;
-
-#define lcu_getsched(L)   (lcu_Scheduler *)lua_touserdata(L, lua_upvalueindex(2))
-
-#define lcu_toloop(S)   (&((S)->loop))
-
-#define lcu_tosched(U) ((lcu_Scheduler *)U)
-
-LCUI_FUNC void lcuM_newmodupvs (lua_State *L);
-
 LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup);
 
 LCUI_FUNC void lcuM_newclass (lua_State *L, const char *name);

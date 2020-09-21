@@ -69,12 +69,13 @@ Index
 		- [`socket:shutdown`](#socketshutdown-)
 		- [`socket:listen`](#socketlisten-backlog)
 		- [`socket:accept`](#socketaccept-)
-	- [`system.load`]()
-	- [`system.loadfile`]()
-		- [`syscoro:resume`]()
+	- [`system.resume`]()
+	- [`system.awaitch`]()
+- [`coutil.coroutine`]()
+	- [`coroutine.load`]()
+	- [`coroutine.loadfile`]()
 		- [`syscoro:status`]()
 		- [`syscoro:close`]()
-	- [`system.awaitch`]()
 - [`coutil.threads`]()
 	- [`threads.create`]()
 		- [`threads:resize`]()
@@ -85,8 +86,8 @@ Index
 - [`coutil.channel`]()
 	- [`channel.getnames`]()
 	- [`channel.create`]()
-		- [`channel:sync`]()
 		- [`channel:close`]()
+		- [`channel:sync`]()
 
 Contents
 ========

@@ -594,7 +594,7 @@ static int system_socket (lua_State *L) {
 	return lcuL_pushresults(L, 1, err);
 }
 
-#define toclass(L) lua_tostring(L, lua_upvalueindex(LCU_MODUPVS+1))
+#define toclass(L) lua_tostring(L, lua_upvalueindex(1))
 
 static lcu_Object *openedobj (lua_State *L, int arg, const char *class) {
 	lcu_Object *object = (lcu_Object *)luaL_checkudata(L, arg, class);
@@ -1458,6 +1458,9 @@ static const luaL_Reg pipeipc[] = {
 
 static const luaL_Reg modf[] = {
 	{"address", system_address},
+};
+
+static const luaL_Reg upvf[] = {
 	{"findaddr", system_findaddr},
 	{"nameaddr", system_nameaddr},
 	{"socket", system_socket},
@@ -1475,61 +1478,62 @@ LCUI_FUNC void lcuM_addcommunc (lua_State *L) {
 
 	lua_pushstring(L, LCU_UDPSOCKETCLS);
 	lcuM_newclass(L, LCU_UDPSOCKETCLS);
-	lcuM_setfuncs(L, object, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, ip, LCU_MODUPVS+1);
+	lcuM_setfuncs(L, object, 1);
+	lcuM_setfuncs(L, ip, 1);
 	lua_remove(L, -2);
-	lcuM_setfuncs(L, udp, LCU_MODUPVS);
+	lcuM_setfuncs(L, udp, 0);
 	lua_pop(L, 1);
 
 	lua_pushstring(L, LCU_TCPACTIVECLS);
 	lcuM_newclass(L, LCU_TCPACTIVECLS);
-	lcuM_setfuncs(L, object, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, ip, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, tcp, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, active, LCU_MODUPVS+1);
+	lcuM_setfuncs(L, object, 1);
+	lcuM_setfuncs(L, ip, 1);
+	lcuM_setfuncs(L, tcp, 1);
+	lcuM_setfuncs(L, active, 1);
 	lua_remove(L, -2);
-	lcuM_setfuncs(L, tcpactive, LCU_MODUPVS);
+	lcuM_setfuncs(L, tcpactive, 0);
 	lua_pop(L, 1);
 
 	lua_pushstring(L, LCU_TCPPASSIVECLS);
 	lcuM_newclass(L, LCU_TCPPASSIVECLS);
-	lcuM_setfuncs(L, object, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, ip, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, tcp, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, passive, LCU_MODUPVS+1);
+	lcuM_setfuncs(L, object, 1);
+	lcuM_setfuncs(L, ip, 1);
+	lcuM_setfuncs(L, tcp, 1);
+	lcuM_setfuncs(L, passive, 1);
 	lua_remove(L, -2);
-	lcuM_setfuncs(L, tcppassive, LCU_MODUPVS);
+	lcuM_setfuncs(L, tcppassive, 0);
 	lua_pop(L, 1);
 
 	lua_pushstring(L, LCU_PIPEIPCCLS);
 	lcuM_newclass(L, LCU_PIPEIPCCLS);
-	lcuM_setfuncs(L, object, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, pipe, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, active, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, pipeactive, LCU_MODUPVS+1);
+	lcuM_setfuncs(L, object, 1);
+	lcuM_setfuncs(L, pipe, 1);
+	lcuM_setfuncs(L, active, 1);
+	lcuM_setfuncs(L, pipeactive, 1);
 	lua_remove(L, -2);
-	lcuM_setfuncs(L, pipeipc, LCU_MODUPVS);
+	lcuM_setfuncs(L, pipeipc, 0);
 	lua_pop(L, 1);
 
 	lua_pushstring(L, LCU_PIPEACTIVECLS);
 	lcuM_newclass(L, LCU_PIPEACTIVECLS);
-	lcuM_setfuncs(L, object, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, pipe, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, active, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, pipeactive, LCU_MODUPVS+1);
+	lcuM_setfuncs(L, object, 1);
+	lcuM_setfuncs(L, pipe, 1);
+	lcuM_setfuncs(L, active, 1);
+	lcuM_setfuncs(L, pipeactive, 1);
 	lua_remove(L, -2);
 	lua_pop(L, 1);
 
 	lua_pushstring(L, LCU_PIPEPASSIVECLS);
 	lcuM_newclass(L, LCU_PIPEPASSIVECLS);
-	lcuM_setfuncs(L, object, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, pipe, LCU_MODUPVS+1);
-	lcuM_setfuncs(L, passive, LCU_MODUPVS+1);
+	lcuM_setfuncs(L, object, 1);
+	lcuM_setfuncs(L, pipe, 1);
+	lcuM_setfuncs(L, passive, 1);
 	lua_remove(L, -2);
-	lcuM_setfuncs(L, pipepassive, LCU_MODUPVS);
+	lcuM_setfuncs(L, pipepassive, 0);
 	lua_pop(L, 1);
 }
 
 LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
-	lcuM_setfuncs(L, modf, LCU_MODUPVS);
+	lcuM_setfuncs(L, modf, 0);
+	lcuM_setfuncs(L, upvf, LCU_MODUPVS);
 }
