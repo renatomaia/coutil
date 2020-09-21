@@ -137,7 +137,7 @@ struct lcu_IpcPipe {
 };
 
 static lcu_Object *createobj (lua_State *L, size_t size, const char *cls) {
-	lcu_Object *object = (lcu_Object *)lua_newuserdatauv(L, size, 0);
+	lcu_Object *object = (lcu_Object *)lua_newuserdatauv(L, size, 1);
 	object->flags = FLAG_CLOSED;
 	object->stop = NULL;
 	object->step = NULL;

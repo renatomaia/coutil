@@ -541,10 +541,9 @@ static void getbufarg (lua_State *L, uv_buf_t *buf) {
 	const char *data = luamem_checkstring(L, 2, &sz);
 	size_t start = posrelatI(luaL_optinteger(L, 3, 1), sz);
 	size_t end = getendpos(L, 4, -1, sz);
-	if (data && start <= end) {
-		buf->len = end-start+1;
-		buf->base = (char *)(data+start-1);
-	}
+	if (start <= end) buf->len = end-start+1;
+	else buf->len = 0;
+	buf->base = (char *)(data+start-1);
 }
 
 
@@ -819,13 +818,31 @@ static int k_udprecv (lua_State *L) {
 	}
 	return lua_gettop(L)-5;
 }
+static int k_udpbuffer (lua_State *L) {
+	lcu_Object *object = (lcu_Object *)lua_touserdata(L, 1);
+	uv_buf_t *buf = (uv_buf_t *)lua_touserdata( L, -1);
+	lcu_assert(buf);
+	lua_pop(L, 1);  /* discard 'buf' */
+	getbufarg(L, buf);
+	if (buf->len > 65536) buf->len = 65536;  /* avoid use of recvmmsg by libuv */
+	lcu_setobjstep(object, k_udprecv);  /* update continuation function */
+	return -1;  /* yield on success */
+}
 static void uv_onudprecv (uv_udp_t *udp,
                           ssize_t nread,
                           const uv_buf_t *buf,
                           const struct sockaddr *addr,
                           unsigned int flags) {
-	lua_State *thread = (lua_State *)udp->data;
+	uv_handle_t *handle = (uv_handle_t *)udp;
+	lua_State *thread = (lua_State *)handle->data;
 	int nret;
+	if (nread == 0 && addr == NULL) {
+		/* 'libuv' indication of datagram end (meaning?!), ignore it and */
+		/* get ready to restart all over again from obtaining the buffer */
+		lcu_Object *object = lcu_tohdlobj(handle);
+		lcu_setobjstep(object, k_udpbuffer);
+		return;
+	}
 	lcu_assert(thread);
 	lcu_assert(buf->base != (char *)buf);
 	lcu_assert(addr);
@@ -836,28 +853,21 @@ static void uv_onudprecv (uv_udp_t *udp,
 		nret = 3;
 	}
 	else nret = lcuL_pusherrres(thread, nread);
-	lcuU_resumeobjop((uv_handle_t *)udp, nret);
-}
-static int k_udpbuffer (lua_State *L) {
-	lcu_UdpSocket *udp = (lcu_UdpSocket *)lua_touserdata(L, 1);
-	uv_buf_t *buf = (uv_buf_t *)lua_touserdata( L, -1);
-	lcu_assert(buf);
-	lua_pop(L, 1);  /* discard 'buf' */
-	getbufarg(L, buf);
-	if (buf->len > 65536) buf->len = 65536;  /* avoid use of recvmmsg by libuv */
-	lcu_setobjstep((lcu_Object *)udp, k_udprecv);  /* update continuation function */
-	return -1;  /* yield on success */
+	lcuU_resumeobjop(handle, nret);
 }
 static void uv_ongetbuffer (uv_handle_t *handle,
                             size_t suggested_size,
                             uv_buf_t *buf) {
-	lua_State *thread = (lua_State *)handle->data;
 	(void)suggested_size;
-	lcu_assert(thread);
-	buf->base = (char *)buf;
-	buf->len = 0;
-	lua_pushlightuserdata(thread, buf);
-	lcuU_resumeobjop(handle, 1);
+	do {
+		lua_State *thread = (lua_State *)handle->data;
+		buf->base = (char *)buf;
+		buf->len = 0;
+		lcu_assert(thread);
+		lua_pushlightuserdata(thread, buf);
+		lcuU_resumeobjop(handle, 1);
+	} /* while 'socket:receive' is called again after error getting buffer */
+	while (handle->data && buf->base == (char *)buf);
 }
 static int udpstoprecv (uv_handle_t *handle) {
 	return uv_udp_recv_stop((uv_udp_t *)handle);
@@ -983,11 +993,11 @@ static int k_getbuffer (lua_State *L) {
 	lcu_Object *object = (lcu_Object *)lua_touserdata(L, 1);
 	lua_CFunction nextstep = (lua_CFunction)lua_touserdata(L, -2);
 	uv_buf_t *buf = (uv_buf_t *)lua_touserdata(L, -1);
+	lua_pop(L, 2);  /* discard 'nextsteṕ' and 'buf' */
 	lcu_assert(nextstep);
 	lcu_assert(buf);
 	getbufarg(L, buf);
 	lcu_setobjstep(object, nextstep);
-	lua_pop(L, 2);  /* discard 'nextsteṕ' and 'buf' */
 	return -1;
 }
 static int stoprecvdata (uv_handle_t *handle) {
@@ -1219,7 +1229,7 @@ static int k_setuptcpconn (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int tcp_connect (lua_State *L) {
-	lcu_TcpSocket *tcp = openedtcp(L, toclass(L));
+	lcu_TcpSocket *tcp = openedtcp(L, LCU_TCPACTIVECLS);
 	uv_tcp_t *handle = lcu_totcphdl(tcp);
 	lcu_Scheduler *sched = lcu_tosched(handle->loop);
 	return lcuT_resetreqopk(L, sched, k_setuptcpconn, NULL, NULL);

@@ -90,6 +90,7 @@ do case "runtime errors"
 					local t = assert(system.threads(1))
 					assert(t:dostring([[
 						require "_G"
+						warn "@on"
 						error "Oops!"
 					]], "@chunk.lua") == true)
 					assert(t:close())
@@ -98,7 +99,8 @@ do case "runtime errors"
 			stderr = errfile,
 		})
 		assert(errfile:close())
-		assert(readfrom(errpath) == "[COUTIL PANIC] chunk.lua:2: Oops!\n")
+		local output = readfrom(errpath)
+		assert(output == "Lua warning: [coutil] system.threads: chunk.lua:3: Oops!\n")
 		os.remove(errpath)
 	end)
 	system.run()
@@ -545,14 +547,14 @@ do case "already in use"
 	local a
 	spawn(function ()
 		a = 1
-		channel:await()
+		system.awaitch(channel)
 		a = 2
 	end)
 	assert(a == 1)
 
 	local b
 	spawn(function ()
-		asserterr("in use", pcall(channel.await, channel))
+		asserterr("in use", pcall(system.awaitch, channel))
 		channel:sync()
 		b = 1
 	end)
@@ -569,7 +571,7 @@ do case "scheduled yield"
 
 	local stage = 0
 	spawn(function ()
-		assert(system.channel(name):await() == true)
+		assert(system.awaitch(system.channel(name)) == true)
 		stage = 1
 		coroutine.yield()
 		stage = 2
@@ -594,9 +596,9 @@ do case "reschedule same channel"
 	local stage = 0
 	spawn(function ()
 		local channel = system.channel(name)
-		assert(channel:await() == true)
+		assert(system.awaitch(channel) == true)
 		stage = 1
-		assert(channel:await() == true)
+		assert(system.awaitch(channel) == true)
 		stage = 2
 	end)
 	assert(stage == 0)
@@ -625,9 +627,9 @@ do case "reschedule different channels"
 
 	local stage = 0
 	spawn(function ()
-		assert(system.channel(name1):await() == true)
+		assert(system.awaitch(system.channel(name1)) == true)
 		stage = 1
-		assert(system.channel(name2):await() == true)
+		assert(system.awaitch(system.channel(name2)) == true)
 		stage = 2
 	end)
 	assert(stage == 0)
@@ -654,7 +656,7 @@ do case "cancel schedule"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		local a,b,c = system.channel(tostring{}):await()
+		local a,b,c = system.awaitch(system.channel(tostring{}))
 		assert(a == true)
 		assert(b == nil)
 		assert(c == 3)
@@ -681,10 +683,10 @@ do case "cancel and reschedule"
 	spawn(function ()
 		garbage.coro = coroutine.running()
 		local channel = system.channel(name)
-		local extra = channel:await()
+		local extra = system.awaitch(channel)
 		assert(extra == nil)
 		stage = 1
-		assert(channel:await() == true)
+		assert(system.awaitch(channel) == true)
 		stage = 2
 	end)
 	assert(stage == 0)
@@ -712,9 +714,9 @@ do case "resume while closing"
 	spawn(function ()
 		garbage.coro = coroutine.running()
 		local channel = system.channel(name)
-		assert(channel:await() == nil)
+		assert(system.awaitch(channel) == nil)
 		stage = 1
-		local a,b,c = channel:await()
+		local a,b,c = system.awaitch(channel)
 		assert(a == .1)
 		assert(b == 2.2)
 		assert(c == 33.3)
@@ -744,7 +746,7 @@ do case "ignore errors"
 
 	local stage = 0
 	pspawn(function ()
-		assert(system.channel(name):await() == true)
+		assert(system.awaitch(system.channel(name)) == true)
 		stage = 1
 		error("oops!")
 	end)
@@ -767,7 +769,7 @@ do case "ignore errors after cancel"
 	local stage = 0
 	pspawn(function ()
 		garbage.coro = coroutine.running()
-		assert(system.channel(tostring{}):await() == garbage)
+		assert(system.awaitch(system.channel(tostring{})) == garbage)
 		stage = 1
 		error("oops!")
 	end)
@@ -788,8 +790,9 @@ do case "close channels"
 		local channel = system.channel("closing channel")
 		assert(channel:close() == true)
 		assert(channel:close() == false)
-		for _, opname in ipairs{ "await", "sync", "getname" } do
-			asserterr("closed channel", pcall(channel[opname], channel))
+		for _, op in ipairs{ system.awaitch, "sync", "getname" } do
+			local func = channel[op] or op
+			asserterr("closed channel", pcall(func, channel))
 		end
 	end)
 
@@ -802,7 +805,7 @@ do case "collect while in use"
 	local t = system.threads(1)
 	t:dostring(utilschunk..[[
 		local system = require "coutil.system"
-		spawn(function () system.channel("c"):await() end)
+		spawn(function () system.awaitch(system.channel("c")) end)
 	]])
 	t:close()
 
@@ -812,7 +815,7 @@ do case "collect while in use"
 
 	dostring(utilschunk..[[
 		local system = require "coutil.system"
-		spawn(function () system.channel("c"):await() end)
+		spawn(function () system.awaitch(system.channel("c")) end)
 	]])
 
 	done()
@@ -822,7 +825,7 @@ do case "close while in use"
 	local channel = system.channel("c")
 	local ended = false
 	spawn(function ()
-		channel:await()
+		system.awaitch(channel)
 		ended = true
 	end)
 	assert(not ended)
@@ -886,7 +889,7 @@ do case "queueing on endpoints"
 			assert(errmsg == "empty")
 			sendsignal(path)
 		end
-		assert(channel:await(endpoint) == true)
+		assert(system.awaitch(channel, endpoint) == true)
 		sendsignal(path)
 	]]
 	local channelchunk = utilschunk..[[
@@ -1012,7 +1015,7 @@ do case "transfer values"
 			local system = require "coutil.system"
 			spawn(function ()
 				local function assertvalues(...) ]]..assertvalues(rets)..[[ end
-				assertvalues(system.channel(name):await(]]..makeargvals(args)..[[))
+				assertvalues(system.awaitch(system.channel(name)]]..makeargvals(args, ", ")..[[))
 				sendsignal(path)
 			end)
 			system.run()
@@ -1047,7 +1050,7 @@ do case "transfer values"
 			local makeargvals = assert(load(makeargvals(args, "return ")))
 			local assertvalues = assert(load(assertvalues(rets)))
 			spawn(function ()
-				assertvalues(system.channel(name):await(makeargvals()))
+				assertvalues(system.awaitch(system.channel(name), makeargvals()))
 				sendsignal(path)
 			end)
 		end,
@@ -1097,7 +1100,7 @@ do case "transfer errors"
 			local system = require "coutil.system"
 			spawn(function ()
 				local channel = system.channel(name)
-				asserterr("]]..errmsg..[[", pcall(channel.await, channel, nil, ]]..args..[[))
+				asserterr("]]..errmsg..[[", pcall(system.awaitch, channel, nil, ]]..args..[[))
 				sendsignal(path)
 			end)
 			system.run()
@@ -1130,7 +1133,7 @@ do case "transfer errors"
 			spawn(function ()
 				local makeargvals = assert(load("return "..args))
 				local channel = system.channel(name)
-				asserterr(errmsg, pcall(channel.await, channel, nil, makeargvals()))
+				asserterr(errmsg, pcall(system.awaitch, channel, nil, makeargvals()))
 				sendsignal(path)
 			end)
 		end,
@@ -1175,7 +1178,7 @@ do case "invalid endpoint"
 			local system = require "coutil.system"
 			spawn(function ()
 				local channel = system.channel(name)
-				asserterr("]]..errmsg..[[", pcall(channel.await, channel, "]]..arg..[["))
+				asserterr("]]..errmsg..[[", pcall(system.awaitch, channel, "]]..arg..[["))
 				sendsignal(path)
 			end)
 			system.run()
@@ -1207,7 +1210,7 @@ do case "invalid endpoint"
 		function (_, arg, errmsg, name, path)
 			spawn(function ()
 				local channel = system.channel(name)
-				asserterr(errmsg, pcall(channel.await, channel, arg))
+				asserterr(errmsg, pcall(system.awaitch, channel, arg))
 				sendsignal(path)
 			end)
 		end,
@@ -1294,7 +1297,7 @@ do case "resume listed channels"
 		local name = tostring(coroutine.running())
 		local channel = system.channel(name)
 		sendsignal(path)
-		local res, errmsg = channel:await()
+		local res, errmsg = system.awaitch(channel)
 		assert(res == true)
 		assert(errmsg == "reset")
 		channel:close()
@@ -1382,7 +1385,7 @@ do case "end with channel left by ended task"
 		t:dostring(utilschunk..[[
 			local system = require "coutil.system"
 			spawn(function ()
-				system.channel("My Channel"):await()
+				system.awaitch(system.channel("My Channel"))
 			end)
 		]])
 		t:close()
@@ -1415,7 +1418,7 @@ do case "end with task with coroutine waiting on channel"
 		t:dostring(utilschunk..[[
 			local system = require "coutil.system"
 			spawn(function ()
-				system.channel("My Channel"):await()
+				system.awaitch(system.channel("My Channel"))
 			end)
 			system.run()
 		]])
@@ -1434,7 +1437,7 @@ do case "collect running sysco waiting channel"
 				local coroutine = require "coroutine"
 				local system = require "coutil.system"
 				spawn(function ()
-					system.channel("channel"):await()
+					system.awaitch(system.channel("channel"))
 				end)
 				system.run()
 			]]))
@@ -1454,7 +1457,7 @@ do case "suspend with only channels"
 			local system = require "coutil.system"
 			spawn(function ()
 				local channel = system.channel(%q)
-				channel:await()
+				system.awaitch(channel)
 			end)
 			assert(system.run() == false)
 		]]
@@ -1465,7 +1468,7 @@ do case "suspend with only channels"
 		repeat until (checkcount(t, "s", count))
 		for i = count, 1, -1 do
 			local channel = system.channel(tostring(i))
-			assert(channel:await() == true)
+			assert(system.awaitch(channel) == true)
 		end
 		t:close()
 	end)
@@ -1485,13 +1488,13 @@ do case "don't suspend with other events"
 			local memory = require "memory"
 			local channel = system.channel(%q)
 			spawn(function ()
-				channel:await("out")
+				system.awaitch(channel, "out")
 			end)
 			spawn(function ()
 				local socket = system.socket("stream", "ipv4")
 				local address = system.address("ipv4", "127.0.0.1", ]]..baseport..[[+%d)
 				assert(socket:connect(address) == true)
-				assert(socket:receive(memory.create(8192)) == true)
+				assert(socket:receive(memory.create(8192)) == 8192)
 				assert(socket:close() == true)
 			end)
 			assert(system.run() == false)
@@ -1515,7 +1518,6 @@ do case "don't suspend with other events"
 			conns[i] = assert(sockets[i]:accept())
 		end
 
-		--repeat until (checkcount(t, "r", count))
 		for i = count, 1, -1 do
 			assert(conns[i]:send(string.rep("x", 8192)) == true)
 			assert(conns[i]:close() == true)
@@ -1525,7 +1527,7 @@ do case "don't suspend with other events"
 		repeat until (checkcount(t, "s", count))
 		assert(t:resize(1) == true)
 		for i = count, 1, -1 do
-			assert(system.channel(tostring(i)):await("in") == true)
+			assert(system.awaitch(system.channel(tostring(i)), "in") == true)
 		end
 		t:close()
 	end)

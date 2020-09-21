@@ -19,7 +19,7 @@ LCUI_FUNC void lcuT_savevalue (lua_State *L, void *key) {
 
 LCUI_FUNC void lcuT_pushsaved (lua_State *L, void *key) {
 	lua_pushlightuserdata(L, key);
-	lua_settable(L, LUA_REGISTRYINDEX);
+	lua_gettable(L, LUA_REGISTRYINDEX);
 }
 
 LCUI_FUNC void lcuT_freevalue (lua_State *L, void *key) {
@@ -337,22 +337,19 @@ LCUI_FUNC int lcuU_resumethrop (uv_handle_t *handle, int narg) {
 
 static void closedobj (uv_handle_t *handle) {
 	uv_loop_t *loop = handle->loop;
-	lcu_Scheduler *sched = lcu_tosched(loop);
 	lua_State *L = (lua_State *)loop->data;
 	lcuT_freevalue(L, (void *)handle);  /* becomes garbage */
-	sched->nactive--;
 }
 
 LCUI_FUNC void lcuT_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle) {
 	lua_State *thread = (lua_State *)handle->data;
 	if (thread) {
 		int nret;
-		handle->data = NULL;
 		lua_pushnil(L);
-		lua_setiuservalue(L, idx, 1);
+		lua_setiuservalue(L, idx, 1);  /* allow thread to be collected */
 		lua_pushnil(thread);
 		lua_pushliteral(thread, "closed");
-		lua_resume(thread, L, 2, &nret);
+		lua_resume(thread, L, 2, &nret);  /* explicit resume to cancel operation */
 		lua_pop(thread, nret);  /* dicard yielded values */
 	}
 	lua_pushvalue(L, idx);
@@ -360,21 +357,23 @@ LCUI_FUNC void lcuT_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle) {
 	uv_close(handle, closedobj);
 }
 
-static void stopobjop (lcu_Object *obj) {
+static void stopobjop (lua_State *L, lcu_Object *obj) {
 	uv_handle_t *handle = lcu_toobjhdl(obj);
-	lua_State *L = (lua_State *)handle->loop->data;
 	lcu_ObjectAction stop = lcu_getobjstop(obj);
+	lcu_Scheduler *sched = lcu_tosched(handle->loop);
 	int err = stop(handle);
-	lcuT_pushsaved(L, handle);
+	lcuT_pushsaved(L, handle);  /* restore saved object being stopped */
 	lua_pushnil(L);
-	lua_setiuservalue(L, -1, 1);
+	lua_setiuservalue(L, -2, 1);  /* allow thread to be collected */
 	if (err < 0) {
 		lcuT_closeobj(L, -1);
-		lcuL_warnerr(L, "object:stop ", err);
+		lcuL_warnerr(L, "object:stop: ", err);
 	}
 	else lcuT_freevalue(L, (void *)handle);
+	lua_pop(L, 1);  /* discard restored saved object */
 	lcu_setobjstop(obj, NULL);
 	lcu_setobjstep(obj, NULL);
+	sched->nactive--;
 }
 
 static int k_endobjop (lua_State *L, int status, lua_KContext ctx);
@@ -401,7 +400,7 @@ static int k_endobjop (lua_State *L, int status, lua_KContext ctx) {
 		if (nret >= 0) return nret;
 		return scheduledyield (L, handle);
 	}
-	stopobjop(obj);
+	stopobjop(L, obj);
 	return lua_gettop(L)-((int)ctx);
 }
 
@@ -432,7 +431,7 @@ LCUI_FUNC int lcuU_resumeobjop (uv_handle_t *handle, int narg) {
 	lua_State *L = (lua_State *)loop->data;
 	lua_State *thread = (lua_State *)handle->data;
 	int status = resumethread(thread, L, narg, loop);
-	if (handle->data == NULL) stopobjop(lcu_tohdlobj(handle));
+	if (handle->data == NULL) stopobjop(L, lcu_tohdlobj(handle));
 	lcuU_checksuspend(loop);
 	return status;
 }

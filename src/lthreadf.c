@@ -222,7 +222,7 @@ static int addthread_mx (ThreadPool *pool, lua_State *L) {
 			uv_thread_t tid;
 			int err = uv_thread_create(&tid, threadmain, pool);
 			if (!err) pool->threads++;
-			// TODO: show warn in Lua 5.4
+			else lcuL_warnerr(L, "system.threads: ", err);
 		}
 	}
 	if (pool->status == TPOOL_CLOSED) return 0;
@@ -468,7 +468,7 @@ static void threadmain (void *arg) {
 			}
 		} else {
 			if (status != LUA_OK) {
-				lcuL_warnmsg(L, "system.threads", lua_tostring(L, -1));
+				lcuL_warnmsg(L, "system.threads: ", lua_tostring(L, -1));
 			}
 			/* avoid 'pool->tasks--' */
 			lua_settop(L, 0);
@@ -1176,5 +1176,5 @@ LCUI_FUNC void lcuM_addchanelf (lua_State *L) {
 		{"awaitch", system_awaitch},
 		{NULL, NULL}
 	};
-	lcuM_setfuncs(L, modf, 0);
+	lcuM_setfuncs(L, modf, LCU_MODUPVS);
 }

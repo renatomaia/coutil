@@ -1,4 +1,5 @@
 local _ENV = require "_G"
+warn("@on")
 local package = require "package"
 local table = require "table"
 local string = require "string"

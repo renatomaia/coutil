@@ -61,15 +61,23 @@ static int writer (lua_State *L, const void *b, size_t size, void *B) {
 	return 0;
 }
 
+static void warnf (void *ud, const char *message, int tocont);
+
 LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
 	const luaL_Reg *lib;
 	void *allocud;
 	lua_Alloc allocf = lua_getallocf(L, &allocud);
 	lua_CFunction panic = lua_atpanic(L, NULL);  /* changes panic function */
 	lua_State *NL = lua_newstate(allocf, allocud);
+	int *warnstate;  /* space for warning state */
 
 	lua_atpanic(L, panic);  /* restore panic function */
 	lua_atpanic(NL, panic);
+
+	warnstate = (int *)lua_newuserdatauv(NL, sizeof(int), 0);
+	luaL_ref(NL, LUA_REGISTRYINDEX);  /* make sure it won't be collected */
+	*warnstate = 0;  /* default is warnings off */
+	lua_setwarnf(NL, warnf, warnstate);
 
 	luaL_checkstack(NL, 3, "not enough memory");
 
@@ -265,7 +273,7 @@ static int terminateloop (lua_State *L) {
 		loop->data = NULL;
 		if (!err) err = uv_loop_close(loop);
 		else {
-			lcuL_warnerr(L, "system.run", err);
+			lcuL_warnerr(L, "system.run: ", err);
 			uv_print_all_handles(loop, stderr);
 		}
 	}
@@ -341,3 +349,52 @@ LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
 	}
 	printf("\n");
 }
+
+
+/******************************************************************************
+* Copyright (C) 1994-2020 Lua.org, PUC-Rio.
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+******************************************************************************/
+
+#include <string.h>
+
+static void warnf (void *ud, const char *message, int tocont) {
+	int *warnstate = (int *)ud;
+	if (*warnstate != 2 && !tocont && *message == '@') {  /* control message? */
+		if (strcmp(message, "@off") == 0)
+			*warnstate = 0;
+		else if (strcmp(message, "@on") == 0)
+			*warnstate = 1;
+		return;
+	}
+	else if (*warnstate == 0)  /* warnings off? */
+		return;
+	if (*warnstate == 1)  /* previous message was the last? */
+		lua_writestringerror("%s", "Lua warning: ");  /* start a new warning */
+	lua_writestringerror("%s", message);  /* write message */
+	if (tocont)  /* not the last part? */
+		*warnstate = 2;  /* to be continued */
+	else {  /* last part */
+		lua_writestringerror("%s", "\n");  /* finish message with end-of-line */
+		*warnstate = 1;  /* ready to start a new message */
+	}
+}
+
