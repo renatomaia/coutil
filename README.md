@@ -1,7 +1,7 @@
 CoUtil Library
 ==============
 
-`coutil` modules provides utility functions for multithreading in Lua using coroutines. In particular, it provides support for:
+`coutil` modules provides utility functions to support multithreading in Lua using coroutines. In particular, it provides support for:
 
 - Coroutine execution finalizers.
 - Coroutine syncronization abstractions:
@@ -57,6 +57,7 @@ TODO
 	- Transferable memories that are resized to zero in the source and move to the destiny.
 - Remove support to `getoption` on sockets and the like.
 - User and group definition of process started with `system.execute`.
+- Add option to 'system.execute{await=false,...}' to avoid suspending until the program terminates.
 - Function to create an envionment variables set to be used in `system.execute`.
 - Support `std{in,out,err}`in `system.execute` to be `"rw"` to create a pipe. See `UV_CREATE_PIPE`.
 - Support for datagram UNIX domain sockets (not on Windows).

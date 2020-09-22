@@ -16,7 +16,7 @@ LIBUV_INC= $(LIBUV_HOME)/include
 LIBUV_LIB= $(LIBUV_HOME)/lib
 
 LIB_A=	libluacoutil.a
-COS_M=	system.so
+COS_M=	coutil.so
 
 LD= ld
 CC= gcc -std=gnu89

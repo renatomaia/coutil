@@ -74,8 +74,8 @@ Index
 - [`coutil.coroutine`]()
 	- [`coroutine.load`]()
 	- [`coroutine.loadfile`]()
-		- [`syscoro:status`]()
-		- [`syscoro:close`]()
+	- [`coroutine.status`]()
+	- [`coroutine.close`]()
 - [`coutil.threads`]()
 	- [`threads.create`]()
 		- [`threads:resize`]()
@@ -528,7 +528,7 @@ The default is `"t"`.
 
 The returned object provides the following fields:
 
-- `type`: is either the string `"ipv4"` or `"ipv6"`,
+- `type`: (read-only) is either the string `"ipv4"` or `"ipv6"`,
 to indicate the address is a IPv4 or IPv6 address,
 respectively.
 - `literal`: is the text (literal) representation of the address,
@@ -705,7 +705,7 @@ Otherwise it returns `nil` plus an error message.
 
 Returns the value of option `name` of socket `socket`.
 This operation is not available for passive TCP sockets.
-There available options are:
+The available options are:
 
 #### UDP Socket
 
@@ -737,7 +737,7 @@ It can contain the following characters:
 
 Binds socket `socket` to the address provided as `address`.
 
-For non-local sockets `address` must be an [IP address object](#systemaddress-type--data--port--mode).
+For non-local sockets `address` must be an [IP address](#systemaddress-type--data--port--mode).
 For local sockets `address` must be a string
 (either a path on Unix or a pipe name on Windows).
 
@@ -750,7 +750,7 @@ Otherwise it returns `nil` plus an error message.
 Binds socket `socket` to the peer address provided as `address`,
 thus any data send over the socket is targeted to that `address`.
 
-For non-local domain sockets `address` must be an [IP address object](#systemaddress-type--data--port--mode).
+For non-local domain sockets `address` must be an [IP address](#systemaddress-type--data--port--mode).
 For local domain sockets `address` must be a string
 (either a path on Unix or a pipe name on Windows).
 
@@ -773,7 +773,7 @@ which can be:
 - `"peer"`: The socket's peer address.
 
 For non-local domain sockets,
-`address` can be an [IP address object](#systemaddress-type--data--port--mode) to store the result,
+`address` can be an [IP address](#systemaddress-type--data--port--mode) to store the result,
 otherwise a new object is returned with the result data.
 
 In case of errors,
@@ -867,7 +867,7 @@ This operation is only available for passive sockets.
 
 Returns a new stream socket for the accepted connection.
 
-### `system.load (chunk [, chunkname [, mode]])`
+### `coroutine.load (chunk [, chunkname [, mode]])`
 
 Returns a _system coroutine_ with [independent state](http://www.lua.org/manual/5.4/manual.html#lua_newstate) that executes in a separate system thread.
 The code to be executed is given by the arguments `chunk`, `chunkname`, `mode`,
@@ -900,12 +900,12 @@ but share the same [memory allocation](http://www.lua.org/manual/5.4/manual.html
 Therefore, it is required that thread-safe implementations are used,
 such as the ones used in the [Lua standalone interpreter](http://www.lua.org/manual/5.4/manual.html#7).
 
-### `system.loadfile ([filepath [, mode]])`
+### `coroutine.loadfile ([filepath [, mode]])`
 
 Similar to [`system.load`](#systemload-chunk--chunkname--mode), but gets the chunk from a file.
 The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.4/manual.html#pdf-loadfile).
 
-### `syscoro:resume (...)`
+### `system.resume (syscoro, ...)`
 
 [Await function](#await) that is like [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume), but executes the [_system coroutine_](#systemload-chunk--chunkname--mode) `syscoro` on a separate system thread and awaits for its completion or [suspension](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
 Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values can be passed as arguments or returned from `syscoro`.
@@ -913,17 +913,19 @@ Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values 
 If the coroutine executing this [await function](#await) is explicitly resumed,
 the execution of `syscoro` continues in the separate thread,
 and it will not be able to be resumed again until it [suspends](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
-In such case the results of the execution are discarted.
+In such case the results of the execution of `syscoro` are discarted.
+Finally,
+the explicitly resumed coroutine may not complete await functions until `syscoro` yields or terminates.
 
 _System coroutines_ are executed using a limited set of threads that are also used by the underlying system.
 The number of threads is given by environment variable [`UV_THREADPOOL_SIZE`](http://docs.libuv.org/en/v1.x/threadpool.html).
 
-### `syscoro:status ()`
+### `coroutine.status (syscoro)`
 
 Similar to [`coroutine.status`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
 but for [_system coroutines_](#systemload-chunk--chunkname--mode).
 
-### `syscoro:close ()`
+### `coroutine.close (syscoro)`
 
 Similar to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
 but for  [_system coroutines_](#systemload-chunk--chunkname--mode).
