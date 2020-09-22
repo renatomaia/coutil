@@ -299,6 +299,9 @@ LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
 
 
 /******************************************************************************
+* The code below is copied from the source of Lua 5.4.0 by
+* R. Ierusalimschy, L. H. de Figueiredo, W. Celes - Lua.org, PUC-Rio.
+*
 * Copyright (C) 1994-2020 Lua.org, PUC-Rio.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
