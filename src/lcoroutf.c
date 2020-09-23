@@ -71,7 +71,7 @@ static int closesysco (lua_State *L) {
 
 
 /* getmetatable(coroutine).__{gc,close}(coroutine) */
-static int coroutine_free(lua_State *L) {
+static int coroutine_gc(lua_State *L) {
 	closesysco(L);
 	return 0;
 }
@@ -207,9 +207,10 @@ LCUI_FUNC void lcuM_addcoroutf (lua_State *L) {
 }
 
 LCUMOD_API int luaopen_coutil_coroutine (lua_State *L) {
-	static const luaL_Reg clsf[] = {
-		{"__gc", coroutine_free},
-		{"__close", coroutine_free},
+	static const luaL_Reg meta[] = {
+		{"__index", NULL},
+		{"__gc", coroutine_gc},
+		{"__close", coroutine_gc},
 		{NULL, NULL}
 	};
 	static const luaL_Reg modf[] = {
@@ -221,7 +222,7 @@ LCUMOD_API int luaopen_coutil_coroutine (lua_State *L) {
 	};
 	luaL_newlib(L, modf);
 	luaL_newmetatable(L, CLASS_SYSCORO);
-	luaL_setfuncs(L, clsf, 0);  /* add metamethods to metatable */
+	luaL_setfuncs(L, meta, 0);  /* add metamethods to metatable */
 	lua_pushvalue(L, -2);  /* push library */
 	lua_setfield(L, -2, "__index");  /* metatable.__index = library */
 	lua_pop(L, 1);  /* pop metatable */
