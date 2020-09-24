@@ -59,7 +59,7 @@ LCUI_FUNC void lcuM_newmodupvs (lua_State *L) {
 	int err;
 	lcu_Scheduler *sched;
 	uv_loop_t *loop;
-	pushhandlemap(L);  /* to be collected after the 'lcu_Scheduler' */
+	pushhandlemap(L);  /* shall be GC after the 'lcu_Scheduler' in Lua close */
 	lua_pop(L, 1);
 	sched = (lcu_Scheduler *)lua_newuserdatauv(L, sizeof(lcu_Scheduler), 0);
 	sched->nasync = 0;

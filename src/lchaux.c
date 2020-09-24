@@ -174,6 +174,25 @@ static void swapvalues (lua_State *src, lua_State *dst) {
 	}
 }
 
+static lua_State *getsuspendedtask (lua_State *L) {
+	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY) == LUA_TLIGHTUSERDATA) {
+		uv_async_t *async;
+		lcu_ChannelTask *channeltask = (lcu_ChannelTask *)lua_touserdata(L, -1);
+		lua_pop(L, 1);
+		lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
+		async = (uv_async_t *)lua_touserdata(L, -1);
+		lua_pop(L, 1);
+		uv_mutex_lock(&channeltask->mutex);
+		L = channeltask->L;
+		channeltask->L = NULL;
+		channeltask->wakes++;
+		uv_mutex_unlock(&channeltask->mutex);
+		uv_async_send(async);
+	}
+	else lua_pop(L, 1);
+	return L;
+}
+
 LCUI_FUNC int lcuCS_matchchsync (lcu_ChannelSync *sync,
                                  int endpoint,
                                  lua_State *L,
@@ -187,7 +206,7 @@ LCUI_FUNC int lcuCS_matchchsync (lcu_ChannelSync *sync,
 		lua_State *match = lcuCS_dequeuestateq(&sync->queue);
 		uv_mutex_unlock(&sync->mutex);
 		swapvalues(L, match);  /* 'match' may be a task or a channel */
-		match = lcuCT_getsuspendedtask(match);  /* if a channel, gets its task */
+		match = getsuspendedtask(match);  /* if a channel, gets its task */
 		if (match) lcuTP_resumetask(match);
 		return 1;
 	}
@@ -307,7 +326,7 @@ LCUI_FUNC void lcuCS_freechsync (lcu_ChannelMap *map, const char *name) {
 }
 
 
-LCUI_FUNC int lcuCT_suspendedchtask (lua_State *L) {
+LCUI_FUNC int lcuCS_suspendedchtask (lua_State *L) {
 	lcu_ChannelTask *channeltask = (lcu_ChannelTask *)luaL_testudata(L, 1, LCU_CHANNELTASKCLS);
 	if (channeltask == NULL) return 0;
 	uv_mutex_lock(&channeltask->mutex);
@@ -317,23 +336,4 @@ LCUI_FUNC int lcuCT_suspendedchtask (lua_State *L) {
 	}
 	uv_mutex_unlock(&channeltask->mutex);
 	return L == NULL;
-}
-
-LCUI_FUNC lua_State *lcuCT_getsuspendedtask (lua_State *L) {
-	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY) == LUA_TLIGHTUSERDATA) {
-		uv_async_t *async;
-		lcu_ChannelTask *channeltask = (lcu_ChannelTask *)lua_touserdata(L, -1);
-		lua_pop(L, 1);
-		lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
-		async = (uv_async_t *)lua_touserdata(L, -1);
-		lua_pop(L, 1);
-		uv_mutex_lock(&channeltask->mutex);
-		L = channeltask->L;
-		channeltask->L = NULL;
-		channeltask->wakes++;
-		uv_mutex_unlock(&channeltask->mutex);
-		uv_async_send(async);
-	}
-	else lua_pop(L, 1);
-	return L;
 }

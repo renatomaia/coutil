@@ -19,7 +19,7 @@ LCUI_FUNC void lcuTP_closetpool (lcu_ThreadPool *pool);
 
 LCUI_FUNC int lcuTP_resizetpool (lcu_ThreadPool *pool, int size, int create);
 
-LCUI_FUNC int lcuTP_addtasktpool (lcu_ThreadPool *pool, lua_State *L);
+LCUI_FUNC int lcuTP_addtpooltask (lcu_ThreadPool *pool, lua_State *L);
 
 typedef struct lcu_ThreadCount {
 	int expected;

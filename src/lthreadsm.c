@@ -1,5 +1,4 @@
 #include "lthpool.h"
-
 #include "lmodaux.h"
 #include "lchaux.h"
 
@@ -103,7 +102,7 @@ static int dochunk (lua_State *L,
 		lua_close(NL);
 		return 2;  /* return nil plus error message */
 	}
-	status = lcuTP_addtasktpool(pool, NL);
+	status = lcuTP_addtpooltask(pool, NL);
 	if (status) {
 		lua_close(NL);
 		return lcuL_pusherrres(L, status);

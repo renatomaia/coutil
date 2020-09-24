@@ -7,6 +7,7 @@
 
 #define CLASS_SYSCORO LCU_PREFIX"syscoro"
 
+
 typedef struct lcu_SysCoro {
 	int released;
 	lua_State *thread;

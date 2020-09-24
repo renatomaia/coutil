@@ -92,7 +92,7 @@ static void threadmain (void *arg) {
 				if (endpoint != -1 && !lcuCS_matchchsync(sync, endpoint, L, NULL, NULL))
 					L = NULL;
 				lcuCS_freechsync(map, channelname);
-			} else if (lcuCT_suspendedchtask(L)) {
+			} else if (lcuCS_suspendedchtask(L)) {
 				L = NULL;
 			} else {
 				lua_settop(L, 0);  /* discard returned values */
@@ -252,7 +252,7 @@ static int collectthreadpool (lua_State *L) {
 	return 0;
 }
 
-LCUI_FUNC int lcuTP_addtasktpool (lcu_ThreadPool *pool, lua_State *L) {
+LCUI_FUNC int lcuTP_addtpooltask (lcu_ThreadPool *pool, lua_State *L) {
 	lcu_ThreadPool **poolref;
 	int added;
 	int hasspace = lua_checkstack(L, 1);

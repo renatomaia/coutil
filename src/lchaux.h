@@ -12,7 +12,6 @@ typedef struct lcu_StateQ {
 	lua_State *tail;
 } lcu_StateQ;
 
-
 LCUI_FUNC void lcuCS_initstateq (lcu_StateQ *q);
 
 LCUI_FUNC int lcuCS_emptystateq (lcu_StateQ *q);
@@ -55,9 +54,7 @@ LCUI_FUNC void lcuCS_freechsync (lcu_ChannelMap *map, const char *name);
 
 #define LCU_CHANNELSYNCREGKEY	LCU_PREFIX"uv_async_t channelWake"
 
-LCUI_FUNC lua_State *lcuCT_getsuspendedtask (lua_State *L);
-
-LCUI_FUNC int lcuCT_suspendedchtask (lua_State *L);
+LCUI_FUNC int lcuCS_suspendedchtask (lua_State *L);
 
 
 #endif
