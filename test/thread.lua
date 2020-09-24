@@ -875,9 +875,6 @@ end
 
 do case "collect channels with tasks"
 	dostring([=[
-
-local system = require "coutil.system" -- TODO: remove this!!!
-
 		local threads = require "coutil.threads"
 		local t = threads.create(1)
 		assert(t:dostring([[ require("coroutine").yield("channel01") ]]))
@@ -1393,9 +1390,6 @@ end
  -- DESTROYS TASK, LEAVES CHANNELS
 do case "end with channel left by ended task"
 	dostring(utilschunk..[=[
-
-local system = require "coutil.system" -- TODO: remove this!!!
-
 		local threads = require "coutil.threads"
 		local t = threads.create(1)
 		t:dostring(utilschunk..[[
@@ -1414,9 +1408,6 @@ end
 -- DESTROYS CHANNELS, LEAVES TASK
 do case "end with task waiting on channel"
 	dostring(utilschunk..[=[
-
-local system = require "coutil.system" -- TODO: remove this!!!
-
 		local threads = require "coutil.threads"
 		local t = threads.create(1)
 		t:dostring(utilschunk..[[
@@ -1433,9 +1424,6 @@ end
 -- LEAVES TASK AND CHANNELS
 do case "end with task with coroutine waiting on channel"
 	dostring(utilschunk..[=[
-
-local system = require "coutil.system" -- TODO: remove this!!!
-
 		local threads = require "coutil.threads"
 		local t = threads.create(1)
 		t:dostring(utilschunk..[[

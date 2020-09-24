@@ -2,6 +2,9 @@
 #define lcuconf_h
 
 
+#include <luaconf.h>
+
+
 #ifndef LCUI_FUNC
 #define LCUI_FUNC LUAI_FUNC
 #endif

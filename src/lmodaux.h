@@ -54,4 +54,5 @@ LCUI_FUNC void lcuM_newclass (lua_State *L, const char *name);
 LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
                                               const char *func);
 
+
 #endif

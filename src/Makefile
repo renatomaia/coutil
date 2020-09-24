@@ -40,9 +40,13 @@ MYOBJS=
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 
 OSM_O=	lsyslib.o \
-      	lmodaux.o loperaux.o \
-      	lscheduf.o ltimef.o lprocesf.o lsocketf.o lcoroutf.o lthreadf.o \
+      	lmodaux.o loperaux.o lchaux.o lthpool.o \
+      	lthreadsm.o lchannelm.o \
+      	lscheduf.o ltimef.o lprocesf.o lsocketf.o lcoroutf.o \
       	lsysmod.o
+
+
+
 
 ALL_O=	$(OSM_O) $(MYOBJS)
 ALL_A= $(LIB_A)

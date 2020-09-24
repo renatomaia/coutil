@@ -1,5 +1,6 @@
 #include "lmodaux.h"
 #include "loperaux.h"
+#include "lchaux.h"
 
 #include <lmemlib.h>
 
@@ -220,6 +221,7 @@ LCUMOD_API int luaopen_coutil_coroutine (lua_State *L) {
 		{"status", coroutine_status},
 		{NULL, NULL}
 	};
+	lcuCS_tochannelmap(L);  /* map shall be GC after 'syscoro' on Lua close */
 	luaL_newlib(L, modf);
 	luaL_newmetatable(L, CLASS_SYSCORO);
 	luaL_setfuncs(L, meta, 0);  /* add metamethods to metatable */
