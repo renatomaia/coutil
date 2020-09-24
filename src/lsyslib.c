@@ -1,4 +1,5 @@
 #include "lsyslib.h"
+#include "lmodaux.h"
 #include "loperaux.h"
 
 

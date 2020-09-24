@@ -1,8 +1,3 @@
-#include "lmodaux.h"
-
-
-
-
 #ifndef lcuconf_h
 #define lcuconf_h
 
@@ -37,17 +32,17 @@
 
 #ifndef LCU_NETHOSTNAMESZ
 #ifndef NI_MAXHOST
-#define LCU_NETHOSTNAMESZ	NI_MAXHOST
-#else
 #define LCU_NETHOSTNAMESZ	1025
+#else
+#define LCU_NETHOSTNAMESZ	NI_MAXHOST
 #endif
 #endif
 
 #ifndef LCU_NETSERVNAMESZ
 #ifndef NI_MAXSERT
-#define LCU_NETSERVNAMESZ	NI_MAXSERV
-#else
 #define LCU_NETSERVNAMESZ	32
+#else
+#define LCU_NETSERVNAMESZ	NI_MAXSERV
 #endif
 #endif
 
