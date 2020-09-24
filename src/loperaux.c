@@ -9,6 +9,14 @@
 #define torequest(O) ((uv_req_t *)&((O)->kind.request))
 #define tohandle(O) ((uv_handle_t *)&((O)->kind.handle))
 
+
+struct lcu_Scheduler {
+	uv_loop_t loop;
+	int nasync;  /* number of active 'uv_async_t' handles */
+	int nactive;  /* number of other active handles */
+};
+
+
 static void pushhandlemap (lua_State *L) {
 	lua_pushlightuserdata(L, pushhandlemap);
 	if (lua_gettable(L, LUA_REGISTRYINDEX) != LUA_TTABLE) {
@@ -266,10 +274,18 @@ static OpStatus checkreset (Operation *op,
 }
 
 
-LCUI_FUNC void lcuU_checksuspend(uv_loop_t *loop) {
+LCUI_FUNC uv_loop_t *lcu_toloop (lcu_Scheduler *sched) {
+	return &sched->loop;
+}
+
+LCUI_FUNC int lcu_shallsuspend (lcu_Scheduler *sched) {
+	return sched->nactive == 0 && sched->nasync > 0;
+}
+
+LCUI_FUNC void lcuU_checksuspend (uv_loop_t *loop) {
 	lua_State *L = (lua_State *)loop->data;
 	lcu_Scheduler *sched = lcu_tosched(loop);
-	if (sched->nactive == 0 && sched->nasync > 0) {
+	if (lcu_shallsuspend(sched)) {
 		lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY);
 		uv_stop(loop);
 	}

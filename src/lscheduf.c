@@ -33,7 +33,7 @@ static int lcuM_run (lua_State *L) {
 			if (L == mainL) {
 				lua_KContext ctx = (lua_KContext)loop;
 				loop->data = (void *)L;
-				if (sched->nactive == 0 && sched->nasync > 0) {
+				if (lcu_shallsuspend(sched)) {
 					lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY);
 					return lua_yieldk(L, 1, ctx, k_resumeall);
 				}
