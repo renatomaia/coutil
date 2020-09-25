@@ -59,4 +59,16 @@
 #endif
 
 
+#define LCU_UDPSOCKETCLS	LCU_PREFIX"udp"
+#define LCU_TCPACTIVECLS	LCU_PREFIX"tcpactive"
+#define LCU_TCPPASSIVECLS	LCU_PREFIX"tcppassive"
+#define LCU_PIPEIPCCLS	LCU_PREFIX"pipeipc"
+#define LCU_PIPEACTIVECLS	LCU_PREFIX"pipeactive"
+#define LCU_PIPEPASSIVECLS	LCU_PREFIX"pipepassive"
+#define LCU_SYSCOROCLS	LCU_PREFIX"syscoro"
+#define LCU_CHANNELCLS	LCU_PREFIX"channel"
+#define LCU_THREADSCLS	LCU_PREFIX"threads"
+#define LCU_TPOOLGCCLS	LCU_PREFIX"lcu_ThreadPool *"
+
+
 #endif

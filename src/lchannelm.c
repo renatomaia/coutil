@@ -3,15 +3,13 @@
 #include "lchdefs.h"
 
 
-#define CLASS_CHANNEL	LCU_PREFIX"channel"
-
 typedef struct LuaChannel {
 	lcu_ChannelSync *sync;
 	lua_State *L;
 	uv_async_t *handle;
 } LuaChannel;
 
-#define tolchannel(L,I)	((LuaChannel *)luaL_checkudata(L,I,CLASS_CHANNEL))
+#define tolchannel(L,I)	((LuaChannel *)luaL_checkudata(L,I,LCU_CHANNELCLS))
 
 static LuaChannel *chklchannel(lua_State *L, int arg) {
 	LuaChannel *channel = tolchannel(L, arg);
@@ -230,7 +228,7 @@ static int channel_create (lua_State *L) {
 		lua_close(channel->L);
 		luaL_error(L, "not enough memory");
 	}
-	luaL_setmetatable(L, CLASS_CHANNEL);
+	luaL_setmetatable(L, LCU_CHANNELCLS);
 
 	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY) == LUA_TNIL) {
 		int err;
@@ -316,7 +314,7 @@ LCUMOD_API int luaopen_coutil_channel (lua_State *L) {
 	luaL_newmetatable(L, LCU_CHANNELTASKCLS);
 	luaL_setfuncs(L, channeltaskf, 0);  /* add metamethods to metatable */
 	lua_pop(L, 1);  /* pop metatable */
-	luaL_newmetatable(L, CLASS_CHANNEL);
+	luaL_newmetatable(L, LCU_CHANNELCLS);
 	luaL_setfuncs(L, channelf, 0);  /* add metamethods to metatable */
 	lua_pushvalue(L, -2);  /* push library */
 	lua_setfield(L, -2, "__index");  /* metatable.__index = library */

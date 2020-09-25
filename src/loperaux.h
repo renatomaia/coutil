@@ -3,17 +3,12 @@
 
 
 #include "lcuconf.h"
-#include "lsyslib.h"
 
 #include <uv.h>
 #include <lua.h>
 
 
 #define LCU_MODUPVS	1
-
-LCUI_FUNC void lcuT_savevalue (lua_State *L, void *key);
-
-LCUI_FUNC void lcuT_freevalue (lua_State *L, void *key);
 
 /* scheduler operations */
 
@@ -64,7 +59,27 @@ LCUI_FUNC void lcuU_resumethrop (uv_handle_t *handle, int narg);
 
 /* object operations */
 
-LCUI_FUNC void lcuT_closeobjhdl (lua_State *L, int idx, uv_handle_t *handle);
+#define LCU_OBJCLOSEDFLAG	0x01
+
+typedef int (*lcu_ObjectAction) (uv_handle_t *h);
+
+typedef struct lcu_Object {
+	int flags;
+	lcu_ObjectAction stop;
+	lua_CFunction step;
+	uv_handle_t handle;
+} lcu_Object;
+
+#define lcu_isobjclosed(O)	((O)->flags&LCU_OBJCLOSEDFLAG)
+
+#define lcu_toobjhdl(O)	(&(O)->handle)
+
+#define lcu_tohdlobj(H) ({ const char *p = (const char *)H; \
+                           (lcu_Object *)(p-offsetof(lcu_Object, H)); })
+
+LCUI_FUNC lcu_Object *lcu_createobj (lua_State *L, size_t sz, const char *cls);
+
+LCUI_FUNC int lcu_closeobj (lua_State *L, int idx);
 
 LCUI_FUNC int lcuT_resetobjopk (lua_State *L,
                                 lcu_Object *obj,

@@ -5,16 +5,13 @@
 #include <lmemlib.h>
 
 
-#define CLASS_SYSCORO LCU_PREFIX"syscoro"
-
-
 typedef struct lcu_SysCoro {
 	int released;
 	lua_State *thread;
 	lua_State *coroutine;
 } lcu_SysCoro;
 
-#define tosysco(L) ((lcu_SysCoro *)luaL_checkudata(L,1,CLASS_SYSCORO))
+#define tosysco(L) ((lcu_SysCoro *)luaL_checkudata(L,1,LCU_SYSCOROCLS))
 
 
 static int doloaded (lua_State *L, lua_State *NL, int status) {
@@ -31,7 +28,7 @@ static int doloaded (lua_State *L, lua_State *NL, int status) {
 		sysco->released = 0;
 		sysco->thread = NULL;
 		sysco->coroutine = NL;
-		luaL_setmetatable(L, CLASS_SYSCORO);
+		luaL_setmetatable(L, LCU_SYSCOROCLS);
 		return 1;
 	}
 }
@@ -224,7 +221,7 @@ LCUMOD_API int luaopen_coutil_coroutine (lua_State *L) {
 	};
 	lcuCS_tochannelmap(L);  /* map shall be GC after 'syscoro' on Lua close */
 	luaL_newlib(L, modf);
-	luaL_newmetatable(L, CLASS_SYSCORO);
+	luaL_newmetatable(L, LCU_SYSCOROCLS);
 	luaL_setfuncs(L, meta, 0);  /* add metamethods to metatable */
 	lua_pushvalue(L, -2);  /* push library */
 	lua_setfield(L, -2, "__index");  /* metatable.__index = library */

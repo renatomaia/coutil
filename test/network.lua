@@ -1,9 +1,7 @@
 local system = require "coutil.system"
 
 local function testbooloption(sock, name)
-	assert(sock:getoption(name) == false)
 	assert(sock:setoption(name, true) == true)
-	assert(sock:getoption(name) == true)
 	assert(sock:setoption(name, false) == true)
 end
 
@@ -105,10 +103,8 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 	do case "errors"
 		local socket = assert(create())
 
-		asserterr("string expected, got no value", pcall(socket.getoption, socket))
 		asserterr("string expected, got no value", pcall(socket.setoption, socket))
 		asserterr("number expected, got no value", pcall(socket.setoption, socket, "mcastttl"))
-		asserterr("invalid option", pcall(socket.getoption, socket, "MCastTTL"))
 		asserterr("invalid option", pcall(socket.setoption, socket, "MCastTTL", 1))
 
 		done()
@@ -123,10 +119,8 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 
 	do case "mcastttl"
 		local stream = assert(create())
-		assert(stream:getoption("mcastttl") == 1)
 		for _, value in ipairs{ 1, 2, 3, 123, 128, 255 } do
 			assert(stream:setoption("mcastttl", value) == true)
-			assert(stream:getoption("mcastttl") == value)
 		end
 
 		for _, value in ipairs{ -1, 0, 256, 257, math.maxinteger } do
@@ -780,10 +774,8 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 	do case "errors"
 		local socket = assert(create("stream"))
 
-		asserterr("string expected, got no value", pcall(socket.getoption, socket))
 		asserterr("string expected, got no value", pcall(socket.setoption, socket))
 		asserterr("value expected", pcall(socket.setoption, socket, "keepalive"))
-		asserterr("invalid option", pcall(socket.getoption, socket, "KeepAlive"))
 		asserterr("invalid option", pcall(socket.setoption, socket, "KeepAlive", 1))
 
 		done()
@@ -796,13 +788,10 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 
 	do case "keepalive"
 		local stream = assert(create("stream"))
-		assert(stream:getoption("keepalive") == nil)
 		for _, value in ipairs{ 1, 2, 3, 123, 128, 255 } do
 			assert(stream:setoption("keepalive", value) == true)
-			assert(stream:getoption("keepalive") == value)
 		end
 		assert(stream:setoption("keepalive", false) == true)
-		assert(stream:getoption("keepalive") == nil)
 
 		for _, value in ipairs{ -1, 0 } do
 			asserterr("invalid argument",

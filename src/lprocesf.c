@@ -1,4 +1,3 @@
-#include "lsyslib.h"
 #include "lmodaux.h"
 #include "loperaux.h"
 
@@ -134,13 +133,10 @@ static void getstreamfield (lua_State *L,
 				luaL_Stream *lstream = (luaL_Stream *)lua_touserdata(L, -2);
 				stream->data.fd = fileno(lstream->f);
 				stream->flags = UV_INHERIT_FD;
-			} else if (ismetatable(L, LCU_TCPACTIVECLS)) {
-				lcu_TcpSocket *tcp = (lcu_TcpSocket *)lua_touserdata(L, -2);
-				stream->data.stream = (uv_stream_t *)lcu_totcphdl(tcp);
-				stream->flags = UV_INHERIT_STREAM;
-			} else if (ismetatable(L, LCU_PIPEACTIVECLS)) {
-				lcu_IpcPipe *pipe = (lcu_IpcPipe *)lua_touserdata(L, -2);
-				stream->data.stream = (uv_stream_t *)lcu_topipehdl(pipe);
+			} else if (ismetatable(L, LCU_TCPACTIVECLS) ||
+			           ismetatable(L, LCU_PIPEACTIVECLS)) {
+				lcu_Object *obj = (lcu_Object *)lua_touserdata(L, -2);
+				stream->data.stream = (uv_stream_t *)lcu_toobjhdl(obj);
 				stream->flags = UV_INHERIT_STREAM;
 			}
 		}

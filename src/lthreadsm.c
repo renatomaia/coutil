@@ -6,26 +6,24 @@
 #include <lmemlib.h>
 
 
-#define CLASS_TPOOLGC	LCU_PREFIX"lcu_ThreadPool *"
-#define CLASS_THREADS	LCU_PREFIX"threads"
 
 
 static lcu_ThreadPool *tothreads (lua_State *L, int idx) {
-	lcu_ThreadPool **ref = (lcu_ThreadPool **)luaL_checkudata(L, idx, CLASS_THREADS);
+	lcu_ThreadPool **ref = (lcu_ThreadPool **)luaL_checkudata(L, idx, LCU_THREADSCLS);
 	luaL_argcheck(L, *ref, idx, "closed threads");
 	return *ref;
 }
 
 /* getmetatable(tpoolgc).__gc(pool) */
 static int tpoolgc_gc (lua_State *L) {
-	lcu_ThreadPool **ref = (lcu_ThreadPool **)luaL_checkudata(L, 1, CLASS_TPOOLGC);
+	lcu_ThreadPool **ref = (lcu_ThreadPool **)luaL_checkudata(L, 1, LCU_TPOOLGCCLS);
 	lcuTP_closetpool(*ref);
 	return 0;
 }
 
 /* succ [, errmsg] = threads:close() */
 static int threads_close (lua_State *L) {
-	lcu_ThreadPool **ref = (lcu_ThreadPool **)luaL_checkudata(L, 1, CLASS_THREADS);
+	lcu_ThreadPool **ref = (lcu_ThreadPool **)luaL_checkudata(L, 1, LCU_THREADSCLS);
 	lua_pushboolean(L, *ref != NULL);
 	if (*ref) {
 		lua_pushlightuserdata(L, *ref);
@@ -152,7 +150,7 @@ static int threads_create (lua_State *L) {
 				return lcuL_pusherrres(L, err);
 			}
 		}
-		luaL_setmetatable(L, CLASS_TPOOLGC);
+		luaL_setmetatable(L, LCU_TPOOLGCCLS);
 		lua_pushlightuserdata(L, pool);
 		lua_insert(L, -2);
 		lua_settable(L, LUA_REGISTRYINDEX);
@@ -166,7 +164,7 @@ static int threads_create (lua_State *L) {
 		lcu_ThreadPool **ref =
 			(lcu_ThreadPool **)lua_newuserdatauv(L, sizeof(lcu_ThreadPool *), 0);
 		*ref = pool;
-		luaL_setmetatable(L, CLASS_THREADS);
+		luaL_setmetatable(L, LCU_THREADSCLS);
 	}
 	return 1;
 }
@@ -193,10 +191,10 @@ LCUMOD_API int luaopen_coutil_threads (lua_State *L) {
 	};
 	lcuCS_tochannelmap(L);  /* map shall be GC after 'threads' on Lua close */
 	luaL_newlib(L, modulef);
-	luaL_newmetatable(L, CLASS_TPOOLGC)  /* metatable for tpool sentinel */;
+	luaL_newmetatable(L, LCU_TPOOLGCCLS)  /* metatable for tpool sentinel */;
 	luaL_setfuncs(L, poolrefmt, 0);  /* add metamethods to metatable */
 	lua_pop(L, 1);  /* pop metatable */
-	luaL_newmetatable(L, CLASS_THREADS);  /* metatable for thread pools */
+	luaL_newmetatable(L, LCU_THREADSCLS);  /* metatable for thread pools */
 	luaL_setfuncs(L, threadsmt, 0);  /* add metamethods to metatable */
 	lua_pushvalue(L, -2);  /* push library */
 	lua_setfield(L, -2, "__index");  /* metatable.__index = library */

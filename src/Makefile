@@ -39,8 +39,7 @@ MYOBJS=
 
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 
-OSM_O=	lsyslib.o \
-      	lmodaux.o loperaux.o lchaux.o lthpool.o \
+OSM_O=	lmodaux.o loperaux.o lchaux.o lthpool.o \
       	lthreadsm.o lchannelm.o \
       	lscheduf.o ltimef.o lprocesf.o lsocketf.o lcoroutf.o \
       	lsysmod.o
