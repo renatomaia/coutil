@@ -5,7 +5,6 @@ LUA_HOME= /usr/local
 LUA_INC= $(LUA_HOME)/include
 LUA_LIB= $(LUA_HOME)/lib
 LUA_BIN= $(LUA_HOME)/bin
-LUA_VER= 5.3
 
 LUAMEM_HOME= $(LUA_HOME)
 LUAMEM_INC= $(LUAMEM_HOME)/include
@@ -16,7 +15,7 @@ LIBUV_INC= $(LIBUV_HOME)/include
 LIBUV_LIB= $(LIBUV_HOME)/lib
 
 LIB_A=	libluacoutil.a
-COS_M=	coutil.so
+MOD_M=	coutil.so
 
 LD= ld
 CC= gcc -std=gnu89
@@ -39,17 +38,15 @@ MYOBJS=
 
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 
-OSM_O=	lmodaux.o loperaux.o lchaux.o lthpool.o \
-      	lthreadsm.o lchannelm.o \
-      	lscheduf.o ltimef.o lprocesf.o lsocketf.o lcoroutf.o \
-      	lsysmod.o
+MOD_O=	lmodaux.o loperaux.o lchaux.o lthpool.o \
+      	lscheduf.o ltimef.o lprocesf.o lsocketf.o \
+      	lcoroutm.o lthreadm.o lchannem.o lsystemm.o
 
 
 
-
-ALL_O=	$(OSM_O) $(MYOBJS)
+ALL_O=	$(MOD_O) $(MYOBJS)
 ALL_A= $(LIB_A)
-ALL_M= $(COS_M)
+ALL_M= $(MOD_M)
 ALL_T= $(ALL_A) $(ALL_M)
 
 # Targets start here.
@@ -63,7 +60,7 @@ a:	$(ALL_A)
 
 m:	$(ALL_M)
 
-$(COS_M): $(OSM_O)
+$(MOD_M): $(MOD_O)
 	$(LD) -o $@ $(LDFLAGS) $^ $(LIBS)
 
 $(LIB_A): $(ALL_O)
