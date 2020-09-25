@@ -1496,7 +1496,7 @@ static const luaL_Reg upvf[] = {
 	{NULL, NULL}
 };
 
-LCUI_FUNC void lcuM_addcommunc (lua_State *L) {
+LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	lcuM_newclass(L, LCU_NETADDRCLS);
 	lcuM_setfuncs(L, addr, 0);
 	lua_pop(L, 1);
@@ -1560,9 +1560,7 @@ LCUI_FUNC void lcuM_addcommunc (lua_State *L) {
 	lua_remove(L, -2);
 	lcuM_setfuncs(L, pipepassive, 0);
 	lua_pop(L, 1);
-}
 
-LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	lcuM_setfuncs(L, modf, 0);
 	lcuM_setfuncs(L, upvf, LCU_MODUPVS);
 }
