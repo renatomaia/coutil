@@ -1,8 +1,8 @@
 CoUtil Libraries
 ================
 
-`coutil` provides a set of modules that loads utility libraries to support multithreading in Lua using coroutines.
-In particular, its libraries support:
+`coutil` provides a set of modules to loads utility libraries that support multithreading in Lua using coroutines.
+In particular, its libraries provide support for:
 
 - Coroutine execution finalizers.
 - Coroutine syncronization abstractions:
@@ -50,13 +50,11 @@ TODO
 
 ### Improvements
 
-- Call 'lua_warn' whenever 'lua_resume' fails.
 - Protect all 'lua_*' calls in 'uv_*' callbacks from raising errors (use 'pcall'?)
 - Replacement for package.cpath searcher that saves the 'luaopen_*' function to 'package.preload', so it can be shared by other threads (saves opened file descriptors).
 - Support metamethod 'transfer' containing a _light userdata_ to a C function that "transfers" a userdata between independet Lua states.
 	- Transferable coroutines that are closed on the source and move to the destiny.
 	- Transferable memories that are resized to zero in the source and move to the destiny.
-- Remove support to `getoption` on sockets and the like.
 - User and group definition of process started with `system.execute`.
 - Add option to 'system.execute{await=false,...}' to avoid suspending until the program terminates.
 - Function to create an envionment variables set to be used in `system.execute`.
