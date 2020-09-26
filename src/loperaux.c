@@ -404,14 +404,19 @@ LCUI_FUNC void lcuU_resumethrop (uv_handle_t *handle, int narg) {
  * object operation
  */
 
-LCUI_FUNC lcu_Object *lcu_createobj (lua_State *L, size_t sz, const char *cls) {
-	lcu_Object *object = (lcu_Object *)lua_newuserdatauv(L, sz, 1);
+#define UPV_SCHEDULER	1
+#define UPV_THREAD	2
+
+LCUI_FUNC lcu_Object *lcuT_createobj (lua_State *L, size_t sz, const char *cls) {
+	lcu_Object *object = (lcu_Object *)lua_newuserdatauv(L, sz, 2);
 	lcu_assert(sz >= sizeof(lcu_ObjectAction));
 	object->flags = LCU_OBJCLOSEDFLAG;
 	object->stop = NULL;
 	object->step = NULL;
 	object->handle.data = NULL;
 	luaL_setmetatable(L, cls);
+	lua_pushvalue(L, lua_upvalueindex(1));  /* push scheduler object */
+	lua_setiuservalue(L, -2, UPV_SCHEDULER);  /* avoid scheduler to be collected */
 	return object;
 }
 
@@ -429,7 +434,7 @@ LCUI_FUNC int lcu_closeobj (lua_State *L, int idx) {
 		if (thread) {
 			int nret;
 			lua_pushnil(L);
-			lua_setiuservalue(L, idx, 1);  /* allow thread to be collected */
+			lua_setiuservalue(L, idx, UPV_THREAD);  /* allow thread to be collected */
 			lua_pushnil(thread);
 			lua_pushliteral(thread, "closed");
 			lua_resume(thread, L, 2, &nret);  /* explicit resume to cancel operation */
@@ -450,7 +455,7 @@ static void stopobjop (lua_State *L, lcu_Object *obj) {
 	int err = obj->stop(handle);
 	pushsaved(L, handle);  /* restore saved object being stopped */
 	lua_pushnil(L);
-	lua_setiuservalue(L, -2, 1);  /* allow thread to be collected */
+	lua_setiuservalue(L, -2, UPV_THREAD);  /* allow thread to be collected */
 	if (err < 0) {
 		lcu_closeobj(L, -1);
 		lcuL_warnerr(L, "object:stop: ", err);
@@ -469,7 +474,7 @@ static int scheduledyield (lua_State *L, uv_handle_t *handle) {
 	lcu_assert(uv_has_ref(handle));
 	lcu_assert(!uv_is_closing(handle));
 	lua_pushthread(L);
-	lua_setiuservalue(L, 1, 1);
+	lua_setiuservalue(L, 1, UPV_THREAD);
 	handle->data = (void *)L;
 	return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), k_endobjop);
 }

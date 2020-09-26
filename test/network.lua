@@ -804,3 +804,33 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 	teststream(create, ipaddr[domain])
 
 end
+
+
+do case "used after library collection"
+	dostring(utilschunk..[===[
+		local system = require "coutil.system"
+		local addr = system.address("ipv4", "127.0.0.1:65432")
+		local path = os.tmpname()
+		local cases = {}
+		table.insert(cases, { socket = system.socket("datagram", addr.type), op = "send", "xxx", nil, nil, addr })
+		table.insert(cases, { socket = system.socket("stream", addr.type), op = "connect", addr })
+		table.insert(cases, { socket = system.socket("stream", "local"), op = "connect", path })
+		table.insert(cases, { socket = system.socket("stream", "ipc"), op = "connect", path })
+
+		garbage.system = system
+		system = nil
+		package.loaded["coutil.system"] = nil
+		gc()
+		assert(garbage.system == nil)
+
+		for _, case in ipairs(cases) do
+			spawn(function ()
+				local ok, err = case.socket[case.op](case.socket, table.unpack(case))
+				assert(not ok)
+				assert(err == "closed")
+			end)
+		end
+	]===])
+
+	done()
+end

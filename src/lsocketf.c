@@ -631,7 +631,7 @@ typedef struct lcu_IpcPipe {
 #define FLAG_UDPCONNECTED 0x04
 
 
-#define newobject(L,T,C)	(T *)lcu_createobj(L,sizeof(T),C)
+#define newobject(L,T,C)	(T *)lcuT_createobj(L,sizeof(T),C)
 
 
 /* socket [, errmsg] = system.socket(type, domain) */

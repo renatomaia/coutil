@@ -77,7 +77,7 @@ typedef struct lcu_Object {
 #define lcu_tohdlobj(H) ({ const char *p = (const char *)H; \
                            (lcu_Object *)(p-offsetof(lcu_Object, H)); })
 
-LCUI_FUNC lcu_Object *lcu_createobj (lua_State *L, size_t sz, const char *cls);
+LCUI_FUNC lcu_Object *lcuT_createobj (lua_State *L, size_t sz, const char *cls);
 
 LCUI_FUNC int lcu_closeobj (lua_State *L, int idx);
 
