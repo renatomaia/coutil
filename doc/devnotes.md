@@ -89,189 +89,6 @@ Auxiliary functions for implementation of Lua modules.
 Auxiliary functions for implementation of module operations,
 specially [await functions](manual.md#await).
 
-States
-======
-
-Thread
-------
-
-![Thread States](thrstates.svg)
-
-### States
-
-| Name                           | E | R | S | P | C | KFunction    | Callback Pending  |
-|:------------------------------ |:-:|:-:|:-:|:-:|:-:|:------------ |:----------------  |
-| Freed              Operation   | ? | R |   |   |   |              |                   |
-| Awaiting           Request Op. |   | R | S | P |   | `k_endop`    | `uv_<request>_cb` |
-| Completed          Request Op. | E | R | S |   |   |              |                   |
-| Canceled           Request Op. | ? | R | S |   | ? |              | `uv_<request>_cb` |
-| Reseting           Request Op. |   | R | S | P | ? | `k_resetopk` | `uv_<request>_cb` |
-| Awaiting           Thread Op.  |   |   |   | P |   | `k_endop`    | `uv_<handle>_cb`  |
-| Completed          Thread Op.  | E |   |   |   |   |              | `uv_<handle>_cb`  |
-| Canceled           Thread Op.  | ? |   |   |   | C |              | `uv_<handle>_cb`  |
-| Reseting  Canceled Thread Op.  |   |   |   | P | C | `k_resetopk` | `uv_<handle>_cb`  |
-| Closing            Thread Op.  | ? |   |   |   |   |              | `uv_close_cb`     |
-| Reseting  Closed   Thread Op.  |   |   |   | P |   | `k_resetopk` | `uv_close_cb`     |
-_______________________
-- E: coroutine is executing.
-- R: `FLAG_REQUEST` is set in coroutines's `Operation.flags`.
-- S: `FLAG_THRSAVED` is set in coroutines's `Operation.flags`.
-- P: `FLAG_PENDING` is set in coroutines's `Operation.flags`.
-- C: `FLAG_NOCANCEL` is set in coroutines's `Operation.flags`.
-
-### Transitions
-
-|  # | Trigger                         | Result                                  |
-| --:|:------------------------------- |:--------------------------------------- |
-|  1 | request op. called              | coroutine suspends calling request op.  |
-|  2 | thread op. called               | coroutine suspends calling thread op.   |
-|  3 | UV request callback             | request op. returns results             |
-|  4 | coroutine resumed               | request op. returns as canceled         |
-|  5 | request op. called              | coroutine suspends calling request op.  |
-|  6 | coroutine yields or ends        | coroutine is unreferenced               |
-|  7 | thread op. called               | coroutine suspends calling thread op.   |
-|  8 | UV request callback             | coroutine is unreferenced               |
-|  9 | operation called                | coroutine suspends calling operation    |
-| 10 | UV request callback             | coroutine suspends again on request op. |
-| 11 | coroutine resumed               | operation returns as canceled           |
-| 12 | UV request callback             | coroutine suspends again on thread op.  |
-| 13 | UV handle callback              | thread op. returns results              |
-| 14 | coroutine resumed               | thread op. returns as canceled          |
-| 15 | coroutine resumed               | thread op. returns as canceled          |
-| 16 | same thread op. called          | coroutine suspends calling thread op.   |
-| 17 | coroutine yields or ends        | coroutine is unreferenced               |
-| 18 | other operation called          | coroutine suspends calling operation    |
-| 19 | same canceled thread op. called | coroutine suspends calling thread op.   |
-| 20 | UV handle callback              | thread op.'s handle starts closing      |
-| 21 | other operation called          | coroutine suspends calling operation    |
-| 22 | UV handle closed                | thread op.'s handle is released         |
-| 23 | operation called                | coroutine suspends calling operation    |
-| 24 | coroutine resumed               | operation returns as canceled           |
-| 25 | UV request callback             | coroutine suspends again on operation   |
-| 26 | coroutine resumed               | operation returns as canceled           |
-| 27 | UV handle closed                | coroutine suspends again on request op. |
-| 28 | UV handle closed                | coroutine suspends again on thread op.  |
-_______________________
- 1. `lcuT_resetreqopk`
-	- `uv_<request>`
-	- `startedopk`
- 2. `lcuT_resetthropk`
-	- `uv_<handle>_init`
-	- `lcuT_armthrop`
-	- `uv_<handle>_start`
-	- `startedopk`
- 3. `uv_<request>_cb`
-	- `lcuU_endreqop`
-	- `lcuU_resumereqop...`
-		- `k_endop`
- 4. `k_endop`
-	- `cancelop`?
-		- `uv_cancel`
- 5. `lcuT_resetreqopk`
-	- `uv_<request>`
-	- `startedopk`
-	- `...lcuU_resumereqop`
- 6. `...lcuU_resumereqop`
- 7. `lcuT_resetthropk`
-	- `uv_<handle>_init`
-	- `lcuT_armthrop`
-	- `uv_<handle>_start`
-	- `startedopk`
-	- `...lcuU_resumereqop`
- 8. `uv_<request>_cb`
-	- `lcuU_endreqop`
- 9. `lcuT_resetreqopk|lcuT_resetthropk`
-	- `yieldresetk`
-10. `uv_<request>_cb`
-	- `lcuU_endreqop`
-	- `lcuU_resumereqop...`
-		- `k_resetopk`
-			- `uv_<request>`
-			- `startedopk`
-11. `k_resetopk`
-12. `uv_<request>_cb`
-	- `lcuU_endreqop`
-	- `lcuU_resumereqop...`
-		- `k_resetopk`
-			- `uv_<handle>_init`
-			- `lcuT_armthrop`
-			- `uv_<handle>_start`
-			- `startedopk`
-13. `uv_<handle>_cb`
-	- `lcuU_endthrop`
-	- `lcuU_resumethrop...`
-		- `k_endop`
-14. `k_endop`
-15. `k_endop`
-	- `cancelop`
-		- `uv_close`
-16. `lcuT_resetthropk`
-	- `uv_<handle>_stop`?
-	- `uv_<handle>_start`?
-	- `startedopk`
-	- `...lcuU_resumethrop`
-17. `...lcuU_resumethrop`
-	- `cancelop`
-		- `uv_close`
-18. `lcuT_resetreqopk|lcuT_resetthropk`
-	- `checkreset`
-		- `uv_close`
-	- `yieldresetk`
-	- `...lcuU_resumethrop`
-19. `lcuT_resetthropk`
-	- `uv_<handle>_stop`?
-	- `uv_<handle>_start?`
-	- `startedopk`
-20. `uv_<handle>_cb`
-	- `lcuU_endthrop`
-		- `cancelop`
-			- `uv_close`
-21. `lcuT_resetreqopk|lcuT_resetthropk`
-	- `yieldresetk`
-22. `closedhdl`
-23. `lcuT_resetreqopk|lcuT_resetthropk`
-	- `yieldresetk`
-24. `k_resetopk`
-25. `uv_<handle>_cb`
-	- `lcuU_endthrop`
-	- !!!`cancelop`!!!
-		- !!!`uv_close`!!!
-26. `k_resetopk`
-27. `closedhdl`
-	- `lcuU_resumereqop...`
-		- `k_resetopk`
-			- `uv_<request>`
-			- `startedopk`
-28. `closedhdl`
-	- `lcuU_resumereqop...`
-		- `k_resetopk`
-			- `uv_<handle>_init`
-			- `lcuT_armthrop`
-			- `uv_<handle>_start`
-			- `startedopk`
-
-Object
-------
-
-![Object States](objstates.svg)
-
-### Transitions
-
-| # | P | S | Action | Condition |
-| - | - | - | ------ | --------- |
-| 1 |   | T | `lcu_closeobj` | object closed or collected |
-| 2 |   | T | `lcuT_awaitobj` | UV handle started |
-| 3 |   | U | `closedobj` | UV handle closed |
-| 4 |   | T | `lcuT_haltedobjop` | resumed by `coroutine.resume` |
-| 5 |   | T | `lcu_closeobj` | object closed or collected |
-| 6 |   | U | `lcuU_resumeobjop` | resumed by UV handle callback |
-| 7 | 6 | U | `freethread` | coroutine suspended or terminated |
-| 8 | 6 | T | `lcu_closeobj` | object closed or collected |
-| 9 | 6 | T | `lcuT_awaitobj` | coroutine repeated operation |
-_______________________
-- P = Previous transition
-- S = Call scope (T = Thread; U = UV loop)
-
 Templates
 =========
 
@@ -467,3 +284,219 @@ static int k_onreturn (lua_State *L, int status, lua_KContext ctx) {
 	return /* number of values to return from the top of the stack */;
 }
 ```
+
+States
+======
+
+Thread
+------
+
+![Thread States](thrstates.svg)
+
+### States
+
+| Name                           | E | R | S | P | C | KFunction    | Callback Pending        |
+|:------------------------------ |:-:|:-:|:-:|:-:|:-:|:------------ |:----------------------- |
+| Freed              Operation   | ? | R |   |   |   |              |                         |
+| Awaiting           Request Op. |   | R | S | P |   | `k_endop`    | `uv_<request>_cb`       |
+| Completed          Request Op. | E | R | S |   |   |              |                         |
+| Canceled           Request Op. | ? | R | S |   | ? |              | `uv_<request>_cb`       |
+| Reseting           Request Op. |   | R | S | P | ? | `k_resetopk` | `uv_<request>_cb`       |
+| Awaiting           Thread Op.  |   |   |   | P |   | `k_endop`    | `uv_<handle>_cb`        |
+| Completed          Thread Op.  | E |   |   |   |   |              | `uv_<handle>_cb`        |
+| Canceled           Thread Op.  | ? |   |   |   | C |              | `uv_<handle>_cb`        |
+| Reseting  Canceled Thread Op.  |   |   |   | P | C | `k_resetopk` | `uv_<handle>_cb`        |
+| Closing            Thread Op.  | ? |   |   |   |   |              | `closedhdl:uv_close_cb` |
+| Reseting  Closed   Thread Op.  |   |   |   | P |   | `k_resetopk` | `closedhdl:uv_close_cb` |
+_______________________
+- E: coroutine is executing.
+- R: `FLAG_REQUEST` is set in coroutines's `Operation.flags`.
+- S: `FLAG_THRSAVED` is set in coroutines's `Operation.flags`.
+- P: `FLAG_PENDING` is set in coroutines's `Operation.flags`.
+- C: `FLAG_NOCANCEL` is set in coroutines's `Operation.flags`.
+
+### Transitions
+
+|  # | Trigger                         | Result                                  |
+| --:|:------------------------------- |:--------------------------------------- |
+|  1 | request op. called              | coroutine suspends calling request op.  |
+|  2 | thread op. called               | coroutine suspends calling thread op.   |
+|  3 | UV request callback             | request op. returns results             |
+|  4 | coroutine resumed               | request op. returns as canceled         |
+|  5 | request op. called              | coroutine suspends calling request op.  |
+|  6 | coroutine yields or ends        | coroutine is unreferenced               |
+|  7 | thread op. called               | coroutine suspends calling thread op.   |
+|  8 | UV request callback             | coroutine is unreferenced               |
+|  9 | operation called                | coroutine suspends calling operation    |
+| 10 | UV request callback             | coroutine suspends again on request op. |
+| 11 | coroutine resumed               | operation returns as canceled           |
+| 12 | UV request callback             | coroutine suspends again on thread op.  |
+| 13 | UV handle callback              | thread op. returns results              |
+| 14 | coroutine resumed               | thread op. returns as canceled          |
+| 15 | coroutine resumed               | thread op. returns as canceled          |
+| 16 | same thread op. called          | coroutine suspends calling thread op.   |
+| 17 | coroutine yields or ends        | coroutine is unreferenced               |
+| 18 | other operation called          | coroutine suspends calling operation    |
+| 19 | same canceled thread op. called | coroutine suspends calling thread op.   |
+| 20 | UV handle callback              | thread op.'s handle starts closing      |
+| 21 | other operation called          | coroutine suspends calling operation    |
+| 22 | UV handle closed                | thread op.'s handle is released         |
+| 23 | operation called                | coroutine suspends calling operation    |
+| 24 | coroutine resumed               | operation returns as canceled           |
+| 25 | UV request callback             | coroutine suspends again on operation   |
+| 26 | coroutine resumed               | operation returns as canceled           |
+| 27 | UV handle closed                | coroutine suspends again on request op. |
+| 28 | UV handle closed                | coroutine suspends again on thread op.  |
+_______________________
+ 1. `lcuT_resetreqopk`
+	- `uv_<request>`
+	- `startedopk`
+ 2. `lcuT_resetthropk`
+	- `uv_<handle>_init`
+	- `lcuT_armthrop`
+	- `uv_<handle>_start`
+	- `startedopk`
+ 3. `uv_<request>_cb`
+	- `lcuU_endreqop`
+	- `lcuU_resumereqop...`
+		- `k_endop`
+ 4. `k_endop`
+	- `cancelop`?
+		- `uv_cancel`
+ 5. `lcuT_resetreqopk`
+	- `uv_<request>`
+	- `startedopk`
+	- `...lcuU_resumereqop`
+ 6. `...lcuU_resumereqop`
+ 7. `lcuT_resetthropk`
+	- `uv_<handle>_init`
+	- `lcuT_armthrop`
+	- `uv_<handle>_start`
+	- `startedopk`
+	- `...lcuU_resumereqop`
+ 8. `uv_<request>_cb`
+	- `lcuU_endreqop`
+ 9. `lcuT_resetreqopk|lcuT_resetthropk`
+	- `yieldresetk`
+10. `uv_<request>_cb`
+	- `lcuU_endreqop`
+	- `lcuU_resumereqop...`
+		- `k_resetopk`
+			- `uv_<request>`
+			- `startedopk`
+11. `k_resetopk`
+12. `uv_<request>_cb`
+	- `lcuU_endreqop`
+	- `lcuU_resumereqop...`
+		- `k_resetopk`
+			- `uv_<handle>_init`
+			- `lcuT_armthrop`
+			- `uv_<handle>_start`
+			- `startedopk`
+13. `uv_<handle>_cb`
+	- `lcuU_endthrop`
+	- `lcuU_resumethrop...`
+		- `k_endop`
+14. `k_endop`
+15. `k_endop`
+	- `cancelop`
+		- `uv_close`
+16. `lcuT_resetthropk`
+	- `uv_<handle>_stop`?
+	- `uv_<handle>_start`?
+	- `startedopk`
+	- `...lcuU_resumethrop`
+17. `...lcuU_resumethrop`
+	- `cancelop`
+		- `uv_close`
+18. `lcuT_resetreqopk|lcuT_resetthropk`
+	- `checkreset`
+		- `uv_close`
+	- `yieldresetk`
+	- `...lcuU_resumethrop`
+19. `lcuT_resetthropk`
+	- `uv_<handle>_stop`?
+	- `uv_<handle>_start`?
+	- `startedopk`
+20. `uv_<handle>_cb`
+	- `lcuU_endthrop`
+		- `cancelop`
+			- `uv_close`
+21. `lcuT_resetreqopk|lcuT_resetthropk`
+	- `yieldresetk`
+22. `closedhdl`
+23. `lcuT_resetreqopk|lcuT_resetthropk`
+	- `yieldresetk`
+24. `k_resetopk`
+25. `uv_<handle>_cb`
+	- `lcuU_endthrop`
+	- !!!`cancelop`!!!
+		- !!!`uv_close`!!!
+26. `k_resetopk`
+27. `closedhdl`
+	- `lcuU_resumereqop...`
+		- `k_resetopk`
+			- `uv_<request>`
+			- `startedopk`
+28. `closedhdl`
+	- `lcuU_resumereqop...`
+		- `k_resetopk`
+			- `uv_<handle>_init`
+			- `lcuT_armthrop`
+			- `uv_<handle>_start`
+			- `startedopk`
+
+Object
+------
+
+![Object States](objstates.svg)
+
+### States
+
+| Name      | E | S | P | C | KFunction     | Callback Pending        |
+|:--------- |:-:|:-:|:-:|:-:|:------------- |:----------------------- |
+| Ready     | ? |   |   |   |               |                         |
+| Closing   | ? |   |   | C |               | `closedobj:uv_close_cb` |
+| Freed     | ? |   |   | C |               |                         |
+| Awaiting  |   | S | P |   | `k_endobjopk` | `uv_<handle>_cb`        |
+| Completed | E | S |   |   |               |                         |
+_______________________
+- E: a coroutine is executing.
+- S: (started) `stop` and `step` fields are not `NULL` in `lcu_Object`.
+- P: (pending) `handle.data` is not `NULL` in `lcu_Object`.
+- C: (closed) `LCU_OBJCLOSEDFLAG` is set in `lcu_Object`.
+
+### Transitions
+
+| # | Trigger                                    | Result                                                   |
+| -:|:------------------------------------------ |:-------------------------------------------------------- |
+| 1 | close operation called or object collected | object marked as closed                                  |
+| 2 | operation called                           | coroutine suspends calling operation                     |
+| 3 | UV handle closed                           | object handle is released                                |
+| 4 | coroutine resumed                          | object stops, and operation returns as canceled          |
+| 5 | close operation called                     | object marked as closed, and operation returns as closed |
+| 6 | UV handle callback                         | operation returns results                                |
+| 7 | coroutine yields or ends                   | object stops                                             |
+| 8 | close operation called                     | object marked as closed                                  |
+| 9 | operation called again                     | coroutine suspends calling operation                     |
+_______________________
+1. `lcu_closeobj`
+	- `uv_close`
+2. `lcuT_resetobjopk`
+	- `uv_<handle>_start`
+3. `closedobj`
+4. `k_endobjopk`
+	- `stopobjop`
+		- `uv_<handle>_stop`
+5. `lcu_closeobj`
+	- `uv_close`
+6. `uv_<handle>_cb`
+	- `lcuU_resumeobjop...`
+		- `k_endobjopk`
+7. `...lcuU_resumeobjop`
+	- `stopobjop`
+		- `uv_<handle>_stop`
+8. `lcu_closeobj`
+	- `uv_close`
+9. `lcuT_resetobjopk`
+

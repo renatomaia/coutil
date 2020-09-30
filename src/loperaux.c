@@ -481,7 +481,7 @@ static void stopobjop (lua_State *L, lcu_Object *obj) {
 	sched->nactive--;
 }
 
-static int k_endobjop (lua_State *L, int status, lua_KContext kctx);
+static int k_endobjopk (lua_State *L, int status, lua_KContext kctx);
 
 static int scheduleobjk (lua_State *L, uv_handle_t *handle) {
 	lcu_assert(handle->type != UV_UNKNOWN_HANDLE);
@@ -490,10 +490,10 @@ static int scheduleobjk (lua_State *L, uv_handle_t *handle) {
 	lua_pushthread(L);
 	lua_setiuservalue(L, 1, UPV_THREAD);
 	handle->data = (void *)L;
-	return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), k_endobjop);
+	return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), k_endobjopk);
 }
 
-static int k_endobjop (lua_State *L, int status, lua_KContext kctx) {
+static int k_endobjopk (lua_State *L, int status, lua_KContext kctx) {
 	lcu_Object *obj = (lcu_Object *)lua_touserdata(L, 1);
 	uv_handle_t *handle = lcu_toobjhdl(obj);
 	lcu_assert(status == LUA_YIELD);
