@@ -826,8 +826,12 @@ do case "used after library collection"
 		for _, case in ipairs(cases) do
 			spawn(function ()
 				local ok, err = case.socket[case.op](case.socket, table.unpack(case))
-				assert(not ok)
-				assert(err == "closed")
+				if case.op == "send" then
+					assert(ok)
+				else
+					assert(not ok)
+					assert(err == "operation canceled")
+				end
 			end)
 		end
 	]===])

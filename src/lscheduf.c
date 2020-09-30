@@ -2,13 +2,13 @@
 #include "loperaux.h"
 
 
-static int k_resumeall (lua_State *L, int status, lua_KContext ctx) {
-	uv_loop_t *loop = (uv_loop_t *)ctx;
+static int k_resumeall (lua_State *L, int status, lua_KContext kctx) {
+	uv_loop_t *loop = (uv_loop_t *)kctx;
 	int pending;
 	lua_settop(L, 0);
 	pending = uv_run(loop, UV_RUN_DEFAULT);
 	if (pending && lua_isuserdata(L, 1))
-		return lua_yieldk(L, 1, ctx, k_resumeall);
+		return lua_yieldk(L, 1, kctx, k_resumeall);
 	loop->data = NULL;
 	lua_pushboolean(L, pending);
 	return 1;
@@ -31,13 +31,13 @@ static int lcuM_run (lua_State *L) {
 			mainL = lua_tothread(L, -1);
 			lua_pop(L, 1);
 			if (L == mainL) {
-				lua_KContext ctx = (lua_KContext)loop;
+				lua_KContext kctx = (lua_KContext)loop;
 				loop->data = (void *)L;
 				if (lcu_shallsuspend(sched)) {
 					lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY);
-					return lua_yieldk(L, 1, ctx, k_resumeall);
+					return lua_yieldk(L, 1, kctx, k_resumeall);
 				}
-				return k_resumeall(L, LUA_YIELD, ctx);
+				return k_resumeall(L, LUA_YIELD, kctx);
 			}
 		}
 	}

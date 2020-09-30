@@ -156,7 +156,7 @@ but the coroutine will not be collected as long as the value does not become gar
 
 ### `event.await (e)`
 
-Equivalent to [`event.awaitany`](#eventawait-e)`(e)`.
+Equivalent to [`event.awaitany`](#eventawaitany-e1-)`(e)`.
 
 ### `event.awaitall ([e1, ...])`
 
