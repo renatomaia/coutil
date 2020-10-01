@@ -84,15 +84,15 @@ Source Files
 
 | Source Files | Contents Type | Description |
 | ------------ | ------------- | ----------- |
-| `lchannem.c` | Lua module | `coutil.channel` |
+| `lchannem.c` | Lua module | `coutil.channel` and `system.awaitch` |
 | `lchaux.{c,h}` | internal | inter-thread channel basic support |
 | `lchdefs.h` | internal | inter-thread channel structures |
-| `lcoroutm.c` | Lua module | `coutil.coroutine` |
+| `lcoroutm.c` | Lua module | `coutil.coroutine` and `system.resume` |
 | `lcuconf.h` | configuration | general implementation configurations |
 | `lmodaux.{c,h}` | internal | Lua general utilities |
-| `loperaux.{c,h}` | internal | [await functions](manual.md#await) support for [UV operations](#operations) |
+| `loperaux.{c,h}` | internal | [await function](manual.md#await) support for [UV operations](#operations) |
 | `lprocesf.c` | Lua functions | process and signal functions of `coutil.system` |
-| `lscheduf.c` | Lua functions | run functions of `coutil.system` |
+| `lscheduf.c` | Lua functions | event loop functions of `coutil.system` |
 | `lsocketf.c` | Lua functions | socket functions of `coutil.system` |
 | `lsystemm.c` | Lua module | `coutil.system` |
 | `lthpool.{c,h}` | internal | thread pool basic support |
@@ -352,6 +352,7 @@ Transitions
 -----------
 
 ### [C]allback
+
 1. `uv_<request>_cb`
 	- `lcuU_endreqop`
 	- `lcuU_resumereqop...`
@@ -382,7 +383,7 @@ Transitions
 			- `uv_close`
 7. `uv_<handle>_cb`
 	- `lcuU_endthrop`
-	- !!!`cancelop`!!!
+	- !!!`cancelop`!!!   TODO: implement this and a test case for it.
 		- !!!`uv_close`!!!
 8. `uv_<handle>_cb`
 	- `lcuU_resumeobjop...`
@@ -446,7 +447,7 @@ Transitions
 		- `uv_close`
 	- `yieldresetk`
 	- `...lcuU_resumethrop`
-8. `lcuT_resetthropk`
+8. `lcuT_resetthropk` (`checkreset() == SAMEOP`)
 	- `uv_<handle>_stop`?
 	- `uv_<handle>_start`?
 	- `startedopk`
@@ -456,6 +457,7 @@ Transitions
 	- `yieldresetk`
 11. `lcuT_resetobjopk`
 	- `uv_<handle>_start`
+12. `lcuT_resetobjopk`
 
 ### [R]esumed
 
@@ -472,7 +474,6 @@ Transitions
 7. `k_endobjopk`
 	- `stopobjop`
 		- `uv_<handle>_stop`
-8. `lcuT_resetobjopk`
 
 ### [Y]ields
 
