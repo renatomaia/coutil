@@ -680,7 +680,7 @@ static int system_socket (lua_State *L) {
 
 LCUI_FUNC lcu_Object *lcu_openedobj (lua_State *L, int arg, const char *class) {
 	lcu_Object *object = (lcu_Object *)luaL_checkudata(L, arg, class);
-	luaL_argcheck(L, !lcu_isobjclosed(object), arg, "closed object");
+	luaL_argcheck(L, !lcuL_maskflag(object, LCU_OBJCLOSEDFLAG), arg, "closed object");
 	return object;
 }
 

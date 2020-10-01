@@ -70,8 +70,6 @@ typedef struct lcu_Object {
 	uv_handle_t handle;
 } lcu_Object;
 
-#define lcu_isobjclosed(O)	((O)->flags&LCU_OBJCLOSEDFLAG)
-
 #define lcu_toobjhdl(O)	(&(O)->handle)
 
 #define lcu_tohdlobj(H) ({ const char *p = (const char *)H; \

@@ -1,5 +1,5 @@
-Terminology
-===========
+Terminology in Code
+===================
 
 Operations
 ----------
@@ -10,35 +10,39 @@ CoUtil categorizes UV asynchronous operations into the following categories:
 
 - Requires a UV request ([`uv_req_t`](http://docs.libuv.org/en/v1.x/request.html)).
 - Requires an initialized `uv_loop_t` structure.
-- Is started using a UV function that register a single-shot callback, which is eventually called and indicates the UV request is freed.
+- Started using a UV function that register a single-shot callback, which is eventually called and indicates the UV request is freed.
 
 | Definition | Description |
 | :--- | :--- |
-| `uv_<name>_t` | UV request type |
-| `uv_<name>_cb` | callback pointer type, which is called when the operation terminates and the request is free. |
-| `uv_<name>(uv_loop_t *loop, uv_<name>_t *req, <arguments>, uv_<name>_cb callback);` | starts the operation on UV event loop `loop`. |
+| `uv_<request>_t` | UV request type |
+| `uv_<request>_cb` | callback pointer type, which is called when the operation terminates and the request is free. |
+| `uv_<request>(uv_loop_t*, uv_<request>_t*, <arguments>, uv_<request>_cb);` | starts the operation on UV event loop `loop` with the provided arguments, and registering the callback. |
 
 ### Thread Operations (`throp`)
 
-- Requires a UV handle ([`uv_handle_t`](http://docs.libuv.org/en/v1.x/handle.html)) not associated with a system resource, like a file descriptor.
-- Must be first initialized using a initialized `uv_loop_t` structure, before it can start.
-- Is started using a UV function that registers a callback that will be continuously called until the operation is stopped using another UV function.
-- Is terminated by function `uv_close`,
-which registers an additional callback to be called when the UV handle is released.
+- Requires a UV handle ([`uv_handle_t`](http://docs.libuv.org/en/v1.x/handle.html)),
+but not associated with a system object (_e.g._ file descriptor).
+- Requires an initialized `uv_loop_t` structure.
+- Started using a UV function that registers a callback to be continuously called until the operation is stopped using another UV function.
+- Terminated by function `uv_close`,
+which registers an additional callback to be called when the UV handle is freed.
 
 | Definition | Description |
 | :--- | :--- |
-| `uv_<name>_t` | UV handle type |
-| `uv_<name>_cb` | callback pointer type, which is called while the operation is active. |
-| `uv_<name>_init(uv_loop_t *loop, uv_<name>_t *handle);` | associates the handler with UV event loop `loop`. |
-| `uv_<name>_start(uv_<name>_t *handle, <arguments>, uv_<name>_cb callback);` | starts the operation with the provided arguments, and registering the callback. |
-| `uv_<name>_stop(uv_<name>_t *handle);` | stops the operation, so the callback is not called until started again. |
+| `uv_<handler>_t` | UV handle type |
+| `uv_<handler>_cb` | callback pointer type, which is called while the operation is active. |
+| `uv_<handler>_init(uv_loop_t*, uv_<handler>_t*);` | associates the handler with UV event loop `loop`. |
+| `uv_<handler>_start(uv_<handler>_t*, <arguments>, uv_<handler>_cb);` | starts the operation with the provided arguments, and registering the callback. |
+| `uv_<handler>_stop(uv_<handler>_t*);` | stops the operation, so the callback is not called until started again. |
 
 ### Object Operations (`objop`)
 
-Same as [Thread Operations],
-but when the handle is associated with a system resource, like a file descriptor.
-This distinction is important because such handles are not replicated to allow multiple coroutines to perform its operation simultaneously.
+Same as [Thread Operations](#thread-operations-throp),
+but when the handle is associated with a system object (_e.g._ file descriptor).
+In particular,
+such handles cannot be replicated by multiple coroutines.
+Therefore,
+the operation on such system object can only be performed by one coroutine at time.
 
 Identifiers
 -----------
@@ -73,24 +77,30 @@ Functions
 2. Requires `lua_State` of a call to a function with **module upvalues**.
 Can be used with `(lua_State *)uv_loop_t.data` while `system.run()` is running.
 
-Files
-=====
+Source Files
+============
 
-### `lcuconf.h`
+![Source Dependencies](srcdeps.svg)
 
-Definitions to customize implementation in similar fashion to `luaconf.h` of Lua.
+| Source Files | Contents Type | Description |
+| ------------ | ------------- | ----------- |
+| `lchannem.c` | Lua module | `coutil.channel` |
+| `lchaux.{c,h}` | internal | inter-thread channel basic support |
+| `lchdefs.h` | internal | inter-thread channel structures |
+| `lcoroutm.c` | Lua module | `coutil.coroutine` |
+| `lcuconf.h` | configuration | general implementation configurations |
+| `lmodaux.{c,h}` | internal | Lua general utilities |
+| `loperaux.{c,h}` | internal | [await functions](manual.md#await) support for [UV operations](#operations) |
+| `lprocesf.c` | Lua functions | process and signal functions of `coutil.system` |
+| `lscheduf.c` | Lua functions | run functions of `coutil.system` |
+| `lsocketf.c` | Lua functions | socket functions of `coutil.system` |
+| `lsystemm.c` | Lua module | `coutil.system` |
+| `lthpool.{c,h}` | internal | thread pool basic support |
+| `lthreadm.c` | Lua module | `coutil.thread` |
+| `ltimef.c` | Lua functions | time functions of `coutil.system` |
 
-### `lmodaux.c`:
-
-Auxiliary functions for implementation of Lua modules.
-
-### `loperaux.c`: 
-
-Auxiliary functions for implementation of module operations,
-specially [await functions](manual.md#await).
-
-Templates
-=========
+Implementation Templates
+========================
 
 Request Operation
 -----------------
@@ -109,8 +119,8 @@ static int lua_myawait (lua_State *L) {
 	return lcuT_resetreqopk(L, sched, k_setupfunc, onreturn, cancancel);
 }
 
-static int k_setupfunc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
-	uv_myevent_t *myevent = (uv_myevent_t *)handle;
+static int k_setupfunc (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_myevent_t *myevent = (uv_myevent_t *)request;
 	/* check argments and obtain desired configs for myevent */
 	/* leave on the stack values required to produce the results */
 	int err = uv_myevent(loop, myevent, uv_onmyevent, /* configs */);
@@ -118,6 +128,7 @@ static int k_setupfunc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 
+/* optional, if is 'NULL' behaves as 'return 1' */
 static int cancancel (lua_State *L) {
 	/* we know the thread is not awaiting for this myevent anymore */
 	/* inpect any global state that might need clean up */
@@ -139,6 +150,7 @@ static void uv_onmyevent (uv_myevent_t *myrequest, /* myevent details */) {
 	}
 }
 
+/* optional, if is 'NULL' behaves as 'return lua_gettop(L)' */
 static int onreturn (lua_State *L) {
 	/* use values left on the stack by 'k_setupfunc' and the ones yielded */
 	/* by 'uv_onmyevent' to produce the values to be returned */
@@ -176,6 +188,7 @@ static int k_setupfunc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 
+/* optional, if is 'NULL' behaves as 'return 1' */
 static int cancancel (lua_State *L) {
 	/* we know the thread is not awaiting for this myevent anymore */
 	/* inpect any global state that might need clean up */
@@ -195,6 +208,7 @@ static void uv_onmyevent (uv_myevent_t *handle, /* myevent details */) {
 	}
 }
 
+/* optional, if is 'NULL' behaves as 'return lua_gettop(L)' */
 static int onreturn (lua_State *L) {
 	/* use values left on the stack by 'k_setupfunc' and the ones yielded */
 	/* by 'uv_onmyevent' to produce the values to be returned */
@@ -209,14 +223,6 @@ Object Operation
 #define MYOBJECT_CLASS	LCU_PREFIX"MyObject"
 
 LCUI_FUNC void lcuM_addmyawaitf (lua_State *L) {
-	static const luaL_Reg modf[] = {
-		{"myobject", lua_myobject},
-		{NULL, NULL}
-	};
-	lcuM_setfuncs(L, modf, LCU_MODUPVS);
-}
-
-LCUMOD_API int luaopen_coutil_myobject (lua_State *L) {
 	static const luaL_Reg metf[] = {
 		{"__gc", myobj_gc},
 		{"__close", myobj_gc},
@@ -224,14 +230,24 @@ LCUMOD_API int luaopen_coutil_myobject (lua_State *L) {
 		{"await", myobj_await},
 		{NULL, NULL}
 	};
+	static const luaL_Reg modf[] = {
+		{"myobject", lua_myobject},
+		{NULL, NULL}
+	};
+	/* create object metatable */
 	luaL_newmetatable(L, MYOBJECT_CLASS);
 	lcuL_setfuncs(L, metf, 0);
-	return 1;
+	lua_pop(L, 1);
+	/* add object creation function to 'coutil.system' */
+	lcuM_setfuncs(L, modf, LCU_MODUPVS);
 }
 
 typedef struct MyObject {
+	/* same field from 'lcu_Object' */
 	int flags;
-	uv_myobject_t handle;
+	lcu_ObjectAction stop;
+	lua_CFunction step;
+	uv_myobject_t handle;  /* is 'uv_handle_t' in 'lcu_Object' */
 	/* any extra fields */
 }
 
@@ -258,8 +274,9 @@ static int myobj_close (lua_State *L) {
 }
 
 static int myobj_await (lua_State *L) {
-	lcu_Object *object = lcu_openedobj(L, 1, LCU_UDPSOCKETCLS);
-	return lcuT_resetobjopk(L, object, startmyawait, stopmyawait, k_onreturn);
+	lcu_Object *object = (lcu_Object *)luaL_checkudata(L, 1, MYOBJECT_CLASS);
+	luaL_argcheck(L, !lcuL_maskflag(object, LCU_OBJCLOSEDFLAG), 1, "closed object");
+	return lcuT_resetobjopk(L, object, startmyawait, stopmyawait, onreturn);
 }
 
 static int udpstartrecv (uv_handle_t *handle) {
@@ -278,20 +295,20 @@ static void uv_onmyevent (uv_myobject_t *myobjhdl, /* myevent details */) {
 	lcuU_resumeobjop(handle, /* number of pushed values */);
 }
 
-static int k_onreturn (lua_State *L, int status, lua_KContext ctx) {
+static int onreturn (lua_State *L) {
 	/* use values left on the stack by 'myobj_await' and the ones yielded */
 	/* by 'uv_onmyevent' to produce the values to be returned */
 	return /* number of values to return from the top of the stack */;
 }
 ```
 
-States
-======
+Data Structure States
+=====================
 
-Thread
-------
+Operation
+---------
 
-![Thread States](thrstates.svg)
+![Operation States](opstates.svg)
 
 ### States
 
@@ -500,3 +517,16 @@ _______________________
 	- `uv_close`
 9. `lcuT_resetobjopk`
 
+References to Values
+====================
+
+`coutil.system`
+---------------
+
+![System Module ER](sysmoder.svg)
+
+
+`coutil.thread`
+---------------
+
+![Thread Module ER](thrmoder.svg)
