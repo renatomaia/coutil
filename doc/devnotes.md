@@ -310,8 +310,6 @@ Operation
 
 ![Operation States](opstates.svg)
 
-### States
-
 | Name                           | E | R | S | P | C | KFunction    | Callback Pending        |
 |:------------------------------ |:-:|:-:|:-:|:-:|:-:|:------------ |:----------------------- |
 | Freed              Operation   | ? | R |   |   |   |              |                         |
@@ -332,143 +330,10 @@ _______________________
 - P: `FLAG_PENDING` is set in coroutines's `Operation.flags`.
 - C: `FLAG_NOCANCEL` is set in coroutines's `Operation.flags`.
 
-### Transitions
-
-|  # | Trigger                         | Result                                  |
-| --:|:------------------------------- |:--------------------------------------- |
-|  1 | request op. called              | coroutine suspends calling request op.  |
-|  2 | thread op. called               | coroutine suspends calling thread op.   |
-|  3 | UV request callback             | request op. returns results             |
-|  4 | coroutine resumed               | request op. returns as canceled         |
-|  5 | request op. called              | coroutine suspends calling request op.  |
-|  6 | coroutine yields or ends        | coroutine is unreferenced               |
-|  7 | thread op. called               | coroutine suspends calling thread op.   |
-|  8 | UV request callback             | coroutine is unreferenced               |
-|  9 | operation called                | coroutine suspends calling operation    |
-| 10 | UV request callback             | coroutine suspends again on request op. |
-| 11 | coroutine resumed               | operation returns as canceled           |
-| 12 | UV request callback             | coroutine suspends again on thread op.  |
-| 13 | UV handle callback              | thread op. returns results              |
-| 14 | coroutine resumed               | thread op. returns as canceled          |
-| 15 | coroutine resumed               | thread op. returns as canceled          |
-| 16 | same thread op. called          | coroutine suspends calling thread op.   |
-| 17 | coroutine yields or ends        | coroutine is unreferenced               |
-| 18 | other operation called          | coroutine suspends calling operation    |
-| 19 | same canceled thread op. called | coroutine suspends calling thread op.   |
-| 20 | UV handle callback              | thread op.'s handle starts closing      |
-| 21 | other operation called          | coroutine suspends calling operation    |
-| 22 | UV handle closed                | thread op.'s handle is released         |
-| 23 | operation called                | coroutine suspends calling operation    |
-| 24 | coroutine resumed               | operation returns as canceled           |
-| 25 | UV request callback             | coroutine suspends again on operation   |
-| 26 | coroutine resumed               | operation returns as canceled           |
-| 27 | UV handle closed                | coroutine suspends again on request op. |
-| 28 | UV handle closed                | coroutine suspends again on thread op.  |
-_______________________
- 1. `lcuT_resetreqopk`
-	- `uv_<request>`
-	- `startedopk`
- 2. `lcuT_resetthropk`
-	- `uv_<handle>_init`
-	- `lcuT_armthrop`
-	- `uv_<handle>_start`
-	- `startedopk`
- 3. `uv_<request>_cb`
-	- `lcuU_endreqop`
-	- `lcuU_resumereqop...`
-		- `k_endop`
- 4. `k_endop`
-	- `cancelop`?
-		- `uv_cancel`
- 5. `lcuT_resetreqopk`
-	- `uv_<request>`
-	- `startedopk`
-	- `...lcuU_resumereqop`
- 6. `...lcuU_resumereqop`
- 7. `lcuT_resetthropk`
-	- `uv_<handle>_init`
-	- `lcuT_armthrop`
-	- `uv_<handle>_start`
-	- `startedopk`
-	- `...lcuU_resumereqop`
- 8. `uv_<request>_cb`
-	- `lcuU_endreqop`
- 9. `lcuT_resetreqopk|lcuT_resetthropk`
-	- `yieldresetk`
-10. `uv_<request>_cb`
-	- `lcuU_endreqop`
-	- `lcuU_resumereqop...`
-		- `k_resetopk`
-			- `uv_<request>`
-			- `startedopk`
-11. `k_resetopk`
-12. `uv_<request>_cb`
-	- `lcuU_endreqop`
-	- `lcuU_resumereqop...`
-		- `k_resetopk`
-			- `uv_<handle>_init`
-			- `lcuT_armthrop`
-			- `uv_<handle>_start`
-			- `startedopk`
-13. `uv_<handle>_cb`
-	- `lcuU_endthrop`
-	- `lcuU_resumethrop...`
-		- `k_endop`
-14. `k_endop`
-15. `k_endop`
-	- `cancelop`
-		- `uv_close`
-16. `lcuT_resetthropk`
-	- `uv_<handle>_stop`?
-	- `uv_<handle>_start`?
-	- `startedopk`
-	- `...lcuU_resumethrop`
-17. `...lcuU_resumethrop`
-	- `cancelop`
-		- `uv_close`
-18. `lcuT_resetreqopk|lcuT_resetthropk`
-	- `checkreset`
-		- `uv_close`
-	- `yieldresetk`
-	- `...lcuU_resumethrop`
-19. `lcuT_resetthropk`
-	- `uv_<handle>_stop`?
-	- `uv_<handle>_start`?
-	- `startedopk`
-20. `uv_<handle>_cb`
-	- `lcuU_endthrop`
-		- `cancelop`
-			- `uv_close`
-21. `lcuT_resetreqopk|lcuT_resetthropk`
-	- `yieldresetk`
-22. `closedhdl`
-23. `lcuT_resetreqopk|lcuT_resetthropk`
-	- `yieldresetk`
-24. `k_resetopk`
-25. `uv_<handle>_cb`
-	- `lcuU_endthrop`
-	- !!!`cancelop`!!!
-		- !!!`uv_close`!!!
-26. `k_resetopk`
-27. `closedhdl`
-	- `lcuU_resumereqop...`
-		- `k_resetopk`
-			- `uv_<request>`
-			- `startedopk`
-28. `closedhdl`
-	- `lcuU_resumereqop...`
-		- `k_resetopk`
-			- `uv_<handle>_init`
-			- `lcuT_armthrop`
-			- `uv_<handle>_start`
-			- `startedopk`
-
 Object
 ------
 
 ![Object States](objstates.svg)
-
-### States
 
 | Name      | E | S | P | C | KFunction     | Callback Pending        |
 |:--------- |:-:|:-:|:-:|:-:|:------------- |:----------------------- |
@@ -483,39 +348,141 @@ _______________________
 - P: (pending) `handle.data` is not `NULL` in `lcu_Object`.
 - C: (closed) `LCU_OBJCLOSEDFLAG` is set in `lcu_Object`.
 
-### Transitions
+Transitions
+-----------
 
-| # | Trigger                                    | Result                                                   |
-| -:|:------------------------------------------ |:-------------------------------------------------------- |
-| 1 | close operation called or object collected | object marked as closed                                  |
-| 2 | operation called                           | coroutine suspends calling operation                     |
-| 3 | UV handle closed                           | object handle is released                                |
-| 4 | coroutine resumed                          | object stops, and operation returns as canceled          |
-| 5 | close operation called                     | object marked as closed, and operation returns as closed |
-| 6 | UV handle callback                         | operation returns results                                |
-| 7 | coroutine yields or ends                   | object stops                                             |
-| 8 | close operation called                     | object marked as closed                                  |
-| 9 | operation called again                     | coroutine suspends calling operation                     |
-_______________________
-1. `lcu_closeobj`
-	- `uv_close`
-2. `lcuT_resetobjopk`
-	- `uv_<handle>_start`
-3. `closedobj`
-4. `k_endobjopk`
-	- `stopobjop`
-		- `uv_<handle>_stop`
-5. `lcu_closeobj`
-	- `uv_close`
+### [C]allback
+1. `uv_<request>_cb`
+	- `lcuU_endreqop`
+	- `lcuU_resumereqop...`
+		- `k_endop`
+2. `uv_<request>_cb`
+	- `lcuU_endreqop`
+3. `uv_<request>_cb`
+	- `lcuU_endreqop`
+	- `lcuU_resumereqop...`
+		- `k_resetopk`
+			- `uv_<request>`
+			- `startedopk`
+4. `uv_<request>_cb`
+	- `lcuU_endreqop`
+	- `lcuU_resumereqop...`
+		- `k_resetopk`
+			- `uv_<handle>_init`
+			- `lcuT_armthrop`
+			- `uv_<handle>_start`
+			- `startedopk`
+5. `uv_<handle>_cb`
+	- `lcuU_endthrop`
+	- `lcuU_resumethrop...`
+		- `k_endop`
 6. `uv_<handle>_cb`
+	- `lcuU_endthrop`
+		- `cancelop`
+			- `uv_close`
+7. `uv_<handle>_cb`
+	- `lcuU_endthrop`
+	- !!!`cancelop`!!!
+		- !!!`uv_close`!!!
+8. `uv_<handle>_cb`
 	- `lcuU_resumeobjop...`
 		- `k_endobjopk`
-7. `...lcuU_resumeobjop`
+
+### [F]reed
+
+1. `closedhdl`
+2. `closedhdl`
+	- `lcuU_resumereqop...`
+		- `k_resetopk`
+			- `uv_<request>`
+			- `startedopk`
+3. `closedhdl`
+	- `lcuU_resumereqop...`
+		- `k_resetopk`
+			- `uv_<handle>_init`
+			- `lcuT_armthrop`
+			- `uv_<handle>_start`
+			- `startedopk`
+4. `closedobj`
+
+### [G]arbage
+
+1. `lcu_closeobj`
+	- `uv_close`
+2. `lcu_closeobj`
+	- `uv_close`
+3. `lcu_closeobj`
+	- `uv_close`
+
+### [O]peration
+
+1. `lcuT_resetreqopk`
+	- `uv_<request>`
+	- `startedopk`
+2. `lcuT_resetthropk`
+	- `uv_<handle>_init`
+	- `lcuT_armthrop`
+	- `uv_<handle>_start`
+	- `startedopk`
+3. `lcuT_resetreqopk`
+	- `uv_<request>`
+	- `startedopk`
+	- `...lcuU_resumereqop`
+4. `lcuT_resetthropk`
+	- `uv_<handle>_init`
+	- `lcuT_armthrop`
+	- `uv_<handle>_start`
+	- `startedopk`
+	- `...lcuU_resumereqop`
+5. `lcuT_resetreqopk|lcuT_resetthropk`
+	- `yieldresetk`
+6. `lcuT_resetthropk` (`checkreset() == SAMEOP`)
+	- `uv_<handle>_stop`?
+	- `uv_<handle>_start`?
+	- `startedopk`
+	- `...lcuU_resumethrop`
+7. `lcuT_resetreqopk|lcuT_resetthropk`
+	- `checkreset` (`== WAITOP`)
+		- `uv_close`
+	- `yieldresetk`
+	- `...lcuU_resumethrop`
+8. `lcuT_resetthropk`
+	- `uv_<handle>_stop`?
+	- `uv_<handle>_start`?
+	- `startedopk`
+9. `lcuT_resetreqopk|lcuT_resetthropk`
+	- `yieldresetk`
+10. `lcuT_resetreqopk|lcuT_resetthropk`
+	- `yieldresetk`
+11. `lcuT_resetobjopk`
+	- `uv_<handle>_start`
+
+### [R]esumed
+
+1. `k_endop`
+	- `cancelop`?
+		- `uv_cancel`
+2. `k_resetopk`
+3. `k_endop` (`cancancel() == 0`)
+4. `k_endop` (`cancancel() == 1`)
+	- `cancelop`
+		- `uv_close`
+5. `k_resetopk`
+6. `k_resetopk`
+7. `k_endobjopk`
 	- `stopobjop`
 		- `uv_<handle>_stop`
-8. `lcu_closeobj`
-	- `uv_close`
-9. `lcuT_resetobjopk`
+8. `lcuT_resetobjopk`
+
+### [Y]ields
+
+1. `...lcuU_resumereqop`
+2. `...lcuU_resumethrop`
+	- `cancelop`
+		- `uv_close`
+3. `...lcuU_resumeobjop`
+	- `stopobjop`
+		- `uv_<handle>_stop`
 
 References to Values
 ====================

@@ -271,7 +271,7 @@ static OpStatus checkreset (Operation *op,
 		uv_handle_t *handle = tohandle(op);
 		if (!uv_is_closing(handle)) {
 			if (type && handle->type == type) {
-				// TODO: create test case for this (arrow 19 of the state diagram)
+				// TODO: create test case for this (arrow O8 of the state diagram)
 				//lcuL_clearflag(op, FLAG_NOCANCEL);
 				return SAMEOP;
 			}
@@ -391,7 +391,7 @@ LCUI_FUNC int lcuU_endthrop (uv_handle_t *handle) {
 	Operation *op = (Operation *)handle;
 	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST));
 	/*
-	// TODO: create test case for this (arrow 25 of the state diagram)
+	// TODO: create test case for this (arrow C7 of the state diagram)
 	if (lcuL_maskflag(op, FLAG_PENDING|FLAG_NOCANCEL) == FLAG_PENDING) return 1;
 	/*/
 	if (lcuL_maskflag(op, FLAG_PENDING)) return 1;
