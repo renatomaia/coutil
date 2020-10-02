@@ -488,13 +488,4 @@ Transitions
 References to Values
 ====================
 
-`coutil.system`
----------------
-
-![System Module ER](sysmoder.svg)
-
-
-`coutil.thread`
----------------
-
-![Thread Module ER](thrmoder.svg)
+![Data References](references.svg)
