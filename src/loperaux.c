@@ -18,12 +18,12 @@ struct lcu_Scheduler {
 };
 
 
-static void pushhandlemap (lua_State *L) {
-	lua_pushlightuserdata(L, pushhandlemap);
+static void pushopmap (lua_State *L) {
+	lua_pushlightuserdata(L, pushopmap);
 	if (lua_gettable(L, LUA_REGISTRYINDEX) != LUA_TTABLE) {
 		lua_pop(L, 1);
 		lua_newtable(L);
-		lua_pushlightuserdata(L, pushhandlemap);
+		lua_pushlightuserdata(L, pushopmap);
 		lua_pushvalue(L, -2);
 		lua_createtable(L, 0, 1);
 		lua_pushliteral(L, "k");
@@ -60,7 +60,7 @@ LCUI_FUNC void lcuM_newmodupvs (lua_State *L) {
 	int err;
 	lcu_Scheduler *sched;
 	uv_loop_t *loop;
-	pushhandlemap(L);  /* shall be GC after the 'lcu_Scheduler' in Lua close */
+	pushopmap(L);  /* shall be GC after the 'lcu_Scheduler' in Lua close */
 	lua_pop(L, 1);
 	sched = (lcu_Scheduler *)lua_newuserdatauv(L, sizeof(lcu_Scheduler), 0);
 	sched->nasync = 0;
@@ -130,7 +130,7 @@ typedef struct Operation {
 
 static Operation *tothrop (lua_State *L) {
 	Operation *op;
-	pushhandlemap(L);
+	pushopmap(L);
 	lua_pushthread(L);
 	if (lua_gettable(L, -2) == LUA_TNIL) {
 		uv_req_t *request;
@@ -143,7 +143,7 @@ static Operation *tothrop (lua_State *L) {
 		request->data = (void *)L;
 	}
 	else op = (Operation *)lua_touserdata(L, -1);
-	lua_pop(L, 2);  /* pops 'Operation' and 'handlemap' */
+	lua_pop(L, 2);  /* pops 'Operation' and 'opmap' */
 	return op;
 }
 

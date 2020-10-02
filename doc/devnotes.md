@@ -243,7 +243,7 @@ LCUI_FUNC void lcuM_addmyawaitf (lua_State *L) {
 }
 
 typedef struct MyObject {
-	/* same field from 'lcu_Object' */
+	/* same fields from 'lcu_Object' */
 	int flags;
 	lcu_ObjectAction stop;
 	lua_CFunction step;
@@ -310,21 +310,20 @@ Operation
 
 ![Operation States](opstates.svg)
 
-| Name                           | E | R | S | P | C | KFunction    | Callback Pending        |
-|:------------------------------ |:-:|:-:|:-:|:-:|:-:|:------------ |:----------------------- |
-| Freed              Operation   | ? | R |   |   |   |              |                         |
-| Awaiting           Request Op. |   | R | S | P |   | `k_endop`    | `uv_<request>_cb`       |
-| Completed          Request Op. | E | R | S |   |   |              |                         |
-| Canceled           Request Op. | ? | R | S |   | ? |              | `uv_<request>_cb`       |
-| Reseting           Request Op. |   | R | S | P | ? | `k_resetopk` | `uv_<request>_cb`       |
-| Awaiting           Thread Op.  |   |   |   | P |   | `k_endop`    | `uv_<handle>_cb`        |
-| Completed          Thread Op.  | E |   |   |   |   |              | `uv_<handle>_cb`        |
-| Canceled           Thread Op.  | ? |   |   |   | C |              | `uv_<handle>_cb`        |
-| Reseting  Canceled Thread Op.  |   |   |   | P | C | `k_resetopk` | `uv_<handle>_cb`        |
-| Closing            Thread Op.  | ? |   |   |   |   |              | `closedhdl:uv_close_cb` |
-| Reseting  Closed   Thread Op.  |   |   |   | P |   | `k_resetopk` | `closedhdl:uv_close_cb` |
+| Name                           | R | S | P | C | lua_KFunction | Callback Pending        |
+|:------------------------------ |:-:|:-:|:-:|:-:|:------------- |:----------------------- |
+| Freed              Operation   | R |   |   |   |               |                         |
+| Awaiting           Request Op. | R | S | P |   | `k_endop`     | `uv_<request>_cb`       |
+| Completed          Request Op. | R | S |   |   |               |                         |
+| Canceled           Request Op. | R | S |   | ? |               | `uv_<request>_cb`       |
+| Reseting           Request Op. | R | S | P | ? | `k_resetopk`  | `uv_<request>_cb`       |
+| Awaiting           Thread Op.  |   |   | P |   | `k_endop`     | `uv_<handle>_cb`        |
+| Completed          Thread Op.  |   |   |   |   |               | `uv_<handle>_cb`        |
+| Canceled           Thread Op.  |   |   |   | C |               | `uv_<handle>_cb`        |
+| Reseting  Canceled Thread Op.  |   |   | P | C | `k_resetopk`  | `uv_<handle>_cb`        |
+| Closing            Thread Op.  |   |   |   |   |               | `closedhdl:uv_close_cb` |
+| Reseting  Closed   Thread Op.  |   |   | P |   | `k_resetopk`  | `closedhdl:uv_close_cb` |
 _______________________
-- E: coroutine is executing.
 - R: `FLAG_REQUEST` is set in coroutines's `Operation.flags`.
 - S: `FLAG_THRSAVED` is set in coroutines's `Operation.flags`.
 - P: `FLAG_PENDING` is set in coroutines's `Operation.flags`.
@@ -335,15 +334,14 @@ Object
 
 ![Object States](objstates.svg)
 
-| Name      | E | S | P | C | KFunction     | Callback Pending        |
-|:--------- |:-:|:-:|:-:|:-:|:------------- |:----------------------- |
-| Ready     | ? |   |   |   |               |                         |
-| Closing   | ? |   |   | C |               | `closedobj:uv_close_cb` |
-| Freed     | ? |   |   | C |               |                         |
-| Awaiting  |   | S | P |   | `k_endobjopk` | `uv_<handle>_cb`        |
-| Completed | E | S |   |   |               |                         |
+| Name      | S | P | C | lua_KFunction | Callback Pending        |
+|:--------- |:-:|:-:|:-:|:------------- |:----------------------- |
+| Ready     |   |   |   |               |                         |
+| Closing   |   |   | C |               | `closedobj:uv_close_cb` |
+| Freed     |   |   | C |               |                         |
+| Awaiting  | S | P |   | `k_endobjopk` | `uv_<handle>_cb`        |
+| Completed | S |   |   |               |                         |
 _______________________
-- E: a coroutine is executing.
 - S: (started) `stop` and `step` fields are not `NULL` in `lcu_Object`.
 - P: (pending) `handle.data` is not `NULL` in `lcu_Object`.
 - C: (closed) `LCU_OBJCLOSEDFLAG` is set in `lcu_Object`.

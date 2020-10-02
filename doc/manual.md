@@ -365,7 +365,7 @@ Returns the new coroutine.
 ### `spawn.trap (h, f, ...)`
 
 Calls function `f` with the given arguments in a new coroutine.
-If `f` executes without any error, the coroutine executes function `h` passing as arguments the `true` followed by all the results from `f`.
+If `f` executes without any error, the coroutine executes function `h` passing as arguments `true` followed by all the results from `f`.
 In case of any error,
 `h` is executed with arguments `false` and the error message.
 In the latter case,
@@ -377,7 +377,7 @@ Preemptive Coroutines
 ---------------------
 
 Module `coutil.coroutine` provides functions for manipulation of _preemptive coroutines_,
-which execute code on an [independent state](#independent-state) to be executed in a separate system thread.
+which execute a chunk in an [independent state](#independent-state) in a separate system thread (see [`system.resume`](#systemresume-preemptco-)).
 
 This library also sets a metatable for the _preemtive coroutines_,
 where the `__index` field points to the table with all its functions.
@@ -460,7 +460,7 @@ and gerenate a [warning](http://www.lua.org/manual/5.4/manual.html#pdf-warn).
 
 Returns `true` if `chunk` is loaded successfully.
 
-__Note__: A _task_ can yield a channel name followed by the arguments of [`system.awaitch`](#systemawaitch-ch-endpoint-) to be suspended awaiting on a channel without the need to load other modules.
+__Note__: A _task_ can yield a channel name followed by an endpoint name and the other arguments of [`system.awaitch`](#systemawaitch-ch-endpoint-) to be suspended awaiting on a channel without the need to load other modules.
 
 ### `threads.dofile (pool, filepath [, mode, ...])`
 
@@ -501,8 +501,9 @@ If table `names` is provided,
 returns `names`,
 but first sets each of its string keys to either `true`,
 if there is a channel with that name,
-or `nil`,
-thus removing it from `names`.
+or `nil`.
+In other words,
+any non existent channel name as a key in `names` is removed from it.
 
 ### `channel.create (name)`
 
@@ -539,11 +540,13 @@ and some value different from `nil` on success.
 
 ### `system.run ([mode])`
 
-Resumes coroutines awaiting to system condition.
+Resumes coroutines awaiting system conditions.
 
 `mode` is a string that defines how `run` executes, as described below:
 
-- `"loop"` (default): it executes continously resuming every awaiting coroutine that becomes ready to be resumed until there are no more awaiting coroutines.
+- `"loop"` (default): it executes continously resuming every awaiting coroutine when their system condition is satisfied,
+until there are no more awaiting coroutines,
+or [`system.halt`](#systemhalt-) is called.
 - `"step"`: it resumes every ready coroutine once,
 or waits to resume at least one coroutine that becomes ready.
 - `"ready"`: it resumes only coroutines that are currently ready.
@@ -551,7 +554,7 @@ or waits to resume at least one coroutine that becomes ready.
 Returns `true` if there are remaining awaiting coroutines,
 or `false` otherwise.
 
-__Note__: when called with mode `"loop"` from the main thread of a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) and there are only [`channel:await`](#channelawait-endpoint-) calls pending, the task is suspended until one of the pending calls are resolved.
+__Note__: when called with mode `"loop"` from the main thread of a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) and there are only [`system.awaitch`](#systemawaitch-ch-endpoint-) calls pending, the task is suspended until one of the pending calls are resolved.
 
 ### `system.isrunning ()`
 
@@ -613,7 +616,7 @@ as listed below:
 | `signal`      | UNIX Name | Action    | Indication |
 | ------------- | --------- | --------- | ---------- |
 | `"bgread"`    | SIGTTIN   | stop      | **Read** from terminal while in **background**. |
-| `"bgwrite"`   | SIGTTOU   | stop      | **Write** to terminal while in **backgroun**d. |
+| `"bgwrite"`   | SIGTTOU   | stop      | **Write** to terminal while in **background**. |
 | `"hangup"`    | SIGHUP    | terminate | Terminal was closed. |
 | `"interrupt"` | SIGINT    | terminate | Terminal requests the process to terminate. (_e.g._ Ctrl+`C`) |
 | `"quit"`      | SIGQUIT   | core dump | Terminal requests the process to **quit** with a [core dump](https://en.wikipedia.org/wiki/Core_dump). (_e.g._ Ctrl+`\`) |
@@ -935,15 +938,17 @@ Otherwise it returns `nil` plus an error message.
 Binds socket `socket` to the peer address provided as `address`,
 thus any data send over the socket is targeted to that `address`.
 
-For non-local domain sockets `address` must be an [IP address](#systemaddress-type--data--port--mode).
-For local domain sockets `address` must be a string
+For non-local domain sockets,
+`address` must be an [IP address](#systemaddress-type--data--port--mode).
+For local domain sockets,
+`address` must be a string
 (either a path on Unix or a pipe name on Windows).
 
 If `address` is not provided and `socket` is a datagram socket then it is unbinded from its previous binded peer address
 (_i.e._ it is disconnected).
 For stream sockets argument `address` is mandatory,
 and it is necessary to bind the socket to a peer address before sending any data.
-It is a [await function](#await-function) that awaits for the connection establishment on stream sockets.
+It is an [await function](#await-function) that awaits for the connection establishment on stream sockets.
 This operation is not available for passive sockets.
 
 Returns `true` in case of success.
@@ -1062,7 +1067,7 @@ Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values 
 If the coroutine executing this [await function](#await-function) is explicitly resumed,
 the execution of `preemptco` continues in the separate thread,
 and it will not be able to be resumed again until it [suspends](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
-In such case the results of the execution of `preemptco` are discarted.
+In such case the results of the execution of `preemptco` are discarded.
 Finally,
 the explicitly resumed coroutine may not complete await functions until `preemptco` yields or terminates.
 
