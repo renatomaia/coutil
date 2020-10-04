@@ -104,6 +104,8 @@ static int cancelsynced (lua_State *L) {
 		restorechannel(channel);
 		return 1;
 	}
+	lua_pushvalue(L, 1);
+	lcu_setopvalue(L);
 	return 0;
 }
 
@@ -114,14 +116,20 @@ static void uv_onsynced (uv_async_t *async) {
 	lua_getfield(thread, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY);
 	channeltask = (lcu_ChannelTask *)lua_touserdata(thread, -1);
 	lua_pop(thread, 1);
-	uv_mutex_lock(&channeltask->mutex);
-	channeltask->wakes--;
-	uv_mutex_unlock(&channeltask->mutex);
-	if (lcuU_endthrop(handle)) {
-		lcuU_resumethrop(handle, 0);
-	} else {
-		LuaChannel *channel = (LuaChannel *)lua_touserdata(thread, 1);
-		restorechannel(channel);
+	if (channeltask) {
+		uv_mutex_lock(&channeltask->mutex);
+		channeltask->wakes--;
+		uv_mutex_unlock(&channeltask->mutex);
+	}
+	if (lcuU_endthrop(handle)) lcuU_resumethrop(handle, 0);
+	else {
+		LuaChannel *canceled;
+		lcu_pushopvalue(thread);
+		canceled = (LuaChannel *)lua_touserdata(thread, -1);
+		lua_pop(thread, 1);
+		lua_pushnil(thread);
+		lcu_setopvalue(thread);
+		restorechannel(canceled);
 	}
 }
 
@@ -231,18 +239,24 @@ static int channel_create (lua_State *L) {
 	luaL_setmetatable(L, LCU_CHANNELCLS);
 
 	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY) == LUA_TNIL) {
-		int err;
-		channeltask = (lcu_ChannelTask *)lua_newuserdatauv(L, sizeof(lcu_ChannelTask), 0);
-		channeltask->wakes = 0;
-		channeltask->L = NULL;
-		err = uv_mutex_init(&channeltask->mutex);
-		if (err) return lcuL_pusherrres(L, err);
-		luaL_setmetatable(L, LCU_CHANNELTASKCLS);
+		if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_TASKTPOOLREGKEY) == LUA_TNIL) {
+			channeltask = NULL;
+			lua_pushboolean(L, 0);
+		} else {
+			int err;
+			channeltask = (lcu_ChannelTask *)lua_newuserdatauv(L, sizeof(lcu_ChannelTask), 0);
+			channeltask->wakes = 0;
+			channeltask->L = NULL;
+			err = uv_mutex_init(&channeltask->mutex);
+			if (err) return lcuL_pusherrres(L, err);
+			luaL_setmetatable(L, LCU_CHANNELTASKCLS);
+		}
 		lua_setfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY);
+		lua_pop(L, 1);  /* LCU_TASKTPOOLREGKEY */
 	} else {
 		channeltask = (lcu_ChannelTask *)lua_touserdata(L, -1);
 	}
-	lua_pop(L, 1);
+	lua_pop(L, 1);  /* LCU_CHANNELTASKREGKEY */
 
 	lua_pushlightuserdata(channel->L, channeltask);
 	lua_setfield(channel->L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY);

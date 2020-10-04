@@ -26,6 +26,10 @@ LCUI_FUNC int lcu_shallsuspend (lcu_Scheduler *sched);
 
 LCUI_FUNC void lcuU_checksuspend (uv_loop_t *loop);
 
+LCUI_FUNC void lcu_setopvalue (lua_State *L);
+
+LCUI_FUNC int lcu_pushopvalue (lua_State *L);
+
 /* request operations */
 
 typedef int (*lcu_RequestSetup) (lua_State *L, uv_req_t *r, uv_loop_t *l);

@@ -679,7 +679,7 @@ do case "cancel schedule"
 	done()
 end
 
-do case "cancel and reschedule"
+do case "cancel and reschedule before sync"
 	local name = tostring{}
 
 	local stage = 0
@@ -701,6 +701,39 @@ do case "cancel and reschedule"
 	end)
 
 	coroutine.resume(garbage.coro)
+	assert(stage == 1)
+
+	gc()
+	assert(system.run() == false)
+	assert(stage == 2)
+
+	done()
+end
+
+do case "cancel and reschedule after sync"
+	local name = tostring{}
+
+	local stage = 0
+	spawn(function ()
+		garbage.coro = coroutine.running()
+		local ch = channel.create(name)
+		local extra = system.awaitch(ch, "in") -- [doc/opstages.svg#O2]
+		assert(extra == nil)
+		stage = 1
+		local ok, ret = system.awaitch(ch, "in") -- [doc/opstages.svg#O9]
+		assert(ok == true)
+		assert(ret == 456)
+		stage = 2
+	end)
+	assert(stage == 0)
+
+	spawn(function ()
+		system.suspend() -- the first await is active.
+		assert(system.awaitch(channel.create(name), "out", 456) == true)
+	end)
+
+	assert(channel.create(name):sync("out", 123) == true) -- notified, but not processed yet
+	coroutine.resume(garbage.coro) -- [doc/opstages.svg#R3]
 	assert(stage == 1)
 
 	gc()

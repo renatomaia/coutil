@@ -182,12 +182,15 @@ static lua_State *getsuspendedtask (lua_State *L) {
 		lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
 		async = (uv_async_t *)lua_touserdata(L, -1);
 		lua_pop(L, 1);
-		uv_mutex_lock(&channeltask->mutex);
-		L = channeltask->L;
-		channeltask->L = NULL;
-		channeltask->wakes++;
-		uv_mutex_unlock(&channeltask->mutex);
 		uv_async_send(async);
+		if (channeltask == NULL) L = NULL;
+		else {
+			uv_mutex_lock(&channeltask->mutex);
+			L = channeltask->L;
+			channeltask->L = NULL;
+			channeltask->wakes++;
+			uv_mutex_unlock(&channeltask->mutex);
+		}
 	}
 	else lua_pop(L, 1);
 	return L;

@@ -52,10 +52,16 @@
 #include <assert.h>
 #define lcu_assert assert
 //#define lcu_assert(X) (printf("%s:%d: %s = %s\n", __FILE__, __LINE__, __func__, (X) ? "true" : "false"), assert(X))
+//#define lcu_log(O,L,M) printf("[%p,%p]%s:%d:%s(%s)\n",L,O,__FILE__,__LINE__,__func__,M)
 
 
 #if !defined(lcu_assert)
 #define lcu_assert(X)	((void)(X))
+#endif
+
+
+#if !defined(lcu_log)
+#define lcu_log(O,L,M)	((void)(O),(void)(L),(void)(M))
 #endif
 
 
