@@ -381,8 +381,8 @@ Transitions
 			- `uv_close`
 7. `uv_<handle>_cb`
 	- `lcuU_endthrop`
-	- !!!`cancelop`!!!   TODO: implement this and a test case for it.
-		- !!!`uv_close`!!!
+	- `cancelop`
+		- `uv_close`
 8. `uv_<handle>_cb`
 	- `lcuU_resumeobjop...`
 		- `k_endobjopk`

@@ -88,15 +88,12 @@ local function testThrOpTwice(op, suffix) -- O2,C5,(O6,C5,)+Y2,F1
 	op:trigger(1) -- ...C5
 
 	oncallbacks(function ()
+		while a < 1 do system.suspend() end
 		op:trigger(2) -- ...C5
 	end)
 
 	gc()
-	assert(system.run("step") == true) -- C5,06
-	assert(a == 1)
-
-	gc()
-	assert(system.run("step") == false) -- C5,Y2,F1
+	assert(system.run() == false) -- C5,06,C5,Y2,F1
 	assert(a == true)
 
 	done()
@@ -121,6 +118,7 @@ local function testThrOpBeforeCanceledOp(op, suffix) -- O2,C5,Y2,(O10,R6,)+F1
 	op:trigger(1) -- ...C5
 
 	oncallbacks(function ()
+		while a < 1 do system.suspend() end
 		coroutine.resume(garbage.co) -- O10
 		assert(a == 2)
 		coroutine.resume(garbage.co, nil, "canceled") -- R6
@@ -128,7 +126,7 @@ local function testThrOpBeforeCanceledOp(op, suffix) -- O2,C5,Y2,(O10,R6,)+F1
 	end)
 
 	gc()
-	assert(system.run("step") == false) -- C5,Y2,O10,R6,F1
+	assert(system.run() == false) -- C5,Y2,O10,R6,F1
 	assert(a == true)
 
 	done()
@@ -153,16 +151,13 @@ local function testThrOpBeforeReqOp(op, suffix) -- O2,C5,Y2,O10,F2,C1,Y1
 	op:trigger(1) -- ...C5
 
 	oncallbacks(function ()
+		while a < 1 do system.suspend() end
 		coroutine.resume(garbage.co) -- O10
 		assert(a == 2)
 	end)
 
 	gc()
-	assert(system.run("step") == true) -- C5,Y2,O10,F2
-	assert(a == 2)
-
-	gc()
-	assert(system.run("step") == false) -- C1,Y1
+	assert(system.run() == false) -- C5,Y2,O10,F2,C1,Y1
 	assert(a == true)
 
 	done()
@@ -187,16 +182,13 @@ local function testThrOpBeforeOtherThrOp(op, suffix) -- O2,C5,Y2,O10,F3,C5,Y2,F1
 	op:trigger(1) -- ...C5
 
 	oncallbacks(function ()
+		while a < 1 do system.suspend() end
 		coroutine.resume(garbage.co) -- O10
 		assert(a == 2)
 	end)
 
 	gc()
-	assert(system.run("step") == true) -- C5,Y2,O10,F3
-	assert(a == 2)
-
-	gc()
-	assert(system.run("step") == false) -- C5,Y2,F1
+	assert(system.run() == false) -- C5,Y2,O10,F3,C5,Y2,F1
 	assert(a == true)
 
 	done()
@@ -222,12 +214,13 @@ local function testThrOpAndCanceledOp(op, suffix) -- O2,C5,O7,R6,F1
 	op:trigger(1) -- ...C5
 
 	oncallbacks(function ()
+		while a < 1 do system.suspend() end
 		assert(coroutine.resume(garbage.co, nil, "canceled")) -- R6
 		assert(a == true)
 	end)
 
 	gc()
-	assert(system.run("step") == false) -- C5,O7,R6,F1
+	assert(system.run() == false) -- C5,O7,R6,F1
 	assert(a == true)
 
 	done()
@@ -257,6 +250,7 @@ local function testThrOpAndCanceledOpTwice(op, suffix) -- O2,C5,O7,R6,(O10,R6,)+
 	op:trigger(1) -- ...C5
 
 	oncallbacks(function ()
+		while a < 1 do system.suspend() end
 		assert(coroutine.resume(garbage.co, nil, "canceled")) -- R6
 		assert(a == 2)
 		assert(coroutine.resume(garbage.co, nil, "canceled")) -- R6
@@ -264,7 +258,7 @@ local function testThrOpAndCanceledOpTwice(op, suffix) -- O2,C5,O7,R6,(O10,R6,)+
 	end)
 
 	gc()
-	assert(system.run("step") == false) -- C5,O7,R6,(O10,R6,)+F1
+	assert(system.run() == false) -- C5,O7,R6,(O10,R6,)+F1
 	assert(a == true)
 
 	done()
@@ -443,79 +437,15 @@ local function testThrOpResumedAndOtherThrOp(op, suffix) -- O2,R4,O10,F3,C5,Y2,F
 	done()
 end
 
-local function testThrOpResumed2(op, suffix) -- O2,(R3,C6|R4),F1
-	title("cancel schedule", suffix)
+-- Special Cases:
+-- O2,R3,C6,F1
+-- O2,R3,C6,(O10,R6,)+F1
+-- O2,R3,C6,O10,F2,C1,Y1
+-- O2,R3,C6,O10,F3,C5,Y2,F1
+-- O2,R3,O8,C5,Y2,F1
+-- O2,R3,C6,F1
 
-	local a
-	spawn(function ()
-		garbage.co = coroutine.running()
-		a = 0
-		op:await(1, "fail") -- O2
-		a = true
-		coroutine.yield()
-		a = false
-	end)
-	assert(a == 0)
-
-	oncallbacks(function ()
-		op:trigger(1) -- ...C6?
-
-		gc()
-		coroutine.resume(garbage.co, nil, "canceled") -- R3|R4
-		assert(a == true)
-	end)
-
-	gc()
-	assert(system.run() == false) -- (R3,C6|R4),F1
-	assert(a == true)
-
-	done()
-end
-
-local function testThrOpResumedAndCanceledOp2(op, suffix) -- O2,(R3,C6|R4),(O10,R6,)+F1
-	title("cancel schedule twice", suffix)
-
-	local a
-	spawn(function ()
-		garbage.co = coroutine.running()
-		a = 0
-		op:await(1, "fail") -- O2
-		a = 1
-		op:await(2, "fail") -- O10
-		a = true
-	end)
-	assert(a == 0)
-
-	oncallbacks(function ()
-		op:trigger(1) -- ...C6?
-
-		gc()
-		coroutine.resume(garbage.co, nil, "canceled") -- (R3,C6|R4),O10
-		assert(a == 1)
-		coroutine.resume(garbage.co, nil, "canceled") -- R6
-		assert(a == true)
-	end)
-
-	gc()
-	assert(system.run() == false) -- (R3,C6|R4),(O10,R6,)+F1
-	assert(a == true)
-
-	done()
-end
-
-local function testThrOpResumedAndReqOp2(op, suffix) -- O2,(R3,C6|R4),O10,F2,C1,Y1
-end
-
-local function testThrOpResumedAndThrOp2(op, suffix) -- O2,(R3,C6|R4),O10,F3,C5,Y2,F1
-end
-
-local function testThrOpNoCancelReschedule(op, suffix) -- O2,R3,O8,C5,Y2,F1
-end
-
-local function testThrOpNoCancelReset(op, suffix) -- O2,R3,C6,F1
-end
-
--- Cases ignored:
+-- Ignored Cases:
 -- O2,R3,O8,(C5,O6,)+C5,Y2,F1
 -- O2,R3,O8,C5,Y2,(O10,R6,)+F1
 -- O2,R3,O8,C5,Y2,O10,F2,C1,Y1
@@ -548,44 +478,92 @@ local function testThrOp(op)
 	testThrOpResumedAndCanceledOp(op)
 	testThrOpResumedAndReqOp(op)
 	testThrOpResumedAndOtherThrOp(op)
-	testThrOpNoCancelReschedule(op)
-	testThrOpNoCancelReset(op)
+end
+
+local function checkAwait(op, cfgid, ...)
+	local ok, err = ...
+	if not cfgid then
+		assert(not ok)
+		assert(err == "canceled")
+	else
+		if op.check == nil then
+			assert(ok)
+		else
+			op:check(cfgid, ...)
+		end
+	end
+end
+
+local function newTestOpCase(op)
+	local await = op.await
+	function op:await(cfgid, fail)
+		return checkAwait(op, not fail and cfgid or nil, await(self, cfgid))
+	end
+	return op
+end
+
+do newtest "time" --------------------------------------------------------------
+	testThrOp(newTestOpCase{
+		await = function (self, cfgid)
+			return system.suspend(cfgid / 100)
+		end,
+		trigger = function (self, cfgid)
+			local future = system.time() + cfgid / 100
+			repeat until system.time("update") >= future
+		end,
+	})
+end
+
+do newtest "suspend" --------------------------------------------------------------
+	testThrOp(newTestOpCase{
+		await = function (self, cfgid)
+			return system.suspend()
+		end,
+		trigger = function (self, cfgid)
+		end,
+	})
+end
+
+do newtest "signal" --------------------------------------------------------------
+	testThrOp(newTestOpCase{
+		await = function (self, cfgid)
+			return system.awaitsig("user"..cfgid)
+		end,
+		trigger = function (self, cfgid)
+			os.execute("killall -USR"..cfgid.." lua")
+		end,
+		check = function (self, cfgid, signal)
+			assert(signal == "user"..cfgid)
+		end,
+	})
 end
 
 do newtest "channels" ----------------------------------------------------------
-
-	local table = require "loop.table"
-	local oo = require "loop.base"
-
-
-	local op = oo.class{
-		channels = { channel.create("A"), channel.create("B") }
+	local op = newTestOpCase{
+		channels = { channel.create("A"), channel.create("B") },
+		await = function (self, cfgid)
+			return system.awaitch(self.channels[cfgid], "in")
+		end,
+		trigger = function (self, cfgid)
+			assert(self.channels[cfgid]:sync("out", "Secret Token "..cfgid))
+		end,
+		check = function (self, cfgid, ok, res)
+			assert(ok == true)
+			assert(res == "Secret Token "..cfgid)
+		end,
 	}
 
-	function op:await(cfgid, fail)
-		local ok, res = system.awaitch(self.channels[cfgid], "in")
-		if not fail then
-			assert(ok)
-			assert(res == "Secret Token "..cfgid)
-		else
-			assert(not ok)
-			assert(res == "canceled")
-		end
-	end
-
-	function op:trigger(cfgid)
-		assert(channel.sync(self.channels[cfgid], "out", "Secret Token "..cfgid))
-	end
-
-	local cancancel = op{ trigger = function () end }
-	testThrOpResumed(cancancel)
-	testThrOpResumedAndCanceledOp(cancancel)
-	testThrOpResumedAndReqOp(cancancel)
-	testThrOpResumedAndOtherThrOp(cancancel)
-
-	testThrOp(op())
+	testThrOp(op)
 
 	local defaultch = channel.create("Default Test Channel")
-	local samech = op{ channels = { defaultch, defaultch } }
-	testThrOpTwice(samech, "different channel")
+	op.channels = { defaultch, defaultch }
+	testThrOpTwice(op, "different channel")
+
+	op.trigger = function () end
+	op.check = nil
+	local title = "with cancellation"
+	testThrOpResumed(op, title)
+	testThrOpResumedAndCanceledOp(op, title)
+	testThrOpResumedAndReqOp(op, title)
+	testThrOpResumedAndOtherThrOp(op, title)
 end

@@ -424,12 +424,7 @@ LCUI_FUNC int lcuT_armthrop (lua_State *L, int err) {
 LCUI_FUNC int lcuU_endthrop (uv_handle_t *handle) {
 	Operation *op = (Operation *)handle;
 	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST));
-	//*
-	// TODO: create test case for this (arrow C7 of the state diagram)
 	if (lcuL_maskflag(op, FLAG_PENDING|FLAG_NOCANCEL) == FLAG_PENDING) return 1;
-	/*/
-	if (lcuL_maskflag(op, FLAG_PENDING)) return 1;
-	//*/
 	lcuL_clearflag(op, FLAG_NOCANCEL);
 	cancelop(op);
 	lcuU_checksuspend(handle->loop);
