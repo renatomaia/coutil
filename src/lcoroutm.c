@@ -104,6 +104,11 @@ static int coroutine_status(lua_State *L) {
 static int returnvalues (lua_State *L) {
 	return lua_gettop(L)-1;  /* return all except the coroutine (arg #1) */
 }
+static int cancancel (lua_State *L) {
+	lua_pushvalue(L, 1);
+	lcu_setopvalue(L);
+	return 1;
+}
 static void uv_onworking(uv_work_t* req) {
 	lcu_SysCoro *sysco = (lcu_SysCoro *)req->data;
 	lua_State *co = sysco->coroutine;
@@ -115,19 +120,27 @@ static void uv_onworking(uv_work_t* req) {
 	lua_pushinteger(co, narg);
 	lua_pushinteger(co, status);
 }
+static void freecanceled(lua_State *L, lcu_SysCoro *sysco) {
+	if (sysco->released) freecoroutine(sysco);  /* while saved and not GC */
+	else {
+		lua_State *co = sysco->coroutine;
+		lua_settop(co, lua_status(co) == LUA_OK);  /* keep function on stack */
+	}
+	lua_pushnil(L);
+	lcu_setopvalue(L);
+}
 static void uv_onworked(uv_work_t* work, int status) {
 	uv_loop_t *loop = work->loop;
 	uv_req_t *request = (uv_req_t *)work;
 	lcu_SysCoro *sysco = (lcu_SysCoro *)request->data;
 	lua_State *co = sysco->coroutine;
-	lua_State *thread;
-	request->data = sysco->thread;  /* restore 'lua_State' on conclusion */
+	lua_State *thread = sysco->thread;
+	request->data = thread;  /* restore 'lua_State' on conclusion */
 	sysco->thread = NULL;
-	thread = lcuU_endreqop(loop, request);
-	if (thread) {
+	if (lcuU_endreqop(loop, request)) {
 		int nret;
 		if (status == UV_ECANCELED) {
-			lua_settop(co, lua_status(co) == LUA_OK);  /* keep function on stack */
+			freecanceled(thread, sysco);
 			lua_pushboolean(thread, 0);
 			lua_pushliteral(thread, "cancelled");
 			nret = 2;
@@ -140,7 +153,7 @@ static void uv_onworked(uv_work_t* work, int status) {
 				if (lcuL_movefrom(thread, co, nret, "return value") != LUA_OK) {
 					lua_pop(co, nret);  /* remove results anyway */
 					lua_pushboolean(thread, 0);
-					lua_replace(thread, -3);  /* remove pushed 'true' that signals success */
+					lua_replace(thread, -3);  /* remove 'true' that signals success */
 					nret = 2;
 				}
 			} else {
@@ -151,10 +164,10 @@ static void uv_onworked(uv_work_t* work, int status) {
 				nret = 2;
 			}
 		}
-		if (sysco->released) freecoroutine(sysco);  /* must be freed while on the stack */
+		if (sysco->released) freecoroutine(sysco);  /* while in stack and not GC */
 		lcuU_resumereqop(loop, request, nret);
 	}
-	else if (sysco->released) freecoroutine(sysco);
+	else freecanceled(thread, sysco);
 }
 static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_work_t *work = (uv_work_t *)request;
@@ -193,7 +206,7 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 }
 static int system_resume (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
-	return lcuT_resetreqopk(L, sched, k_setupwork, returnvalues, NULL);
+	return lcuT_resetreqopk(L, sched, k_setupwork, returnvalues, cancancel);
 }
 
 

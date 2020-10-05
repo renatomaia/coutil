@@ -267,17 +267,19 @@ do case "collect cancelled"
 		stage = 0
 		local ok, res = system.resume(garbage.co)
 		assert(ok == nil)
-		assert(res == "cancelled")
-		gc()
-		assert(garbage.co == nil)
+		assert(res == "cancel")
 		stage = 1
+		assert(preemptco.status(garbage.co) == "running")
 	end)
 
 	assert(stage == 0)
-	coroutine.resume(garbage.coro, nil, "cancelled")
+	coroutine.resume(garbage.coro, nil, "cancel")
 	assert(stage == 1)
 
 	assert(system.run() == false)
+
+	gc()
+	assert(garbage.co == nil)
 
 	done()
 end
@@ -518,7 +520,7 @@ do case "cancel and resume again"
 		]]
 		local res, extra = system.resume(co)
 		assert(res == nil)
-		assert(extra == "cancelled")
+		assert(extra == "cancel")
 		assert(co:status() == "running")
 		stage = 1
 		local res, extra = system.resume(co)
@@ -533,7 +535,7 @@ do case "cancel and resume again"
 	end)
 
 	assert(stage == 0)
-	coroutine.resume(garbage.coro, nil, "cancelled")
+	coroutine.resume(garbage.coro, nil, "cancel")
 	assert(stage == 1)
 	assert(system.run() == false)
 	assert(stage == 2)
@@ -556,7 +558,7 @@ do case "cancel and resume by other"
 		stage = 0
 		local res, extra = system.resume(co)
 		assert(res == nil)
-		assert(extra == "cancelled")
+		assert(extra == "cancel")
 		assert(co:status() == "running")
 		coroutine.resume(thread, co)
 	end)
@@ -587,7 +589,7 @@ do case "cancel and resume by other"
 	end)
 
 	assert(stage == 1)
-	coroutine.resume(garbage.coro, nil, "cancelled")
+	coroutine.resume(garbage.coro, nil, "cancel")
 	assert(stage == 2)
 	assert(system.run() == false)
 	assert(stage == 3)

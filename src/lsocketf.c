@@ -705,7 +705,7 @@ static int object_close (lua_State *L) {
  * IP Sockets
  */
 
-static const char *const AddrSites[] = {"this", "peer", NULL};
+static const char *const AddrSites[] = {"self", "peer", NULL};
 
 #define netdomainof(O)	(lcuL_maskflag(O, FLAG_IPV6DOM) ? AF_INET6 : AF_INET)
 
@@ -754,7 +754,7 @@ static void completereqop (uv_loop_t *loop, uv_req_t *request, int err) {
 static int udp_getaddress (lua_State *L) {
 	UdpSocket *udp = openedudp(L);
 	uv_udp_t *handle = lcu_toobjhdl(udp);
-	int peer = luaL_checkoption(L, 2, "this", AddrSites);
+	int peer = luaL_checkoption(L, 2, "self", AddrSites);
 	int domain = netdomainof(udp);
 	int addrsz;
 	struct sockaddr *addr = getaddrarg(L, domain, &addrsz);
@@ -1213,7 +1213,7 @@ static int listen_accept (lua_State *L,
 static int tcp_getaddress (lua_State *L) {
 	TcpSocket *tcp = openedtcp(L, toclass(L));
 	uv_tcp_t *handle = lcu_toobjhdl(tcp);
-	int peer = luaL_checkoption(L, 2, "this", AddrSites);
+	int peer = luaL_checkoption(L, 2, "self", AddrSites);
 	int domain = netdomainof(tcp);
 	int addrsz;
 	struct sockaddr *addr = getaddrarg(L, domain, &addrsz);
@@ -1308,7 +1308,7 @@ static int tcp_accept (lua_State *L) {
 static int pipe_getaddress (lua_State *L) {
 	IpcPipe *pipe = openedpipe(L, toclass(L));
 	uv_pipe_t *handle = lcu_toobjhdl(pipe);
-	int peer = luaL_checkoption(L, 2, "this", AddrSites);
+	int peer = luaL_checkoption(L, 2, "self", AddrSites);
 	char mem[LCU_PIPEADDRBUF];
 	size_t bufsz = LCU_PIPEADDRBUF;
 	char *buf = mem;

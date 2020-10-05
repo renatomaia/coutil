@@ -176,7 +176,8 @@ static void pushfrom (lua_State *to,
 			lua_pushboolean(to, lua_toboolean(from, idx));
 		} break;
 		case LUA_TNUMBER: {
-			lua_pushnumber(to, lua_tonumber(from, idx));
+			if (lua_isinteger(from, idx)) lua_pushinteger(to, lua_tointeger(from, idx));
+			else lua_pushnumber(to, lua_tonumber(from, idx));
 		} break;
 		case LUA_TSTRING: {
 			size_t l;

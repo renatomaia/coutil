@@ -347,7 +347,7 @@ do case "redirect streams to a socket"
 		spawn(function ()
 			local passive = assert(system.socket("passive", domain))
 			assert(passive:bind(address))
-			assert(passive:getaddress("this", address))
+			assert(passive:getaddress("self", address))
 			assert(passive:listen(2))
 			local control = assert(passive:accept())
 			assert(passive:close())

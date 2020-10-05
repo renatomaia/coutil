@@ -69,6 +69,7 @@ Index
 	- [`system.time`](#systemtime-update)
 	- [`system.nanosecs`](#systemnanosecs-)
 	- [`system.suspend`](#systemsuspend-delay)
+	- [`system.getpid`](#systemgetpid-which)
 	- [`system.emitsig`](#systememitsig-pid-signal)
 	- [`system.awaitsig`](#systemawaitsig-signal)
 	- [`system.execute`](#systemexecute-cmd-)
@@ -593,9 +594,20 @@ so the calling coroutine will be resumed as soon as possible.
 
 Returns `true` in case of success.
 
+### `system.getpid ([which])`
+
+Returnes  according to the following value of string `which`:
+
+Returns a process identifier,
+as indicated by `which`,
+which can be:
+
+- `"self"`: of the current process (the default).
+- `"parent"`: of the current process's parent process.
+
 ### `system.emitsig (pid, signal)`
 
-Emits signal indicated by string `signal` to process with id `pid`.
+Emits signal indicated by string `signal` to process with identifier `pid`.
 The strings that represent signals are described in [`system.awaitsig`](#systemawaitsig-signal).
 
 ### `system.awaitsig (signal)`
@@ -959,7 +971,7 @@ Returns the address associated with socket `socket`,
 as indicated by `site`,
 which can be:
 
-- `"this"`: The socket's address (the default).
+- `"self"`: The socket's address (the default).
 - `"peer"`: The socket's peer address.
 
 For non-local domain sockets,

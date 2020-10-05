@@ -344,7 +344,7 @@ Object
 _______________________
 - S: (started) `stop` and `step` fields are not `NULL` in `lcu_Object`.
 - P: (pending) `handle.data` is not `NULL` in `lcu_Object`.
-- C: (closed) `LCU_OBJCLOSEDFLAG` is set in `lcu_Object`.
+- C: (closed) `LCU_OBJCLOSEDFLAG` is set in `lcu_Object.flags`.
 
 Transitions
 -----------

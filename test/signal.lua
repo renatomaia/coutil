@@ -2,8 +2,8 @@ local system = require "coutil.system"
 
 newtest "awaitsig" -------------------------------------------------------------
 
-local function sendsignal(name)
-	os.execute("killall -"..name.." lua")
+local function sendsignal(signal)
+	system.emitsig(system.getpid(), signal)
 end
 
 do case "error messages"
@@ -29,7 +29,7 @@ do case "yield values"
 
 	spawn(function ()
 		system.suspend()
-		sendsignal("USR1")
+		sendsignal("user1")
 	end)
 
 	gc()
@@ -51,7 +51,7 @@ do case "scheduled yield"
 
 	spawn(function ()
 		system.suspend()
-		sendsignal("USR1")
+		sendsignal("user1")
 	end)
 
 	gc()
@@ -73,9 +73,9 @@ do case "reschedule same signal"
 
 	spawn(function ()
 		system.suspend()
-		sendsignal("USR1")
+		sendsignal("user1")
 		system.suspend()
-		sendsignal("USR1")
+		sendsignal("user1")
 	end)
 
 	gc()
@@ -101,9 +101,9 @@ do case "reschedule different signal"
 
 	spawn(function ()
 		system.suspend()
-		sendsignal("USR1")
+		sendsignal("user1")
 		system.suspend()
-		sendsignal("USR2")
+		sendsignal("user2")
 	end)
 
 	gc()
@@ -156,7 +156,7 @@ do case "cancel and reschedule"
 	spawn(function ()
 		system.suspend() -- the first signal handle is active.
 		system.suspend() -- the first signal handle is being closed.
-		sendsignal("USR1") -- the second signal handle is active.
+		sendsignal("user1") -- the second signal handle is active.
 	end)
 
 	coroutine.resume(garbage.coro)
@@ -212,7 +212,7 @@ do case "ignore errors"
 
 	spawn(function ()
 		system.suspend()
-		sendsignal("USR1")
+		sendsignal("user1")
 	end)
 
 	gc()
