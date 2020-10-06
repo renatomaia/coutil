@@ -596,14 +596,12 @@ Returns `true` in case of success.
 
 ### `system.getpid ([which])`
 
-Returnes  according to the following value of string `which`:
-
-Returns a process identifier,
+Returns the process identifier,
 as indicated by `which`,
 which can be:
 
-- `"self"`: of the current process (the default).
-- `"parent"`: of the current process's parent process.
+- `"self"`: for the current process (the default).
+- `"parent"`: for the current process parent.
 
 ### `system.emitsig (pid, signal)`
 
@@ -653,7 +651,7 @@ as listed below:
 | `"user1"`     | SIGUSR1   | terminate | User-defined conditions. |
 | `"user2"`     | SIGUSR2   | terminate | User-defined conditions. |
 
-Returns string `signal`.
+Returns string `signal` in case of success.
 
 ### `system.execute (cmd, ...)`
 
@@ -700,7 +698,7 @@ only the variables defined will be available for the new process.
 
 If `cmd` is a table,
 the field `pid` is set with a number that identifies the new process
-(_e.g._ UNIX process identifier)
+(see [`system.emitsig`](#systememitsig-pid-signal))
 before the calling coroutine is suspended.
 
 Returns the string `"exit"`,
@@ -879,8 +877,7 @@ or pipe names on Windows.
 but allows for transmission of stream sockets.
 
 In case of success,
-it returns the new socket,
-Otherwise it returns `nil` plus an error message.
+it returns the new socket.
 
 ### `socket:close ()`
 
@@ -888,9 +885,7 @@ Closes socket `socket`.
 Note that sockets are automatically closed when they are garbage collected,
 but that takes an unpredictable amount of time to happen. 
 
-In case of success,
-this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Returns `true` in case of success.
 
 ### `socket:getdomain ()`
 
@@ -931,7 +926,7 @@ It can contain the following characters:
 	- `r` indicate processes have permission to read from the socket.
 	- `w` indicate processes have permission to write to the socket.
 
-In case of success, this function returns `true`.
+Returns `true` in case of success.
 
 ### `socket:bind (address)`
 
@@ -941,9 +936,7 @@ For non-local sockets `address` must be an [IP address](#systemaddress-type--dat
 For local sockets `address` must be a string
 (either a path on Unix or a pipe name on Windows).
 
-In case of success,
-this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Returns `true` in case of success.
 
 ### `socket:connect ([address])`
 
@@ -978,18 +971,13 @@ For non-local domain sockets,
 `address` can be an [IP address](#systemaddress-type--data--port--mode) to store the result,
 otherwise a new object is returned with the result data.
 
-In case of errors,
-it returns `nil` plus an error message.
-
 ### `socket:send (data [, i [, j [, address]]])`
 
 [Await function](#await-function) that awaits until it sends through socket `socket` the substring of `data` that starts at `i` and continues until `j`,
 following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
 
-For unbinded datagram sockets `address` must be provided
-(_i.e._ disconnected UDP sockets),
-and it must be omitted for datagram sockets binded to a peer address
-(_i.e._ connected UDP sockets).
+For unbinded datagram sockets `address` must be destination address,
+but it must be omitted for datagram sockets binded to a peer address.
 For stream sockets `address` is ignored.
 This operation is not available for passive sockets.
 
@@ -1010,7 +998,8 @@ For stream sockets,
 `address` is ignored.
 This operation is not available for passive sockets.
 
-Returns the number of bytes copied to `buffer`.
+In case of success,
+this function returns the number of bytes copied to `buffer`.
 For datagram sockets,
 it also returns a boolean indicating whether the copied data was truncated.
 
@@ -1025,9 +1014,7 @@ Both `multicast` and `interface` are string containing either textual (literal) 
 
 This operation is only available for UDP sockets.
 
-In case of success,
-this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Returns `true` in case of success.
 
 ### `socket:leavegroup (multicast [, interface])`
 
@@ -1036,9 +1023,7 @@ Removes network interface with address `interface` from the multicast group of a
 
 This operation is only available for UDP sockets.
 
-In case of success,
-this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Returns `true` in case of success.
 
 ### `socket:shutdown ()`
 
@@ -1046,9 +1031,7 @@ Shuts down the write side of stream socket `socket`.
 
 This operation is only available for stream sockets.
 
-In case of success,
-this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Returns `true` in case of success.
 
 ### `socket:listen (backlog)`
 
@@ -1057,9 +1040,7 @@ Starts listening for new connections on passive socket `socket`.
 
 This operation is only available for passive sockets.
 
-In case of success,
-this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Returns `true` in case of success.
 
 ### `socket:accept ()`
 
@@ -1067,7 +1048,8 @@ Otherwise it returns `nil` plus an error message.
 
 This operation is only available for passive sockets.
 
-Returns a new stream socket for the accepted connection.
+In case of success,
+this function returns a new stream socket for the accepted connection.
 
 ### `system.resume (preemptco, ...)`
 

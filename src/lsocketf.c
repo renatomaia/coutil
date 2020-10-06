@@ -388,7 +388,7 @@ static int found_close (lua_State *L) {
 	return 0;
 }
 
-/* next, domain = system.resolveaddr (name [, service [, mode]]) */
+/* next, domain = system.findaddr (name [, service [, mode]]) */
 static void uv_onresolved (uv_getaddrinfo_t *addrreq,
                            int err,
                            struct addrinfo* results) {

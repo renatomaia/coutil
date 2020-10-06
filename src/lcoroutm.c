@@ -104,11 +104,6 @@ static int coroutine_status(lua_State *L) {
 static int returnvalues (lua_State *L) {
 	return lua_gettop(L)-1;  /* return all except the coroutine (arg #1) */
 }
-static int cancancel (lua_State *L) {
-	lua_pushvalue(L, 1);
-	lcu_setopvalue(L);
-	return 1;
-}
 static void uv_onworking(uv_work_t* req) {
 	lcu_SysCoro *sysco = (lcu_SysCoro *)req->data;
 	lua_State *co = sysco->coroutine;
@@ -140,7 +135,6 @@ static void uv_onworked(uv_work_t* work, int status) {
 	if (lcuU_endreqop(loop, request)) {
 		int nret;
 		if (status == UV_ECANCELED) {
-			freecanceled(thread, sysco);
 			lua_pushboolean(thread, 0);
 			lua_pushliteral(thread, "cancelled");
 			nret = 2;
@@ -164,7 +158,7 @@ static void uv_onworked(uv_work_t* work, int status) {
 				nret = 2;
 			}
 		}
-		if (sysco->released) freecoroutine(sysco);  /* while in stack and not GC */
+		freecanceled(thread, sysco);  /* while in stack and not GC */
 		lcuU_resumereqop(loop, request, nret);
 	}
 	else freecanceled(thread, sysco);
@@ -202,11 +196,13 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		return lcuL_pusherrres(L, err);
 	}
 	sysco->thread = L;
+	lua_pushvalue(L, 1);
+	lcu_setopvalue(L);
 	return -1;  /* yield on success */
 }
 static int system_resume (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
-	return lcuT_resetreqopk(L, sched, k_setupwork, returnvalues, cancancel);
+	return lcuT_resetreqopk(L, sched, k_setupwork, returnvalues, NULL);
 }
 
 

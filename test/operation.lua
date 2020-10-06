@@ -1,12 +1,26 @@
+local memory = require "memory"
 local system = require "coutil.system"
 local channel = require "coutil.channel"
 local preemptco = require "coutil.coroutine"
 
-local function title(name, suffix)
-	if suffix ~= nil then
-		name = name.." "..suffix
+local case, done, casesuffix = case, done do
+	local currentop
+
+	local backup = case
+	function case(name, op)
+		if casesuffix ~= nil then
+			name = name.." "..casesuffix
+		end
+		backup(name)
+		op:setup()
+		currentop = op
 	end
-	case(name)
+
+	local backup = done
+	function done()
+		currentop:teardown()
+		backup()
+	end
 end
 
 local oncallbacks do
@@ -25,11 +39,16 @@ local coroutine = require "coroutine"
 repeat until coroutine.yield()
 ]===])
 
+local addr = {
+	system.address("ipv4", "127.0.0.1:65432"),
+	system.address("ipv4", "127.0.0.1:65433"),
+}
+
 -- Thread Operation Tests
 
-local function testOpAndYield(op, suffix) -- O2,C5,Y2,F1
-                                          -- O1,C1,Y1
-	title("scheduled yield", suffix)
+local function testOpAndYield(op) -- O2,C5,Y2,F1
+                                  -- O1,C1,Y1
+	case("scheduled yield", op)
 
 	local a
 	spawn(function ()
@@ -45,15 +64,15 @@ local function testOpAndYield(op, suffix) -- O2,C5,Y2,F1
 	op:trigger(1) -- ...C1|C5
 
 	gc()
-	assert(system.run("step") == false) -- (C1,Y1|C5,Y2,F1)
+	assert(system.run() == false) -- (C1,Y1|C5,Y2,F1)
 	assert(a == true)
 
 	done()
 end
 
-local function testOpTwice(op, suffix) -- O2,C5,(O6,C5,)+Y2,F1
-                                       -- O1,C1,(O3,C1,)+Y1
-	title("reschedule", suffix)
+local function testOpTwice(op) -- O2,C5,(O6,C5,)+Y2,F1
+                               -- O1,C1,(O3,C1,)+Y1
+	case("reschedule", op)
 
 	local a
 	spawn(function ()
@@ -80,8 +99,8 @@ local function testOpTwice(op, suffix) -- O2,C5,(O6,C5,)+Y2,F1
 	done()
 end
 
-local function testOpBeforeCancelOp(op, suffix) -- O2,C5,Y2,(O10,R6,)+F1
- 	title("yield and cancel repeat", suffix)
+local function testOpBeforeCancelOp(op) -- O2,C5,Y2,(O10,R6,)+F1
+ 	case("yield and cancel repeat", op)
 
 	local a
 	spawn(function ()
@@ -114,8 +133,8 @@ local function testOpBeforeCancelOp(op, suffix) -- O2,C5,Y2,(O10,R6,)+F1
 	done()
 end
 
-local function testOpBeforeReqOp(op, suffix) -- O2,C5,Y2,O10,F2,C1,Y1
-	title("yield and call request op.", suffix)
+local function testOpBeforeReqOp(op) -- O2,C5,Y2,O10,F2,C1,Y1
+	case("yield and call request op.", op)
 
 	local a
 	spawn(function ()
@@ -145,8 +164,8 @@ local function testOpBeforeReqOp(op, suffix) -- O2,C5,Y2,O10,F2,C1,Y1
 	done()
 end
 
-local function testOpBeforeThrOp(op, suffix) -- O2,C5,Y2,O10,F3,C5,Y2,F1
-	title("yield and call thread op.", suffix)
+local function testOpBeforeThrOp(op) -- O2,C5,Y2,O10,F3,C5,Y2,F1
+	case("yield and call thread op.", op)
 
 	local a
 	spawn(function ()
@@ -156,7 +175,7 @@ local function testOpBeforeThrOp(op, suffix) -- O2,C5,Y2,O10,F3,C5,Y2,F1
 		a = 1
 		coroutine.yield() -- Y2
 		a = 2
-		system.suspend() -- O10
+		assert(system.suspend()) -- O10
 		a = true
 	end)
 	assert(a == 0)
@@ -176,9 +195,9 @@ local function testOpBeforeThrOp(op, suffix) -- O2,C5,Y2,O10,F3,C5,Y2,F1
 	done()
 end
 
-local function testOpAndCancelOp(op, suffix) -- O2,C5,O7,R6,F1
-                                             -- O1,C1,O4,R4,F1
-	title("and cancel thread op.", suffix)
+local function testOpAndCancelOp(op) -- O2,C5,O7,R6,F1
+                                     -- O1,C1,O4,R4,F1
+	case("and cancel thread op.", op)
 
 	local a
 	spawn(function ()
@@ -186,7 +205,7 @@ local function testOpAndCancelOp(op, suffix) -- O2,C5,O7,R6,F1
 		a = 0
 		op:await(1) -- O1|O2
 		a = 1
-		local ok, res = system.suspend() -- O4|O7
+		local ok, res = system.suspend(10) -- O4|O7
 		assert(not ok)
 		assert(res == "canceled")
 		a = true
@@ -209,8 +228,8 @@ local function testOpAndCancelOp(op, suffix) -- O2,C5,O7,R6,F1
 	done()
 end
 
-local function testOpAndCancelOpTwice(op, suffix) -- O2,C5,O7,R6,(O10,R6,)+F1
-	title("and cancel op. twice", suffix)
+local function testOpAndCancelOpTwice(op) -- O2,C5,O7,R6,(O10,R6,)+F1
+	case("and cancel op. twice", op)
 
 	local a
 	spawn(function ()
@@ -218,11 +237,11 @@ local function testOpAndCancelOpTwice(op, suffix) -- O2,C5,O7,R6,(O10,R6,)+F1
 		a = 0
 		op:await(1) -- O2
 		a = 1
-		local ok, res = system.suspend() -- O7
+		local ok, res = system.suspend(10) -- O7
 		assert(not ok)
 		assert(res == "canceled")
 		a = 2
-		local ok, res = system.suspend() -- O10
+		local ok, res = system.suspend(10) -- O10
 		assert(not ok)
 		assert(res == "canceled")
 		a = true
@@ -247,8 +266,8 @@ local function testOpAndCancelOpTwice(op, suffix) -- O2,C5,O7,R6,(O10,R6,)+F1
 	done()
 end
 
-local function testOpAndReqOp(op, suffix) -- O2,C5,O7,F2,C1,Y1
-	title("and request op.", suffix)
+local function testOpAndReqOp(op) -- O2,C5,O7,F2,C1,Y1
+	case("and request op.", op)
 
 	local a
 	spawn(function ()
@@ -275,9 +294,9 @@ local function testOpAndReqOp(op, suffix) -- O2,C5,O7,F2,C1,Y1
 	done()
 end
 
-local function testOpAndThrOp(op, suffix) -- O2,C5,O7,F3,C5,Y2,F1
-                                          -- O1,C1,O4,C5,Y2,F1
-	title("and thread op.", suffix)
+local function testOpAndThrOp(op) -- O2,C5,O7,F3,C5,Y2,F1
+                                  -- O1,C1,O4,C5,Y2,F1
+	case("and thread op.", op)
 
 	local a
 	spawn(function ()
@@ -294,19 +313,15 @@ local function testOpAndThrOp(op, suffix) -- O2,C5,O7,F3,C5,Y2,F1
 	op:trigger(1) -- ...C1|C5
 
 	gc()
-	assert(system.run("step") == true) -- (C1,O4|C5,O7,F3)
-	assert(a == 1)
-
-	gc()
-	assert(system.run("step") == false) -- C5,Y2,F1
+	assert(system.run() == false) -- (C1,O4|C5,O7,F3),C5,Y2,F1
 	assert(a == true)
 
 	done()
 end
 
-local function testOpResumed(op, suffix) -- O2,R4,F1
-                                         -- O1,R1,C2
-	title("cancel schedule", suffix)
+local function testOpResumed(op) -- O2,R4,F1
+                                 -- O1,R1,C2
+	case("cancel schedule", op)
 
 	local a
 	spawn(function ()
@@ -331,9 +346,9 @@ local function testOpResumed(op, suffix) -- O2,R4,F1
 	done()
 end
 
-local function testOpResumedTwice(op, suffix) -- O2,R4,(O10,R6,)+F1
-                                              -- O1,R1,(O5,R2,)+C2
-	title("cancel schedule twice", suffix)
+local function testOpResumedTwice(op) -- O2,R4,(O10,R6,)+F1
+                                      -- O1,R1,(O5,R2,)+C2
+	case("cancel schedule twice", op)
 
 	local a
 	spawn(function ()
@@ -364,9 +379,9 @@ local function testOpResumedTwice(op, suffix) -- O2,R4,(O10,R6,)+F1
 	done()
 end
 
-local function testOpResumedAndReqOp(op, suffix) -- O2,R4,O10,F2,C1,Y1
-                                                 -- O1,R1,O5,C3,C1,Y1
-	title("cancel schedule and request op.", suffix)
+local function testOpResumedAndReqOp(op) -- O2,R4,O10,F2,C1,Y1
+                                         -- O1,R1,O5,C3,C1,Y1
+	case("cancel schedule and request op.", op)
 
 	local a
 	spawn(function ()
@@ -385,19 +400,15 @@ local function testOpResumedAndReqOp(op, suffix) -- O2,R4,O10,F2,C1,Y1
 	assert(a == 1)
 
 	gc()
-	assert(system.run("step") == true) -- (O1,R1,O5,C3|R4,O10,F2)
-	assert(a == 1)
-
-	gc()
-	assert(system.run("step") == false) -- C1,Y1
+	assert(system.run() == false) -- (O1,R1,O5,C3|R4,O10,F2),C1,Y1
 	assert(a == true)
 
 	done()
 end
 
-local function testOpResumedAndThrOp(op, suffix) -- O2,R4,O10,F3,C5,Y2,F1
-                                                 -- O1,R1,O5,C4,C5,Y2,F1
-	title("cancel schedule and thread op.", suffix)
+local function testOpResumedAndThrOp(op) -- O2,R4,O10,F3,C5,Y2,F1
+                                         -- O1,R1,O5,C4,C5,Y2,F1
+	case("cancel schedule and thread op.", op)
 
 	local a
 	spawn(function ()
@@ -405,7 +416,7 @@ local function testOpResumedAndThrOp(op, suffix) -- O2,R4,O10,F3,C5,Y2,F1
 		a = 0
 		op:await(1, "fail") -- O1|O2
 		a = 1
-		system.suspend() -- O5|O10
+		assert(system.suspend()) -- O5|O10
 		a = true
 	end)
 	assert(a == 0)
@@ -416,11 +427,8 @@ local function testOpResumedAndThrOp(op, suffix) -- O2,R4,O10,F3,C5,Y2,F1
 	assert(a == 1)
 
 	gc()
-	assert(system.run("step") == true) -- (R1,O5,C4|R4,O10,F3)
-	assert(a == 1)
 
-	gc()
-	assert(system.run("step") == false) -- C5,Y2,F1
+	assert(system.run() == false) -- (R1,O5,C4|R4,O10,F3),C5,Y2,F1
 	assert(a == true)
 
 	done()
@@ -470,16 +478,12 @@ local function testOp(op)
 end
 
 local function checkAwait(op, cfgid, ...)
-	local ok, err = ...
 	if not cfgid then
+		local ok, err = ...
 		assert(not ok)
 		assert(err == "canceled")
 	else
-		if op.check == nil then
-			assert(ok)
-		else
-			op:check(cfgid, ...)
-		end
+		op:check(cfgid, ...)
 	end
 end
 
@@ -488,33 +492,14 @@ local function newTestOpCase(op)
 	function op:await(cfgid, fail)
 		return checkAwait(op, not fail and cfgid or nil, await(self, cfgid))
 	end
+	if op.setup == nil then function op:setup() end end
+	if op.teardown == nil then function op:teardown() end end
+	if op.trigger == nil then function op:trigger() end end
+	if op.check == nil then function op:check(cfgid, ok) assert(ok) end end
 	return op
 end
 
-do newtest "coroutine" --------------------------------------------------------------
-	local chunk = utilschunk..[[
-		local coroutine = require "coroutine"
-		local cfgid = ...
-		local path = "signal"..cfgid..".tmp"
-		local token = "Secret Token "..cfgid
-		repeat
-			waitsignal(path)
-		until coroutine.yield(token) ~= cfgid
-	]]
-	testOp(newTestOpCase{
-		coroutines = { preemptco.load(chunk), preemptco.load(chunk) },
-		await = function (self, cfgid)
-			return system.resume(self.coroutines[cfgid], cfgid)
-		end,
-		trigger = function (self, cfgid)
-			sendsignal("signal"..cfgid..".tmp")
-		end,
-		check = function (self, cfgid, ok, res)
-			assert(ok == true)
-			assert(res == "Secret Token "..cfgid)
-		end,
-	})
-end
+-- Thread Operations
 
 do newtest "time" --------------------------------------------------------------
 	testOp(newTestOpCase{
@@ -532,9 +517,6 @@ do newtest "suspend" -----------------------------------------------------------
 	testOp(newTestOpCase{
 		await = function (self, cfgid)
 			return system.suspend()
-		end,
-		trigger = function (self, cfgid)
-			-- empty
 		end,
 	})
 end
@@ -571,15 +553,305 @@ do newtest "channels" ----------------------------------------------------------
 
 	testOp(op)
 
+	casesuffix = "with the same channel"
 	local defaultch = channel.create("Default Test Channel")
 	op.channels = { defaultch, defaultch }
-	testOpTwice(op, "with the same channel")
+	testOpTwice(op)
 
+	casesuffix = "allowing cancellation"
 	op.trigger = function () end
 	op.check = nil
-	local title = "allowing cancellation"
-	testOpResumed(op, title)
-	testOpResumedTwice(op, title)
-	testOpResumedAndReqOp(op, title)
-	testOpResumedAndThrOp(op, title)
+	testOpResumed(op)
+	testOpResumedTwice(op)
+	testOpResumedAndReqOp(op)
+	testOpResumedAndThrOp(op)
+
+	casesuffix = nil
+end
+
+-- Request Operations
+
+do newtest "coroutine" --------------------------------------------------------------
+	local chunk = utilschunk..[[
+		local coroutine = require "coroutine"
+		local cfgid = ...
+		local path = "signal"..cfgid..".tmp"
+		local token = "Secret Token "..cfgid
+		repeat
+			waitsignal(path)
+		until coroutine.yield(token) ~= cfgid
+	]]
+	testOp(newTestOpCase{
+		coroutines = { preemptco.load(chunk), preemptco.load(chunk) },
+		await = function (self, cfgid)
+			return system.resume(self.coroutines[cfgid], cfgid)
+		end,
+		trigger = function (self, cfgid)
+			sendsignal("signal"..cfgid..".tmp")
+		end,
+		check = function (self, cfgid, ok, res)
+			assert(ok == true)
+			assert(res == "Secret Token "..cfgid)
+		end,
+	})
+end
+
+do newtest "findaddr" ----------------------------------------------------------
+	testOp(newTestOpCase{
+		names = { "localhost", "ip6-localhost" },
+		await = function (self, cfgid)
+			return system.findaddr(self.names[cfgid])
+		end,
+		check = function (self, cfgid, next, domain)
+			assert(type(next) == "userdata")
+			assert(string.match(domain, "^ipv[46]$"))
+		end,
+	})
+end
+
+do newtest "nameaddr" ----------------------------------------------------------
+	testOp(newTestOpCase{
+		address = {
+			system.address("ipv4", "127.0.0.1:80"),
+			system.address("ipv6", "[::1]:80"),
+		},
+		await = function (self, cfgid)
+			return system.nameaddr(self.address[cfgid])
+		end,
+		check = function (self, cfgid, hostname, servname)
+			assert(string.find(hostname, "localhost"))
+			assert(servname == "http")
+		end,
+	})
+end
+
+do newtest "shutdown" -----------------------------------------------------------
+	testOp(newTestOpCase{
+		stream = { {}, {}, used = {} },
+		setup = function (self)
+			spawn(function ()
+				self.passive = assert(system.socket("passive", "ipv4"))
+				assert(self.passive:bind(addr[1]))
+				assert(self.passive:listen(2))
+				for i = 1, 2 do
+					table.insert(self.stream[i], assert(self.passive:accept()))
+				end
+			end)
+			spawn(function ()
+				for i = 1, 2 do
+					local stream = assert(system.socket("stream", "ipv4"))
+					assert(stream:connect(addr[1]))
+					table.insert(self.stream[i], stream)
+				end
+			end)
+			assert(system.run() == false)
+		end,
+		teardown = function (self)
+			assert(self.passive:close())
+			for _, list in pairs(self.stream) do
+				for index, socket in ipairs(list) do
+					assert(socket:close())
+					list[index] = nil
+				end
+			end
+			assert(system.run() == false)
+		end,
+		await = function (self, cfgid)
+			local stream = assert(table.remove(self.stream[cfgid]))
+			table.insert(self.stream.used, stream)
+			return stream:shutdown()
+		end,
+	})
+end
+
+do newtest "udpsend" -----------------------------------------------------------
+	testOp(newTestOpCase{
+		sockets = {},
+		setup = function (self)
+			for i = 1, 2 do
+				self.sockets[i] = system.socket("datagram", "ipv4")
+			end
+		end,
+		teardown = function (self)
+			for index, socket in ipairs(self.sockets) do
+				assert(socket:close())
+				self.sockets[index] = nil
+			end
+			assert(system.run() == false)
+		end,
+		await = function (self, cfgid)
+			return self.sockets[cfgid]:send("Hello!", 1, -1, addr[1])
+		end,
+	})
+end
+
+for title, domain in pairs{ tcp = "ipv4", pipe = "local" } do
+	local addr = addr
+	if domain == "local" then
+		addr = { os.tmpname(), os.tmpname() }
+		os.remove(addr[1])
+		os.remove(addr[2])
+	end
+
+	newtest(title.."send") -------------------------------------------------------
+	testOp(newTestOpCase{
+		stream = {},
+		setup = function (self)
+			spawn(function ()
+				self.passive = assert(system.socket("passive", domain))
+				assert(self.passive:bind(addr[1]))
+				assert(self.passive:listen(2))
+				self.stream[1] = assert(self.passive:accept())
+			end)
+			spawn(function ()
+				self.stream[2] = assert(system.socket("stream", domain))
+				assert(self.stream[2]:connect(addr[1]))
+			end)
+			assert(system.run() == false)
+		end,
+		teardown = function (self)
+			assert(self.passive:close())
+			for index, socket in ipairs(self.stream) do
+				assert(socket:close())
+				self.stream[index] = nil
+			end
+			assert(system.run() == false)
+		end,
+		await = function (self, cfgid)
+			return self.stream[cfgid]:send("Hello from "..cfgid)
+		end,
+	})
+
+	newtest(title.."conn") -------------------------------------------------------
+	testOp(newTestOpCase{
+		stream = {},
+		setup = function (self)
+			self.passive = assert(system.socket("passive", domain))
+			assert(self.passive:bind(addr[1]))
+			assert(self.passive:listen(2))
+		end,
+		teardown = function (self)
+			assert(self.passive:close())
+			for index, socket in ipairs(self.stream) do
+				assert(socket:close())
+				self.stream[index] = nil
+			end
+			assert(system.run() == false)
+		end,
+		await = function (self, cfgid)
+			local stream = assert(system.socket("stream", domain))
+			table.insert(self.stream, stream)
+			return stream:connect(addr[1])
+		end,
+		trigger = function (self)
+			pspawn(function ()
+				table.insert(self.stream, self.passive:accept())
+			end)
+		end,
+	})
+
+	-- Object Operations
+
+	newtest(title.."accept") -----------------------------------------------------
+	testOp(newTestOpCase{
+		passive = {},
+		setup = function (self)
+			for i = 1, 2 do
+				local socket = assert(system.socket("passive", domain))
+				assert(socket:bind(addr[i]))
+				assert(socket:listen(1))
+				self.passive[i] = socket
+			end
+		end,
+		teardown = function (self)
+			for index, socket in ipairs(self.passive) do
+				assert(socket:close())
+				self.passive[index] = nil
+			end
+			assert(system.run() == false)
+		end,
+		await = function (self, cfgid)
+			local result, errmsg = self.passive[cfgid]:accept()
+			if result then assert(result:close()) end
+			return result, errmsg
+		end,
+		trigger = function (self, cfgid)
+			spawn(function ()
+				local stream = assert(system.socket("stream", domain))
+				assert(stream:connect(self.passive[cfgid]:getaddress()))
+				assert(stream:close())
+			end)
+		end,
+	})
+
+	newtest(title.."recv") -------------------------------------------------------
+	testOp(newTestOpCase{
+		stream = {},
+		setup = function (self)
+			spawn(function ()
+				self.passive = assert(system.socket("passive", domain))
+				assert(self.passive:bind(addr[1]))
+				assert(self.passive:listen(2))
+				self.stream[1] = assert(self.passive:accept())
+			end)
+			spawn(function ()
+				self.stream[2] = assert(system.socket("stream", domain))
+				assert(self.stream[2]:connect(addr[1]))
+			end)
+			assert(system.run() == false)
+		end,
+		teardown = function (self)
+			assert(self.passive:close())
+			for index, socket in ipairs(self.stream) do
+				assert(socket:close())
+				self.stream[index] = nil
+			end
+			assert(system.run() == false)
+		end,
+		await = function (self, cfgid)
+			local buffer = memory.create(6)
+			return self.stream[cfgid]:receive(buffer)
+		end,
+		trigger = function (self, cfgid)
+			spawn(function ()
+				self.stream[3-cfgid]:send("Hello"..cfgid)
+			end)
+		end,
+		check = function (self, cfsgid, bytes)
+			assert(bytes == 6)
+		end,
+	})
+
+end
+
+do newtest "udprecv" ------------------------------------------------------------
+	testOp(newTestOpCase{
+		sockets = {},
+		setup = function (self)
+			for i = 1, 2 do
+				self.sockets[i] = system.socket("datagram", "ipv4")
+				assert(self.sockets[i]:bind(addr[i]))
+			end
+		end,
+		teardown = function (self)
+			for index, socket in ipairs(self.sockets) do
+				assert(socket:close())
+				self.sockets[index] = nil
+			end
+			assert(system.run() == false)
+		end,
+		await = function (self, cfgid)
+			local buffer = memory.create(6)
+			return self.sockets[cfgid]:receive(buffer)
+		end,
+		trigger = function (self, cfgid)
+			spawn(function ()
+				local address = self.sockets[cfgid]:getaddress()
+				self.sockets[3-cfgid]:send("Hello!", 1, 6, address)
+			end)
+		end,
+		check = function (self, cfsgid, bytes)
+			assert(bytes == 6)
+		end,
+	})
 end
