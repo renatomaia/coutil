@@ -1,8 +1,8 @@
 CoUtil Libraries
 ================
 
-`coutil` provides a set of modules to loads utility libraries that support multithreading in Lua using coroutines.
-In particular, its libraries provide support for:
+`coutil` provides a set of Lua libraries to support multithreading in Lua using coroutines,
+in particular, to support:
 
 - Coroutine execution finalizers.
 - Coroutine syncronization abstractions:
@@ -26,8 +26,9 @@ therefore they should be available in all plataforms supported by such library.
 Documentation
 -------------
 
-- [Manual](doc/manual.md)
 - [License](LICENSE)
+- [Manual](doc/manual.md)
+- [Source](doc/devnotes.md)
 
 History
 -------

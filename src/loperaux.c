@@ -488,6 +488,7 @@ LCUI_FUNC int lcu_closeobj (lua_State *L, int idx) {
 		savevalue(L, (void *)handle);
 		uv_close(handle, closedobj);
 		lcuL_setflag(object, LCU_OBJCLOSEDFLAG);
+		lcu_log(handle, L, "closing object handle");
 		return 1;
 	}
 	return 0;

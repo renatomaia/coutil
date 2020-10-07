@@ -157,7 +157,6 @@ static void getstreamfield (lua_State *L,
 }
 static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 	procopts->flags = 0;
-	procopts->stdio_count = 0;
 
 	if (lua_isstring(L, 1)) {
 		int i;
@@ -172,7 +171,11 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 		procopts->file = procopts->args[0];
 		procopts->env = NULL;
 		procopts->cwd = NULL;
-		procopts->stdio = NULL;
+		procopts->stdio_count = 3;
+		for (i = 0; i < procopts->stdio_count; i++) {
+			procopts->stdio[i].data.fd = i;
+			procopts->stdio[i].flags = UV_INHERIT_FD;
+		}
 
 		return 0;
 	} else if (lua_istable(L, 1)) {
@@ -182,6 +185,7 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 		lua_settop(L, 1);  /* discard all other arguments */
 		procopts->file = getstrfield(L, "execfile", 1);
 		procopts->cwd = getstrfield(L, "runpath", 0);
+		procopts->stdio_count = 0;
 		for (; streamfields[procopts->stdio_count]; ++procopts->stdio_count)
 			getstreamfield(L, streamfields[procopts->stdio_count],
 			                  procopts->stdio+procopts->stdio_count,

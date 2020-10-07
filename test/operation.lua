@@ -34,10 +34,10 @@ local oncallbacks do
 	end
 end
 
-local pco = preemptco.load([===[
+local pco = preemptco.load([[
 local coroutine = require "coroutine"
 repeat until coroutine.yield()
-]===])
+]])
 
 local addr = {
 	system.address("ipv4", "127.0.0.1:65432"),
@@ -102,15 +102,15 @@ end
 local function testOpBeforeCancelOp(op) -- O2,C5,Y2,(O10,R6,)+F1
  	case("yield and cancel repeat", op)
 
-	local a
+	local a, co
 	spawn(function ()
-		garbage.co = coroutine.running()
+		co = coroutine.running()
 		a = 0
 		op:await(1) -- O2
 		a = 1
 		coroutine.yield() -- Y2
 		a = 2
-		op:await(1, "fail") -- O10
+		op:await(2, "fail") -- O10
 		a = true
 	end)
 	assert(a == 0)
@@ -119,16 +119,17 @@ local function testOpBeforeCancelOp(op) -- O2,C5,Y2,(O10,R6,)+F1
 
 	oncallbacks(function ()
 		while a < 1 do system.suspend() end
-		coroutine.resume(garbage.co) -- O10
+		coroutine.resume(co) -- O10
 		assert(a == 2)
-		coroutine.resume(garbage.co, nil, "canceled") -- R6
+		coroutine.resume(co, nil, "canceled") -- R6
 		assert(a == true)
-		op:trigger(1) -- ...C5
+		op:trigger(2) -- ...C5
 	end)
 
 	gc()
 	assert(system.run() == false) -- C5,Y2,O10,R6,F1
 	assert(a == true)
+	co = nil
 
 	done()
 end
@@ -136,9 +137,9 @@ end
 local function testOpBeforeReqOp(op) -- O2,C5,Y2,O10,F2,C1,Y1
 	case("yield and call request op.", op)
 
-	local a
+	local a, co
 	spawn(function ()
-		garbage.co = coroutine.running()
+		co = coroutine.running()
 		a = 0
 		op:await(1) -- O2
 		a = 1
@@ -153,13 +154,14 @@ local function testOpBeforeReqOp(op) -- O2,C5,Y2,O10,F2,C1,Y1
 
 	oncallbacks(function ()
 		while a < 1 do system.suspend() end
-		coroutine.resume(garbage.co) -- O10
+		coroutine.resume(co) -- O10
 		assert(a == 2)
 	end)
 
 	gc()
 	assert(system.run() == false) -- C5,Y2,O10,F2,C1,Y1
 	assert(a == true)
+	co = nil
 
 	done()
 end
@@ -167,9 +169,9 @@ end
 local function testOpBeforeThrOp(op) -- O2,C5,Y2,O10,F3,C5,Y2,F1
 	case("yield and call thread op.", op)
 
-	local a
+	local a, co
 	spawn(function ()
-		garbage.co = coroutine.running()
+		co = coroutine.running()
 		a = 0
 		op:await(1) -- O2
 		a = 1
@@ -184,13 +186,14 @@ local function testOpBeforeThrOp(op) -- O2,C5,Y2,O10,F3,C5,Y2,F1
 
 	oncallbacks(function ()
 		while a < 1 do system.suspend() end
-		coroutine.resume(garbage.co) -- O10
+		coroutine.resume(co) -- O10
 		assert(a == 2)
 	end)
 
 	gc()
 	assert(system.run() == false) -- C5,Y2,O10,F3,C5,Y2,F1
 	assert(a == true)
+	co = nil
 
 	done()
 end
@@ -284,11 +287,7 @@ local function testOpAndReqOp(op) -- O2,C5,O7,F2,C1,Y1
 	op:trigger(1) -- ...C5
 
 	gc()
-	assert(system.run("step") == true) -- C5,O7,F2
-	assert(a == 1)
-
-	gc()
-	assert(system.run("step") == false) -- C1,Y1
+	assert(system.run() == false) -- C5,O7,F2,C1,Y1
 	assert(a == true)
 
 	done()
@@ -340,7 +339,7 @@ local function testOpResumed(op) -- O2,R4,F1
 	assert(a == true)
 
 	gc()
-	assert(system.run("step") == false) -- (R1,C2|R4,F1)
+	assert(system.run() == false) -- (R1,C2|R4,F1)
 	assert(a == true)
 
 	done()
@@ -477,6 +476,28 @@ local function testOp(op)
 	testOpResumedAndThrOp(op)
 end
 
+local function testOpClosing(op)
+	local trigger = op.trigger
+	function op:trigger(cfgid)
+		local stream = table.remove(self.stream[cfgid])
+		spawn(function ()
+			system.suspend()
+			stream:close()
+		end)
+	end
+	local check = op.check
+	function op:check(cfgid, ok, err)
+		if not ok then
+			assert(err == "closed" or err == "operation canceled")
+		end
+	end
+	casesuffix = "while closing"
+	testOp(op)
+	casesuffix = nil
+	op.trigger = trigger
+	op.check = check
+end
+
 local function checkAwait(op, cfgid, ...)
 	if not cfgid then
 		local ok, err = ...
@@ -536,6 +557,31 @@ do newtest "signal" ------------------------------------------------------------
 	})
 end
 
+do newtest "process" ------------------------------------------------------------
+	local script = os.tmpname()
+	writeto(script, utilschunk..[[
+		local path = ...
+		waitsignal(path)
+	]])
+	testOp(newTestOpCase{
+		signals = {},
+		await = function (self, cfgid)
+			local path = os.tmpname()
+			table.insert(self.signals, path)
+			return system.execute(luabin, script, path)
+		end,
+		trigger = function (self, cfgid)
+			local path = table.remove(self.signals, 1)
+			sendsignal(path)
+		end,
+		check = function (self, cfgid, result, value)
+			assert(result == "exit")
+			assert(value == 0)
+		end,
+	})
+	os.remove(script)
+end
+
 do newtest "channels" ----------------------------------------------------------
 	local op = newTestOpCase{
 		channels = { channel.create("A"), channel.create("B") },
@@ -574,8 +620,7 @@ end
 do newtest "coroutine" --------------------------------------------------------------
 	local chunk = utilschunk..[[
 		local coroutine = require "coroutine"
-		local cfgid = ...
-		local path = "signal"..cfgid..".tmp"
+		local cfgid, path = ...
 		local token = "Secret Token "..cfgid
 		repeat
 			waitsignal(path)
@@ -583,11 +628,12 @@ do newtest "coroutine" ---------------------------------------------------------
 	]]
 	testOp(newTestOpCase{
 		coroutines = { preemptco.load(chunk), preemptco.load(chunk) },
+		paths = { os.tmpname(), os.tmpname() },
 		await = function (self, cfgid)
-			return system.resume(self.coroutines[cfgid], cfgid)
+			return system.resume(self.coroutines[cfgid], cfgid, self.paths[cfgid])
 		end,
 		trigger = function (self, cfgid)
-			sendsignal("signal"..cfgid..".tmp")
+			sendsignal(self.paths[cfgid])
 		end,
 		check = function (self, cfgid, ok, res)
 			assert(ok == true)
@@ -625,41 +671,52 @@ do newtest "nameaddr" ----------------------------------------------------------
 	})
 end
 
+local function setuptcp(self)
+	spawn(function ()
+		self.passive = assert(system.socket("passive", "ipv4"))
+		assert(self.passive:bind(addr[1]))
+		assert(self.passive:listen(2))
+		for key, list in pairs(self.stream) do
+			table.insert(list, assert(self.passive:accept()))
+		end
+	end)
+	spawn(function ()
+		for key, list in pairs(self.stream) do
+			local stream = assert(system.socket("stream", "ipv4"))
+			assert(stream:connect(addr[1]))
+			table.insert(list, stream)
+		end
+	end)
+	assert(system.run() == false)
+	self.stream.used = {}
+end
+
+local function teardowntcp(self)
+	if self.passive ~= nil then
+		assert(self.passive:close())
+	end
+	for _, list in pairs(self.stream) do
+		for key, socket in pairs(list) do
+			assert(socket:close())
+			list[key] = nil
+		end
+	end
+	assert(system.run() == false)
+end
+
+local function picktcp(self, cfgid)
+	local stream = assert(table.remove(self.stream[cfgid]))
+	table.insert(self.stream.used, stream)
+	return stream
+end
+
 do newtest "shutdown" -----------------------------------------------------------
 	testOp(newTestOpCase{
-		stream = { {}, {}, used = {} },
-		setup = function (self)
-			spawn(function ()
-				self.passive = assert(system.socket("passive", "ipv4"))
-				assert(self.passive:bind(addr[1]))
-				assert(self.passive:listen(2))
-				for i = 1, 2 do
-					table.insert(self.stream[i], assert(self.passive:accept()))
-				end
-			end)
-			spawn(function ()
-				for i = 1, 2 do
-					local stream = assert(system.socket("stream", "ipv4"))
-					assert(stream:connect(addr[1]))
-					table.insert(self.stream[i], stream)
-				end
-			end)
-			assert(system.run() == false)
-		end,
-		teardown = function (self)
-			assert(self.passive:close())
-			for _, list in pairs(self.stream) do
-				for index, socket in ipairs(list) do
-					assert(socket:close())
-					list[index] = nil
-				end
-			end
-			assert(system.run() == false)
-		end,
+		stream = { {}, {} },
+		setup = setuptcp,
+		teardown = teardowntcp,
 		await = function (self, cfgid)
-			local stream = assert(table.remove(self.stream[cfgid]))
-			table.insert(self.stream.used, stream)
-			return stream:shutdown()
+			return picktcp(self, cfgid):shutdown()
 		end,
 	})
 end
@@ -694,134 +751,102 @@ for title, domain in pairs{ tcp = "ipv4", pipe = "local" } do
 	end
 
 	newtest(title.."send") -------------------------------------------------------
-	testOp(newTestOpCase{
-		stream = {},
-		setup = function (self)
-			spawn(function ()
-				self.passive = assert(system.socket("passive", domain))
-				assert(self.passive:bind(addr[1]))
-				assert(self.passive:listen(2))
-				self.stream[1] = assert(self.passive:accept())
-			end)
-			spawn(function ()
-				self.stream[2] = assert(system.socket("stream", domain))
-				assert(self.stream[2]:connect(addr[1]))
-			end)
-			assert(system.run() == false)
-		end,
-		teardown = function (self)
-			assert(self.passive:close())
-			for index, socket in ipairs(self.stream) do
-				assert(socket:close())
-				self.stream[index] = nil
-			end
-			assert(system.run() == false)
-		end,
+	local op = newTestOpCase{
+		stream = { {}, {} },
+		setup = setuptcp,
+		teardown = teardowntcp,
 		await = function (self, cfgid)
-			return self.stream[cfgid]:send("Hello from "..cfgid)
+			return self.stream[cfgid][2]:send("Hello from "..cfgid)
 		end,
-	})
+	}
+	testOp(op)
+	testOpClosing(op)
 
 	newtest(title.."conn") -------------------------------------------------------
-	testOp(newTestOpCase{
-		stream = {},
+	local op = newTestOpCase{
+		stream = { {}, {} },
 		setup = function (self)
-			self.passive = assert(system.socket("passive", domain))
-			assert(self.passive:bind(addr[1]))
-			assert(self.passive:listen(2))
-		end,
-		teardown = function (self)
-			assert(self.passive:close())
-			for index, socket in ipairs(self.stream) do
-				assert(socket:close())
-				self.stream[index] = nil
+			for key, list in pairs(self.stream) do
+				local passive = assert(system.socket("passive", domain))
+				assert(passive:bind(addr[key]))
+				assert(passive:listen(0))
+				list[1] = passive
+				list[2] = assert(system.socket("stream", domain))
 			end
-			assert(system.run() == false)
 		end,
+		teardown = teardowntcp,
 		await = function (self, cfgid)
-			local stream = assert(system.socket("stream", domain))
-			table.insert(self.stream, stream)
-			return stream:connect(addr[1])
+			local stream = self.stream[cfgid][2]
+			local address = self.stream[cfgid][1]:getaddress()
+			return stream:connect(address)
 		end,
-		trigger = function (self)
-			pspawn(function ()
-				table.insert(self.stream, self.passive:accept())
+		trigger = function (self, cfgid)
+			local passive = self.stream[cfgid][1]
+			local acceptor
+			spawn(function ()
+				acceptor = coroutine.running()
+				local stream = passive:accept()
+				if stream then assert(stream:close()) end
+			end)
+			spawn(function ()
+				system.suspend(.1)
+				coroutine.resume(acceptor, nil, "timeout")
 			end)
 		end,
-	})
+	}
+	testOp(op)
+	testOpClosing(op)
 
 	-- Object Operations
 
 	newtest(title.."accept") -----------------------------------------------------
-	testOp(newTestOpCase{
-		passive = {},
+	local op = newTestOpCase{
+		stream = { {}, {} },
 		setup = function (self)
-			for i = 1, 2 do
-				local socket = assert(system.socket("passive", domain))
-				assert(socket:bind(addr[i]))
-				assert(socket:listen(1))
-				self.passive[i] = socket
+			for key, list in pairs(self.stream) do
+				list[1] = assert(system.socket("stream", domain))
+				local passive = assert(system.socket("passive", domain))
+				assert(passive:bind(addr[key]))
+				assert(passive:listen(1))
+				list[2] = passive
 			end
 		end,
-		teardown = function (self)
-			for index, socket in ipairs(self.passive) do
-				assert(socket:close())
-				self.passive[index] = nil
-			end
-			assert(system.run() == false)
-		end,
+		teardown = teardowntcp,
 		await = function (self, cfgid)
-			local result, errmsg = self.passive[cfgid]:accept()
+			local result, errmsg = self.stream[cfgid][2]:accept()
 			if result then assert(result:close()) end
 			return result, errmsg
 		end,
 		trigger = function (self, cfgid)
 			spawn(function ()
-				local stream = assert(system.socket("stream", domain))
-				assert(stream:connect(self.passive[cfgid]:getaddress()))
-				assert(stream:close())
+				local stream = self.stream[cfgid][1]
+				assert(stream:connect(self.stream[cfgid][2]:getaddress()))
 			end)
 		end,
-	})
+	}
+	testOp(op)
+	testOpClosing(op)
 
 	newtest(title.."recv") -------------------------------------------------------
-	testOp(newTestOpCase{
-		stream = {},
-		setup = function (self)
-			spawn(function ()
-				self.passive = assert(system.socket("passive", domain))
-				assert(self.passive:bind(addr[1]))
-				assert(self.passive:listen(2))
-				self.stream[1] = assert(self.passive:accept())
-			end)
-			spawn(function ()
-				self.stream[2] = assert(system.socket("stream", domain))
-				assert(self.stream[2]:connect(addr[1]))
-			end)
-			assert(system.run() == false)
-		end,
-		teardown = function (self)
-			assert(self.passive:close())
-			for index, socket in ipairs(self.stream) do
-				assert(socket:close())
-				self.stream[index] = nil
-			end
-			assert(system.run() == false)
-		end,
+	local op = newTestOpCase{
+		stream = { {}, {} },
+		setup = setuptcp,
+		teardown = teardowntcp,
 		await = function (self, cfgid)
 			local buffer = memory.create(6)
-			return self.stream[cfgid]:receive(buffer)
+			return self.stream[cfgid][2]:receive(buffer)
 		end,
 		trigger = function (self, cfgid)
 			spawn(function ()
-				self.stream[3-cfgid]:send("Hello"..cfgid)
+				self.stream[cfgid][1]:send("Hello"..cfgid)
 			end)
 		end,
 		check = function (self, cfsgid, bytes)
 			assert(bytes == 6)
 		end,
-	})
-
+	}
+	testOp(op)
+	testOpClosing(op)
 end
 
 do newtest "udprecv" ------------------------------------------------------------
