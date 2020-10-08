@@ -884,26 +884,26 @@ static void uv_onudprecv (uv_udp_t *udp,
                           const struct sockaddr *addr,
                           unsigned int flags) {
 	uv_handle_t *handle = (uv_handle_t *)udp;
-	lua_State *thread = (lua_State *)handle->data;
-	int nret;
 	if (nread == 0 && addr == NULL) {
 		/* 'libuv' indication of datagram end (meaning?!), ignore it and */
 		/* get ready to restart all over again from obtaining the buffer */
 		lcu_Object *object = lcu_tohdlobj(handle);
 		object->step = k_udpbuffer;
-		return;
+	} else {
+		lua_State *thread = (lua_State *)handle->data;
+		int nret;
+		lcu_assert(thread);
+		lcu_assert(buf->base != (char *)buf);
+		lcu_assert(addr);
+		if (nread >= 0) {
+			lua_pushinteger(thread, nread);
+			lua_pushboolean(thread, flags&UV_UDP_PARTIAL);
+			lua_pushlightuserdata(thread, (void *)addr);
+			nret = 3;
+		}
+		else nret = lcuL_pusherrres(thread, nread);
+		lcuU_resumeobjop(handle, nret);
 	}
-	lcu_assert(thread);
-	lcu_assert(buf->base != (char *)buf);
-	lcu_assert(addr);
-	if (nread >= 0) {
-		lua_pushinteger(thread, nread);
-		lua_pushboolean(thread, flags&UV_UDP_PARTIAL);
-		lua_pushlightuserdata(thread, (void *)addr);
-		nret = 3;
-	}
-	else nret = lcuL_pusherrres(thread, nread);
-	lcuU_resumeobjop(handle, nret);
 }
 static void uv_ongetbuffer (uv_handle_t *handle,
                             size_t suggested_size,
@@ -1025,20 +1025,6 @@ static int pipe_send (lua_State *L) {
 static int k_recvdata (lua_State *L) {
 	return lua_gettop(L)-4;
 }
-static void uv_onrecvdata (uv_stream_t *stream,
-                           ssize_t nread,
-                           const uv_buf_t *buf) {
-	lua_State *thread = (lua_State *)stream->data;
-	int nret;
-	lcu_assert(thread);
-	lcu_assert(buf->base != (char *)buf);
-	if (nread >= 0) {
-		lua_pushinteger(thread, nread);
-		nret = 1;
-	}
-	else nret = lcuL_pusherrres(thread, nread);
-	lcuU_resumeobjop((uv_handle_t *)stream, nret);
-}
 static int k_getbuffer (lua_State *L) {
 	lcu_Object *object = (lcu_Object *)lua_touserdata(L, 1);
 	lua_CFunction nextstep = (lua_CFunction)lua_touserdata(L, -2);
@@ -1049,6 +1035,29 @@ static int k_getbuffer (lua_State *L) {
 	getbufarg(L, buf);
 	object->step = nextstep;
 	return -1;
+}
+static void uv_onrecvdata (uv_stream_t *stream,
+                           ssize_t nread,
+                           const uv_buf_t *buf) {
+	uv_handle_t *handle = (uv_handle_t *)stream;
+	lua_State *thread = (lua_State *)handle->data;
+	if (nread == 0) {
+		/* 'libuv' indication of EGAIN or EWOULDBLOCK, ignore it and */
+		/* get ready to restart all over again from obtaining the buffer */
+		lcu_Object *object = lcu_tohdlobj(handle);
+		lua_pushlightuserdata(thread, object->step);
+		object->step = k_getbuffer;
+	} else {
+		int nret;
+		lcu_assert(thread);
+		lcu_assert(buf->base != (char *)buf);
+		if (nread >= 0) {
+			lua_pushinteger(thread, nread);
+			nret = 1;
+		}
+		else nret = lcuL_pusherrres(thread, nread);
+		lcuU_resumeobjop(handle, nret);
+	}
 }
 static int stoprecvdata (uv_handle_t *handle) {
 	return uv_read_stop((uv_stream_t *)handle);
