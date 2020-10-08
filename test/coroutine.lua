@@ -256,7 +256,7 @@ do case "collect suspended"
 	done()
 end
 
-do case "collect cancelled"
+do case "collect canceled"
 	local stage
 	spawn(function ()
 		garbage.coro = coroutine.running()

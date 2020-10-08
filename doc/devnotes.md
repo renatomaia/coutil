@@ -146,7 +146,7 @@ static void uv_onmyevent (uv_myevent_t *myrequest, /* myevent details */) {
 		/* push values to yield to 'thread', for 'onreturn' to process */
 		lcuU_resumereqop(loop, request, /* number of pushed values */);
 	} else {
-		/* request wasn't cancelled, we can do the clean up now */
+		/* request wasn't canceled, we can do the clean up now */
 	}
 }
 

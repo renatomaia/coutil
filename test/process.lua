@@ -421,7 +421,7 @@ end
 do case "yield values"
 	local stage = 0
 	local a,b,c = spawn(function ()
-		local res, extra = system.execute(luabin, "-v")
+		local res, extra = system.execute(luabin, "-e", "return")
 		assert(res == "exit")
 		assert(extra == 0)
 		stage = 1
@@ -441,7 +441,7 @@ end
 do case "scheduled yield"
 	local stage = 0
 	spawn(function ()
-		system.execute(luabin, "-v")
+		system.execute(luabin, "-e", "return")
 		stage = 1
 		coroutine.yield()
 		stage = 2
@@ -458,11 +458,11 @@ end
 do case "reschedule"
 	local stage = 0
 	spawn(function ()
-		local res, extra = system.execute(luabin, "-v")
+		local res, extra = system.execute(luabin, "-e", "return")
 		assert(res == "exit")
 		assert(extra == 0)
 		stage = 1
-		local res, extra = system.execute(luabin, "-v")
+		local res, extra = system.execute(luabin, "-e", "return")
 		assert(res == "exit")
 		assert(extra == 0)
 		stage = 2
@@ -484,7 +484,7 @@ do case "cancel schedule"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		local a,b,c = system.execute(luabin, "-v")
+		local a,b,c = system.execute(luabin, "-e", "return")
 		assert(a == true)
 		assert(b == nil)
 		assert(c == 3)
@@ -508,10 +508,10 @@ do case "cancel and reschedule"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		local res = system.execute(luabin, "-v")
+		local res = system.execute(luabin, "-e", "return")
 		assert(res == nil)
 		stage = 1
-		local res, extra = system.execute(luabin, "-v")
+		local res, extra = system.execute(luabin, "-e", "return")
 		assert(res == "exit")
 		assert(extra == 0)
 		stage = 2
@@ -532,9 +532,9 @@ do case "resume while closing"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		assert(system.execute(luabin, "-v") == nil)
+		assert(system.execute(luabin, "-e", "return") == nil)
 		stage = 1
-		local a,b,c = system.execute(luabin, "-v")
+		local a,b,c = system.execute(luabin, "-e", "return")
 		assert(a == 1)
 		assert(b == 22)
 		assert(c == 333)
@@ -562,7 +562,7 @@ end
 do case "ignore errors"
 	local stage = 0
 	pspawn(function ()
-		system.execute(luabin, "-v")
+		system.execute(luabin, "-e", "return")
 		stage = 1
 		error("oops!")
 	end)
@@ -579,7 +579,7 @@ do case "ignore errors after cancel"
 	local stage = 0
 	pspawn(function ()
 		garbage.coro = coroutine.running()
-		system.execute(luabin, "-v")
+		system.execute(luabin, "-e", "return")
 		stage = 1
 		error("oops!")
 	end)

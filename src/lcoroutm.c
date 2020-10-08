@@ -5,8 +5,10 @@
 #include <lmemlib.h>
 
 
+#define FLAG_CLOSED	0x01
+
 typedef struct lcu_SysCoro {
-	int released;
+	int flags;
 	lua_State *thread;
 	lua_State *coroutine;
 } lcu_SysCoro;
@@ -25,7 +27,7 @@ static int doloaded (lua_State *L, lua_State *NL, int status) {
 	} else {
 		lcu_SysCoro *sysco =
 			(lcu_SysCoro *)lua_newuserdatauv(L, sizeof(lcu_SysCoro), 1);
-		sysco->released = 0;
+		sysco->flags = 0;
 		sysco->thread = NULL;
 		sysco->coroutine = NL;
 		luaL_setmetatable(L, LCU_SYSCOROCLS);
@@ -62,9 +64,9 @@ static void freecoroutine (lcu_SysCoro *sysco) {
 
 static int closesysco (lua_State *L) {
 	lcu_SysCoro *sysco = tosysco(L);
-	if (sysco->released) return 0;
+	if (lcuL_maskflag(sysco, FLAG_CLOSED)) return 0;
 	if (sysco->thread == NULL) freecoroutine(sysco);
-	sysco->released = 1;
+	lcuL_setflag(sysco, FLAG_CLOSED);
 	return 1;
 }
 
@@ -87,7 +89,7 @@ static int coroutine_close(lua_State *L) {
 /* status = coroutine:status() */
 static int coroutine_status(lua_State *L) {
 	lcu_SysCoro *sysco = tosysco(L);
-	if (sysco->released) lua_pushliteral(L, "dead");
+	if (lcuL_maskflag(sysco, FLAG_CLOSED)) lua_pushliteral(L, "dead");
 	else if (sysco->thread) lua_pushliteral(L, "running");
 	else {
 		lua_State *co = sysco->coroutine;
@@ -116,11 +118,7 @@ static void uv_onworking(uv_work_t* req) {
 	lua_pushinteger(co, status);
 }
 static void freecanceled(lua_State *L, lcu_SysCoro *sysco) {
-	if (sysco->released) freecoroutine(sysco);  /* while saved and not GC */
-	else {
-		lua_State *co = sysco->coroutine;
-		lua_settop(co, lua_status(co) == LUA_OK);  /* keep function on stack */
-	}
+	if (lcuL_maskflag(sysco, FLAG_CLOSED)) freecoroutine(sysco);  /* while saved and not GC */
 	lua_pushnil(L);
 	lcu_setopvalue(L);
 }
@@ -132,11 +130,13 @@ static void uv_onworked(uv_work_t* work, int status) {
 	lua_State *thread = sysco->thread;
 	request->data = thread;  /* restore 'lua_State' on conclusion */
 	sysco->thread = NULL;
+	/* if not executed, remove arguments (LUA_OK when function is on stack) */
 	if (lcuU_endreqop(loop, request)) {
 		int nret;
 		if (status == UV_ECANCELED) {
+			lua_settop(co, lua_status(co) == LUA_OK);
 			lua_pushboolean(thread, 0);
-			lua_pushliteral(thread, "cancelled");
+			lua_pushliteral(thread, "canceled");
 			nret = 2;
 		} else {
 			int lstatus = (int)lua_tointeger(co, -1);
@@ -160,8 +160,11 @@ static void uv_onworked(uv_work_t* work, int status) {
 		}
 		freecanceled(thread, sysco);  /* while in stack and not GC */
 		lcuU_resumereqop(loop, request, nret);
+	} else {
+		if (status == UV_ECANCELED) lua_settop(co, lua_status(co) == LUA_OK);
+		else lua_settop(co, 0);
+		freecanceled(thread, sysco);
 	}
-	else freecanceled(thread, sysco);
 }
 static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_work_t *work = (uv_work_t *)request;
@@ -175,7 +178,8 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		lua_pushliteral(L, "cannot resume running coroutine");
 		return 2;
 	}
-	if (sysco->released || (lua_status(co) == LUA_OK && lua_gettop(co) == 0) ) {
+	if (lcuL_maskflag(sysco, FLAG_CLOSED) ||
+	    (lua_status(co) == LUA_OK && lua_gettop(co) == 0) ) {
 		lua_pushboolean(L, 0);
 		lua_pushliteral(L, "cannot resume dead coroutine");
 		return 2;

@@ -53,6 +53,7 @@
 #define lcu_assert assert
 //#define lcu_assert(X) (printf("%s:%d: %s = %s\n", __FILE__, __LINE__, __func__, (X) ? "true" : "false"), assert(X))
 //#define lcu_log(O,L,M) printf("[%p,%p]%s:%d:%s(%s)\n",L,O,__FILE__,__LINE__,__func__,M)
+//#define lcuL_printlua(L) lcuL_printstack(L,__FILE__,__LINE__,__func__)
 
 
 #if !defined(lcu_assert)
