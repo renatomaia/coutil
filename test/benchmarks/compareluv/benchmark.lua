@@ -1,174 +1,81 @@
-local uvtime = [[
-	(function ()
-		package.cpath = os.getenv("LUV_CPATH").."/?.so;;"
+local runtime = {
+	luarocks = {
+		lua = os.getenv("LUA53_BIN"),
+		cfgpattern = "local %1 =",
+		gettime = [[
+			(function ()
+				package.cpath = os.getenv("LUAROCKS_CPATH").."/?.so;;"
+				package.path = os.getenv("LUAROCKS_LPATH").."/?.lua;;"
 
-		return require("luv").hrtime
-	end)()
-]]
-local coutiltime = [[
-	(function ()
-		package.cpath = os.getenv("COUTIL_CPATH").."/?.so;"..
-		                os.getenv("LUAMEM_CPATH").."/?.so;;"
-		package.path = os.getenv("COUTIL_LPATH").."/?.lua;;"
-
-		return require("coutil.system").nanosecs
-	end)()
-]]
-
-local tcpcfg = [[
-	local msgcount<const> = 65536
-	local msgsize<const> = 512
-	local msgbyte<const> = "x"
-	local msgdata<const> = string.rep(msgbyte, msgsize)
-	local host<const> = "127.0.0.1"
-	local port<const> = 65432
-	local backlog<const> = 8
-]]
-local idlecfg = [[
-	local repeats<const> = 1e6
-]]
-
-return {
-	id = "tcp",
-	cases = {
-		coutil = {
-			lua = os.getenv("LUA54_BIN"),
-			gettime = coutiltime,
-			setup = [[
-				local memory = require "memory"
-				local system = require "coutil.system"
-				local spawn = require "coutil.spawn"
-
-				]]..tcpcfg..[[
-				local address<const> = system.address("ipv4", host, port)
-
-				spawn.catch(print, function ()
-					local passive<close> = system.socket("passive", address.type)
-					passive:bind(address)
-					passive:listen(backlog)
-					local stream<close> = passive:accept()
-					local buffer<const> = memory.create(2*msgsize)
-					local missing = msgcount*msgsize
-					repeat
-						missing = missing-stream:receive(buffer)
-					until missing <= 0
-				end)
-
-				spawn.catch(print, function ()
-					local stream<close> = system.socket("stream", address.type)
-					stream:connect(address)
-					for i = 1, msgcount do
-						stream:send(msgdata)
-					end
-				end)
-			]],
-			test = [[system.run()]],
-		},
-		luv = {
-			lua = os.getenv("LUA53_BIN"),
-			gettime = uvtime,
-			setup = [[
-				local uv = require "luv"
-
-				]]..tcpcfg:gsub("<const>", "")..[[
-				local msgpattern = "^"..msgbyte.."+$"
-
-				local passive = uv.new_tcp()
-				passive:bind(host, port)
-				passive:listen(backlog, function (err)
-					local stream = uv.new_tcp()
-					passive:accept(stream)
-					local missing = msgcount*msgsize
-					stream:read_start(function (err, chunk)
-						missing = missing-#chunk
-						if missing <= 0 then
-							stream:read_stop()
-							stream:close()
-							passive:close()
-						end
-					end)
-				end)
-
-				local stream = uv.new_tcp()
-				local missing = msgcount
-				local function onwrite(err)
-					missing = missing-1
-					if missing > 0 then
-						stream:write(msgdata, onwrite)
-					else
-						stream:close()
-					end
-				end
-				stream:connect(host, port, function (err)
-					stream:write(msgdata, onwrite)
-				end)
-			]],
-			test = [[uv.run()]],
-		},
+				return require("luv").hrtime
+			end)()
+		]],
 	},
-}, {
-	id = "idle",
-	cases = {
-		coutil = {
-			lua = os.getenv("LUA54_BIN"),
-			gettime = coutiltime,
-			setup = [[
-				local system = require "coutil.system"
-				local spawn = require "coutil.spawn"
+	coutil = {
+		lua = os.getenv("LUA54_BIN"),
+		cfgpattern = "local %1<const> =",
+		gettime = [[
+			(function ()
+				package.cpath = os.getenv("COUTIL_CPATH").."/?.so;"..
+				                os.getenv("LUAMEM_CPATH").."/?.so;;"
+				package.path = os.getenv("COUTIL_LPATH").."/?.lua;;"
 
-				]]..idlecfg..[[
+				return require("coutil.system").nanosecs
+			end)()
+		]],
+	},
+}
 
-				spawn.catch(print, function ()
-					for i = 1, repeats do
-						system.suspend()
-					end
-				end)
-			]],
-			test = [[system.run()]],
-		},
-		luv = {
-			lua = os.getenv("LUA53_BIN"),
-			gettime = uvtime,
-			setup = [[
-				local uv = require "luv"
+local function readdemo(path)
+	local file = assert(io.open("../demo/"..path))
+	return assert(file:read("a")), file:close()
+end
 
-				]]..idlecfg:gsub("<const>", "")..[[
+local function descibetests(tests)
+	local list = {}
+	for name, cases in pairs(tests) do
+		local feature = assert(name:match("^[^/]+"))
+		local cfgchunk = readdemo(feature.."/configs.lua")
+		local test = {
+			id = name:gsub("[^%w_]", ""),
+			cases = {},
+		}
+		for _, case in ipairs(cases) do
+			local config = runtime[case:match("[^/]+$")] or runtime.luarocks
+			local cfgscript = cfgchunk:gsub("([%a_][%w_]*)%s*=", config.cfgpattern)
+			local path = name.."/"..case..".lua"
+			local script, loop = readdemo(path):match(
+				'^dofile "configs.lua"%s*(.-)([%a_][%w_%.]*%s*%(%s*%))%s*$')
+			test.cases[case:gsub("[^%w_]", "_")] = {
+				lua = config.lua,
+				gettime = config.gettime,
+				setup = cfgscript..script,
+				test = loop,
+			}
+		end
+		table.insert(list, test)
+	end
+	return table.unpack(list)
+end
 
-				local timer = uv.new_idle()
-				timer:start(function ()
-					repeats = repeats-1
-					if repeats == 0 then
-						timer:stop()
-					end
-				end)
-			]],
-			test = [[uv.run()]],
-		},
-		luv_and_coro = {
-			lua = os.getenv("LUA53_BIN"),
-			gettime = uvtime,
-			setup = [[
-				local uv = require "luv"
-
-				]]..idlecfg:gsub("<const>", "")..[[
-
-				local yield = coroutine.yield
-				local counter = coroutine.create(function ()
-					for i = 1, repeats do
-						yield(true)
-					end
-				end)
-
-				local resume = coroutine.resume
-				local timer = uv.new_idle()
-				timer:start(function ()
-					local _, cont = resume(counter)
-					if not cont then
-						timer:stop()
-					end
-				end)
-			]],
-			test = [[uv.run()]],
-		},
+return descibetests{
+	["idle"] = {
+		"copas",
+		"coutil",
+		"luvcoro",
+		"luv",
+	},
+	["tcp/upload"] = {
+		"copas",
+		"coutil",
+		"luv",
+	},
+	["tcp/reqreply"] = {
+		"multiplex/copas",
+		"multiplex/coutil",
+		"multiplex/luv",
+		"serial/copas",
+		"serial/coutil",
+		"serial/luv",
 	},
 }
