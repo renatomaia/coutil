@@ -145,7 +145,7 @@ static void swapvalues (lua_State *src, lua_State *dst) {
 		{ int n = ndst; ndst = nsrc; nsrc = n; }
 	}
 
-	for (i = 3; i <= ndst; ++i) {
+	for (i = 3; i <= ndst; i++) {
 		err = lcuL_pushfrom(src, dst, i, "argument");
 		if (err == LUA_OK) {
 			lua_replace(src, i-1);
