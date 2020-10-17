@@ -193,7 +193,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 
 		local function assertfilled(buffer, count)
 			local expected = string.sub(data, 1, count)..string.rep("\0", #data-count)
-			assert(memory.diff(buffer, expected) == nil)
+			assert(not memory.diff(buffer, expected))
 		end
 
 		local done1
@@ -245,7 +245,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			unconnected = assert(create())
 			assert(unconnected:bind(ipaddr[domain].bindable))
 			assert(unconnected:receive(buffer) == size)
-			assert(memory.diff(buffer, string.rep("a", size)) == nil)
+			assert(not memory.diff(buffer, string.rep("a", size)))
 			coroutine.resume(thread)
 		end)
 
@@ -256,7 +256,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			asserterr("already in use", pcall(unconnected.receive, unconnected))
 			coroutine.yield()
 			assert(unconnected:receive(buffer) == size)
-			assert(memory.diff(buffer, string.rep("b", size)) == nil)
+			assert(not memory.diff(buffer, string.rep("b", size)))
 			assert(unconnected:close())
 			complete = true
 		end)
@@ -301,7 +301,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 				local buffer = memory.create(64)
 				local addr = system.address(domain)
 				assert(connected:receive(buffer, nil, nil, addr) == 64)
-				assert(memory.diff(buffer, string.rep("x", 64)) == nil)
+				assert(not memory.diff(buffer, string.rep("x", 64)))
 				assert(tostring(addr) == tostring(unconnected:getaddress()))
 				assert(connected:close())
 				assert(unconnected:close())
@@ -359,10 +359,10 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			local bytes, extra = unconnected:receive(buffer)
 			assert(bytes == nil)
 			assert(extra == nil)
-			assert(memory.diff(buffer, "9876543210") == nil)
+			assert(not memory.diff(buffer, "9876543210"))
 			stage = 2
 			assert(unconnected:receive(buffer) == 10)
-			assert(memory.diff(buffer, "0123456789") == nil)
+			assert(not memory.diff(buffer, "0123456789"))
 			assert(unconnected:close())
 			stage = 3
 		end)
@@ -431,7 +431,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			local buffer = memory.create("9876543210")
 			stage = 1
 			assert(unconnected:receive(buffer) == 10)
-			assert(memory.diff(buffer, "0123456789") == nil)
+			assert(not memory.diff(buffer, "0123456789"))
 			stage = 2
 			error("oops!")
 		end)
@@ -528,7 +528,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			assert(unconnected:bind(ipaddr[domain].bindable))
 			local buffer = memory.create(128)
 			assert(unconnected:receive(buffer) == 128)
-			assert(memory.diff(buffer, string.rep("x", 128)) == nil)
+			assert(not memory.diff(buffer, string.rep("x", 128)))
 			stage1 = 1
 		end)
 		assert(stage1 == 0)
@@ -575,10 +575,10 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			local buffer = memory.create(128)
 			stage1 = 2
 			assert(unconnected:receive(buffer) == 128)
-			assert(memory.diff(buffer, string.rep("x", 128)) == nil)
+			assert(not memory.diff(buffer, string.rep("x", 128)))
 			local buffer = memory.create(64)
 			assert(unconnected:receive(buffer) == 64)
-			assert(memory.diff(buffer, string.rep("x", 64)) == nil)
+			assert(not memory.diff(buffer, string.rep("x", 64)))
 			stage1 = 3
 		end)
 		assert(stage1 == 2)
@@ -632,10 +632,10 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			local buffer = memory.create(128)
 			stage1 = 2
 			assert(unconnected:receive(buffer) == 128)
-			assert(memory.diff(buffer, string.rep("x", 128)) == nil)
+			assert(not memory.diff(buffer, string.rep("x", 128)))
 			--local buffer = memory.create(64)
 			--assert(unconnected:receive(buffer) == 64)
-			--assert(memory.diff(buffer, string.rep("x", 64)) == nil)
+			--assert(not memory.diff(buffer, string.rep("x", 64)))
 			stage1 = 3
 		end)
 		assert(stage1 == 2)
@@ -683,7 +683,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			local buffer = memory.create(10)
 			stage1 = 1
 			assert(unconnected:receive(buffer) == 10)
-			assert(memory.diff(buffer, "0123456789") == nil)
+			assert(not memory.diff(buffer, "0123456789"))
 			stage1 = 2
 		end)
 		assert(stage1 == 1)
@@ -717,7 +717,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			assert(unconnected:bind(ipaddr[domain].bindable))
 			local buffer = memory.create(128)
 			assert(unconnected:receive(buffer) == 128)
-			assert(memory.diff(buffer, string.rep("x", 128)) == nil)
+			assert(not memory.diff(buffer, string.rep("x", 128)))
 			stage1 = 1
 		end)
 		assert(stage1 == 0)
