@@ -28,8 +28,6 @@
 #endif
 
 
-#define LCU_NETADDRCLS LCU_PREFIX"netaddress"
-
 #define checknetaddr(L,i)  ((struct sockaddr *) \
                            luaL_checkudata(L, i, LCU_NETADDRCLS))
 
@@ -326,8 +324,6 @@ static int addr_newindex (lua_State *L) {
 /*
  * Names
  */
-
-#define LCU_NETADDRLISTCLS LCU_PREFIX"netaddrlist"
 
 #define chkaddrdom(L,I,A,D) luaL_argcheck(L, (A)->sa_family == D, I, \
                                              "wrong domain")

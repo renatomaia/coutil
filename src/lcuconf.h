@@ -30,7 +30,7 @@
 #endif
 
 #ifndef LCU_EXECARGCOUNT
-#define LCU_EXECARGCOUNT	1023
+#define LCU_EXECARGCOUNT	255
 #endif
 
 #ifndef LCU_NETHOSTNAMESZ
@@ -42,7 +42,7 @@
 #endif
 
 #ifndef LCU_NETSERVNAMESZ
-#ifndef NI_MAXSERT
+#ifndef NI_MAXSERV
 #define LCU_NETSERVNAMESZ	32
 #else
 #define LCU_NETSERVNAMESZ	NI_MAXSERV
@@ -66,6 +66,9 @@
 #endif
 
 
+#define LCU_PROCENVCLS LCU_PREFIX"procesenv"
+#define LCU_NETADDRCLS LCU_PREFIX"netaddress"
+#define LCU_NETADDRLISTCLS LCU_PREFIX"netaddrlist"
 #define LCU_UDPSOCKETCLS	LCU_PREFIX"udp"
 #define LCU_TCPACTIVECLS	LCU_PREFIX"tcpactive"
 #define LCU_TCPPASSIVECLS	LCU_PREFIX"tcppassive"
