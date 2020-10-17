@@ -653,6 +653,24 @@ as listed below:
 
 Returns string `signal` in case of success.
 
+### `system.packenv (vars)`
+
+Returns a _packed environment_ that encapsulates environment variables from table `vars`,
+which shall map environment variable names to the values they must assume.
+
+__Note__: by indexing a _packed environment_,
+like `env.LUA_PATH`,
+a linear search is performed in the list of packed variables to find the value of variable `LUA_PATH`.
+If such variable does not exist in the packed environment,
+`nil` is returned.
+
+### `system.unpackenv (env [, tab])`
+
+Returns a table mapping all environment variable names in [packed environment](#systempackenv-vars) `env` to their corresponding values.
+If table `tab` is provided,
+no table is created,
+and it is used to store the results returned.
+
 ### `system.execute (cmd, ...)`
 
 [Await function](#await-function) that executes a new process,
@@ -692,7 +710,10 @@ When this field is not provided,
 the new process's executable image receives no arguments.
 
 - `environment`:
-table mapping environment variable names to the values they must assume for the new process.
+a packed environment created by [`system.packenv`](#systempackenv-vars),
+or a table mapping environment variable names to the values they must assume for the new process.
+In the latter case,
+a packed environment is implicitly created from the table.
 If this field is provided,
 only the variables defined will be available for the new process.
 
