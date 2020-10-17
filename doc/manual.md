@@ -517,7 +517,7 @@ Channels with the same name share the same two opposite [_endpoints_](#systemawa
 Similar to [`system.awaitch`](#systemawaitch-ch-endpoint-),
 but does not await for a matching call.
 In such case,
-it returns `nil` followed by message "empty".
+it returns `false` followed by message "empty".
 
 ### `channel.close (ch)`
 
@@ -527,7 +527,7 @@ but that takes an unpredictable amount of time to happen.
 
 In case of success,
 this function returns `true`.
-Otherwise it returns `nil` plus an error message.
+Otherwise it returns `false` plus an error message.
 
 System
 ------
@@ -536,8 +536,8 @@ Module `coutil.system` provides functions that expose system functionalities,
 including [await functions]("#await") to await on system conditions.
 
 Unless otherwise stated,
-all there functions return `nil` plus an error message on failure,
-and some value different from `nil` on success.
+all there functions return `false` plus an error message on failure,
+and some truly value on success.
 
 ### `system.run ([mode])`
 
@@ -775,9 +775,9 @@ the search behaves as if both `d` and `s` were provided.
 By default,
 `mode` is the empty string.
 
-Returns an iterator that have the following usage pattern,
-followed by the type of the first address found,
-or `nil` if no address is found.
+In case of success,
+returns an iterator that have the following usage pattern,
+followed by the type of the first address found.
 
 ```
 	[address, socktype, nextdomain =] getnext ([address])
@@ -1083,7 +1083,7 @@ the call will await for a call on either _endpoints_.
 For instance, the call `channel:await("any")` will match either a call `channel:await("in")` or `channel:await("out")`.
 
 Returns `true` followed by the extra arguments `...` from the matching call.
-Otherwise, return `nil` followed by an error message related to obtaining the arguments from the matching call.
+Otherwise, return `false` followed by an error message related to obtaining the arguments from the matching call.
 In any case,
 if this call does not raise errors,
 it resumed the coroutine, [_task_](#threadsdostring-pool-chunk--chunkname--mode-) or [_preemptive coroutine_](#coroutineload-chunk--chunkname--mode) of the matching call.
