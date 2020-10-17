@@ -4,7 +4,7 @@
 
 
 LCUI_FUNC int lcuL_pusherrres (lua_State *L, int err) {
-	lua_pushnil(L);
+	lua_pushboolean(L, 0);
 	lcu_pusherror(L, err);
 	lua_pushinteger(L, -err);
 	return 3;
@@ -154,7 +154,7 @@ LCUI_FUNC int lcuL_canmove (lua_State *L,
 			default: {
 				const char *tname = luaL_typename(L, i);
 				lua_settop(L, 0);
-				lua_pushnil(L);
+				lua_pushboolean(L, 0);
 				doerrmsg(lua_pushfstring, L, i, msg, tname);
 				return 0;
 			}

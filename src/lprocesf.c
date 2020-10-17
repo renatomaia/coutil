@@ -80,7 +80,7 @@ static int system_emitsig (lua_State *L) {
 /* signal [, errmsg] = system.awaitsig(signal) */
 static int returnsignal (lua_State *L) {
 	if (checksignal(L, 1) != lua_tonumber(L, -1)) {
-		lua_pushnil(L);
+		lua_pushboolean(L, 0);
 		lua_pushliteral(L, "unexpected signal");
 		return 2;
 	}

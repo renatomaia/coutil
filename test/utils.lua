@@ -19,7 +19,7 @@ end
 
 function asserterr(expected, ok, ...)
 	local actual = ...
-	assert(not ok, "error was expected, got "..table.concat({vararg.map(tostring, ok, ...)}, ", "))
+	assert(ok == false, "error was expected, got "..table.concat({vararg.map(tostring, ok, ...)}, ", "))
 	assert(string.find(actual, expected, 1, true), "wrong error, got "..actual)
 end
 
@@ -133,7 +133,7 @@ function sendsignal(path)
 	file:close()
 	--while true do
 	--	file = io.open(path)
-	--	if file == nil then break end
+	--	if not file then break end
 	--	file:close()
 	--end
 end
