@@ -165,7 +165,7 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 			size_t argsz = (argc+1)*sizeof(char *);  /* arguments + NULL */
 			procopts->args = (char **)lua_newuserdatauv(L, argsz, 0);
 		}
-		for (i = 0; i < argc; ++i)
+		for (i = 0; i < argc; i++)
 			procopts->args[i] = (char *)luaL_checkstring(L, i+1);
 		procopts->args[argc] = NULL;
 		procopts->file = procopts->args[0];
@@ -202,7 +202,7 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 				size_t argsz = (argc+1)*sizeof(char *);  /* arguments + NULL */
 				procopts->args = (char **)lua_newuserdatauv(L, argsz, 0);
 			}
-			for (i = 1; i < argc; ++i) {
+			for (i = 1; i < argc; i++) {
 				lua_geti(L, 2, i);
 				procopts->args[i] = (char *)lua_tostring(L, -1);
 				if (!procopts->args[i]) return luaL_error(L,
@@ -227,7 +227,7 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 				if (name && (value == NULL || strchr(name, '='))) return luaL_error(L,
 					"bad name '%s' in field 'environment' (must be a string without '=')",
 					name);
-				++envc;
+				envc++;
 				envsz += sizeof(char *)+sizeof(char)*(strlen(name)+1+strlen(value)+1);
 				lua_pop(L, 1);
 			}
