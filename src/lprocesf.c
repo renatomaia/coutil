@@ -109,6 +109,75 @@ static int system_awaitsig (lua_State *L) {
 }
 
 
+static char **newprocenv (lua_State *L, int idx) {
+	void *mem;
+	char **envl, *envv;
+	size_t envc = 0, envsz = sizeof(char *);
+	int i = 0;
+
+	/* check environment variables are strings */
+	lua_pushnil(L);  /* first key */
+	while (lua_next(L, idx) != 0) {
+		const char *name = lua_tostring(L, -2);
+		const char *value = lua_tostring(L, -1);
+		if (name && (value == NULL || strchr(name, '='))) luaL_error(L,
+			"bad name '%s' in environment (must be a string without '=')", name);
+		envc++;
+		envsz += sizeof(char *)+sizeof(char)*(strlen(name)+1+strlen(value)+1);
+		lua_pop(L, 1);
+	}
+
+	mem = lua_newuserdatauv(L, envsz, 0);
+	envl = (char **)mem;
+	envv = (char *)(mem+(envc+1)*sizeof(char *));  /* variables + NULL */
+	lua_pushnil(L);  /* first key */
+	while (lua_next(L, idx) != 0) {
+		const char *c = lua_tostring(L, -2);  /* variable name */
+		envl[i++] = envv; /* put string in 'envl' array */
+		while (*c) *envv++ = *c++; /* copy key to string, excluding '\0' */
+		*envv++ = '=';
+		c = lua_tostring(L, -1);  /* variable value */
+		while ((*envv++ = *c++)); /* copy value to string, including '\0' */
+		lua_pop(L, 1);
+	}
+	envl[i] = NULL; /* put NULL to mark the end of 'envl' array */
+	return envl;
+}
+
+static int system_packenv (lua_State *L) {
+	luaL_checktype(L, 1, LUA_TTABLE);
+	newprocenv(L, 1);
+	luaL_setmetatable(L, LCU_PROCENVCLS);
+	return 1;
+}
+
+static int system_unpackenv (lua_State *L) {
+	const char **envl = (const char **)luaL_checkudata(L, 1, LCU_PROCENVCLS);
+	if (lua_gettop(L) == 1) lua_newtable(L);
+	else luaL_checktype(L, 2, LUA_TTABLE);
+	for (; *envl; envl++) {
+		const char *value = strchr(*envl, '=');
+		lua_pushlstring(L, *envl, value-*envl);
+		lua_pushstring(L, ++value);
+		lua_settable(L, 2);
+	}
+	return 1;
+}
+
+static int procenv_index (lua_State *L) {
+	const char **envl = (const char **)luaL_checkudata(L, 1, LCU_PROCENVCLS);
+	size_t len;
+	const char *name = luaL_checklstring(L, 2, &len);
+	for (; *envl; envl++) {
+		if (strncmp(name, *envl, len) == 0 && (*envl)[len] == '=') {
+			lua_pushstring(L, *envl+len+1);
+			return 1;
+		}
+	}
+	return 0;
+}
+
+
 /* ended [, errmsg] = system.execute (command [, arguments...]) */
 static const char* getstrfield (lua_State *L, const char *field, int required) {
 	const char* value = NULL;
@@ -180,7 +249,7 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 		return 0;
 	} else if (lua_istable(L, 1)) {
 		static const char *streamfields[] = { "stdin", "stdout", "stderr", NULL };
-		size_t argc = 0, envc = 0;
+		size_t argc = 0;
 
 		lua_settop(L, 1);  /* discard all other arguments */
 		procopts->file = getstrfield(L, "execfile", 1);
@@ -213,45 +282,12 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 			return luaL_argerror(L, 1, "field 'arguments' must be a table");
 		}
 
-		if (lua_istable(L, 3)) {
-			void *mem;
-			char **envl, *envv;
-			size_t envsz = sizeof(char *);
-			int i = 0;
-
-			/* check environment variables are strings */
-			lua_pushnil(L);  /* first key */
-			while (lua_next(L, 3) != 0) {
-				const char *name = lua_tostring(L, -2);
-				const char *value = lua_tostring(L, -1);
-				if (name && (value == NULL || strchr(name, '='))) return luaL_error(L,
-					"bad name '%s' in field 'environment' (must be a string without '=')",
-					name);
-				envc++;
-				envsz += sizeof(char *)+sizeof(char)*(strlen(name)+1+strlen(value)+1);
-				lua_pop(L, 1);
-			}
-
-			mem = lua_newuserdatauv(L, envsz, 0);
-			envl = (char **)mem;
-			envv = (char *)(mem+(envc+1)*sizeof(char *));  /* variables + NULL */
-			lua_pushnil(L);  /* first key */
-			while (lua_next(L, 3) != 0) {
-				const char *c = lua_tostring(L, -2);  /* variable name */
-				envl[i++] = envv; /* put string in 'envl' array */
-				while (*c) *envv++ = *c++; /* copy key to string, excluding '\0' */
-				*envv++ = '=';
-				c = lua_tostring(L, -1);  /* variable value */
-				while ((*envv++ = *c++)); /* copy value to string, including '\0' */
-				lua_pop(L, 1);
-			}
-			envl[i] = NULL; /* put NULL to mark the end of 'envl' array */
-			procopts->env = envl;
-		} else if (lua_isnil(L, 3)) {
+		if (lua_isnoneornil(L, 3)) {
 			procopts->env = NULL;
+		} else if (lua_istable(L, 3)) {
+			procopts->env = newprocenv(L, 3);
 		} else {
-			return luaL_argerror(L, 1,
-				"field 'environment' must be a table");
+			procopts->env = (char **)luaL_checkudata(L, 3, LCU_PROCENVCLS);
 		}
 
 		procopts->args[0] = (char *)procopts->file;
@@ -302,7 +338,13 @@ static int system_execute (lua_State *L) {
 
 
 LCUI_FUNC void lcuM_addsignalf (lua_State *L) {
+	static const luaL_Reg envmt[] = {
+		{"__index", procenv_index},
+		{NULL, NULL}
+	};
 	static const luaL_Reg luaf[] = {
+		{"packenv", system_packenv},
+		{"unpackenv", system_unpackenv},
 		{"getpid", system_getpid},
 		{"emitsig", system_emitsig},
 		{NULL, NULL}
@@ -312,6 +354,11 @@ LCUI_FUNC void lcuM_addsignalf (lua_State *L) {
 		{"execute", system_execute},
 		{NULL, NULL}
 	};
+
+	luaL_newmetatable(L, LCU_PROCENVCLS);
+	luaL_setfuncs(L, envmt, 0);
+	lua_pop(L, 1);
+
 	lcuM_setfuncs(L, luaf, 0);
 	lcuM_setfuncs(L, modf, LCU_MODUPVS);
 }

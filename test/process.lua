@@ -1,20 +1,20 @@
 local system = require "coutil.system"
 
+local function fillenv(env)
+	if type(env) == "table" then
+		env.PATH = os.getenv("PATH")
+		env.LUA_INIT = os.getenv("LUA_INIT")
+		env.LUA_PATH = os.getenv("LUA_PATH")
+		env.LUA_CPATH = os.getenv("LUA_CPATH")
+		env.LD_LIBRARY_PATH = os.getenv("LD_LIBRARY_PATH")
+	end
+	return env
+end
+
 local runscript
 do
 	local scriptfile = os.tmpname()
 	local successfile = os.tmpname()
-
-	local function fillenv(env)
-		if env ~= nil then
-			env.PATH = os.getenv("PATH")
-			env.LUA_INIT = os.getenv("LUA_INIT")
-			env.LUA_PATH = os.getenv("LUA_PATH")
-			env.LUA_CPATH = os.getenv("LUA_CPATH")
-			env.LD_LIBRARY_PATH = os.getenv("LD_LIBRARY_PATH")
-		end
-		return env
-	end
 
 	function runscript(info, ...)
 		local command = luabin
@@ -147,7 +147,7 @@ do case "environment inherit"
 	done()
 end
 
-do case "environment redefined new"
+do case "environment redefined with table"
 	spawn(function ()
 		runscript{
 			script = [[
@@ -164,6 +164,66 @@ do case "environment redefined new"
 		}
 	end)
 	assert(system.run() == false)
+
+	done()
+end
+
+do case "environment redefined with environment"
+	spawn(function ()
+		runscript{
+			script = [[
+				assert(os.getenv("ENV_VAR_01") == "environment variable 01")
+				assert(os.getenv("ENV_VAR_02") == "environment variable 02")
+				assert(os.getenv("ENV_VAR_03") == "environment variable 03")
+				assert(os.getenv("HOME") == nil)
+			]],
+			environment = system.packenv(fillenv{
+				ENV_VAR_01 = "environment variable 01",
+				ENV_VAR_02 = "environment variable 02",
+				ENV_VAR_03 = "environment variable 03",
+			}),
+		}
+	end)
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "environment unpacked"
+	local environment = system.packenv{
+		ENV_VAR_01 = "environment variable 01",
+		ENV_VAR_02 = "environment variable 02",
+		ENV_VAR_03 = "environment variable 03",
+	}
+	assert(environment.ENV_VAR_01 == "environment variable 01")
+	assert(environment.ENV_VAR_02 == "environment variable 02")
+	assert(environment.ENV_VAR_03 == "environment variable 03")
+	assert(environment.ENV_VAR_04 == nil)
+
+	local created = system.unpackenv(environment)
+	assert(created.ENV_VAR_01 == "environment variable 01")
+	assert(created.ENV_VAR_02 == "environment variable 02")
+	assert(created.ENV_VAR_03 == "environment variable 03")
+	created.ENV_VAR_01 = nil
+	created.ENV_VAR_02 = nil
+	created.ENV_VAR_03 = nil
+	assert(next(created) == nil)
+
+	created.extra = "extra"
+	created[1] = "one"
+	local repacked = system.unpackenv(environment, created)
+	assert(rawequal(created, repacked))
+	assert(created.ENV_VAR_01 == "environment variable 01")
+	assert(created.ENV_VAR_02 == "environment variable 02")
+	assert(created.ENV_VAR_03 == "environment variable 03")
+	assert(created.extra == "extra")
+	assert(created[1] == "one")
+	created.ENV_VAR_01 = nil
+	created.ENV_VAR_02 = nil
+	created.ENV_VAR_03 = nil
+	created.extra = nil
+	created[1] = nil
+	assert(next(created) == nil)
 
 	done()
 end
@@ -193,7 +253,7 @@ end
 do case "environment illegal char"
 	spawn(function ()
 		asserterr(
-			"bad name '=ENV' in field 'environment' (must be a string without '=')",
+			"bad name '=ENV' in environment (must be a string without '=')",
 			pcall(system.execute, {
 				execfile = luabin,
 				environment = { ["=ENV"] = "illegal" },
