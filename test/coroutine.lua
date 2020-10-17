@@ -101,7 +101,7 @@ do case "preemptive execution"
 	local path = os.tmpname()
 	os.remove(path)
 
-	assert(io.open(path) == nil)
+	assert(not io.open(path))
 	local co = assert(preemptco.load(string.format([[
 		local io = require "io"
 		local os = require "os"
@@ -134,7 +134,7 @@ do case "preemptive execution"
 	local removed = false
 	for i=1, 1e3 do
 		file = io.open(path)
-		if file == nil then
+		if not file then
 			removed = true
 			break
 		else
