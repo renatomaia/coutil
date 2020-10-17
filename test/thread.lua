@@ -253,7 +253,7 @@ do case "many threads, even more tasks"
 			local ok, err = xpcall(function ()
 				while true do
 					local file = io.open(path)
-					if file == nil then break end
+					if not file then break end
 					file:close()
 					coroutine.yield()
 				end
@@ -686,8 +686,7 @@ do case "cancel and reschedule before sync"
 	spawn(function ()
 		garbage.coro = coroutine.running()
 		local ch = channel.create(name)
-		local extra = system.awaitch(ch)
-		assert(extra == nil)
+		assert(system.awaitch(ch) == nil)
 		stage = 1
 		assert(system.awaitch(ch) == true)
 		stage = 2
@@ -717,8 +716,7 @@ do case "cancel and reschedule after sync"
 	spawn(function ()
 		garbage.coro = coroutine.running()
 		local ch = channel.create(name)
-		local extra = system.awaitch(ch, "in") -- [doc/opstages.svg#O2]
-		assert(extra == nil)
+		assert(system.awaitch(ch, "in") == nil) -- [doc/opstages.svg#O2]
 		stage = 1
 		local ok, ret = system.awaitch(ch, "in") -- [doc/opstages.svg#O9]
 		assert(ok == true)
@@ -847,7 +845,7 @@ do case "collect while in use"
 	t:close()
 
 	local ok, err = channel.create("c"):sync()
-	assert(ok == nil)
+	assert(ok == false)
 	assert(err == "empty")
 
 	dostring(utilschunk..[[
@@ -923,7 +921,7 @@ do case "queueing on endpoints"
 		local ch = channel.create(name)
 		if producer then
 			local res, errmsg = ch:sync(endpoint)
-			assert(res == nil)
+			assert(res == false)
 			assert(errmsg == "empty")
 			sendsignal(path)
 		end

@@ -151,7 +151,7 @@ static lua_State *armsynced (lua_State *L, void *data) {
 	if (err != LUA_OK) {
 		const char *msg = lua_tostring(cL, -1);
 		lua_settop(L, 0);
-		lua_pushnil(L);
+		lua_pushboolean(L, 0);
 		lua_pushstring(L, msg);
 		lua_settop(cL, 0);
 		return NULL;
@@ -192,7 +192,7 @@ static int system_awaitch (lua_State *L) {
 /* res [, errmsg] = channel:sync(endpoint) */
 static lua_State *cancelsuspension (lua_State *L, void *data) {
 	lua_settop(L, 0);
-	lua_pushnil(L);
+	lua_pushboolean(L, 0);
 	lua_pushliteral(L, "empty");
 	return NULL;
 }

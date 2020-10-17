@@ -479,7 +479,7 @@ LCUI_FUNC int lcu_closeobj (lua_State *L, int idx) {
 			int nret;
 			lua_pushnil(L);
 			lua_setiuservalue(L, idx, UPV_THREAD);  /* allow thread to be collected */
-			lua_pushnil(thread);
+			lua_pushboolean(thread, 0);
 			lua_pushliteral(thread, "closed");
 			lua_resume(thread, L, 2, &nret);  /* explicit resume to cancel operation */
 			lua_pop(thread, nret);  /* dicard yielded values */

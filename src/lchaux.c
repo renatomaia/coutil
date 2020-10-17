@@ -106,7 +106,7 @@ LCUI_FUNC int lcuCS_checksyncargs (lua_State *L) {
 		}
 	}
 	lua_settop(L, 0);
-	lua_pushnil(L);
+	lua_pushboolean(L, 0);
 	lua_pushfstring(L, "bad argument #2 (invalid option '%s')", name);
 	return -1;
 }

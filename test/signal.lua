@@ -145,8 +145,7 @@ do case "cancel and reschedule"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		local extra = system.awaitsig("user1")
-		assert(extra == nil)
+		assert(system.awaitsig("user1") == nil)
 		stage = 1
 		assert(system.awaitsig("user1") == "user1")
 		stage = 2
