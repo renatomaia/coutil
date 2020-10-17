@@ -275,7 +275,7 @@ LCUI_FUNC int lcuTP_counttpool (lcu_ThreadPool *pool,
                                 lcu_ThreadCount *count,
                                 const char *what) {
 	uv_mutex_lock(&pool->mutex);
-	for (; *what; ++what) switch (*what) {
+	for (; *what; what++) switch (*what) {
 		case 'e': count->expected = pool->size; break;
 		case 'a': count->actual = pool->threads; break;
 		case 'r': count->running = pool->running; break;

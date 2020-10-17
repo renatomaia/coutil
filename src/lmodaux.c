@@ -142,7 +142,7 @@ LCUI_FUNC int lcuL_canmove (lua_State *L,
                             int n,
                             const char *msg) {
 	int i, top = lua_gettop(L);
-	for (i = 1+top-n; i <= top; ++i) {
+	for (i = 1+top-n; i <= top; i++) {
 		int type = lua_type(L, i);
 		switch (type) {
 			case LUA_TNIL:
@@ -266,7 +266,7 @@ LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
                                               const char *func) {
 	int i;
 	printf("%s:%d: function '%s'\n", file, line, func);
-	for(i = 1; i <= lua_gettop(L); ++i) {
+	for(i = 1; i <= lua_gettop(L); i++) {
 		const char *typename = NULL;
 		printf("\t[%d] = ", i);
 		switch (lua_type(L, i)) {
