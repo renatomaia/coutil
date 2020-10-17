@@ -65,7 +65,7 @@ static int threads_count (lua_State *L) {
 	luaL_checkstack(L, len, "too many values to return");
 	lcuTP_counttpool(pool, &count, len < 6 ? opt : "earpsn");
 	lua_settop(L, 2);
-	for (; *opt; ++opt) switch (*opt) {
+	for (; *opt; opt++) switch (*opt) {
 		case 'e': lua_pushinteger(L, count.expected); break;
 		case 'a': lua_pushinteger(L, count.actual); break;
 		case 'r': lua_pushinteger(L, count.running); break;

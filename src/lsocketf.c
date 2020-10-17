@@ -432,7 +432,7 @@ static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		}
 	}
 	else luaL_argcheck(L, servname, 1, "name or service must be provided");
-	for (; *mode; ++mode) switch (*mode) {
+	for (; *mode; mode++) switch (*mode) {
 		case '4': hints.ai_family = AF_INET; goto aftercase6;
 		case '6': hints.ai_family = AF_INET6; aftercase6:
 			if (hints.ai_flags&AI_ADDRCONFIG)
@@ -536,7 +536,7 @@ static int k_setupnameaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		uv_getnameinfo_t *namereq = (uv_getnameinfo_t *)request;
 		int flags = 0;
 		const char *mode = luaL_optstring(L, 2, "");
-		for (; *mode; ++mode) switch (*mode) {
+		for (; *mode; mode++) switch (*mode) {
 			case 'l': flags |= NI_NOFQDN; break;
 			case 'd': flags |= NI_DGRAM; break;
 #ifdef NI_IDN
@@ -994,7 +994,7 @@ static int k_setupwriteobj (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 			                                       LCU_PIPEPASSIVECLS,
 			                                       NULL };
 			int i;
-			for (i = 0; classes[i]; ++i) {
+			for (i = 0; classes[i]; i++) {
 				int samemt = 0;
 				luaL_getmetatable(L, classes[i]);  /* get correct metatable */
 				samemt = lua_rawequal(L, -1, -2);
@@ -1356,7 +1356,7 @@ static int pipe_setoption (lua_State *L) {
 		case 0: {  /* permission */
 			const char *mode = luaL_optstring(L, 3, "");
 			int flags;
-			for (; *mode; ++mode) switch (*mode) {
+			for (; *mode; mode++) switch (*mode) {
 				case 'r': flags |= UV_READABLE; break;
 				case 'w': flags |= UV_WRITABLE; break;
 				default: return luaL_error(L, "unknown option (got '%c')", *mode);
