@@ -20,7 +20,7 @@ static int doloaded (lua_State *L, lua_State *NL, int status) {
 	if (status != LUA_OK) {  /* error (message is on top of the stack) */
 		size_t len;
 		const char *errmsg = lua_tolstring(NL, -1, &len);
-		lua_pushnil(L);
+		lua_pushboolean(L, 0);
 		lua_pushlstring(L, errmsg, len);
 		lua_close(NL);
 		return 2;  /* return nil plus error message */
