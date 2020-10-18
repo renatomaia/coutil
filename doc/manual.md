@@ -705,7 +705,7 @@ The possible values are:
 	- A string with the following characters that indicate a [stream socket](#systemsocket-type-domain) shall be created and stored in the field to allow communication with the process.
 		- `r`: a readable stream socket to send data to the process.
 		- `w`: a writable stream socket to receive data from the process.
-		- `i`: a stream socket that allows transmission of stream sockets (see domain [`"ipc"`](#systemsocket-type-domain)).
+		- `s`: a stream socket that allows transmission of stream sockets (see domain [`"share"`](#systemsocket-type-domain)).
 
 - `arguments`:
 table with the sequence of command-line arguments for the executable image of the new process.
@@ -897,7 +897,7 @@ which is either:
 - `"ipv6"` for UDP (datagram) or TCP (stream) sockets over IPv6.
 - `"local"` for sockets which addresses are file paths on Unix,
 or pipe names on Windows.
-- `"ipc"` same as `"local"`,
+- `"share"` same as `"local"`,
 but allows for transmission of stream sockets.
 
 In case of success,
@@ -914,9 +914,7 @@ Returns `true` in case of success.
 ### `socket:getdomain ()`
 
 Returns the address domain of `socket`,
-which can be either `"ipv4"`,
-`"ipv6"`,
-or `"local"`.
+as provided by argument `domain` in [`system.socket`](#systemsocket-type-domain).
 
 ### `socket:setoption (name, value)`
 
@@ -1002,7 +1000,9 @@ following the same sematics of the arguments of [memory.get](https://github.com/
 
 For unbinded datagram sockets `address` must be destination address,
 but it must be omitted for datagram sockets binded to a peer address.
-For stream sockets `address` is ignored.
+For stream sockets `address` is ignored,
+except for `"share"` stream sockets,
+where `address` might be the stream socket to be transferred.
 This operation is not available for passive sockets.
 
 Returns `true` in case of success.
@@ -1026,6 +1026,8 @@ In case of success,
 this function returns the number of bytes copied to `buffer`.
 For datagram sockets,
 it also returns a boolean indicating whether the copied data was truncated.
+For `"share"` stream sockets,
+it might return a received stream socket after the number of bytes.
 
 ### `socket:joingroup (multicast [, interface])`
 
