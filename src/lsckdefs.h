@@ -28,7 +28,7 @@ typedef struct lcu_PipeSocket {
 
 
 #define LCU_SOCKIPV6FLAG 0x02  /* used for network sockets */
-#define LCU_SOCKTRANFFLAG 0x02  /* used for local|ipc sockets */
+#define LCU_SOCKTRANFFLAG 0x02  /* used for local|share sockets */
 
 
 #define lcuT_newobject(L,T,C)	(T *)lcuT_createobj(L,sizeof(T),C)
