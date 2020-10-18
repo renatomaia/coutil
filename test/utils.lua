@@ -152,9 +152,6 @@ end
 
 utilschunk = string.format([[
 	local _G = require "_G"
-	local waitsignal = _G.load(%q, nil, "b")
-	local sendsignal = _G.load(%q, nil, "b")
-	local checkcount = _G.load(%q, nil, "b")
 	dofile "utils.lua"
-]], string.dump(waitsignal), string.dump(sendsignal), string.dump(checkcount))
+]])
 
