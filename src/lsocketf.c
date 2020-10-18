@@ -606,7 +606,7 @@ static void getbufarg (lua_State *L, uv_buf_t *buf) {
 /* socket [, errmsg] = system.socket(type, domain) */
 static int system_socket (lua_State *L) {
 	static const char *const types[] = { "stream", "passive", "datagram", NULL };
-	static const char *const domains[] = { "ipv4", "ipv6", "local", "ipc", NULL };
+	static const char *const domains[] = { "ipv4", "ipv6", "local", "share", NULL };
 	lcu_Scheduler *sched = lcu_getsched(L);
 	uv_loop_t *loop = lcu_toloop(sched);
 	int type = luaL_checkoption(L, 1, NULL, types);
@@ -617,9 +617,8 @@ static int system_socket (lua_State *L) {
 		switch (type) {
 			case 0:
 			case 1: {
-				static const char *const classes[] = { LCU_TCPACTIVECLS,
-				                                       LCU_TCPPASSIVECLS };
-				lcu_TcpSocket *tcp = lcuT_newobject(L, lcu_TcpSocket, classes[type]);
+				const char *class = type ? LCU_TCPPASSIVECLS : LCU_TCPACTIVECLS;
+				lcu_TcpSocket *tcp = lcuT_newobject(L, lcu_TcpSocket, class);
 				err = uv_tcp_init_ex(loop, lcu_toobjhdl(tcp), domain);
 				if (!err) tcp->flags = (domain == AF_INET6) ? LCU_SOCKIPV6FLAG : 0;
 			} break;
@@ -634,10 +633,10 @@ static int system_socket (lua_State *L) {
 			case 0:
 			case 1: {
 				int socktranf = domain-2;
-				static const char *const classes[] = { LCU_PIPEACTIVECLS,
-				                                       LCU_PIPEPASSIVECLS };
-				lcu_PipeSocket *pipe = lcuT_newobject(L, lcu_PipeSocket, classes[type]);
-				err = uv_pipe_init(loop, lcu_toobjhdl(pipe), socktranf);
+				const char *class = type == 1 ? LCU_PIPEPASSIVECLS :
+				                    socktranf ? LCU_PIPESHARECLS : LCU_PIPEACTIVECLS;
+				lcu_PipeSocket *pipe = lcuT_newobject(L, lcu_PipeSocket, class);
+				err = uv_pipe_init(loop, lcu_toobjhdl(pipe), type ? 0 : socktranf);
 				if (!err) pipe->flags = socktranf ? LCU_SOCKTRANFFLAG : 0;
 			} break;
 		}
@@ -961,6 +960,7 @@ static int k_setupwriteobj (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 			                                       LCU_TCPPASSIVECLS,
 			                                       LCU_PIPEACTIVECLS,
 			                                       LCU_PIPEPASSIVECLS,
+			                                       LCU_PIPESHARECLS,
 			                                       NULL };
 			int i;
 			for (i = 0; classes[i]; i++) {
@@ -984,7 +984,7 @@ static int k_setupwriteobj (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int pipe_send (lua_State *L) {
-	lcu_Object *object = lcu_openedobj(L, 1, LCU_PIPEIPCCLS);
+	lcu_Object *object = lcu_openedobj(L, 1, LCU_PIPESHARECLS);
 	uv_handle_t *handle = lcu_toobjhdl(object);
 	lcu_Scheduler *sched = lcu_tosched(handle->loop);
 	return lcuT_resetreqopk(L, sched, k_setupwriteobj, NULL, NULL);
@@ -1080,7 +1080,7 @@ static int k_recvpipedata (lua_State *L) {
 	return lua_gettop(L)-4;
 }
 static int pipe_receive (lua_State *L) {
-	lcu_Object *object = lcu_openedobj(L, 1, LCU_PIPEIPCCLS);
+	lcu_Object *object = lcu_openedobj(L, 1, LCU_PIPESHARECLS);
 	uv_handle_t *handle = lcu_toobjhdl(object);
 	uv_pipe_t *pipe = (uv_pipe_t *)handle;
 	if (uv_pipe_pending_count(pipe)) {
@@ -1282,6 +1282,13 @@ static int tcp_accept (lua_State *L) {
 #define openedpipe(L,c)	((lcu_PipeSocket *)lcu_openedobj(L, 1, c))
 
 
+/* domain = pipe:getdomain() */
+static int pipe_getdomain (lua_State *L) {
+	lcu_PipeSocket *pipe = openedpipe(L, toclass(L));
+	lua_pushstring(L, lcuL_maskflag(pipe, LCU_SOCKTRANFFLAG) ? "share" : "local");
+	return 1;
+}
+
 /* address [, errmsg] = pipe:getaddress([site]) */
 static int pipe_getaddress (lua_State *L) {
 	lcu_PipeSocket *pipe = openedpipe(L, toclass(L));
@@ -1359,7 +1366,8 @@ static int newpipeaccept (lua_State *L,
                           lcu_Object *object,
                           lcu_Object **newobj) {
 	int socktranf = lcuL_maskflag(object, LCU_SOCKTRANFFLAG);
-	lcu_PipeSocket *pipe = lcuT_newobject(L, lcu_PipeSocket, LCU_PIPEACTIVECLS);
+	const char *class = socktranf ? LCU_PIPESHARECLS : LCU_PIPEACTIVECLS;
+	lcu_PipeSocket *pipe = lcuT_newobject(L, lcu_PipeSocket, class);
 	int err = uv_pipe_init(loop, lcu_toobjhdl(pipe), socktranf);
 	if (!err) {
 		pipe->flags |= socktranf;
@@ -1442,6 +1450,7 @@ static const luaL_Reg tcppassive[] = {
 };
 
 static const luaL_Reg pipe[] = {
+	{"getdomain", pipe_getdomain},
 	{"getaddress", pipe_getaddress},
 	{"bind", pipe_bind},
 	{"setoption", pipe_setoption},
@@ -1512,8 +1521,8 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	lcuM_setfuncs(L, tcppassive, 0);
 	lua_pop(L, 1);
 
-	lua_pushstring(L, LCU_PIPEIPCCLS);
-	lcuM_newclass(L, LCU_PIPEIPCCLS);
+	lua_pushstring(L, LCU_PIPESHARECLS);
+	lcuM_newclass(L, LCU_PIPESHARECLS);
 	lcuM_setfuncs(L, object, 1);
 	lcuM_setfuncs(L, pipe, 1);
 	lcuM_setfuncs(L, active, 1);

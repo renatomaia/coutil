@@ -72,7 +72,7 @@
 #define LCU_UDPSOCKETCLS	LCU_PREFIX"udp"
 #define LCU_TCPACTIVECLS	LCU_PREFIX"tcpactive"
 #define LCU_TCPPASSIVECLS	LCU_PREFIX"tcppassive"
-#define LCU_PIPEIPCCLS	LCU_PREFIX"pipeipc"
+#define LCU_PIPESHARECLS	LCU_PREFIX"pipeshare"
 #define LCU_PIPEACTIVECLS	LCU_PREFIX"pipeactive"
 #define LCU_PIPEPASSIVECLS	LCU_PREFIX"pipepassive"
 #define LCU_SYSCOROCLS	LCU_PREFIX"syscoro"
