@@ -51,11 +51,8 @@ TODO
 
 ### Improvements
 
-- Support `std{in,out,err}`in `system.execute` to be `"rw"` to create a pipe. See `UV_CREATE_PIPE`.
-
-- User and group definition of process started with `system.execute`.
-
 - Protect all 'lua_*' calls in 'uv_*' callbacks from raising errors (use 'pcall'?)
+- User and group definition of process started with `system.execute`.
 - Replacement for package.cpath searcher that saves the 'luaopen_*' function to 'package.preload', so it can be shared by other threads (saves opened file descriptors).
 - Support metamethod 'transfer' containing a _light userdata_ to a C function that "transfers" a userdata between independet Lua states.
 	- Transferable coroutines that are closed on the source and move to the destiny.
