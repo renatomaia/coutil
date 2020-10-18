@@ -75,6 +75,7 @@
 #define LCU_PIPESHARECLS	LCU_PREFIX"pipeshare"
 #define LCU_PIPEACTIVECLS	LCU_PREFIX"pipeactive"
 #define LCU_PIPEPASSIVECLS	LCU_PREFIX"pipepassive"
+#define LCU_TERMSOCKETCLS	LCU_PREFIX"terminal"
 #define LCU_SYSCOROCLS	LCU_PREFIX"syscoro"
 #define LCU_CHANNELCLS	LCU_PREFIX"channel"
 #define LCU_THREADSCLS	LCU_PREFIX"threads"
