@@ -21,26 +21,23 @@ do
 		local script = info
 		if type(info) == "table" then
 			script = info.script
-			local arguments = {scriptfile}
-			if info.arguments ~= nil then
-				for index, argval in ipairs(info.arguments) do
-					arguments[index+1] = argval
+			if info.arguments == nil then
+				info.arguments = {scriptfile}
+			else
+				for i = #info.arguments, 1, -1 do
+					info.arguments[i+1] = info.arguments[i]
 				end
+				info.arguments[1] = scriptfile
 			end
-			command = {
-				execfile = command,
-				runpath = info.runpath,
-				environment = fillenv(info.environment),
-				arguments = arguments,
-				stdin = info.stdin,
-				stdout = info.stdout,
-				stderr = info.stderr,
-			}
+			info.execfile = command
+			info.environment = fillenv(info.environment)
+			command = info
+			--]===]
 		end
 		writeto(scriptfile, [[
 			local function main(...) ]], script, [[ end
 			local exitval = main(...)
-			local file = assert(io.open("]],successfile,[[", "w"))
+			local file = assert(io.open("]], successfile, [[", "w"))
 			assert(file:write("SUCCESS!"))
 			assert(file:close())
 			os.exit(exitval, true)
@@ -447,6 +444,61 @@ do case "redirect streams to a socket"
 	os.remove(filepath)
 	testsocketstdstream("local", filepath)
 	os.remove(filepath)
+
+	done()
+end
+
+do case "redirect streams to created socket"
+	local memory = require "memory"
+
+	local spec = {
+		script = [[
+			assert(io.stdin:read("a") == "stdin")
+			assert(io.stdout:write("stdout")) io.stdout:flush()
+			assert(io.stderr:write("stderr")) io.stderr:flush()
+		]],
+		stdin = "w",
+		stdout = "r",
+		stderr = "r",
+	}
+	spawn(runscript, spec)
+
+	spawn(function ()
+		assert(spec.stdin:send("stdin"))
+		assert(spec.stdin:shutdown())
+		local buffer = memory.create(6)
+		for name, stream in pairs{ stdout = spec.stdout, stderr = spec.stderr } do
+			local bytes = 0
+			while bytes < #buffer do
+				bytes = bytes+assert(stream:receive(buffer, bytes+1))
+			end
+			assert(tostring(buffer) == name)
+			assert(stream:close())
+		end
+	end)
+
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "redirect streams to null"
+	local memory = require "memory"
+
+	local spec = {
+		script = [[
+			assert(io.stdin:read("a") == "")
+			local long = string.rep(" FIX ME! ", 1024)
+			assert(io.stdout:write(long)) io.stdout:flush()
+			assert(io.stderr:write(long)) io.stderr:flush()
+		]],
+		stdin = false,
+		stdout = false,
+		stderr = false,
+	}
+	spawn(runscript, spec)
+
+	assert(system.run() == false)
 
 	done()
 end

@@ -696,14 +696,16 @@ This field is required.
 - `runpath`:
 path of the current directory of the new process.
 
-- `stdin`:
-file or stream socket to be used as the standard input of the new process.
-
-- `stdout`:
-file or stream socket to be used as the standard output of the new process.
-
-- `stderr`:
-file or stream socket to be used as the standard error output of the new process.
+- `stdin`, `stdout`, `stderr`:
+the standard input, output or error output of the new process.
+The possible values are:
+	- A [Lua file](http://www.lua.org/manual/5.4/manual.html#pdf-io.open) to be provided to the process.
+	- A [stream socket](#systemsocket-type-domain) to be provided to the process.
+	- `false` to indicate it should be discarded (_e.g._ `/dev/null` shall be used).
+	- A string with the following characters that indicate a [stream socket](#systemsocket-type-domain) shall be created and stored in the field to allow communication with the process.
+		- `r`: a readable stream socket to send data to the process.
+		- `w`: a writable stream socket to receive data from the process.
+		- `i`: a stream socket that allows transmission of stream sockets (see domain [`"ipc"`](#systemsocket-type-domain)).
 
 - `arguments`:
 table with the sequence of command-line arguments for the executable image of the new process.
