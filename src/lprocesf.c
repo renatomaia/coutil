@@ -1,5 +1,6 @@
 #include "lmodaux.h"
 #include "loperaux.h"
+#include "lsckdefs.h"
 
 #include <string.h>
 #include <signal.h>
@@ -198,15 +199,37 @@ static int ismetatable (lua_State *L, const char *meta) {
 	return res;
 }
 static void getstreamfield (lua_State *L,
+                            uv_loop_t *loop,
                             const char *field,
                             uv_stdio_container_t *stream,
                             int deffd) {
-	if (lua_getfield(L, 1, field) == LUA_TNIL) {
+	int ltype = lua_getfield(L, 1, field);
+	if (ltype == LUA_TNIL) {
 		stream->data.fd = deffd;
 		stream->flags = UV_INHERIT_FD;
+	} else if (ltype == LUA_TSTRING) {
+		const char *mode = lua_tostring(L, -1);
+		int socktranf = 0, err;
+		lcu_PipeSocket *pipe;
+		stream->flags = UV_CREATE_PIPE;
+		for (; *mode; mode++) switch (*mode) {
+			case 'w': stream->flags |= UV_READABLE_PIPE; break;
+			case 'r': stream->flags |= UV_WRITABLE_PIPE; break;
+			case 'i': socktranf = 1; break;
+			default: luaL_error(L, "unknown '%s' mode char (got '%c')", field, *mode);
+		}
+		pipe = lcuT_newobject(L, lcu_PipeSocket, LCU_PIPEACTIVECLS);
+		stream->data.stream = (uv_stream_t *)lcu_toobjhdl(pipe);
+		err = uv_pipe_init(loop, lcu_toobjhdl(pipe), socktranf);
+		if (err) lcu_error(L, err);
+		pipe->flags = socktranf ? LCU_SOCKTRANFFLAG : 0;
+		lua_setfield(L, 1, field);
 	} else {
 		stream->flags = UV_IGNORE;
-		if (lua_getmetatable(L, -1)) {
+		if (ltype == LUA_TBOOLEAN) {
+			if (lua_toboolean(L, -1))
+				luaL_error(L, "bad field %s (got true)", field);
+		} else if (lua_getmetatable(L, -1)) {
 			if (ismetatable(L, LUA_FILEHANDLE)) {
 				luaL_Stream *lstream = (luaL_Stream *)lua_touserdata(L, -2);
 				stream->data.fd = fileno(lstream->f);
@@ -217,14 +240,16 @@ static void getstreamfield (lua_State *L,
 				stream->data.stream = (uv_stream_t *)lcu_toobjhdl(obj);
 				stream->flags = UV_INHERIT_STREAM;
 			}
+			lua_pop(L, 1); /* remove value's metatable */
+			if (stream->flags == UV_IGNORE)
+				luaL_error(L, "bad field %s (invalid stream)", field);
 		}
-		lua_pop(L, 1); /* remove value's metatable */
-		if (stream->flags == UV_IGNORE)
-			luaL_error(L, "bad field %s (must be a stream)", field);
 	}
 	lua_pop(L, 1); /* remove value */
 }
-static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
+static int getprocopts (lua_State *L,
+                        uv_loop_t *loop,
+                        uv_process_options_t *procopts) {
 	procopts->flags = 0;
 
 	if (lua_isstring(L, 1)) {
@@ -256,7 +281,7 @@ static int getprocopts (lua_State *L, uv_process_options_t *procopts) {
 		procopts->cwd = getstrfield(L, "runpath", 0);
 		procopts->stdio_count = 0;
 		for (; streamfields[procopts->stdio_count]; ++procopts->stdio_count)
-			getstreamfield(L, streamfields[procopts->stdio_count],
+			getstreamfield(L, loop, streamfields[procopts->stdio_count],
 			                  procopts->stdio+procopts->stdio_count,
 			                  procopts->stdio_count);
 		lua_getfield(L, 1, "arguments");
@@ -320,7 +345,7 @@ static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	procopts.exit_cb = uv_procexited;
 	procopts.args = args;
 	procopts.stdio = streams;
-	tabarg = getprocopts(L, &procopts);
+	tabarg = getprocopts(L, loop, &procopts);
 
 	err = uv_spawn(loop, process, &procopts);
 	lcuT_armthrop(L, 0);  /* 'uv_spawn' always arms the operation */
