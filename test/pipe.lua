@@ -1,3 +1,4 @@
+local memory = require "memory"
 local system = require "coutil.system"
 
 local pipenames = {
@@ -6,18 +7,18 @@ local pipenames = {
 	denied = "/dev/null",
 }
 
-newgroup("pipe") ---------------------------------------------------------------
+local function testgetdomain(create, domain, ...)
+	case "getdomain"
 
-local function create(kind) return system.socket(kind, "local") end
+	local sock = assert(create(...))
+	assert(sock:getdomain() == domain)
 
-newtest "creation"
+	done()
+end
 
-testobject(create, "passive")
-testobject(create, "stream")
+local function testgetaddr(create)
+	case "getaddress"
 
-newtest "address"
-
-do case "getaddress"
 	local sock = assert(create("stream"))
 
 	assert(sock:bind(pipenames.free) == true)
@@ -40,7 +41,127 @@ do case "getaddress"
 	done()
 end
 
+newgroup("pipe") ---------------------------------------------------------------
+
+local function create(kind) return system.socket(kind, "local") end
+
+newtest "creation"
+
+testobject(create, "passive")
+testobject(create, "stream")
+
+newtest "address"
+
+testgetdomain(create, "local", "passive")
+testgetdomain(create, "local", "stream")
+testgetaddr(create)
 teststream(create, pipenames)
+
+gc()
+for name, path in pairs(pipenames) do
+	os.remove(path)
+end
+
+newgroup("share") ----------------------------------------------------------------
+
+local function create(kind) return system.socket(kind, "share") end
+
+newtest "creation"
+
+testobject(create, "passive")
+testobject(create, "stream")
+
+newtest "address"
+
+testgetdomain(create, "share", "passive")
+testgetdomain(create, "share", "stream")
+testgetaddr(create)
+teststream(create, pipenames)
+
+do case "tranfer socket"
+	local serveraddr = os.tmpname()
+	local parentaddr = os.tmpname()
+	os.remove(parentaddr)
+	os.remove(serveraddr)
+
+	local done1
+	spawn(function ()
+		local parent<close> = assert(system.socket("passive", "share"))
+		assert(parent:bind(parentaddr))
+		assert(parent:listen(1))
+
+		local server<close> = assert(system.socket("passive", "local"))
+		assert(server:bind(serveraddr))
+		assert(server:listen(1))
+
+		local child<close> = assert(parent:accept())
+		local client<close> = assert(server:accept())
+		assert(child:send("parent", 1, -1, client))
+		done1 = true
+	end)
+	assert(done1 == nil)
+
+	local done2
+	spawn(function ()
+		local stream<close> = assert(system.socket("stream", "local"))
+		assert(stream:connect(serveraddr))
+		assert(stream:send("client"))
+
+		local buffer = memory.create(#("child"))
+		local bytes = 0
+		repeat
+			bytes = bytes+assert(stream:receive(buffer, bytes+1))
+		until bytes == #buffer
+		assert(not memory.diff(buffer, "child"))
+		done2 = true
+	end)
+	assert(done2 == nil)
+
+	local done3
+	spawn(function ()
+		local childspec = {
+			execfile = luabin,
+			arguments = { "--" },
+			stdin = "w",
+		}
+		spawn(function ()
+			local res, value = system.execute(childspec)
+			assert(res == "exit")
+			assert(value == 0)
+			done3 = true
+		end)
+		assert(childspec.stdin:send(utilschunk..[[
+			local memory = require "memory"
+			local system = require "coutil.system"
+			local done3
+			spawn(function ()
+				local parent<close> = assert(system.socket("stream", "share"))
+				assert(parent:connect("]]..parentaddr..[["))
+
+				local buffer = memory.create(#("parent"))
+				local bytes, client<close> = assert(parent:receive(buffer))
+				assert(bytes == #("parent"))
+				assert(not memory.diff(buffer, "parent"))
+
+				assert(client:send("child"))
+				done3 = true
+			end)
+			assert(done3 == nil)
+			system.run()
+			assert(done3 == true)
+		]]))
+		assert(childspec.stdin:shutdown())
+	end)
+	assert(done3 == nil)
+
+	gc()
+	assert(system.run() == false)
+	assert(done1 == true)
+	assert(done2 == true)
+	assert(done3 == true)
+
+	done()
+end
 
 os.remove(pipenames.bindable)
 os.remove(pipenames.free)
