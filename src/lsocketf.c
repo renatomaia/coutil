@@ -1381,6 +1381,36 @@ static int pipe_accept (lua_State *L) {
 
 
 /*
+ * Terminal
+ */
+
+#define openedterm(L)	((lcu_TermSocket *)lcu_openedobj(L, 1, LCU_TERMSOCKETCLS))
+
+
+/* success = terminal:setmode(mode) */
+static int terminal_setmode (lua_State *L) {
+	static const char *const modes[] = { "normal", "raw", "binary" };
+	lcu_TermSocket *term = openedterm(L);
+	uv_tty_t *tty = (uv_tty_t *)lcu_toobjhdl(term);
+	int mode = luaL_checkoption(L, 2, "default", modes);
+	int err = uv_tty_set_mode(tty, mode);
+	return lcuL_pushresults(L, 0, err);
+}
+
+/* width, height = terminal:winsize() */
+static int terminal_winsize (lua_State *L) {
+	lcu_TermSocket *term = openedterm(L);
+	uv_tty_t *tty = (uv_tty_t *)lcu_toobjhdl(term);
+	int width, height;
+	int err = uv_tty_get_winsize(tty, &width, &height);
+	if (err) return lcuL_pusherrres(L, err);
+	lua_pushinteger(L, width);
+	lua_pushinteger(L, height);
+	return 2;
+}
+
+
+/*
  * Module
  */
 
@@ -1473,6 +1503,12 @@ static const luaL_Reg pipeipc[] = {
 	{NULL, NULL}
 };
 
+static const luaL_Reg terminal[] = {
+	{"setmode", terminal_setmode},
+	{"winsize", terminal_winsize},
+	{NULL, NULL}
+};
+
 static const luaL_Reg modf[] = {
 	{"address", system_address},
 };
@@ -1549,6 +1585,34 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	lcuM_setfuncs(L, pipepassive, 0);
 	lua_pop(L, 1);
 
+	lua_pushstring(L, LCU_TERMSOCKETCLS);
+	lcuM_newclass(L, LCU_TERMSOCKETCLS);
+	lcuM_setfuncs(L, object, 1);
+	lcuM_setfuncs(L, active, 1);
+	lua_remove(L, -2);
+	lcuM_setfuncs(L, terminal, 0);
+	lua_pop(L, 1);
+
 	luaL_setfuncs(L, modf, 0);
 	lcuM_setfuncs(L, upvf, LCU_MODUPVS);
+
+	// TODO: this currently causes std. files to be uninheritable and cause
+	//       programs by `os.execute` to fail with SIGABRT.
+	// {
+	// 	static const char *const field[] = { "stdin", "stdout", "stderr" };
+	// 	int fd;
+	// 	for (fd = 0; fd < 3; fd++) {
+	// 		lcu_Scheduler *sched = (lcu_Scheduler *)lua_touserdata(L, -2);
+	// 		uv_loop_t *loop = lcu_toloop(sched);
+	// 		lcu_TermSocket *term = lcuT_newobject(L, lcu_TermSocket, LCU_TERMSOCKETCLS);
+	// 		int err = uv_tty_init(loop, lcu_toobjhdl(term), fd, 0);
+	// 		if (err) {
+	// 			lua_pop(L, 1);
+	// 			lcuL_warnerr(L, field[fd], err);
+	// 		} else {
+	// 			term->flags = 0;
+	// 			lua_setfield(L, -2, field[fd]);
+	// 		}
+	// 	}
+	// }
 }
