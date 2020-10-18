@@ -7,16 +7,14 @@ local pipenames = {
 	denied = "/dev/null",
 }
 
-newgroup("pipe") ---------------------------------------------------------------
+local function testgetdomain(create, domain, ...)
+	case "getdomain"
 
-local function create(kind) return system.socket(kind, "local") end
+	local sock = assert(create(...))
+	assert(sock:getdomain() == domain)
 
-newtest "creation"
-
-testobject(create, "passive")
-testobject(create, "stream")
-
-newtest "address"
+	done()
+end
 
 local function testgetaddr(create)
 	case "getaddress"
@@ -43,17 +41,9 @@ local function testgetaddr(create)
 	done()
 end
 
-testgetaddr(create)
-teststream(create, pipenames)
+newgroup("pipe") ---------------------------------------------------------------
 
-gc()
-for name, path in pairs(pipenames) do
-	os.remove(path)
-end
-
-newgroup("ipc") ----------------------------------------------------------------
-
-local function create(kind) return system.socket(kind, "ipc") end
+local function create(kind) return system.socket(kind, "local") end
 
 newtest "creation"
 
@@ -62,6 +52,29 @@ testobject(create, "stream")
 
 newtest "address"
 
+testgetdomain(create, "local", "passive")
+testgetdomain(create, "local", "stream")
+testgetaddr(create)
+teststream(create, pipenames)
+
+gc()
+for name, path in pairs(pipenames) do
+	os.remove(path)
+end
+
+newgroup("share") ----------------------------------------------------------------
+
+local function create(kind) return system.socket(kind, "share") end
+
+newtest "creation"
+
+testobject(create, "passive")
+testobject(create, "stream")
+
+newtest "address"
+
+testgetdomain(create, "share", "passive")
+testgetdomain(create, "share", "stream")
 testgetaddr(create)
 teststream(create, pipenames)
 
@@ -73,7 +86,7 @@ do case "tranfer socket"
 
 	local done1
 	spawn(function ()
-		local parent<close> = assert(system.socket("passive", "ipc"))
+		local parent<close> = assert(system.socket("passive", "share"))
 		assert(parent:bind(parentaddr))
 		assert(parent:listen(1))
 
@@ -122,7 +135,7 @@ do case "tranfer socket"
 			local system = require "coutil.system"
 			local done3
 			spawn(function ()
-				local parent<close> = assert(system.socket("stream", "ipc"))
+				local parent<close> = assert(system.socket("stream", "share"))
 				assert(parent:connect("]]..parentaddr..[["))
 
 				local buffer = memory.create(#("parent"))

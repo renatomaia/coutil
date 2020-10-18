@@ -73,12 +73,12 @@ do case "error messages"
 		asserterr("bad argument", pcall(system.socket, value, "ipv4"))
 		asserterr("bad argument", pcall(system.socket, value, "ipv6"))
 		asserterr("bad argument", pcall(system.socket, value, "local"))
-		asserterr("bad argument", pcall(system.socket, value, "ipc"))
+		asserterr("bad argument", pcall(system.socket, value, "share"))
 		asserterr("bad argument", pcall(system.socket, "datagram", value))
 		asserterr("bad argument", pcall(system.socket, "stream", value))
 		asserterr("bad argument", pcall(system.socket, "passive", value))
 		asserterr("socket type not supported", system.socket("datagram", "local"))
-		asserterr("socket type not supported", system.socket("datagram", "ipc"))
+		asserterr("socket type not supported", system.socket("datagram", "share"))
 	end
 
 	done()
@@ -815,7 +815,7 @@ do case "used after library collection"
 		table.insert(cases, { socket = system.socket("datagram", addr.type), op = "send", "xxx", nil, nil, addr })
 		table.insert(cases, { socket = system.socket("stream", addr.type), op = "connect", addr })
 		table.insert(cases, { socket = system.socket("stream", "local"), op = "connect", path })
-		table.insert(cases, { socket = system.socket("stream", "ipc"), op = "connect", path })
+		table.insert(cases, { socket = system.socket("stream", "share"), op = "connect", path })
 
 		garbage.system = system
 		system = nil
