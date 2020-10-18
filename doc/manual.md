@@ -1001,7 +1001,9 @@ following the same sematics of the arguments of [memory.get](https://github.com/
 
 For unbinded datagram sockets `address` must be destination address,
 but it must be omitted for datagram sockets binded to a peer address.
-For stream sockets `address` is ignored.
+For stream sockets `address` is ignored,
+except for `"ipc"` stream sockets,
+where `address` might be the stream socket to be transferred.
 This operation is not available for passive sockets.
 
 Returns `true` in case of success.
@@ -1025,6 +1027,8 @@ In case of success,
 this function returns the number of bytes copied to `buffer`.
 For datagram sockets,
 it also returns a boolean indicating whether the copied data was truncated.
+For `"ipc"` stream sockets,
+it might return a received stream socket after the number of bytes.
 
 ### `socket:joingroup (multicast [, interface])`
 
