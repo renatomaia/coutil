@@ -648,9 +648,9 @@ do newtest "findaddr" ----------------------------------------------------------
 		await = function (self, cfgid)
 			return system.findaddr(self.names[cfgid])
 		end,
-		check = function (self, cfgid, next, domain)
-			assert(type(next) == "userdata")
-			assert(string.match(domain, "^ipv[46]$"))
+		check = function (self, cfgid, addrlist)
+			assert(type(addrlist) == "userdata")
+			assert(addrlist:close())
 		end,
 	})
 end

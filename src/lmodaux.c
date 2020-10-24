@@ -255,12 +255,6 @@ LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
 	}
 }
 
-LCUI_FUNC void lcuM_newclass (lua_State *L, const char *name) {
-	luaL_newmetatable(L, name);
-	lua_pushvalue(L, -1);
-	lua_setfield(L, -2, "__index");
-}
-
 
 LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
                                               const char *func) {

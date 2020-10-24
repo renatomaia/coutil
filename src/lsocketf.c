@@ -329,60 +329,102 @@ static int addr_newindex (lua_State *L) {
 #define chkaddrdom(L,I,A,D) luaL_argcheck(L, (A)->sa_family == D, I, \
                                              "wrong domain")
 
-typedef struct lcu_AddressList {
+typedef struct AddressList {
 	struct addrinfo *start;
 	struct addrinfo *current;
-} lcu_AddressList;
+} AddressList;
 
 
-static struct addrinfo *findvalidaddr (lcu_AddressList *l) {
-	for (; l->current; l->current = l->current->ai_next) {
-		switch (l->current->ai_socktype) {
+static AddressList *openedlist (lua_State *L, int arg) {
+	AddressList *list = (AddressList *) luaL_checkudata(L, 1, LCU_NETADDRLISTCLS);
+	luaL_argcheck(L, list->start, arg, "closed "LCU_NETADDRLISTCLS);
+	return list;
+}
+
+static struct addrinfo *findvalidaddr (struct addrinfo *addr) {
+	for (addr = addr->ai_next; addr; addr = addr->ai_next) {
+		switch (addr->ai_socktype) {
 			case SOCK_DGRAM:
-			case SOCK_STREAM: return l->current;
+			case SOCK_STREAM: return addr;
 		}
 	}
 	return NULL;
 }
 
-/* [address, socktype, nextdomain =] found:next([address]) */
-static int found_next (lua_State *L) {
-	lcu_AddressList *list = (lcu_AddressList *)luaL_checkudata(L, 1,
-	                                                           LCU_NETADDRLISTCLS);
-	struct addrinfo *found = list->current;
-	if (found) {
-		struct sockaddr *addr = tonetaddr(L, 2);
-		if (addr) {
-			chkaddrdom(L, 2, addr, found->ai_family);
-			lua_settop(L, 2);
-		} else {
-			lua_settop(L, 1);
-			addr = newaddress(L, found->ai_family);
-		}
-		memcpy(addr, found->ai_addr, found->ai_addrlen);
-		lua_pushstring(L, (found->ai_socktype == SOCK_DGRAM ? "datagram" :
-		                  (found->ai_flags&AI_PASSIVE ? "passive" : "stream" )));
-		list->current = list->current->ai_next;
-		found = findvalidaddr(list);
-		if (found) pushaddrtype(L, found->ai_family);
-		else lua_pushnil(L);
-		return 3;
+static void closeaddrlist (AddressList *list) {
+	struct addrinfo* results = list->start;
+	if (results) {
+		uv_freeaddrinfo(results);
+		list->start = NULL;
+		list->current = NULL;
 	}
+}
+
+static int found_gc (lua_State *L) {
+	AddressList *list = (AddressList *)luaL_checkudata(L, 1, LCU_NETADDRLISTCLS);
+	closeaddrlist(list);
 	return 0;
 }
 
+/* true = found:close() */
 static int found_close (lua_State *L) {
-	lcu_AddressList *list = (lcu_AddressList *)luaL_testudata(L, 1,
-	                                                          LCU_NETADDRLISTCLS);
-	if (list) {
-		struct addrinfo* results = list->start;
-		if (results) {
-			freeaddrinfo(results);
-			list->start = NULL;
-			list->current = NULL;
-		}
+	AddressList *list = openedlist(L, 1);
+	closeaddrlist(list);
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+/* changed = found:next() */
+static int found_next (lua_State *L) {
+	AddressList *list = openedlist(L, 1);
+	struct addrinfo *found = findvalidaddr(list->current);
+	if (found) {
+		list->current = found;
+		lua_pushboolean(L, 1);
 	}
+	else lua_pushboolean(L, 0);
+	return 1;
+}
+
+/* found:reset() */
+static int found_reset (lua_State *L) {
+	AddressList *list = openedlist(L, 1);
+	list->current = findvalidaddr(list->start);
+	lcu_assert(list->current);
 	return 0;
+}
+
+/* address = found:getaddress([address]) */
+static int found_getaddress (lua_State *L) {
+	AddressList *list = openedlist(L, 1);
+	struct addrinfo *found = list->current;
+	struct sockaddr *addr = tonetaddr(L, 2);
+	if (addr) {
+		chkaddrdom(L, 2, addr, found->ai_family);
+		lua_settop(L, 2);
+	} else {
+		lua_settop(L, 1);
+		addr = newaddress(L, found->ai_family);
+	}
+	memcpy(addr, found->ai_addr, found->ai_addrlen);
+	return 1;
+}
+
+/* domain = found:getdomain() */
+static int found_getdomain (lua_State *L) {
+	AddressList *list = openedlist(L, 1);
+	struct addrinfo *found = list->current;
+	pushaddrtype(L, found->ai_family);
+	return 1;
+}
+
+/* type = found:getsocktype() */
+static int found_getsocktype (lua_State *L) {
+	AddressList *list = openedlist(L, 1);
+	struct addrinfo *found = list->current;
+	lua_pushstring(L, (found->ai_socktype == SOCK_DGRAM ? "datagram" :
+	                  (found->ai_flags&AI_PASSIVE ? "passive" : "stream" )));
+	return 1;
 }
 
 /* next, domain = system.findaddr (name [, service [, mode]]) */
@@ -394,22 +436,24 @@ static void uv_onresolved (uv_getaddrinfo_t *addrreq,
 	lua_State *thread = lcuU_endreqop(loop, request);
 	if (thread) {
 		int nret;
-		if (!err) {
-			lcu_AddressList *list = (lcu_AddressList *)
-				lua_newuserdatauv(thread, sizeof(lcu_AddressList), 0);
-			list->start = NULL;
-			list->current = NULL;
-			luaL_setmetatable(thread, LCU_NETADDRLISTCLS);
-			list->start = results;
-			list->current = results;
-			findvalidaddr(list);
-			pushaddrtype(thread, results->ai_family);
-			nret = 2;
+		if (err) nret = lcuL_pusherrres(thread, err);
+		else {
+			struct addrinfo* found = findvalidaddr(results);
+			if (found) {
+				AddressList *list = (AddressList *)
+					lua_newuserdatauv(thread, sizeof(AddressList), 0);
+				list->start = results;
+				list->current = found;
+				luaL_setmetatable(thread, LCU_NETADDRLISTCLS);
+				nret = 1;
+			} else {
+				uv_freeaddrinfo(results);
+				nret = lcuL_pusherrres(thread, UV_EAFNOSUPPORT);
+			}
 		}
-		else nret = lcuL_pushresults(thread, 0, err);
 		lcuU_resumereqop(loop, request, nret);
 	}
-	else if (!err) freeaddrinfo(results);
+	else if (!err) uv_freeaddrinfo(results);
 }
 static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_getaddrinfo_t *addrreq = (uv_getaddrinfo_t *)request;
@@ -517,7 +561,7 @@ static void uv_oncannonical (uv_getaddrinfo_t *addrreq,
 		else nret = lcuL_pushresults(thread, 0, err);
 		lcuU_resumereqop(loop, request, nret);
 	}
-	freeaddrinfo(results);
+	uv_freeaddrinfo(results);
 }
 static int k_setupnameaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	int err;
@@ -661,10 +705,11 @@ static int object_gc (lua_State *L) {
 }
 
 
-/* succ [, errmsg] = object:close() */
+/* true = object:close() */
 static int object_close (lua_State *L) {
-	luaL_checkudata(L, 1, toclass(L));
-	lua_pushboolean(L, lcu_closeobj(L, 1));
+	lcu_openedobj(L, 1, toclass(L));
+	lcu_closeobj(L, 1);
+	lua_pushboolean(L, 1);
 	return 1;
 }
 
@@ -1414,7 +1459,7 @@ static int terminal_winsize (lua_State *L) {
  * Module
  */
 
-static const luaL_Reg addr[] = {
+static const luaL_Reg addrmt[] = {
 	{"__tostring", addr_tostring},
 	{"__eq", addr_eq},
 	{"__index", addr_index},
@@ -1422,15 +1467,29 @@ static const luaL_Reg addr[] = {
 	{NULL, NULL}
 };
 
+static const luaL_Reg foundmt[] = {
+	{"__gc", found_gc},
+	{"__close", found_gc},
+	{NULL, NULL}
+};
+
 static const luaL_Reg found[] = {
-	{"__gc", found_close},
-	{"__call", found_next},
+	{"close", found_close},
+	{"next", found_next},
+	{"reset", found_reset},
+	{"getaddress", found_getaddress},
+	{"getdomain", found_getdomain},
+	{"getsocktype", found_getsocktype},
+	{NULL, NULL}
+};
+
+static const luaL_Reg objectmt[] = {
+	{"__gc", object_gc},
+	{"__close", object_gc},
 	{NULL, NULL}
 };
 
 static const luaL_Reg object[] = {
-	{"__gc", object_gc},
-	{"__close", object_gc},
 	{"close", object_close},
 	{NULL, NULL}
 };
@@ -1522,76 +1581,100 @@ static const luaL_Reg upvf[] = {
 
 LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	luaL_newmetatable(L, LCU_NETADDRCLS);
-	luaL_setfuncs(L, addr, 0);
+	luaL_setfuncs(L, addrmt, 0);
 	lua_pop(L, 1);
 
 	luaL_newmetatable(L, LCU_NETADDRLISTCLS);
+	luaL_setfuncs(L, foundmt, 0);
+	lua_newtable(L);  /* create method table */
 	luaL_setfuncs(L, found, 0);
-	lua_pop(L, 1);
+	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
+	lua_pop(L, 1);  /* pop metatable */
 
 	lua_pushstring(L, LCU_UDPSOCKETCLS);
-	lcuM_newclass(L, LCU_UDPSOCKETCLS);
+	lua_newtable(L);  /* create method table */
 	lcuM_setfuncs(L, object, 1);
 	lcuM_setfuncs(L, ip, 1);
-	lua_remove(L, -2);
-	lcuM_setfuncs(L, udp, 0);
-	lua_pop(L, 1);
+	luaL_setfuncs(L, udp, 0);
+	luaL_newmetatable(L, LCU_UDPSOCKETCLS);
+	lua_insert(L, -2);  /* place below method table */
+	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
+	lcuM_setfuncs(L, objectmt, 1);
+	lua_pop(L, 2);  /* pop metatable and name */
 
 	lua_pushstring(L, LCU_TCPACTIVECLS);
-	lcuM_newclass(L, LCU_TCPACTIVECLS);
+	lua_newtable(L);  /* create method table */
 	lcuM_setfuncs(L, object, 1);
 	lcuM_setfuncs(L, ip, 1);
 	lcuM_setfuncs(L, tcp, 1);
 	lcuM_setfuncs(L, active, 1);
-	lua_remove(L, -2);
-	lcuM_setfuncs(L, tcpactive, 0);
-	lua_pop(L, 1);
+	luaL_setfuncs(L, tcpactive, 0);
+	luaL_newmetatable(L, LCU_TCPACTIVECLS);
+	lua_insert(L, -2);  /* place below method table */
+	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
+	lcuM_setfuncs(L, objectmt, 1);
+	lua_pop(L, 2);  /* pop metatable and name */
 
 	lua_pushstring(L, LCU_TCPPASSIVECLS);
-	lcuM_newclass(L, LCU_TCPPASSIVECLS);
+	lua_newtable(L);  /* create method table */
 	lcuM_setfuncs(L, object, 1);
 	lcuM_setfuncs(L, ip, 1);
 	lcuM_setfuncs(L, tcp, 1);
 	lcuM_setfuncs(L, passive, 1);
-	lua_remove(L, -2);
-	lcuM_setfuncs(L, tcppassive, 0);
-	lua_pop(L, 1);
+	luaL_setfuncs(L, tcppassive, 0);
+	luaL_newmetatable(L, LCU_TCPPASSIVECLS);
+	lua_insert(L, -2);  /* place below method table */
+	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
+	lcuM_setfuncs(L, objectmt, 1);
+	lua_pop(L, 2);  /* pop metatable and name */
 
 	lua_pushstring(L, LCU_PIPESHARECLS);
-	lcuM_newclass(L, LCU_PIPESHARECLS);
+	lua_newtable(L);  /* create method table */
 	lcuM_setfuncs(L, object, 1);
 	lcuM_setfuncs(L, pipe, 1);
 	lcuM_setfuncs(L, active, 1);
 	lcuM_setfuncs(L, pipeactive, 1);
-	lua_remove(L, -2);
-	lcuM_setfuncs(L, pipeipc, 0);
-	lua_pop(L, 1);
+	luaL_setfuncs(L, pipeipc, 0);
+	luaL_newmetatable(L, LCU_PIPESHARECLS);
+	lua_insert(L, -2);  /* place below method table */
+	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
+	lcuM_setfuncs(L, objectmt, 1);
+	lua_pop(L, 2);  /* pop metatable and name */
 
 	lua_pushstring(L, LCU_PIPEACTIVECLS);
-	lcuM_newclass(L, LCU_PIPEACTIVECLS);
+	lua_newtable(L);  /* create method table */
 	lcuM_setfuncs(L, object, 1);
 	lcuM_setfuncs(L, pipe, 1);
 	lcuM_setfuncs(L, active, 1);
 	lcuM_setfuncs(L, pipeactive, 1);
-	lua_remove(L, -2);
-	lua_pop(L, 1);
+	luaL_newmetatable(L, LCU_PIPEACTIVECLS);
+	lua_insert(L, -2);  /* place below method table */
+	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
+	lcuM_setfuncs(L, objectmt, 1);
+	lua_pop(L, 2);  /* pop metatable and name */
 
 	lua_pushstring(L, LCU_PIPEPASSIVECLS);
-	lcuM_newclass(L, LCU_PIPEPASSIVECLS);
+	lua_newtable(L);  /* create method table */
 	lcuM_setfuncs(L, object, 1);
 	lcuM_setfuncs(L, pipe, 1);
 	lcuM_setfuncs(L, passive, 1);
-	lua_remove(L, -2);
-	lcuM_setfuncs(L, pipepassive, 0);
-	lua_pop(L, 1);
+	luaL_setfuncs(L, pipepassive, 0);
+	luaL_newmetatable(L, LCU_PIPEPASSIVECLS);
+	lua_insert(L, -2);  /* place below method table */
+	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
+	lcuM_setfuncs(L, objectmt, 1);
+	lua_pop(L, 2);  /* pop metatable and name */
 
 	lua_pushstring(L, LCU_TERMSOCKETCLS);
-	lcuM_newclass(L, LCU_TERMSOCKETCLS);
+	lua_newtable(L);  /* create method table */
 	lcuM_setfuncs(L, object, 1);
 	lcuM_setfuncs(L, active, 1);
-	lua_remove(L, -2);
-	lcuM_setfuncs(L, terminal, 0);
-	lua_pop(L, 1);
+	luaL_setfuncs(L, terminal, 0);
+	luaL_newmetatable(L, LCU_TERMSOCKETCLS);
+	lua_insert(L, -2);  /* place below method table */
+	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
+	lcuM_setfuncs(L, objectmt, 1);
+	lua_pop(L, 2);  /* pop metatable and name */
 
 	luaL_setfuncs(L, modf, 0);
 	lcuM_setfuncs(L, upvf, LCU_MODUPVS);
@@ -1605,7 +1688,7 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	// 		lcu_Scheduler *sched = (lcu_Scheduler *)lua_touserdata(L, -2);
 	// 		uv_loop_t *loop = lcu_toloop(sched);
 	// 		lcu_TermSocket *term = lcuT_newobject(L, lcu_TermSocket, LCU_TERMSOCKETCLS);
-	// 		int err = uv_tty_init(loop, lcu_toobjhdl(term), fd, 0);
+	// 		int err = uv_tty_init(loop, (uv_tty_t *)lcu_toobjhdl(term), fd, 0);
 	// 		if (err) {
 	// 			lua_pop(L, 1);
 	// 			lcuL_warnerr(L, field[fd], err);
