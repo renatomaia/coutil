@@ -49,8 +49,6 @@ LCUI_FUNC int lcuL_movefrom (lua_State *to,
 
 LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup);
 
-LCUI_FUNC void lcuM_newclass (lua_State *L, const char *name);
-
 LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
                                               const char *func);
 

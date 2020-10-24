@@ -10,7 +10,7 @@ local _, index = assert(memory.pack(buffer, format, szlen+1, argc-1, select(3, .
 assert(memory.pack(buffer, szfmt, 1, index-szlen-1))
 
 spawn(function ()
-	local address = assert(system.findaddr(host, port, "s6"))()
+	local address = assert(system.findaddr(host, port, "s6")):getaddress()
 	local conn<close> = assert(system.socket("stream", address.type))
 	assert(conn:connect(address))
 	assert(conn:send(buffer, 1, index-1))
