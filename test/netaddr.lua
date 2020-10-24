@@ -250,22 +250,29 @@ do case "reusing addresses"
 		for hostname, ips in pairs(hosts) do
 			for servname, servport in pairs(servs) do
 				if servname or (hostname and hostname ~= "*") then
-					local missing = allexpected(ips, hostname, servport)
-					local getnext, last = assert(system.findaddr(hostname or nil, servname or nil))
-					repeat
-						local addr = assert(addrtypes[last])
-						local other = last == "ipv4" and addrtypes.ipv6 or addrtypes.ipv4
-						asserterr("wrong domain", pcall(getnext, other))
-						local found, scktype, domain = getnext(addr)
-						assert(rawequal(found, addr))
-						assert(ips[found.literal] == last)
-						assert(found.port == servport)
-						assert(scktypes[scktype] == true)
-						assert(domain == nil or addrtypes[domain] ~= nil)
-						clearexpected(missing, found, scktype)
-						last = domain
-					until last == nil
-					assert(_G.next(missing) == nil)
+					local addrlist = assert(system.findaddr(hostname or nil, servname or nil))
+					for i = 1, 2 do
+						local missing = allexpected(ips, hostname, servport)
+						local addr, domain, scktype
+						repeat
+							domain = addrlist:getdomain()
+							addr = assert(addrtypes[domain])
+							local other = domain == "ipv4" and addrtypes.ipv6 or addrtypes.ipv4
+							asserterr("wrong domain", pcall(addrlist.getaddress, addrlist, other))
+							local found = addrlist:getaddress(addr)
+							assert(rawequal(found, addr))
+							assert(ips[found.literal] == domain)
+							assert(found.port == servport)
+							scktype = addrlist:getsocktype()
+							assert(scktypes[scktype] == true)
+							assert(domain == nil or addrtypes[domain] ~= nil)
+							clearexpected(missing, found, scktype)
+						until not addrlist:next()
+						assert(domain == addrlist:getdomain())
+						assert(addr == addrlist:getaddress())
+						assert(scktype == addrlist:getsocktype())
+						addrlist:reset()
+					end
 				end
 			end
 		end
@@ -280,53 +287,16 @@ do case "create addresses"
 			for servname, servport in pairs(servs) do
 				if servname or (hostname and hostname ~= "*") then
 					local missing = allexpected(ips, hostname, servport)
-					local getnext = assert(system.findaddr(hostname or nil, servname or nil))
+					local addrlist = assert(system.findaddr(hostname or nil, servname or nil))
 					repeat
-						local found, scktype, domain = assert(getnext())
+						local found = addrlist:getaddress()
+						local scktype = addrlist:getsocktype()
+						assert(addrlist:getdomain() == found.type)
 						assert(ips[found.literal] ~= nil)
 						assert(found.port == servport)
 						assert(scktypes[scktype] == true)
 						clearexpected(missing, found, scktype)
-					until domain == nil
-					assert(_G.next(missing) == nil)
-				end
-			end
-		end
-	end)
-	assert(system.run() == false)
-	done()
-end
-
-do case "for iteration"
-	spawn(function ()
-		for hostname, ips in pairs(hosts) do
-			for servname, servport in pairs(servs) do
-				if servname or (hostname and hostname ~= "*") then
-					local missing = allexpected(ips, hostname, servport)
-					for resaddr, scktype, domain in system.findaddr(hostname or nil, servname or nil) do
-						assert(ips[resaddr.literal] ~= nil)
-						assert(resaddr.port == servport)
-						assert(scktypes[scktype] == true)
-						clearexpected(missing, resaddr, scktype)
-					end
-					assert(_G.next(missing) == nil)
-				end
-			end
-		end
-	end)
-	assert(system.run() == false)
-	done()
-end
-
-do case "only first"
-	spawn(function ()
-		for hostname, ips in pairs(hosts) do
-			for servname, servport in pairs(servs) do
-				if servname or (hostname and hostname ~= "*") then
-					local resaddr, scktype, domain = assert(system.findaddr(hostname or nil, servname or nil))()
-					assert(ips[resaddr.literal] ~= nil)
-					assert(resaddr.port == servport)
-					assert(scktypes[scktype] == true)
+					until not addrlist:next()
 				end
 			end
 		end

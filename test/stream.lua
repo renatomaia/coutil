@@ -25,7 +25,7 @@ function testobject(create, ...)
 
 		asserterr("closed object", pcall(garbage.sock.getaddress, garbage.sock))
 
-		assert(garbage.sock:close() == false)
+		asserterr("closed object", pcall(garbage.sock.close, garbage.sock))
 
 		gc()
 		assert(garbage.sock ~= nil)
