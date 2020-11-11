@@ -12,6 +12,7 @@ Summary
 9. [Thread Pools](#thread-pools)
 10. [Preemptive Coroutines](#preemptive-coroutines)
 11. [System Features](#system-features)
+12. [System Information](#system-information)
 
 Index
 =====
@@ -33,6 +34,12 @@ Index
 	- [`event.emitall`](#eventemitall-e-)
 	- [`event.emitone`](#eventemitone-e-)
 	- [`event.pending`](#eventpending-e)
+- [`coutil.info`](#system-information)
+	- [`info.getcpustats`](#infogetcpustats-)
+		- [`cpuinfo:count`](#cpuinfocount-)
+		- [`cpuinfo:stats`](#cpuinfostats-i-what)
+	- [`info.getsystem`](#infogetsystem-what)
+	- [`info.getprocess`](#infogetprocess-what)
 - [`coutil.mutex`](#mutex)
 	- [`mutex.islocked`](#mutexislocked-e)
 	- [`mutex.lock`](#mutexlock-e)
@@ -68,7 +75,6 @@ Index
 		- [`addresses:getsocktype`](#addressesgetsocktype-)
 		- [`addresses:next`](#addressesnext-)
 		- [`addresses:reset`](#addressesreset-)
-	- [`system.getpid`](#systemgetpid-which)
 	- [`system.halt`](#systemhalt-)
 	- [`system.isrunning`](#systemisrunning-)
 	- [`system.nameaddr`](#systemnameaddr-address--mode)
@@ -602,15 +608,6 @@ so the calling coroutine will be resumed as soon as possible.
 
 Returns `true` in case of success.
 
-### `system.getpid ([which])`
-
-Returns the process identifier,
-as indicated by `which`,
-which can be:
-
-- `"self"`: for the current process (the default).
-- `"parent"`: for the current process parent.
-
 ### `system.emitsig (pid, signal)`
 
 Emits signal indicated by string `signal` to process with identifier `pid`.
@@ -1086,3 +1083,66 @@ This operation is only available for passive sockets.
 
 In case of success,
 this function returns a new stream socket for the accepted connection.
+
+System Information
+------------------
+
+Module `coutil.info` provides functions to get information about the system.
+
+### `info.getprocess (what)`
+
+Returns numbers corresponding to resource usage of the current process according to the following characters present in string `what`:
+
+| Char | Unsupported | Description |
+| ---- | ----------- | ----------- |
+| `#`  |             | process identifier of the current process (number). |
+| `^`  |             | process identifier of the parent process (number). |
+| `m`  |             | resident memory size (bytes). |
+| `U`  | Windows     | user CPU time used (seconds). |
+| `S`  | Windows     | system CPU time used (seconds). |
+| `T`  |             | maximum resident set size (bytes). |
+| `M`  | Linux       | integral shared memory size (bytes). |
+| `d`  | Linux       | integral unshared data size (bytes). |
+| `=`  | Linux       | integral unshared stack size (bytes). |
+| `p`  |             | page reclaims (soft page faults). |
+| `P`  | Windows     | page faults (hard page faults). |
+| `w`  | Linux       | swaps. |
+| `i`  | Windows     | block input operations. |
+| `o`  | Windows     | block output operations. |
+| `>`  | Linux       | IPC messages sent. |
+| `<`  | Linux       | IPC messages received. |
+| `s`  | Linux       | signals received. |
+| `x`  |             | voluntary context switches. |
+| `X`  |             | involuntary context switches. |
+
+### `info.getsystem (what)`
+
+Returns numbers corresponding to resource usage of the system according to the following characters present in string `what`:
+
+- `f`: amount of free memory available in the system, as reported by the kernel (bytes).
+- `p`: total amount of physical memory in the system (bytes).
+- `u`: current system uptime (seconds).
+- `1`: system load (last 1 minute).
+- `l`: system load (last 5 minutes).
+- `L`: system load (last 15 minutes).
+
+### `info.getcpustats ()`
+
+Returns a `cpuinfo` object with statistics about the individual CPU of the system.
+
+### `cpuinfo:count ()`
+
+Returns the number of individual CPU information contained in `cpus`.
+These CPU are identified by indexes from 1 to the number of individual CPU.
+
+### `cpuinfo:stats (i, what)`
+
+Returns numbers corresponding to usage statistics stored in `cpuinfo` for the CPU with index `i`, according to the following characters present in string `what`:
+
+- `m`: CPU model name.
+- `c`: current CPU clock speed (MHz).
+- `u`: time the CPU spent executing normal processes in user mode (milliseconds).
+- `n`: time the CPU spent executing prioritized (niced) processes in user mode (milliseconds).
+- `s`: time the CPU spent executing processes in kernel mode (milliseconds).
+- `i`: time the CPU was idle (milliseconds).
+- `d`: time the CPU spent servicing device interrupts. (milliseconds).
