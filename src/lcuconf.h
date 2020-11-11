@@ -80,6 +80,7 @@
 #define LCU_CHANNELCLS	LCU_PREFIX"channel"
 #define LCU_THREADSCLS	LCU_PREFIX"threads"
 #define LCU_TPOOLGCCLS	LCU_PREFIX"lcu_ThreadPool *"
+#define LCU_CPUINFOLISTCLS	LCU_PREFIX"cpustats"
 
 
 #endif

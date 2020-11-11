@@ -23,6 +23,7 @@ function done()
 	print(" OK")
 end
 
+dofile "info.lua"
 dofile "event.lua"
 dofile "queued.lua"
 dofile "promise.lua"
