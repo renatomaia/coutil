@@ -12,6 +12,7 @@ Summary
 9. [Thread Pools](#thread-pools)
 10. [Preemptive Coroutines](#preemptive-coroutines)
 11. [System Features](#system-features)
+12. [System Information](#system-information)
 
 Index
 =====
@@ -33,6 +34,18 @@ Index
 	- [`event.emitall`](#eventemitall-e-)
 	- [`event.emitone`](#eventemitone-e-)
 	- [`event.pending`](#eventpending-e)
+- [`coutil.info`](#system-information)
+	- [`info.getcpustat`](#infogetcpustat-)
+		- [`cpustat:count`](#cpustatcount-)
+		- [`cpustat:idletime`](#cpustatidletime-i)
+		- [`cpustat:irqtime`](#cpustatirqtime-i)
+		- [`cpustat:model`](#cpustatmodel-i)
+		- [`cpustat:nicetime`](#cpustatnicetime-i)
+		- [`cpustat:speed`](#cpustatspeed-i)
+		- [`cpustat:systemtime`](#cpustatsystemtime-i)
+		- [`cpustat:usertime`](#cpustatusertime-i)
+	- [`info.getsystem`](#infogetsystem-what)
+	- [`info.getusage`](#infogetusage-what)
 - [`coutil.mutex`](#mutex)
 	- [`mutex.islocked`](#mutexislocked-e)
 	- [`mutex.lock`](#mutexlock-e)
@@ -1085,3 +1098,81 @@ This operation is only available for passive sockets.
 
 In case of success,
 this function returns a new stream socket for the accepted connection.
+
+System Information
+------------------
+
+Module `coutil.info` provides functions to get information about the system.
+
+### `info.getusage (what)`
+
+Returns information about the current process resource usage according to the following characters present in string `what`:
+
+| Char | Unsupported | Description |
+| ---- | ----------- | ----------- |
+| `c`  |             | amount of memory available to the process (bytes). |
+| `m`  |             | resident memory size (bytes). |
+| `U`  | Windows     | user CPU time used (seconds). |
+| `S`  | Windows     | system CPU time used (seconds). |
+| `T`  |             | maximum resident set size (bytes). |
+| `M`  | Linux       | integral shared memory size (bytes). |
+| `d`  | Linux       | integral unshared data size (bytes). |
+| `=`  | Linux       | integral unshared stack size (bytes). |
+| `p`  |             | page reclaims (soft page faults). |
+| `P`  | Windows     | page faults (hard page faults). |
+| `w`  | Linux       | swaps. |
+| `i`  | Windows     | block input operations. |
+| `o`  | Windows     | block output operations. |
+| `>`  | Linux       | IPC messages sent. |
+| `<`  | Linux       | IPC messages received. |
+| `s`  | Linux       | signals received. |
+| `x`  |             | voluntary context switches. |
+| `X`  |             | involuntary context switches. |
+
+### `info.getsystem (what)`
+
+Returns information about the system according to the following characters present in string `what`:
+
+- `f`: amount of free memory available in the system, as reported by the kernel (bytes).
+- `p`: total amount of physical memory in the system (bytes).
+- `u`: current system uptime (seconds).
+- `1`: system load (last 1 minute).
+- `l`: system load (last 5 minutes).
+- `L`: system load (last 15 minutes).
+
+### `info.getcpustat ()`
+
+Returns a `cpustat` object with statistics about the individual CPU of the system.
+
+### `cpustat:count ()`
+
+Returns the number of individual CPU information contained in `cpus`.
+These CPU are identified by indexes from 1 to the number of individual CPU.
+
+### `cpustat:model (i)`
+
+Returns the model name of the CPU with index `i`.
+
+### `cpustat:speed (i)`
+
+Returns the current the speed of the CPU with index `i` in MHz.
+
+### `cpustat:usertime (i)`
+
+Returns the amount of time, in milliseconds, the CPU with index `i` has spent executing normal processes in user mode.
+
+### `cpustat:nicetime (i)`
+
+Returns the amount of time, in milliseconds, the CPU with index `i` has spent executing prioritized (niced) processes in user mode.
+
+### `cpustat:systemtime (i)`
+
+Returns the amount of time, in milliseconds, the CPU with index `i` has spent executing processes in kernel mode.
+
+### `cpustat:idletime (i)`
+
+Returns the amount of time, in milliseconds, the CPU with index `i` was idle.
+
+### `cpustat:irqtime (i)`
+
+Returns the amount of time, in milliseconds, the CPU with index `i` has spent servicing interrupts.
