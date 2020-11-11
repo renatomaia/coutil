@@ -62,15 +62,6 @@ static int checksignal (lua_State *L, int arg) {
 }
 
 
-/* success [, errmsg] = system.getpid ([which]) */
-static int system_getpid (lua_State *L) {
-	static const char *const options[] = {"self", "parent", NULL};
-	int parent = luaL_checkoption(L, 1, "self", options);
-	lua_pushinteger(L, (lua_Integer)(parent ? uv_os_getppid() : uv_os_getpid()));
-	return 1;
-}
-
-
 /* success [, errmsg] = system.emitsig (process, signal) */
 static int system_emitsig (lua_State *L) {
 	int err = uv_kill(luaL_checkinteger(L, 1), checksignal(L, 2));
@@ -370,7 +361,6 @@ LCUI_FUNC void lcuM_addsignalf (lua_State *L) {
 	static const luaL_Reg luaf[] = {
 		{"packenv", system_packenv},
 		{"unpackenv", system_unpackenv},
-		{"getpid", system_getpid},
 		{"emitsig", system_emitsig},
 		{NULL, NULL}
 	};
