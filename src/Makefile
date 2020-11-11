@@ -40,7 +40,7 @@ MYOBJS=
 
 MOD_O=	lmodaux.o loperaux.o lchaux.o lthpool.o \
       	lscheduf.o ltimef.o lprocesf.o lsocketf.o \
-      	lcoroutm.o lthreadm.o lchannem.o lsystemm.o
+      	lcoroutm.o lthreadm.o lchannem.o lsystemm.o lsysinfm.o
 
 
 

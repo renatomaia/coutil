@@ -1,4 +1,5 @@
 local memory = require "memory"
+local info = require "coutil.info"
 local system = require "coutil.system"
 local channel = require "coutil.channel"
 local preemptco = require "coutil.coroutine"
@@ -549,7 +550,7 @@ do newtest "signal" ------------------------------------------------------------
 			return system.awaitsig(self.signals[cfgid])
 		end,
 		trigger = function (self, cfgid)
-			system.emitsig(system.getpid(), self.signals[cfgid])
+			system.emitsig(info.getprocess("#"), self.signals[cfgid])
 		end,
 		check = function (self, cfgid, signal)
 			assert(signal == self.signals[cfgid])
