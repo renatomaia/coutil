@@ -3,6 +3,7 @@
 
 LCUI_FUNC void lcuM_addscheduf (lua_State *L);
 LCUI_FUNC void lcuM_addtimef (lua_State *L);
+LCUI_FUNC void lcuM_addfilef (lua_State *L);
 LCUI_FUNC void lcuM_addsignalf (lua_State *L);
 LCUI_FUNC void lcuM_addcommunf (lua_State *L);
 LCUI_FUNC void lcuM_addcoroutf (lua_State *L);
@@ -13,6 +14,7 @@ LCUMOD_API int luaopen_coutil_system (lua_State *L) {
 	lcuM_newmodupvs(L);
 	lua_newtable(L);
 	lcuM_addtimef(L);
+	lcuM_addfilef(L);
 	lcuM_addsignalf(L);
 	lcuM_addcommunf(L);
 	lcuM_addcoroutf(L);
