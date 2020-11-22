@@ -428,30 +428,34 @@ static int found_getsocktype (lua_State *L) {
 }
 
 /* next, domain = system.findaddr (name [, service [, mode]]) */
+static int returnfound (lua_State *L) {
+	AddressList *list = (AddressList *)lua_touserdata(L, 3);
+	int err = lua_tointeger(L, 4);
+	struct addrinfo *results = (struct addrinfo *)lua_touserdata(L, 5);
+	lua_settop(L, 3);
+	if (!err) {
+		struct addrinfo* found = findvalidaddr(results);
+		if (found) {
+			list->start = results;
+			list->current = found;
+			luaL_setmetatable(L, LCU_NETADDRLISTCLS);
+			return 1;
+		}
+		uv_freeaddrinfo(results);
+		err = UV_EAFNOSUPPORT;
+	}
+	return lcuL_pusherrres(L, err);
+}
 static void uv_onresolved (uv_getaddrinfo_t *addrreq,
                            int err,
-                           struct addrinfo* results) {
+                           struct addrinfo *results) {
 	uv_loop_t *loop = addrreq->loop;
 	uv_req_t *request = (uv_req_t *)addrreq;
 	lua_State *thread = lcuU_endreqop(loop, request);
 	if (thread) {
-		int nret;
-		if (err) nret = lcuL_pusherrres(thread, err);
-		else {
-			struct addrinfo* found = findvalidaddr(results);
-			if (found) {
-				AddressList *list = (AddressList *)
-					lua_newuserdatauv(thread, sizeof(AddressList), 0);
-				list->start = results;
-				list->current = found;
-				luaL_setmetatable(thread, LCU_NETADDRLISTCLS);
-				nret = 1;
-			} else {
-				uv_freeaddrinfo(results);
-				nret = lcuL_pusherrres(thread, UV_EAFNOSUPPORT);
-			}
-		}
-		lcuU_resumereqop(loop, request, nret);
+		lua_pushinteger(thread, err);
+		lua_pushlightuserdata(thread, results);
+		lcuU_resumereqop(loop, request, 2);
 	}
 	else if (!err) uv_freeaddrinfo(results);
 }
@@ -500,6 +504,8 @@ static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		hints.ai_family = AF_INET6;
 	}
 	hints.ai_protocol = 0;  /* clear mark that 'ai_socktype' was defined above */
+	lua_settop(L, 2);
+	lua_newuserdatauv(L, sizeof(AddressList), 0);  /* raise memory errors */
 	err = uv_getaddrinfo(loop, addrreq, uv_onresolved,
 	                     nodename, servname, &hints);
 	if (err < 0) return lcuL_pusherrres(L, err);
@@ -507,7 +513,7 @@ static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 }
 static int system_findaddr (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
-	return lcuT_resetreqopk(L, sched, k_setupfindaddr, NULL, NULL);
+	return lcuT_resetreqopk(L, sched, k_setupfindaddr, returnfound, NULL);
 }
 
 /* name [, service] = system.nameaddr (address [, mode]) */
@@ -607,36 +613,6 @@ static int k_setupnameaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 static int system_nameaddr (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
 	return lcuT_resetreqopk(L, sched, k_setupnameaddr, NULL, NULL);
-}
-
-
-/*
- * Buffer
- */
-
-static size_t posrelatI (lua_Integer pos, size_t len) {
-	if (pos > 0) return (size_t)pos;
-	else if (pos == 0) return 1;
-	else if (pos < -(lua_Integer)len) return 1;
-	else return len + (size_t)pos + 1;
-}
-
-static size_t getendpos (lua_State *L, int arg, lua_Integer def, size_t len) {
-	lua_Integer pos = luaL_optinteger(L, arg, def);
-	if (pos > (lua_Integer)len) return len;
-	else if (pos >= 0) return (size_t)pos;
-	else if (pos < -(lua_Integer)len) return 0;
-	else return len+(size_t)pos+1;
-}
-
-static void getbufarg (lua_State *L, uv_buf_t *buf) {
-	size_t sz;
-	const char *data = luamem_checkstring(L, 2, &sz);
-	size_t start = posrelatI(luaL_optinteger(L, 3, 1), sz);
-	size_t end = getendpos(L, 4, -1, sz);
-	if (start <= end) buf->len = end-start+1;
-	else buf->len = 0;
-	buf->base = (char *)(data+start-1);
 }
 
 
@@ -853,7 +829,7 @@ static int k_setupsend (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	const struct sockaddr *addr = lcuL_maskflag(udp, FLAG_UDPCONNECTED) ?
 	                              NULL : toobjaddr(L, 5, netdomainof(udp));
 	int err;
-	getbufarg(L, bufs);
+	lcu_getinputbuf(L, 2, bufs);
 	err = uv_udp_send(send, handle, bufs, 1, addr, uv_onsent);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
@@ -886,7 +862,7 @@ static int k_udpbuffer (lua_State *L) {
 	uv_buf_t *buf = (uv_buf_t *)lua_touserdata( L, -1);
 	lcu_assert(buf);
 	lua_pop(L, 1);  /* discard 'buf' */
-	getbufarg(L, buf);
+	lcu_getoutputbuf(L, 2, buf);
 	if (buf->len > 65536) buf->len = 65536;  /* avoid use of recvmmsg by libuv */
 	object->step = k_udprecv;  /* update continuation function */
 	return -1;  /* yield on success */
@@ -978,7 +954,7 @@ static int k_setupwrite (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_write_t *write = (uv_write_t *)request;
 	uv_buf_t bufs[1];
 	int err;
-	getbufarg(L, bufs);
+	lcu_getinputbuf(L, 2, bufs);
 	err = uv_write(write, stream, bufs, 1, uv_onwritten);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
@@ -1023,7 +999,7 @@ static int k_setupwriteobj (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		}
 		luaL_argcheck(L, wrtstrm, 5, "writable object expected");
 	}
-	getbufarg(L, bufs);
+	lcu_getinputbuf(L, 2, bufs);
 	err = uv_write2(write, stream, bufs, 1, wrtstrm, uv_onwritten);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
@@ -1046,7 +1022,7 @@ static int k_getbuffer (lua_State *L) {
 	lua_pop(L, 2);  /* discard 'nextsteṕ' and 'buf' */
 	lcu_assert(nextstep);
 	lcu_assert(buf);
-	getbufarg(L, buf);
+	lcu_getoutputbuf(L, 2, buf);
 	object->step = nextstep;
 	return -1;
 }

@@ -68,6 +68,10 @@ Index
 	- [`system.awaitsig`](#systemawaitsig-signal)
 	- [`system.emitsig`](#systememitsig-pid-signal)
 	- [`system.execute`](#systemexecute-cmd-)
+	- [`system.file`](#systemfile-path--mode--uperm--gperm--operm)
+		- [`file:close`](#fileclose-)
+		- [`file:read`](#filereadbuffer--i--j--offset)
+		- [`file:write`](#filewritedata--i--j--offset)
 	- [`system.findaddr`](#systemfindaddr-name--service--mode)
 		- [`addresses:close`](#addressesclose-)
 		- [`addresses:getaddress`](#addressesgetaddress-address)
@@ -1083,6 +1087,87 @@ This operation is only available for passive sockets.
 
 In case of success,
 this function returns a new stream socket for the accepted connection.
+
+### `system.file (path [, mode [, uperm [, gperm [, operm]]]])`
+
+Opens file from the path indicated by string `path`.
+The string `mode` can contain the following characters that define properties of the file opened.
+
+- `a`: write operations are done at the end of the file (implies `w`).
+- `n`: if such file does not exist,
+instead of returning an error,
+a new file is created in `path` and opened.
+- `N`: ensure a new file is created in `path`,
+otherwise returns an error.
+- `r`: allows reading operations.
+- `s`: write operations transfers all data to hardware (implies `w`).
+- `t`: file contents are erased,
+that is,
+it is truncated to length 0 (implies `w`).
+- `w`: allows writing operations.
+- `x`: file is not inheritable to child processes.
+
+The remaining arguments are strings that indicate the file permissions for the current user (`uperm`),
+users in the current group (`gperm`),
+and other users (`operm`) to be used to create a new file when `n` or `N` are present in `mode`.
+The following characters are allowed in these arguments to define the permissions:
+
+- `r`: read permission.
+- `w`: write permission.
+- `x`: execute permission.
+
+**Note**: these file permissions are not enforced by the call that creates the file.
+They only affect future accesses.
+Files created by this call always allows for all permissions regardless of the permissions defined.
+
+When absent,
+the default value for the arguments are:
+
+- `mode` is `"r"`.
+- `uperm` is `"rw"`.
+- `gperm` is the value of `uperm`.
+- `operm` is the value of `gperm`.
+
+In case of success,
+it returns the file opened.
+
+### `file:close ()`
+
+Closes file `file`.
+Note that files are automatically closed when they are garbage collected,
+but that takes an unpredictable amount of time to happen. 
+
+Returns `true` in case of success.
+
+### `file:write(data [, i [, j [, offset]]])`
+
+[Await function](#await-function) that awaits until it writes to file `file` the substring of `data` that starts at `i` and continues until `j`,
+following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+
+If `offset` is provided,
+the data is written from the `offset` provided from the begin of the file.
+In such case,
+the file offset is not changed by this call.
+In the other case,
+the current file offset is used and updated.
+
+In case of success,
+this function returns the number of bytes written to `file`.
+
+### `file:read(buffer [, i [, j [, offset]]])`
+
+[Await function](#await-function) that awaits until it reads from file `file` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
+following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+
+If `offset` is provided,
+the file is read from the `offset` provided from the begin of the file.
+In such case,
+the file offset is not changed by this call.
+In the other case,
+the current file offset is used and updated.
+
+In case of success,
+this function returns the number of bytes copied to `buffer`.
 
 System Information
 ------------------

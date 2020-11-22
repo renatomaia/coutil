@@ -27,6 +27,10 @@ LCUI_FUNC void lcuL_warnerr (lua_State *L, const char *prefix, int err);
 
 LCUI_FUNC void lcuL_setfinalizer (lua_State *L, lua_CFunction finalizer);
 
+LCUI_FUNC void lcu_getinputbuf (lua_State *L, int arg, uv_buf_t *buf);
+
+LCUI_FUNC void lcu_getoutputbuf (lua_State *L, int arg, uv_buf_t *buf);
+
 #define lcuL_maskflag(O,F) ((O)->flags&(F))
 #define lcuL_setflag(O,F) ((O)->flags |= (F))
 #define lcuL_clearflag(O,F) ((O)->flags &= ~(F))
