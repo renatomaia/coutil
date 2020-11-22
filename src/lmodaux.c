@@ -1,7 +1,12 @@
 #include "lmodaux.h"
 
 #include <lualib.h>
+#include <lmemlib.h>
 
+
+/*
+ * Results and errors
+ */
 
 LCUI_FUNC int lcuL_pusherrres (lua_State *L, int err) {
 	lua_pushboolean(L, 0);
@@ -38,6 +43,50 @@ LCUI_FUNC void lcuL_setfinalizer (lua_State *L, lua_CFunction finalizer) {
 	lua_setmetatable(L, -2);
 }
 
+
+/*
+ * Buffer
+ */
+
+static size_t posrelatI (lua_Integer pos, size_t len) {
+	if (pos > 0) return (size_t)pos;
+	else if (pos == 0) return 1;
+	else if (pos < -(lua_Integer)len) return 1;
+	else return len + (size_t)pos + 1;
+}
+
+static size_t getendpos (lua_State *L, int arg, lua_Integer def, size_t len) {
+	lua_Integer pos = luaL_optinteger(L, arg, def);
+	if (pos > (lua_Integer)len) return len;
+	else if (pos >= 0) return (size_t)pos;
+	else if (pos < -(lua_Integer)len) return 0;
+	else return len+(size_t)pos+1;
+}
+
+static void setupbuf (lua_State *L, int arg, uv_buf_t *buf, char *data, size_t sz) {
+	size_t start = posrelatI(luaL_optinteger(L, arg+1, 1), sz);
+	size_t end = getendpos(L, arg+2, -1, sz);
+	if (start <= end) buf->len = end-start+1;
+	else buf->len = 0;
+	buf->base = data+start-1;
+}
+
+LCUI_FUNC void lcu_getinputbuf (lua_State *L, int arg, uv_buf_t *buf) {
+	size_t sz;
+	const char *data = luamem_checkstring(L, arg, &sz);
+	setupbuf(L, arg, buf, (char *)data, sz);
+}
+
+LCUI_FUNC void lcu_getoutputbuf (lua_State *L, int arg, uv_buf_t *buf) {
+	size_t sz;
+	char *data = luamem_checkmemory(L, arg, &sz);
+	setupbuf(L, arg, buf, data, sz);
+}
+
+
+/*
+ * Lua states and value copying
+ */
 
 static const luaL_Reg stdlibs[] = {
 	{"_G", luaopen_base},
@@ -255,6 +304,10 @@ LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
 	}
 }
 
+
+/*
+ * Debugging
+ */
 
 LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
                                               const char *func) {
