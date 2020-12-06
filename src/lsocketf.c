@@ -1013,13 +1013,13 @@ static int pipe_send (lua_State *L) {
 
 /* bytes [, errmsg] = stream:receive(buffer [, i [, j]]) */
 static int k_recvdata (lua_State *L) {
-	return lua_gettop(L)-4;
+	return lua_gettop(L)-5;
 }
 static int k_getbuffer (lua_State *L) {
 	lcu_Object *object = (lcu_Object *)lua_touserdata(L, 1);
 	lua_CFunction nextstep = (lua_CFunction)lua_touserdata(L, -2);
 	uv_buf_t *buf = (uv_buf_t *)lua_touserdata(L, -1);
-	lua_pop(L, 2);  /* discard 'nextsteṕ' and 'buf' */
+	lua_pop(L, 1);  /* discard 'buf' pointer */
 	lcu_assert(nextstep);
 	lcu_assert(buf);
 	lcu_getoutputbuf(L, 2, buf);
@@ -1032,10 +1032,9 @@ static void uv_onrecvdata (uv_stream_t *stream,
 	uv_handle_t *handle = (uv_handle_t *)stream;
 	lua_State *thread = (lua_State *)handle->data;
 	if (nread == 0) {
-		/* 'libuv' indication of EGAIN or EWOULDBLOCK, ignore it and */
+		/* 'libuv' indication of EAGAIN or EWOULDBLOCK, ignore it and */
 		/* get ready to restart all over again from obtaining the buffer */
 		lcu_Object *object = lcu_tohdlobj(handle);
-		lua_pushlightuserdata(thread, object->step);
 		object->step = k_getbuffer;
 	} else {
 		int nret;
@@ -1103,9 +1102,9 @@ static int k_recvpipedata (lua_State *L) {
 	uv_pipe_t *pipe = (uv_pipe_t *)handle;
 	if (uv_pipe_pending_count(pipe)) {  /* only if read was successful? */
 		int err = pushstreamread(L, pipe);
-		return lcuL_pushresults(L, lua_gettop(L)-4, err);
+		return lcuL_pushresults(L, lua_gettop(L)-5, err);
 	}
-	return lua_gettop(L)-4;
+	return lua_gettop(L)-5;
 }
 static int pipe_receive (lua_State *L) {
 	lcu_Object *object = lcu_openedobj(L, 1, LCU_PIPESHARECLS);
