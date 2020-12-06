@@ -497,7 +497,9 @@ LCUI_FUNC int lcu_closeobj (lua_State *L, int idx) {
 static void stopobjop (lua_State *L, lcu_Object *obj) {
 	uv_handle_t *handle = lcu_toobjhdl(obj);
 	lcu_Scheduler *sched = lcu_tosched(handle->loop);
-	int err = obj->stop(handle);
+	int err = 0;
+	if (obj->stop) obj->stop(handle);
+	lcu_assert(handle->data == NULL);
 	pushsaved(L, handle);  /* restore saved object being stopped */
 	lua_pushnil(L);
 	lua_setiuservalue(L, -2, UPV_THREAD);  /* allow thread to be collected */

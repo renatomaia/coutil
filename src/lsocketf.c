@@ -1044,15 +1044,22 @@ static void uv_onrecvdata (uv_stream_t *stream,
 		if (nread >= 0) {
 			lua_pushinteger(thread, nread);
 			nret = 1;
+		} else {
+			if (nread == UV_EOF) {  /* implies 'handle' is already stopped */
+				lcu_Object *object = lcu_tohdlobj(handle);
+				object->stop = NULL;
+			}
+			nret = lcuL_pusherrres(thread, nread);
 		}
-		else nret = lcuL_pusherrres(thread, nread);
 		lcuU_resumeobjop(handle, nret);
 	}
 }
 static int stoprecvdata (uv_handle_t *handle) {
+	lcu_log(handle, handle->data, "uv_read_stop");
 	return uv_read_stop((uv_stream_t *)handle);
 }
 static int startrecvdata (uv_handle_t *handle) {
+	lcu_log(handle, handle->data, "uv_read_start");
 	return uv_read_start((uv_stream_t *)handle, uv_ongetbuffer, uv_onrecvdata);
 }
 static int active_receive (lua_State *L) {
