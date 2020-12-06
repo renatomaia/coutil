@@ -795,6 +795,50 @@ function teststream(create, addresses)
 		done()
 	end
 
+	do case "end of transmission"
+		local server = assert(create("passive"))
+		assert(server:bind(addresses.bindable))
+		assert(server:listen(backlog))
+
+		local data1 = string.rep("a", 64)
+		local data2 = string.rep("b", 64)
+
+		local done1
+		spawn(function ()
+			local stream = assert(server:accept())
+			assert(server:close())
+			local buffer = memory.create(128)
+			assert(stream:receive(buffer) == 64)
+			assert(memory.tostring(buffer, 1, 64) == data1)
+			asserterr("end of file", stream:receive(buffer))
+			asserterr("end of file", stream:receive(buffer))
+			assert(stream:send(data2))
+			done1 = true
+		end)
+		assert(done1 == nil)
+
+		local done2
+		spawn(function ()
+			local stream = assert(create("stream"))
+			assert(stream:connect(addresses.bindable))
+			assert(stream:send(data1))
+			system.suspend()
+			assert(stream:shutdown())
+			local buffer = memory.create(128)
+			assert(stream:receive(buffer) == 64)
+			assert(memory.tostring(buffer, 1, 64) == data2)
+			done2 = true
+		end)
+		assert(done2 == nil)
+
+		gc()
+		assert(system.run() == false)
+		assert(done1 == true)
+		assert(done2 == true)
+
+		done()
+	end
+
 	do case "successful transmissions"
 		local server = assert(create("passive"))
 		assert(server:bind(addresses.bindable))
