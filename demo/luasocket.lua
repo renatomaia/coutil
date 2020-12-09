@@ -4,6 +4,7 @@ local error = _G.error
 local getmetatable = _G.getmetatable
 local ipairs = _G.ipairs
 local pcall = _G.pcall
+local select = _G.select
 local tonumber = _G.tonumber
 local tostring = _G.tostring
 local type = _G.type
@@ -26,9 +27,6 @@ local strsub = string.sub
 
 local debug = require "debug"
 local setmetatable = debug.setmetatable
-
-local vararg = require "vararg"
-local varange = vararg.range
 
 local memory = require "memory"
 local memalloc = memory.create
@@ -75,6 +73,8 @@ local function wrapsock(class, metatable, domain, result, errmsg)
 		socket = result,
 		address = newaddr(domain),
 		buffer = memalloc(defaultsize),
+		readtimer = {},
+		writetimer = {},
 		class = class,
 	}, metatable)
 end
@@ -90,37 +90,45 @@ local function timerbody(self)
 	end
 end
 
-local function starttimer(self)
-	local timeout = self.timeout
-	if timeout == nil then
-		assert(self.thread == nil)
-	else
-		self.thread = running()
-		if status(self.timer) == "suspended" then
-			assert(resume(self.timer, self))
+local function starttimer(self, options)
+	local activemode = self.active
+	if not activemode then
+		activemode = options.mode or "none"
+		if activemode ~= "none" then
+			self.thread = running()
+			if status(self.timer) == "suspended" then
+				assert(resume(self.timer, self))
+			end
 		end
+		self.active = activemode
+	elseif activemode == "block" then
+		assert(resume(self.timer, false, "reset"))
 	end
 end
 
 local function canceltimer(self, ...)
-	if self.thread == running() then
-		self.thread = nil
+	local activemode = self.active or "none"
+	self.active = false
+	if activemode ~= "none" then
+		self.thread = false
 		local result, errmsg = ...
 		if not result and errmsg == timerbody then
 			return nil, "timeout"
 		end
-		assert(resume(self.timer, nil, "cancel"))
+		assert(resume(self.timer, false, "cancel"))
 	end
 	return ...
 end
 
 local function connectsock(self, host, port, class)
 	local socket = self.socket
-	if socket == nil then return nil, "closed" end
+	if not socket then return nil, "closed" end
 	local addr, errmsg = toaddr(self.address, host, port)
 	if not addr then return nil, errmsg end
-	starttimer(self)
-	local ok, errmsg = canceltimer(self, socket:connect(addr))
+	local timer = self.writetimer
+	if timer.active then return nil, "in use" end
+	starttimer(timer, self)
+	local ok, errmsg = canceltimer(timer, socket:connect(addr))
 	if not ok then return nil, errmsg end
 	self.class = class
 	return true
@@ -128,23 +136,34 @@ end
 
 local tcp = {
 	class = "tcp{master}",
-	sendmaxsz = defaultsize,
 	first = 1,
 	last = 0,
 }
 tcp.__index = tcp
 
 do
+	local modes = {
+		b = "block",
+		t = "total",
+		r = "total",
+	}
+	local timers = { "readtimer", "writetimer" }
 	function tcp:settimeout(value, mode)
-		assert(mode == nil or (#mode == 1 and strfind("btr", mode, 1 , true)),
-			"invalid mode")
-		if value ~= nil then
+		if value then
 			assert(type(value) == "number", "number expected")
-			if value < 0 then value = nil end
+			if value < 0 then value = false end
 		end
-		self.timeout = value
-		if value ~= nil and self.timer == nil then
-			self.timer = newcoro(timerbody)
+		if value then
+			self.mode = assert(modes[strsub(mode or "b", 1, 1)], "invalid mode")
+			for _, field in ipairs(timers) do
+				local optimer = self[field]
+				optimer.timeout = value
+				if not optimer.timer then
+					optimer.timer = newcoro(timerbody)
+				end
+			end
+		else
+			self.mode = false
 		end
 	end
 end
@@ -171,10 +190,12 @@ end
 function tcp:accept()
 	checkclass(self, "tcp{server}")
 	local socket = self.socket
-	if socket == nil then return nil, "closed" end
-	starttimer(self)
+	if not socket then return nil, "closed" end
+	local timer = self.readtimer
+	if timer.active then return nil, "in use" end
+	starttimer(timer, self)
 	return wrapsock("tcp{client}", tcp, self.address.type,
-		canceltimer(self, socket:accept()))
+		canceltimer(timer, socket:accept()))
 end
 
 function tcp:bind(host, port)
@@ -188,10 +209,10 @@ end
 
 function tcp:close()
 	local socket = self.socket
-	if socket == nil then return nil, "closed" end
-	self.timeout = nil
-	self.timer = nil
-	self.socket = nil
+	if not socket then return nil, "closed" end
+	self.timeout = false
+	self.timer = false
+	self.socket = false
 	return socket:close()
 end
 
@@ -206,8 +227,8 @@ end
 
 function tcp:getfd()
 	local socket = self.socket
-	if socket == nil then return -1 end
-	return 0
+	if not socket then return -1 end
+	return math.huge
 end
 
 do
@@ -242,7 +263,7 @@ do
 	function tcp:listen(backlog)
 		checkclass(self, "tcp{master}")
 		local socket = self.socket
-		if socket == nil then return nil, "closed" end
+		if not socket then return nil, "closed" end
 		local oldmt = getmetatable(socket)
 		setmetatable(socket, lstmt)
 		local result, errmsg = socket:listen(backlog or 32)
@@ -267,7 +288,7 @@ do
 		local pfxidx = first-pfxsz
 		local bufsz = #buffer
 		local newbuf
-		local reqsz = required == nil and 1 or max(0, required-datasz)
+		local reqsz = required and max(0, required-datasz) or 1
 		if pfxsz+datasz+reqsz <= bufsz then
 			newbuf = buffer
 		end
@@ -276,7 +297,7 @@ do
 		else
 			local dataidx = first
 			pfxidx, first, last = 1, pfxsz+1, pfxsz+datasz
-			if newbuf == nil then
+			if not newbuf then
 				bufsz = last+max(reqsz, bufsz)
 				newbuf = memalloc()
 				memrealloc(newbuf, bufsz)
@@ -304,21 +325,21 @@ do
 	function tcp:receive(pattern, prefix)
 		checkclass(self, "tcp{client}")
 		local socket = self.socket
-		if socket == nil then return nil, "closed" end
-		assert(not self.receiving, "in use")
+		if not socket then return nil, "closed" end
+		local timer = self.readtimer
+		if timer.active then return nil, "in use" end
 
-		if pattern == nil then pattern = "*l" end
-		if prefix == nil then prefix = "" end
+		if not pattern then pattern = "*l" end
+		if not prefix then prefix = "" end
 		local result, errmsg, partial = 0 -- to signal success
 		local pattype = type(pattern)
-		local required = (pattype == "number") and pattern or nil
+		local required = (pattype == "number") and pattern or false
 		local buffer, pfxidx, first, last = initbuf(self, prefix, required)
-		self.receiving = true
-		starttimer(self)
 		local reqidx
 		if pattype == "number" then
 			reqidx = pfxidx+pattern-1
 			while reqidx > last do
+				starttimer(timer, self)
 				result, errmsg = socket:receive(buffer, last+1, reqidx)
 				if not result then
 					reqidx = last
@@ -329,14 +350,15 @@ do
 			partial = mem2str(buffer, pfxidx, reqidx)
 		else
 			local term = pat2term[pattern]
-			assert(term ~= nil or pattern == "*a", "invalid pattern")
+			assert(term or pattern == "*a", "invalid pattern")
 			while true do
 				reqidx = term and memfind(buffer, term, first, last)
-				if reqidx ~= nil then
+				if reqidx then
 					break
 				else
 					first = last+1
 					if first > #buffer then buffer = incbuf(self, buffer) end
+					starttimer(timer, self)
 					result, errmsg = socket:receive(buffer, first)
 					if not result then
 						reqidx = last
@@ -349,7 +371,7 @@ do
 			if result then
 				if term == "\n" and memget(buffer, reqidx-1) == 13 then
 					endidx = reqidx-2
-				elseif term ~= nil then
+				elseif term then
 					endidx = reqidx-#term
 				end
 			end
@@ -359,8 +381,7 @@ do
 			end
 		end
 		first = reqidx+1
-		result, errmsg = canceltimer(self, result, errmsg)
-		self.receiving = false
+		result, errmsg = canceltimer(timer, result, errmsg)
 		if first > last then
 			self.first, self.last = nil, nil
 		elseif buffer == self.buffer then
@@ -384,26 +405,21 @@ end
 function tcp:send(data, first, last)
 	checkclass(self, "tcp{client}")
 	local socket = self.socket
-	if socket == nil then return nil, "closed" end
-	assert(not self.sending, "in use")
+	if not socket then return nil, "closed" end
+	local timer = self.writetimer
+	if timer.active then return nil, "in use" end
 
-	if first == nil then first = 1 end
-	if last == nil then last = #data end
-	local sendmaxsz = self.sendmaxsz
+	if not first then first = 1 end
+	if not last then last = #data end
 
 	if first > last then
 		return 0, nil, nil
 	end
-	self.sending = true
-	starttimer(self)
-	local result, errmsg = socket:send(data, first, last)
+	starttimer(timer, self)
+	local result, errmsg = canceltimer(timer, socket:send(data, first, last))
 	if not result then
-		result = 1+last-first
-	end
-	result, errmsg = canceltimer(self, result, errmsg)
-	self.sending = false
-	if not result then
-		return nil, errmsg, result
+	if errmsg == "broken pipe" then errmsg = "closed" end
+		return nil, errmsg, 1+last-first
 	end
 	return result, nil, nil
 end
@@ -416,13 +432,13 @@ do
 	local name2opt = {
 		keepalive = "keepalive",
 		["tcp-nodelay"] = "nodelay",
-		reuseaddr = false,
+		reuseaddr = true,
 	}
 
 	function tcp:setoption(name, value)
 		local option = name2opt[name]
-		assert(option ~= nil, "unsupported option")
-		if not option then return 1 end
+		assert(option, "unsupported option")
+		if option == true then return 1 end
 		return self.socket:setoption(option, value)
 	end
 end
@@ -461,21 +477,20 @@ end
 do
 	local function recvdgram(self, size, ...)
 		local socket = self.socket
-		if socket == nil then return nil, "closed" end
-		assert(not self.receiving, "in use")
+		if not socket then return nil, "closed" end
+		local timer = self.readtimer
+		if timer.active then return nil, "in use" end
 
 		local result, errmsg = self.last
 		if result == 0 then
 			local buffer = self.buffer
 
-			self.receiving = true
-			starttimer(self)
 			repeat
+				starttimer(timer, self)
 				result, errmsg = socket:receive(buffer, 1, size, ...)
 				if not result then break end
 			until result == size or result > 0
-			result, errmsg = canceltimer(self, result, errmsg)
-			self.receiving = false
+			result, errmsg = canceltimer(timer, result, errmsg)
 
 			if not result then return nil, errmsg end
 		else
@@ -533,6 +548,7 @@ local socket = {
 	dns = dns,
 	gettime = now,
 	sleep = sleep,
+	skip = select,
 }
 
 function socket.newtry(func)
@@ -580,9 +596,9 @@ do
 	end
 
 	local function collectpending(pending, list, result, event)
-		if list ~= nil then
+		if list then
 			for _, value in ipairs(list) do
-				if sockcls[getmetatable(value)] ~= nil and value.socket ~= nil then
+				if sockcls[getmetatable(value)] and value.socket then
 					local sock = value.socket
 					if event == "w" or sock:dirty() then
 						addresult(result, value)
@@ -602,6 +618,13 @@ do
 		end
 	end
 
+	local function suspend(timeout)
+		if not timeout or timeout < 0 then
+			return yield()
+		end
+		return sleep(timeout)
+	end
+
 	function socket.select(recvt, sendt, timeout)
 		local recvok, sendok, result, errmsg = {}, {}
 		local pending = {}
@@ -613,35 +636,29 @@ do
 				resume(waiter, socket, thread)
 				pending[socket] = waiter
 			end
-			if timeout == nil or timeout < 0 then
-				result, errmsg = yield()
-			else
-				result, errmsg = sleep(timeout)
-			end
+			result, errmsg = suspend(timeout)
 			if result == wait2read then
 				local ready = errmsg
 				pending[ready] = nil
 				addresult(recvok, ready)
+			elseif result then
+				errmsg = "timeout"
+			else
+				errmsg = "coroutine resumed"
 			end
 			for socket, waiter in pairs(pending) do
 				resume(waiter, nil, "cancel")
 			end
 		else
-			result, errmsg = sleep(timeout)
+			result, errmsg = suspend(timeout)
 			if result then
 				errmsg = "timeout"
+			else
+				errmsg = "coroutine resumed"
 			end
 		end
 		return recvok, sendok, errmsg
 	end
-end
-
-function socket.skip(c, ...)
-	varange(1, -c, ...)
-end
-
-function socket.__unload()
-	-- empty
 end
 
 if LUASOCKET_DEBUG then
