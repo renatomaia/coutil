@@ -249,7 +249,8 @@ Module `coutil.queued` provides functions similar to module [`coutil.event`](#ev
 however the functions in this module store events emitted in a queue to be consumed later,
 as if they were emitted immediately after a coroutine awaits for them.
 
-Storing events on a value does not prevent the value nor the event arguments to be collected.
+A coroutine awaiting an event on a value does not prevent the value nor the coroutine and the event arguments to be collected,
+but the coroutine and the event arguments will not be collected as long as the value does not become garbage.
 
 ### `queued.await (e)`
 
