@@ -35,15 +35,9 @@ Index
 	- [`event.emitone`](#eventemitone-e-)
 	- [`event.pending`](#eventpending-e)
 - [`coutil.info`](#system-information)
-	- [`info.getcpustat`](#infogetcpustat-)
-		- [`cpustat:count`](#cpustatcount-)
-		- [`cpustat:idletime`](#cpustatidletime-i)
-		- [`cpustat:irqtime`](#cpustatirqtime-i)
-		- [`cpustat:model`](#cpustatmodel-i)
-		- [`cpustat:nicetime`](#cpustatnicetime-i)
-		- [`cpustat:speed`](#cpustatspeed-i)
-		- [`cpustat:systemtime`](#cpustatsystemtime-i)
-		- [`cpustat:usertime`](#cpustatusertime-i)
+	- [`info.getcpustats`](#infogetcpustats-)
+		- [`cpuinfo:count`](#cpuinfocount-)
+		- [`cpuinfo:stats`](#cpuinfostats-i-what)
 	- [`info.getsystem`](#infogetsystem-what)
 	- [`info.getusage`](#infogetusage-what)
 - [`coutil.mutex`](#mutex)
@@ -1191,7 +1185,7 @@ Module `coutil.info` provides functions to get information about the system.
 
 ### `info.getusage (what)`
 
-Returns information about the current process resource usage according to the following characters present in string `what`:
+Returns numbers corresponding to resource usage of the current process according to the following characters present in string `what`:
 
 | Char | Unsupported | Description |
 | ---- | ----------- | ----------- |
@@ -1216,7 +1210,7 @@ Returns information about the current process resource usage according to the fo
 
 ### `info.getsystem (what)`
 
-Returns information about the system according to the following characters present in string `what`:
+Returns numbers corresponding to resource usage of the system according to the following characters present in string `what`:
 
 - `f`: amount of free memory available in the system, as reported by the kernel (bytes).
 - `p`: total amount of physical memory in the system (bytes).
@@ -1225,39 +1219,23 @@ Returns information about the system according to the following characters prese
 - `l`: system load (last 5 minutes).
 - `L`: system load (last 15 minutes).
 
-### `info.getcpustat ()`
+### `info.getcpustats ()`
 
-Returns a `cpustat` object with statistics about the individual CPU of the system.
+Returns a `cpuinfo` object with statistics about the individual CPU of the system.
 
-### `cpustat:count ()`
+### `cpuinfo:count ()`
 
 Returns the number of individual CPU information contained in `cpus`.
 These CPU are identified by indexes from 1 to the number of individual CPU.
 
-### `cpustat:model (i)`
+### `cpuinfo:stats (i, what)`
 
-Returns the model name of the CPU with index `i`.
+Returns numbers corresponding to usage statistics stored in `cpuinfo` for the CPU with index `i`, according to the following characters present in string `what`:
 
-### `cpustat:speed (i)`
-
-Returns the current the speed of the CPU with index `i` in MHz.
-
-### `cpustat:usertime (i)`
-
-Returns the amount of time, in milliseconds, the CPU with index `i` has spent executing normal processes in user mode.
-
-### `cpustat:nicetime (i)`
-
-Returns the amount of time, in milliseconds, the CPU with index `i` has spent executing prioritized (niced) processes in user mode.
-
-### `cpustat:systemtime (i)`
-
-Returns the amount of time, in milliseconds, the CPU with index `i` has spent executing processes in kernel mode.
-
-### `cpustat:idletime (i)`
-
-Returns the amount of time, in milliseconds, the CPU with index `i` was idle.
-
-### `cpustat:irqtime (i)`
-
-Returns the amount of time, in milliseconds, the CPU with index `i` has spent servicing interrupts.
+- `m`: CPU model name.
+- `c`: current CPU clock speed (MHz).
+- `u`: time the CPU spent executing normal processes in user mode (milliseconds).
+- `n`: time the CPU spent executing prioritized (niced) processes in user mode (milliseconds).
+- `s`: time the CPU spent executing processes in kernel mode (milliseconds).
+- `i`: time the CPU was idle (milliseconds).
+- `d`: time the CPU spent servicing device interrupts. (milliseconds).

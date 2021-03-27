@@ -49,43 +49,47 @@ end
 
 newtest "getcpustat"
 
-do case "errors"
-	local cpuinfo = info.getcpustat()
-	local count = cpuinfo:count()
+local options = "mcunsid"
+local cpuinfo = info.getcpustats()
 
-	for _, opname in ipairs{
-		"model",
-		"speed",
-		"usertime",
-		"nicetime",
-		"systemtime",
-		"idletime",
-		"irqtime",
-	} do
-		for _, i in ipairs{ -1, 0, count+1, math.maxinteger } do
-			asserterr("index out of bound", pcall(cpuinfo[opname], cpuinfo, i))
+do case "errors"
+	for cpuidx = 1, cpuinfo:count() do
+		for i = 1, 255 do
+			local char = string.char(i)
+			if not string.find(options, char, 1, "plain search") then
+				asserterr("unknown mode char (got '"..char.."')",
+				          pcall(cpuinfo.stats, cpuinfo, cpuidx, char))
+			end
 		end
 	end
 
 	done()
 end
 
-do case "attributes"
-	local cpuinfo = info.getcpustat()
-	local count = cpuinfo:count()
+do case "single value"
+	for cpuidx = 1, cpuinfo:count() do
+		for c in string.gmatch(options , ".") do
+			local ltype = (c == "m") and "string" or "number"
+			local value = cpuinfo:stats(cpuidx, c)
+			assert(type(value) == ltype)
 
-	for i = 1, count do
-		for opname, expected in pairs{
-			model = "string",
-			speed = "number",
-			usertime = "number",
-			nicetime = "number",
-			systemtime = "number",
-			idletime = "number",
-			irqtime = "number",
-		} do
-			local value = cpuinfo[opname](cpuinfo, i)
-			assert(expected == type(value))
+			local v1, v2, v3 = cpuinfo:stats(cpuidx, c..c..c)
+			assert(type(v1) == ltype)
+			assert(v2 == v1)
+			assert(v3 == v1)
+		end
+	end
+
+	done()
+end
+
+do case "all values"
+	for cpuidx = 1, cpuinfo:count() do
+		local packed = table.pack(cpuinfo:stats(cpuidx, options))
+		assert(#packed == #options)
+		for i = 1, #options do
+			local ltype = (options:sub(i, i) == "m") and "string" or "number"
+			assert(type(packed[i]) == ltype)
 		end
 	end
 

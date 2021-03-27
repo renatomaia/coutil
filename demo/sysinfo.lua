@@ -4,7 +4,7 @@ print(string.format([[
 System Information
   Physical memory: %12d bytes
   Free memory    : %12d bytes
-  System uptime  : %12d seconds
+  System uptime  : %12.4f seconds
   System load    : %12.4f (last 1 minute)
                    %12.4f (last 5 minutes)
                    %12.4f (last 10 minutes)
@@ -33,15 +33,9 @@ Process Usage
 ]], info.getusage("cmUSTMd=pPwio><sxX")))
 
 print("CPU Statistics")
-print("  |  # |  Speed   |   User   |   Nice   |  System  |   Idle   |   IRQ    | Name")
-local rowfmt = "  | %2d | "..string.rep("%8d | ", 6).."%s"
-local cpustat = info.getcpustat()
-for i = 1, cpustat:count() do
-	print(string.format(rowfmt, i, cpustat:speed(i),
-	                               cpustat:usertime(i),
-	                               cpustat:nicetime(i),
-	                               cpustat:systemtime(i),
-	                               cpustat:idletime(i),
-	                               cpustat:irqtime(i),
-	                               cpustat:model(i)))
+print("  # |    Speed     |    User     |    Nice     |   System    |    Idle     |     IRQ     | Name")
+local rowfmt = " %2d | %8d MHz | "..string.rep("%8d ms | ", 5).."%s"
+local cpuinfo = info.getcpustats()
+for i = 1, cpuinfo:count() do
+	print(string.format(rowfmt, i, cpuinfo:stats(i, "cunsidm")))
 end

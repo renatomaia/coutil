@@ -8,77 +8,42 @@ typedef struct CpuInfoList {
 
 #define checkcpuinfo(L)	((CpuInfoList *)luaL_checkudata(L, 1, LCU_CPUINFOLISTCLS))
 
-static uv_cpu_info_t *getcpuinfo (lua_State *L) {
-	CpuInfoList *info = checkcpuinfo(L);
-	int i = (int)luaL_checkinteger(L, 2);
-	luaL_argcheck(L, 0 < i && i <= info->count, 2, "index out of bounds");
-	return info->cpu+i-1;
-}
-
 static int cpuinfo_gc (lua_State *L) {
-	CpuInfoList *info = checkcpuinfo(L);
-	uv_free_cpu_info(info->cpu, info->count);
+	CpuInfoList *list = checkcpuinfo(L);
+	uv_free_cpu_info(list->cpu, list->count);
 	return 0;
 }
 
 /* cpucount = cpuinfo:count() */
 static int cpuinfo_count (lua_State *L) {
-	CpuInfoList *info = checkcpuinfo(L);
-	lua_pushinteger(L, info->count);
+	CpuInfoList *list = checkcpuinfo(L);
+	lua_pushinteger(L, list->count);
 	return 1;
 }
 
-/* modelname = cpuinfo:model(i) */
-static int cpuinfo_model (lua_State *L) {
-	uv_cpu_info_t *info = getcpuinfo(L);
-	lua_pushstring(L, info->model);
-	return 1;
+/* value = cpuinfo:stats(i, what) */
+static int cpuinfo_stats (lua_State *L) {
+	CpuInfoList *list = checkcpuinfo(L);
+	int i = (int)luaL_checkinteger(L, 2);
+	const char *mode = luaL_checkstring(L, 3);
+	uv_cpu_info_t *info = list->cpu+i-1;
+	luaL_argcheck(L, 0 < i && i <= list->count, 2, "index out of bounds");
+	lua_settop(L, 3);
+	for (; *mode; mode++) switch (*mode) {
+		case 'm': lua_pushstring(L, info->model); break;
+		case 'c': lua_pushinteger(L, info->speed); break;
+		case 'u': lua_pushinteger(L, info->cpu_times.user); break;
+		case 'n': lua_pushinteger(L, info->cpu_times.nice); break;
+		case 's': lua_pushinteger(L, info->cpu_times.sys); break;
+		case 'i': lua_pushinteger(L, info->cpu_times.idle); break;
+		case 'd': lua_pushinteger(L, info->cpu_times.irq); break;
+		default: return luaL_error(L, "unknown mode char (got '%c')", *mode);
+	}
+	return lua_gettop(L)-3;
 }
 
-/* speed = cpuinfo:speed(i) */
-static int cpuinfo_speed (lua_State *L) {
-	uv_cpu_info_t *info = getcpuinfo(L);
-	lua_pushinteger(L, info->speed);
-	return 1;
-}
-
-/* msecs = cpuinfo:usertime(i) */
-static int cpuinfo_usertime (lua_State *L) {
-	uv_cpu_info_t *info = getcpuinfo(L);
-	lua_pushinteger(L, info->cpu_times.user);
-	return 1;
-}
-
-/* msecs = cpuinfo:nicetime(i) */
-static int cpuinfo_nicetime (lua_State *L) {
-	uv_cpu_info_t *info = getcpuinfo(L);
-	lua_pushinteger(L, info->cpu_times.nice);
-	return 1;
-}
-
-/* msecs = cpuinfo:systemtime(i) */
-static int cpuinfo_systemtime (lua_State *L) {
-	uv_cpu_info_t *info = getcpuinfo(L);
-	lua_pushinteger(L, info->cpu_times.sys);
-	return 1;
-}
-
-/* msecs = cpuinfo:idletime(i) */
-static int cpuinfo_idletime (lua_State *L) {
-	uv_cpu_info_t *info = getcpuinfo(L);
-	lua_pushinteger(L, info->cpu_times.idle);
-	return 1;
-}
-
-/* msecs = cpuinfo:irqtime(i) */
-static int cpuinfo_irqtime (lua_State *L) {
-	uv_cpu_info_t *info = getcpuinfo(L);
-	lua_pushinteger(L, info->cpu_times.irq);
-	return 1;
-}
-
-/* cpuinfo = info.getcpustat() */
-static int info_getcpustat (lua_State *L) {
+/* cpuinfo = info.getcpustats() */
+static int info_getcpustats (lua_State *L) {
 	CpuInfoList *list = (CpuInfoList *)lua_newuserdatauv(L, sizeof(CpuInfoList), 0);
 	int err = uv_cpu_info(&list->cpu, &list->count);
 	if (err) lcu_error(L, err);
@@ -166,17 +131,11 @@ LCUMOD_API int luaopen_coutil_info (lua_State *L) {
 	};
 	static const luaL_Reg cpuinfof[] = {
 		{"count", cpuinfo_count},
-		{"model", cpuinfo_model},
-		{"speed", cpuinfo_speed},
-		{"usertime", cpuinfo_usertime},
-		{"nicetime", cpuinfo_nicetime},
-		{"systemtime", cpuinfo_systemtime},
-		{"idletime", cpuinfo_idletime},
-		{"irqtime", cpuinfo_irqtime},
+		{"stats", cpuinfo_stats},
 		{NULL, NULL}
 	};
 	static const luaL_Reg modulef[] = {
-		{"getcpustat", info_getcpustat},
+		{"getcpustats", info_getcpustats},
 		{"getusage", info_getusage},
 		{"getsystem", info_getsystem},
 		{NULL, NULL}
