@@ -418,7 +418,7 @@ function tcp:send(data, first, last)
 	starttimer(timer, self)
 	local result, errmsg = canceltimer(timer, socket:send(data, first, last))
 	if not result then
-	if errmsg == "broken pipe" then errmsg = "closed" end
+		if errmsg == "broken pipe" then errmsg = "closed" end
 		return nil, errmsg, 1+last-first
 	end
 	return result, nil, nil
