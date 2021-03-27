@@ -82,7 +82,7 @@ end
 local function timerbody(self)
 	while true do
 		while self.thread do
-			if system.suspend(self.timeout) then
+			if sleep(self.timeout) then
 				assert(resume(self.thread, nil, timerbody))
 			end
 		end
