@@ -1,7 +1,7 @@
 local info = require "coutil.info"
 
 local options = {
-	getusage = "cmUSTMd=pPwio><sxX",
+	getprocess = "#^cmUSTMd=pPwio><sxX",
 	getsystem = "fpu1lL",
 }
 

@@ -55,14 +55,16 @@ static int info_getcpustats (lua_State *L) {
 #define unmarked(V,F)	(!((V)&(F)) && (V |= (F)))
 #define time2secs(T)	((T).tv_sec+((lua_Number)((T).tv_usec)*1e-3))
 
-/* ... = info.getusage(what) */
+/* ... = info.getprocess(what) */
 #define USAGEINFO	0x01
-static int info_getusage (lua_State *L) {
+static int info_getprocess (lua_State *L) {
 	int retrieved = 0;
 	uv_rusage_t usage;
 	const char *mode = luaL_checkstring(L, 1);
 	lua_settop(L, 1);
 	for (; *mode; mode++) switch (*mode) {
+		case '#': lua_pushinteger(L, (lua_Integer)uv_os_getpid()); break;
+		case '^': lua_pushinteger(L, (lua_Integer)uv_os_getppid()); break;
 		case 'c': lua_pushinteger(L, (lua_Integer)uv_get_constrained_memory()); break;
 		case 'm': {
 			size_t rssbytes;
@@ -136,7 +138,7 @@ LCUMOD_API int luaopen_coutil_info (lua_State *L) {
 	};
 	static const luaL_Reg modulef[] = {
 		{"getcpustats", info_getcpustats},
-		{"getusage", info_getusage},
+		{"getprocess", info_getprocess},
 		{"getsystem", info_getsystem},
 		{NULL, NULL}
 	};

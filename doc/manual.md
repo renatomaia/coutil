@@ -39,7 +39,7 @@ Index
 		- [`cpuinfo:count`](#cpuinfocount-)
 		- [`cpuinfo:stats`](#cpuinfostats-i-what)
 	- [`info.getsystem`](#infogetsystem-what)
-	- [`info.getusage`](#infogetusage-what)
+	- [`info.getprocess`](#infogetprocess-what)
 - [`coutil.mutex`](#mutex)
 	- [`mutex.islocked`](#mutexislocked-e)
 	- [`mutex.lock`](#mutexlock-e)
@@ -79,7 +79,6 @@ Index
 		- [`addresses:getsocktype`](#addressesgetsocktype-)
 		- [`addresses:next`](#addressesnext-)
 		- [`addresses:reset`](#addressesreset-)
-	- [`system.getpid`](#systemgetpid-which)
 	- [`system.halt`](#systemhalt-)
 	- [`system.isrunning`](#systemisrunning-)
 	- [`system.nameaddr`](#systemnameaddr-address--mode)
@@ -612,15 +611,6 @@ it is assumed as zero,
 so the calling coroutine will be resumed as soon as possible.
 
 Returns `true` in case of success.
-
-### `system.getpid ([which])`
-
-Returns the process identifier,
-as indicated by `which`,
-which can be:
-
-- `"self"`: for the current process (the default).
-- `"parent"`: for the current process parent.
 
 ### `system.emitsig (pid, signal)`
 
@@ -1184,13 +1174,14 @@ System Information
 
 Module `coutil.info` provides functions to get information about the system.
 
-### `info.getusage (what)`
+### `info.getprocess (what)`
 
 Returns numbers corresponding to resource usage of the current process according to the following characters present in string `what`:
 
 | Char | Unsupported | Description |
 | ---- | ----------- | ----------- |
-| `c`  |             | amount of memory available to the process (bytes). |
+| `#`  |             | process identifier of the current process (number). |
+| `^`  |             | process identifier of the parent process (number). |
 | `m`  |             | resident memory size (bytes). |
 | `U`  | Windows     | user CPU time used (seconds). |
 | `S`  | Windows     | system CPU time used (seconds). |
