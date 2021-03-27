@@ -84,20 +84,22 @@ Source Files
 
 | Source Files | Contents Type | Description |
 | ------------ | ------------- | ----------- |
-| `lchannem.c` | Lua module | `coutil.channel` and `system.awaitch` |
+| `lchannem.c` | Lua module | [`coutil.channel`](#channels) and [`system.awaitch`](manual.md#systemawaitch-ch-endpoint-) |
 | `lchaux.{c,h}` | internal | inter-thread channel basic support |
 | `lchdefs.h` | internal | inter-thread channel structures |
-| `lcoroutm.c` | Lua module | `coutil.coroutine` and `system.resume` |
+| `lcoroutm.c` | Lua module | [`coutil.coroutine`](manual.md#preemptive-coroutines) and [`system.resume`](manual.md#systemresume-preemptco-) |
 | `lcuconf.h` | configuration | general implementation configurations |
+| `lfilef.c` | Lua functions | file system functions of [`coutil.system`](manual.md#system-features) |
 | `lmodaux.{c,h}` | internal | Lua general utilities |
 | `loperaux.{c,h}` | internal | [await function](manual.md#await) support for [UV operations](#operations) |
-| `lprocesf.c` | Lua functions | process and signal functions of `coutil.system` |
-| `lscheduf.c` | Lua functions | event loop functions of `coutil.system` |
-| `lsocketf.c` | Lua functions | socket functions of `coutil.system` |
-| `lsystemm.c` | Lua module | `coutil.system` |
+| `lprocesf.c` | Lua functions | process and signal functions of [`coutil.system`](manual.md#system-features) |
+| `lscheduf.c` | Lua functions | event loop functions of [`coutil.system`](manual.md#system-features) |
+| `lsocketf.c` | Lua functions | socket functions of [`coutil.system`](manual.md#system-features) |
+| `lsysinfm.c` | Lua module | [`coutil.info`](manual.md#system-information) |
+| `lsystemm.c` | Lua module | [`coutil.system`](manual.md#system-features) |
 | `lthpool.{c,h}` | internal | thread pool basic support |
-| `lthreadm.c` | Lua module | `coutil.thread` |
-| `ltimef.c` | Lua functions | time functions of `coutil.system` |
+| `lthreadm.c` | Lua module | [`coutil.threads`](manual.md#thread-pools) |
+| `ltimef.c` | Lua functions | time functions of [`coutil.system`](manual.md#system-features) |
 
 Implementation Templates
 ========================
