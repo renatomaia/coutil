@@ -8,11 +8,13 @@ end
 local ipaddr = {
 	ipv4 = {
 		localhost = "127.0.0.1",
+		multicast = "226.1.1.1",
 		dnshost1 = "8.8.8.8",
 		dnshost2 = "8.8.4.4",
 	},
 	ipv6 = {
 		localhost = "::1",
+		multicast = "ff02::abcd:1",
 		dnshost1 = "2001:4860:4860::8888",
 		dnshost2 = "2001:4860:4860::8844",
 	},
@@ -118,14 +120,86 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 	end
 
 	do case "mcastttl"
-		local stream = assert(create())
+		local datagram = assert(create())
 		for _, value in ipairs{ 1, 2, 3, 123, 128, 255 } do
-			assert(stream:setoption("mcastttl", value) == true)
+			assert(datagram:setoption("mcastttl", value) == true)
 		end
 
 		for _, value in ipairs{ -1, 0, 256, 257, math.maxinteger } do
 			asserterr("must be from 1 upto 255",
-				pcall(stream.setoption, stream, "mcastttl", value))
+				pcall(datagram.setoption, datagram, "mcastttl", value))
+		end
+
+		done()
+	end
+
+	do case "mcastiface"
+		local datagram = assert(create())
+		assert(datagram:setoption("mcastiface", ipaddr[domain].localhost) == true)
+		asserterr("invalid argument", datagram:setoption("mcastiface", "localhost"))
+
+		if domain == "ipv4" then
+			asserterr("protocol not available",
+				datagram:setoption("mcastiface", ipaddr.ipv6.localhost))
+		else
+			assert(datagram:setoption("mcastiface", ipaddr.ipv4.localhost) == true)
+		end
+
+		assert(datagram:setoption("mcastiface", nil) == true)
+
+		done()
+	end
+
+	do case "mcast{join,leave}"
+		local datagram = assert(create())
+		local addr = ipaddr[domain]
+
+		asserterr("invalid argument",
+			datagram:setoption("mcastleave", addr.multicast, addr.localhost, addr.dnshost2))
+		asserterr("invalid argument",
+			datagram:setoption("mcastleave", addr.multicast, addr.localhost, addr.dnshost1))
+		asserterr("address not available",
+			datagram:setoption("mcastleave", addr.multicast, addr.localhost))
+		asserterr("address not available",
+			datagram:setoption("mcastleave", addr.multicast))
+
+		assert(datagram:setoption("mcastjoin", addr.multicast, addr.localhost, addr.dnshost1) == true)
+		assert(datagram:setoption("mcastjoin", addr.multicast, addr.localhost, addr.dnshost2) == true)
+		assert(datagram:setoption("mcastleave", addr.multicast, addr.localhost, addr.dnshost2) == true)
+		assert(datagram:setoption("mcastleave", addr.multicast, addr.localhost, addr.dnshost1) == true)
+		assert(datagram:setoption("mcastjoin", addr.multicast, addr.localhost) == true)
+		assert(datagram:setoption("mcastleave", addr.multicast, addr.localhost) == true)
+		assert(datagram:setoption("mcastjoin", addr.multicast) == true)
+		assert(datagram:setoption("mcastleave", addr.multicast) == true)
+
+		asserterr("invalid argument",
+			datagram:setoption("mcastjoin", "localhost"))
+		asserterr("invalid argument",
+			datagram:setoption("mcastjoin", addr.multicast, "localhost"))
+		asserterr("invalid argument",
+			datagram:setoption("mcastjoin", addr.multicast, addr.localhost, "localhost"))
+
+		if domain == "ipv4" then
+			asserterr("protocol not available",
+				datagram:setoption("mcastjoin", ipaddr.ipv6.multicast))
+			asserterr("invalid argument",
+				datagram:setoption("mcastjoin", addr.multicast, ipaddr.ipv6.localhost))
+			asserterr("invalid argument",
+				datagram:setoption("mcastjoin", addr.multicast, addr.localhost, ipaddr.ipv6.dnshost1))
+			asserterr("protocol not available",
+				datagram:setoption("mcastleave", ipaddr.ipv6.multicast))
+			asserterr("invalid argument",
+				datagram:setoption("mcastleave", addr.multicast, ipaddr.ipv6.localhost))
+			asserterr("invalid argument",
+				datagram:setoption("mcastleave", addr.multicast, addr.localhost, ipaddr.ipv6.dnshost1))
+		else
+			local addr = ipaddr.ipv4
+			assert(datagram:setoption("mcastjoin", addr.multicast, addr.localhost, addr.dnshost1) == true)
+			assert(datagram:setoption("mcastleave", addr.multicast, addr.localhost, addr.dnshost1) == true)
+			assert(datagram:setoption("mcastjoin", addr.multicast, addr.localhost) == true)
+			assert(datagram:setoption("mcastleave", addr.multicast, addr.localhost) == true)
+			assert(datagram:setoption("mcastjoin", addr.multicast) == true)
+			assert(datagram:setoption("mcastleave", addr.multicast) == true)
 		end
 
 		done()

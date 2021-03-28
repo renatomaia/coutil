@@ -93,8 +93,6 @@ Index
 		- [`socket:connect`](#socketconnect-address)
 		- [`socket:getaddress`](#socketgetaddress-site--address)
 		- [`socket:getdomain`](#socketgetdomain-)
-		- [`socket:joingroup`](#socketjoingroup-multicast--interface)
-		- [`socket:leavegroup`](#socketleavegroup-multicast--interface)
 		- [`socket:listen`](#socketlisten-backlog)
 		- [`socket:receive`](#socketreceive-buffer--i--j--address)
 		- [`socket:send`](#socketsend-data--i--j--address)
@@ -802,7 +800,7 @@ or `"[::ffff:c000:0280]:80"` (IPv6).
 Moreover,
 if `port` is provided,
 `data` is a host address and `port` is a port number to be used to initialize the address structure.
-The string `mode` controls whether `data` is text (literal) or binary.
+The string `mode` controls whether `data` is textual or binary.
 It may be the string `"b"` (binary data),
 or `"t"` (text data).
 The default is `"t"`.
@@ -821,7 +819,7 @@ The returned object provides the following fields:
 - `type`: (read-only) is either the string `"ipv4"` or `"ipv6"`,
 to indicate the address is a IPv4 or IPv6 address,
 respectively.
-- `literal`: is the text (literal) representation of the host address,
+- `literal`: is the text representation of the host address,
 like `"192.0.2.128"` (IPv4) or `"::ffff:c000:0280"` (IPv6).
 - `binary`: is the binary representation of the host address,
 like `"\192\0\2\128"` (IPv4) or `"\0\0\0\0\0\0\0\0\0\0\xff\xff\xc0\x00\x02\x80"` (IPv6).
@@ -956,7 +954,7 @@ Returns `true` in case of success.
 Returns the address domain of `socket`,
 The possible values are the same of argument `domain` in [`system.socket`](#systemsocket-type-domain).
 
-### `socket:setoption (name, value)`
+### `socket:setoption (name, value, ...)`
 
 Sets `value` as the value of option `name` for socket `socket`.
 This operation is not available for passive TCP sockets.
@@ -969,8 +967,18 @@ or `false` otherwise.
 - `"mcastloop"`: `value` is `true` to enable loopback of outgoing multicast datagrams,
 or `false` otherwise.
 - `"mcastttl"`: `value` is a number from 1 to 255 to define the multicast time to live.
-- `"mcastiface"`: `value` is the address of the interface for multicast,
-or `nil` to define no interface.
+- `"mcastiface"`: `value` is the [literal host address](#systemaddress-type--data--port--mode) of the interface for multicast.
+Otherwise,
+an appropriate interface is chosen by the system.
+- `"mcastjoin"` or `"mcastleave"`: `value` is the [literal host address](#systemaddress-type--data--port--mode) of the multicast group the application wants to **join** or **leave**.
+If an extra third argument is provided,
+it is the [literal host address](#systemaddress-type--data--port--mode) of the local interface with which the system should **join** or **leave** the multicast group.
+Otherwise,
+an appropriate interface is chosen by the system.
+If an extra fourth argument is provided,
+it defines the [literal host address](#systemaddress-type--data--port--mode) of a source the application shall receive data from.
+Otherwise,
+it can receive data from any source.
 
 #### TCP Socket
 
@@ -1066,28 +1074,6 @@ For datagram sockets,
 it also returns a boolean indicating whether the copied data was truncated.
 For `"share"` stream sockets,
 it might return a received stream socket after the number of bytes.
-
-### `socket:joingroup (multicast [, interface])`
-
-Joins network interface with address `interface` in the multicast group of address `multicast`,
-thus datagrams targed to `multicast` address are delivered through address `interface`.
-If `ifaceaddr` is not provided the socket `datagram` binded local address is used.
-
-Both `multicast` and `interface` are string containing either textual (literal) or binary IP addresses
-(see [`system.address`](#systemaddress-type--data--port--mode)).
-
-This operation is only available for UDP sockets.
-
-Returns `true` in case of success.
-
-### `socket:leavegroup (multicast [, interface])`
-
-Removes network interface with address `interface` from the multicast group of address `multicast`
-(see [`socket:joingroup`](#socketjoingroup-multicast--interface)).
-
-This operation is only available for UDP sockets.
-
-Returns `true` in case of success.
 
 ### `socket:shutdown ()`
 
