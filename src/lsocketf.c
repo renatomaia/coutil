@@ -766,35 +766,39 @@ static int udp_bind (lua_State *L) {
 
 /* succ [, errmsg] = udp:setoption(name, value) */
 static int udp_setoption (lua_State *L) {
-	static const char * const options[] = {"broadcast", "mcastloop",
-	                                       "mcastttl", "mcastiface", NULL };
+	static const char * const options[] = { "mcastleave", "mcastjoin",
+	                                        "mcastiface", "mcastttl",
+	                                        "mcastloop", "broadcast", NULL };
 	lcu_UdpSocket *udp = openedudp(L);
 	uv_udp_t *handle = lcu_toobjhdl(udp);
 	int opt = luaL_checkoption(L, 2, NULL, options);
 	int err;
 	switch (opt) {
-		case 0: {  /* broadcast */
-			int enabled = lua_toboolean(L, 3);
-			err = uv_udp_set_broadcast(handle, enabled);
+		case 0:    /* mcastleave */
+		case 1: {  /* mcastjoin */
+			uv_membership action = opt ? UV_JOIN_GROUP : UV_LEAVE_GROUP;
+			const char *mcast = luaL_checkstring(L, 3);
+			const char *iface = luaL_optstring(L, 4, NULL);
+			const char *src = luaL_optstring(L, 5, NULL);
+			if (!src) err = uv_udp_set_membership(handle, mcast, iface, action);
+			else err = uv_udp_set_source_membership(handle, mcast, iface, src, action);
 		}; break;
-		case 1: {  /* mcastloop */
-			int enabled = lua_toboolean(L, 3);
-			err = uv_udp_set_multicast_loop(handle, enabled);
+		case 2: {  /* mcastiface */
+			const char *iface = luaL_optstring(L, 3, NULL);
+			err = uv_udp_set_multicast_interface(handle, iface);
 		}; break;
-		case 2: {  /* mcastttl */
+		case 3: {  /* mcastttl */
 			lua_Integer value = luaL_checkinteger(L, 3);
 			luaL_argcheck(L, 0 < value && value < 256, 3, "must be from 1 upto 255");
 			err = uv_udp_set_multicast_ttl(handle, (int)value);
 		}; break;
-		case 3: {  /* mcastiface */
-			int domain = netdomainof(udp);
-			size_t len;
-			const char *addr = luaL_checklstring(L, 3, &len);
-			char buffer[LCU_ADDRMAXLITERAL];
-			int err = 0;
-			luaL_argcheck(L, len == addrbinsz(domain), 3, "invalid binary address");
-			err = uv_inet_ntop(domain, (void *)addr, buffer, LCU_ADDRMAXLITERAL);
-			if (err >= 0) err = uv_udp_set_multicast_interface(handle, buffer);
+		case 4: {  /* mcastloop */
+			int enabled = lua_toboolean(L, 3);
+			err = uv_udp_set_multicast_loop(handle, enabled);
+		}; break;
+		case 5: {  /* broadcast */
+			int enabled = lua_toboolean(L, 3);
+			err = uv_udp_set_broadcast(handle, enabled);
 		}; break;
 		default: return 0;
 	}
