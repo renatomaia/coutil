@@ -337,7 +337,7 @@ local servs = {
 	http = 80,
 }
 local names = {
-	["www.tecgraf.puc-rio.br"] = "webserver.tecgraf.puc-rio.br",
+	["www.github.com"] = "github.com",
 }
 
 do case "host and service"
