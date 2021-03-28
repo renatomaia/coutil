@@ -730,11 +730,11 @@ function teststream(create, addresses)
 
 		local buffer = memory.create(64)
 
-		local loosepipe
+		local brokenpipe
 		spawn(function ()
-			loosepipe = coroutine.running()
-			system.awaitsig("loosepipe")
-			loosepipe = nil
+			brokenpipe = coroutine.running()
+			system.awaitsig("brokenpipe")
+			brokenpipe = nil
 		end)
 
 		local stage1 = 0
@@ -775,7 +775,7 @@ function teststream(create, addresses)
 			system.suspend()
 			assert(accepted:close() == true)
 			stage2 = 6
-			coroutine.resume(loosepipe)
+			coroutine.resume(brokenpipe)
 		end)
 		assert(stage2 == 1)
 
@@ -1160,11 +1160,11 @@ function teststream(create, addresses)
 
 		local data = string.rep("x", 1<<24)
 
-		local loosepipe
+		local brokenpipe
 		spawn(function ()
-			loosepipe = coroutine.running()
-			system.awaitsig("loosepipe")
-			loosepipe = nil
+			brokenpipe = coroutine.running()
+			system.awaitsig("brokenpipe")
+			brokenpipe = nil
 		end)
 
 		local stage1 = 0
@@ -1184,7 +1184,7 @@ function teststream(create, addresses)
 			assert(res == false)
 			assert(err == "connection reset by peer" or err == "broken pipe")
 			stage1 = 4
-			coroutine.resume(loosepipe)
+			coroutine.resume(brokenpipe)
 		end)
 		assert(stage1 == 1)
 
@@ -1373,11 +1373,11 @@ function teststream(create, addresses)
 
 	do case "ignore errors after cancel"
 
-		local loosepipe
+		local brokenpipe
 		spawn(function ()
-			loosepipe = coroutine.running()
-			system.awaitsig("loosepipe")
-			loosepipe = nil
+			brokenpipe = coroutine.running()
+			system.awaitsig("brokenpipe")
+			brokenpipe = nil
 		end)
 
 		local stage = 0
@@ -1402,7 +1402,7 @@ function teststream(create, addresses)
 			assert(stream:close())
 
 			system.suspend()
-			coroutine.resume(loosepipe)
+			coroutine.resume(brokenpipe)
 		end)
 		assert(stage == 1)
 
