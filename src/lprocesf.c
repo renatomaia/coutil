@@ -7,38 +7,42 @@
 
 
 static const struct { const char *name; int value; } signals[] = {
-	{ "abort", SIGABRT },
+	/* uncatchable signals */
+	{ "TERMINATE", SIGKILL },
+	{ "STOP", SIGSTOP },
+	/* catchable signals */
+	{ "interrupt", SIGINT },
+	{ "terminate", SIGTERM },
+	{ "stop", SIGTSTP },
 	{ "continue", SIGCONT },
 	{ "hangup", SIGHUP },
-	{ "interrupt", SIGINT },
+	{ "stdinoff", SIGTTIN },
+	{ "stdoutoff", SIGTTOU },
+#ifdef SIGWINCH
+	{ "winresize", SIGWINCH },
+#endif
 	{ "quit", SIGQUIT },
-	{ "stop", SIGTSTP },
-	{ "terminate", SIGTERM },
-	{ "loosepipe", SIGPIPE },
-	{ "bgread", SIGTTIN },
-	{ "bgwrite", SIGTTOU },
-	{ "cpulimit", SIGXCPU },
-	{ "filelimit", SIGXFSZ },
+	{ "abort", SIGABRT },
 	{ "child", SIGCHLD },
+	{ "brokenpipe", SIGPIPE },
+	{ "urgentsock", SIGURG },
+	{ "userdef1", SIGUSR1 },
+	{ "userdef2", SIGUSR2 },
+	{ "trap", SIGTRAP },
+	{ "filelimit", SIGXFSZ },
 	{ "clocktime", SIGALRM },
-	{ "debug", SIGTRAP },
-	{ "urgsock", SIGURG },
-	{ "user1", SIGUSR1 },
-	{ "user2", SIGUSR2 },
+	{ "cpulimit", SIGXCPU },
 #ifdef SIGPROF
-	{ "cputimall", SIGPROF },
+	{ "cputotal", SIGPROF },
 #endif
 #ifdef SIGVTALRM
-	{ "cputimprc", SIGVTALRM },
+	{ "cputime", SIGVTALRM },
 #endif
 #ifdef SIGPOLL
 	{ "polling", SIGPOLL },
 #endif
 #ifdef SIGSYS
 	{ "sysargerr", SIGSYS },
-#endif
-#ifdef SIGWINCH
-	{ "winresize", SIGWINCH },
 #endif
 	{ NULL, 0 },
 };
@@ -47,14 +51,14 @@ static void pushsignal (lua_State *L, int signum) {
 	int i;
 	for (i=0; signals[i].name && (signals[i].value != signum); i++);
 	if (signals[i].name) lua_pushstring(L, signals[i].name);
-	else lua_pushinteger(L, signum);
+	else lua_pushliteral(L, "signal");
 	lua_pushinteger(L, signum);
 }
 
-static int checksignal (lua_State *L, int arg) {
+static int checksignal (lua_State *L, int arg, int catch) {
 	const char *name = luaL_checkstring(L, arg);
 	int i;
-	for (i=0; signals[i].name; i++)
+	for (i = catch ? 2 : 0; signals[i].name; i++)
 		if (strcmp(signals[i].name, name) == 0)
 			return signals[i].value;
 	return luaL_argerror(L, arg,
@@ -64,14 +68,17 @@ static int checksignal (lua_State *L, int arg) {
 
 /* success [, errmsg] = system.emitsig (process, signal) */
 static int system_emitsig (lua_State *L) {
-	int err = uv_kill(luaL_checkinteger(L, 1), checksignal(L, 2));
+	lua_Integer pid = luaL_checkinteger(L, 1);
+	lua_Integer signal = lua_isinteger(L, 2) ? lua_tointeger(L, 2)
+	                                         : checksignal(L, 2, 0);
+	int err = uv_kill(pid, signal);
 	return lcuL_pushresults(L, 0, err);
 }
 
 
 /* signal [, errmsg] = system.awaitsig(signal) */
 static int returnsignal (lua_State *L) {
-	if (checksignal(L, 1) != lua_tonumber(L, -1)) {
+	if (checksignal(L, 1, 1) != lua_tonumber(L, -1)) {
 		lua_pushboolean(L, 0);
 		lua_pushliteral(L, "unexpected signal");
 		return 2;
@@ -86,7 +93,7 @@ static void uv_onsignal (uv_signal_t *handle, int signum) {
 }
 static int k_setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_signal_t *signal = (uv_signal_t *)handle;
-	int signum = checksignal(L, 1);
+	int signum = checksignal(L, 1, 1);
 	int err = 0;
 	if (loop) err = lcuT_armthrop(L, uv_signal_init(loop, signal));
 	else if (signal->signum != signum) err = uv_signal_stop(signal);

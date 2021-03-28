@@ -8,7 +8,7 @@ local function sendsignal(signal)
 end
 
 do case "error messages"
-	asserterr("unable to yield", pcall(system.awaitsig, "user1"))
+	asserterr("unable to yield", pcall(system.awaitsig, "userdef1"))
 	asserterr("unable to yield", pcall(system.awaitsig, "kill"))
 	asserterr("invalid signal", pspawn(system.awaitsig, "kill"))
 
@@ -18,8 +18,8 @@ end
 do case "yield values"
 	local stage = 0
 	local a,b,c = spawn(function ()
-		local res, extra = system.awaitsig("user1", "testing", 1, 2, 3)
-		assert(res == "user1")
+		local res, extra = system.awaitsig("userdef1", "testing", 1, 2, 3)
+		assert(res == "userdef1")
 		assert(extra == nil)
 		stage = 1
 	end)
@@ -30,7 +30,7 @@ do case "yield values"
 
 	spawn(function ()
 		system.suspend()
-		sendsignal("user1")
+		sendsignal("userdef1")
 	end)
 
 	gc()
@@ -43,7 +43,7 @@ end
 do case "scheduled yield"
 	local stage = 0
 	spawn(function ()
-		system.awaitsig("user1")
+		system.awaitsig("userdef1")
 		stage = 1
 		coroutine.yield()
 		stage = 2
@@ -52,7 +52,7 @@ do case "scheduled yield"
 
 	spawn(function ()
 		system.suspend()
-		sendsignal("user1")
+		sendsignal("userdef1")
 	end)
 
 	gc()
@@ -65,18 +65,18 @@ end
 do case "reschedule same signal"
 	local stage = 0
 	spawn(function ()
-		system.awaitsig("user1")
+		system.awaitsig("userdef1")
 		stage = 1
-		system.awaitsig("user1")
+		system.awaitsig("userdef1")
 		stage = 2
 	end)
 	assert(stage == 0)
 
 	spawn(function ()
 		system.suspend()
-		sendsignal("user1")
+		sendsignal("userdef1")
 		system.suspend()
-		sendsignal("user1")
+		sendsignal("userdef1")
 	end)
 
 	gc()
@@ -93,18 +93,18 @@ end
 do case "reschedule different signal"
 	local stage = 0
 	spawn(function ()
-		system.awaitsig("user1")
+		system.awaitsig("userdef1")
 		stage = 1
-		system.awaitsig("user2")
+		system.awaitsig("userdef2")
 		stage = 2
 	end)
 	assert(stage == 0)
 
 	spawn(function ()
 		system.suspend()
-		sendsignal("user1")
+		sendsignal("userdef1")
 		system.suspend()
-		sendsignal("user2")
+		sendsignal("userdef2")
 	end)
 
 	gc()
@@ -122,7 +122,7 @@ do case "cancel schedule"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		local a,b,c = system.awaitsig("user1")
+		local a,b,c = system.awaitsig("userdef1")
 		assert(a == true)
 		assert(b == nil)
 		assert(c == 3)
@@ -146,9 +146,9 @@ do case "cancel and reschedule"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		assert(system.awaitsig("user1") == nil)
+		assert(system.awaitsig("userdef1") == nil)
 		stage = 1
-		assert(system.awaitsig("user1") == "user1")
+		assert(system.awaitsig("userdef1") == "userdef1")
 		stage = 2
 	end)
 	assert(stage == 0)
@@ -156,7 +156,7 @@ do case "cancel and reschedule"
 	spawn(function ()
 		system.suspend() -- the first signal handle is active.
 		system.suspend() -- the first signal handle is being closed.
-		sendsignal("user1") -- the second signal handle is active.
+		sendsignal("userdef1") -- the second signal handle is active.
 	end)
 
 	coroutine.resume(garbage.coro)
@@ -173,9 +173,9 @@ do case "resume while closing"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		assert(system.awaitsig("user1") == nil)
+		assert(system.awaitsig("userdef1") == nil)
 		stage = 1
-		local a,b,c = system.awaitsig("user1")
+		local a,b,c = system.awaitsig("userdef1")
 		assert(a == .1)
 		assert(b == 2.2)
 		assert(c == 33.3)
@@ -204,7 +204,7 @@ do case "ignore errors"
 
 	local stage = 0
 	pspawn(function ()
-		assert(system.awaitsig("user1"))
+		assert(system.awaitsig("userdef1"))
 		stage = 1
 		error("oops!")
 	end)
@@ -212,7 +212,7 @@ do case "ignore errors"
 
 	spawn(function ()
 		system.suspend()
-		sendsignal("user1")
+		sendsignal("userdef1")
 	end)
 
 	gc()
@@ -227,7 +227,7 @@ do case "ignore errors after cancel"
 	local stage = 0
 	pspawn(function ()
 		garbage.coro = coroutine.running()
-		system.awaitsig("user1")
+		system.awaitsig("userdef1")
 		stage = 1
 		error("oops!")
 	end)
