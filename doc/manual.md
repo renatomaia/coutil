@@ -423,10 +423,10 @@ Channels with the same name share the same two opposite [_endpoints_](#systemawa
 Returns a table mapping each name of existing channels to `true`.
 
 If table `names` is provided,
-returns `names`,
-but first sets each of its string keys to either `true`,
+it checks only the names stored as string keys in `names`,
+and returns `names` with each of its string keys set to either `true`,
 if there is a channel with that name,
-or `nil`.
+or `nil` otherwise.
 In other words,
 any non existent channel name as a key in `names` is removed from it.
 
@@ -463,7 +463,7 @@ If `size` is smaller than the current number of threads,
 the exceeding threads are destroyed at the rate they are released from the _tasks_ currently executing in `pool`.
 Otherwise, new threads are created on demand until the defined value is reached.
 Unless `create` evaluates to `true`,
-in which case the new threads are created immediatelly.
+in which case new threads are created immediatelly to reach the defined value.
 
 ### `threads.count (pool, options)`
 
@@ -493,7 +493,9 @@ and gerenate a [warning](http://www.lua.org/manual/5.4/manual.html#pdf-warn).
 
 Returns `true` if `chunk` is loaded successfully.
 
-__Note__: A _task_ can yield a channel name followed by an endpoint name and the other arguments of [`system.awaitch`](#systemawaitch-ch-endpoint-) to be suspended awaiting on a channel without the need to load other modules.
+__Note__: A _task_ can [yield](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) a string with a channel name followed by an endpoint name and the other arguments of [`system.awaitch`](#systemawaitch-ch-endpoint-) to be suspended awaiting on a channel without the need to load other modules.
+In such case,
+[coroutine.yield](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) returns just like [`system.awaitch`](#systemawaitch-ch-endpoint-).
 
 ### `threads.dofile (pool, filepath [, mode, ...])`
 
@@ -509,12 +511,15 @@ it has no effect other than prevent further use of `pool`.
 Otherwise, it waits until there are either no more _tasks_ or no more system threads,
 and closes `pool` releasing all of its underlying resources.
 
-Note that when `pool` is garbage collected before this functions is called,
-it will retain minimum resources until the termination of the Lua state they were created.
+Note that when `pool` is garbage collected before this function is called,
+it will retain minimum resources until the termination of the Lua state it was created.
 To avoid accumulative resource consumption by creation of multiple _thread pools_,
 call this function on every _thread pool_.
 
 Moreover, a _thread pool_ that is not closed will prevent the current Lua state to terminate (_i.e._ `lua_close` to return) until it has either no more tasks or no more system threads.
+
+Returns `true` if this call closes `pool`,
+or `false` if `pool` was already closed.
 
 Preemptive Coroutines
 ---------------------
@@ -802,14 +807,23 @@ It may be the string `"b"` (binary data),
 or `"t"` (text data).
 The default is `"t"`.
 
+The following calls create addresses with the same contents:
+
+```lua
+system.address("ipv4")
+system.address("ipv4", "0.0.0.0:0")
+system.address("ipv4", "0.0.0.0", 0)
+system.address("ipv4", "\0\0\0\0", 0, "b")
+```
+
 The returned object provides the following fields:
 
 - `type`: (read-only) is either the string `"ipv4"` or `"ipv6"`,
 to indicate the address is a IPv4 or IPv6 address,
 respectively.
-- `literal`: is the text (literal) representation of the address,
+- `literal`: is the text (literal) representation of the host address,
 like `"192.0.2.128"` (IPv4) or `"::ffff:c000:0280"` (IPv6).
-- `binary`: is the binary representation of the address,
+- `binary`: is the binary representation of the host address,
 like `"\192\0\2\128"` (IPv4) or `"\0\0\0\0\0\0\0\0\0\0\xff\xff\xc0\x00\x02\x80"` (IPv6).
 - `port`: is the port number of the IPv4 and IPv6 address.
 
