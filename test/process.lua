@@ -505,18 +505,25 @@ end
 
 do case "signal termination"
 	for i, signal in ipairs{
+		"TERMINATE",
 		"terminate",
 		"interrupt",
 		"quit",
-		"user1",
-		"user2",
+		"userdef1",
+		"userdef2",
+		32
 	} do
 		local procinfo = { execfile = "sleep", arguments = { "5" } }
 
 		spawn(function ()
 			local res, extra = system.execute(procinfo)
-			assert(res == signal)
-			assert(type(extra) == "number")
+			if (type(signal) == "string") then
+				assert(res == signal)
+				assert(type(extra) == "number")
+			else
+				assert(res == "signal")
+				assert(extra == signal)
+			end
 		end)
 
 		spawn(function ()

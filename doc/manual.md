@@ -614,39 +614,47 @@ Returns `true` in case of success.
 
 ### `system.emitsig (pid, signal)`
 
-Emits signal indicated by string `signal` to process with identifier `pid`.
-The strings that represent signals are described in [`system.awaitsig`](#systemawaitsig-signal).
+Emits signal indicated by `signal` to process with identifier `pid`.
+Aside from the values for `signal` listed in [`system.awaitsig`](#systemawaitsig-signal),
+this function also accepts the following values for `signal`:
+
+| `signal` | POSIX | Action |
+| -------- | ----- | ------ |
+| `"STOP"` | SIGSTOP | stop |
+| `"TERMINATE"` | SIGKILL | terminate |
+
+`signal` can also be the platform-dependent number of the signal to be emitted.
 
 ### `system.awaitsig (signal)`
 
 [Await function](#await-function) that awaits for the process to receive the signal indicated by string `signal`,
 as listed below:
 
-| `signal`      | UNIX Name | Action    | Indication |
-| ------------- | --------- | --------- | ---------- |
-| `"abort"`     | SIGABRT   | core dump | Process shall **abort**. |
-| `"bgread"`    | SIGTTIN   | stop      | **Read** from terminal while in **background**. |
-| `"bgwrite"`   | SIGTTOU   | stop      | **Write** to terminal while in **background**. |
-| `"child"`     | SIGCHLD   | ignore    | **Child** process terminated, stopped, or continued. |
-| `"clocktime"` | SIGALRM   | terminate | Real or **clock time** elapsed. |
-| `"continue"`  | SIGCONT   | continue  | Process shall **continue**, if stopped. |
-| `"cpulimit"`  | SIGXCPU   | core dump | Defined **CPU** time **limit** exceeded. |
-| `"cputimall"` | SIGPROF   | terminate | **CPU time** used by the **process** and by the **system on behalf of the process** elapses. |
-| `"cputimprc"` | SIGVTALRM | terminate | **CPU time** used by the **process** elapsed.  |
-| `"debug"`     | SIGTRAP   | core dump | Exception or **debug** trap occurs. |
-| `"filelimit"` | SIGXFSZ   | core dump | Allowed **file** size **limit** exceeded. |
-| `"hangup"`    | SIGHUP    | terminate | Terminal was closed. |
-| `"interrupt"` | SIGINT    | terminate | Terminal requests the process to terminate. (_e.g._ Ctrl+`C`) |
-| `"loosepipe"` | SIGPIPE   | terminate | Write on a **pipe** with no one to read it. |
-| `"polling"`   | SIGPOLL   | terminate | Event occurred on [watched file descriptor](https://pubs.opengroup.org/onlinepubs/9699919799/functions/ioctl.html). |
-| `"quit"`      | SIGQUIT   | core dump | Terminal requests the process to **quit** with a [core dump](https://en.wikipedia.org/wiki/Core_dump). (_e.g._ Ctrl+`\`) |
-| `"stop"`      | SIGTSTP   | stop      | Terminal requests the process to **stop**. (_e.g._ Ctrl+`Z`) |
-| `"sysargerr"` | SIGSYS    | core dump | System call with a bad argument. |
-| `"terminate"` | SIGTERM   | terminate | Process shall **terminate**. |
-| `"urgsock"`   | SIGURG    | core dump | High-bandwidth data is available at a socket. |
-| `"user1"`     | SIGUSR1   | terminate | User-defined conditions. |
-| `"user2"`     | SIGUSR2   | terminate | User-defined conditions. |
-| `"winresize"` | SIGWINCH  | ignore    | Terminal window size has changed. |
+| `signal` | POSIX | Action | Indication |
+| -------- | ----- | ------ | ---------- |
+| `"abort"` | SIGABRT | core dump | Process shall **abort**. |
+| `"brokenpipe"` | SIGPIPE | terminate | Write on a **pipe** with no one to read it. |
+| `"child"` | SIGCHLD | ignore | **Child** process terminated, stopped, or continued. |
+| `"clocktime"` | SIGALRM | terminate | Real or **clock time** elapsed. |
+| `"continue"` | SIGCONT | continue | Process shall **continue**, if stopped. |
+| `"cpulimit"` | SIGXCPU | core dump | Defined **CPU** time **limit** exceeded. |
+| `"cputime"` | SIGVTALRM | terminate | **CPU** time used by the **process** elapsed. |
+| `"cputotal"` | SIGPROF | terminate | **CPU** time used by the **process** and by the **system on behalf of the process** elapses. |
+| `"filelimit"` | SIGXFSZ | core dump | Allowed **file** size **limit** exceeded. |
+| `"hangup"` | SIGHUP | terminate | Terminal was closed. |
+| `"interrupt"` | SIGINT | terminate | Terminal requests the process to terminate. (_e.g._ Ctrl+`C`) |
+| `"polling"` | SIGPOLL | terminate | Event occurred on [watched file descriptor](https://pubs.opengroup.org/onlinepubs/9699919799/functions/ioctl.html). |
+| `"quit"` | SIGQUIT | core dump | Terminal requests the process to **quit** with a [core dump](https://en.wikipedia.org/wiki/Core_dump). (_e.g._ Ctrl+`\`) |
+| `"stdinoff"` | SIGTTIN | stop | **Read** from terminal while in **background**. |
+| `"stdoutoff"` | SIGTTOU | stop | **Write** to terminal while in **background**. |
+| `"stop"` | SIGTSTP | stop | Terminal requests the process to **stop**. (_e.g._ Ctrl+`Z`) |
+| `"sysargerr"` | SIGSYS | core dump | **System** call with a **bad argument**. |
+| `"terminate"` | SIGTERM | terminate | Process shall **terminate**. |
+| `"trap"` | SIGTRAP | core dump | Exception or debug **trap** occurs. |
+| `"urgentsock"` | SIGURG | core dump | **High-bandwidth data** is available at a **socket**. |
+| `"userdef1"` | SIGUSR1 | terminate | **User-defined** conditions. |
+| `"userdef2"` | SIGUSR2 | terminate | **User-defined** conditions. |
+| `"winresize"` | SIGWINCH | ignore | Terminal **window size** has **changed**. |
 
 Returns string `signal` in case of success.
 
@@ -723,9 +731,14 @@ before the calling coroutine is suspended.
 
 Returns the string `"exit"`,
 followed by a number of the exit status
-when the process terminates normally,
-or the [name of the signal](#systemawaitsig-signal) that terminated the program,
+when the process terminates normally.
+Otherwise,
+it returns a string indicating the signal that terminated the program,
+as listed in [`system.emitsig`](#systememitsig-pid-signal),
 followed by the platform-dependent number of the signal.
+For signals not listed there,
+the string `"signal"` is returned instead.
+Use the platform-dependent number to differentiate such signals.
 
 ### `system.resume (preemptco, ...)`
 
