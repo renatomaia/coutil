@@ -10,22 +10,44 @@ typedef struct CpuInfoList {
 
 #define checkcpuinfo(L)	((CpuInfoList *)luaL_checkudata(L, 1, LCU_CPUINFOLISTCLS))
 
+static CpuInfoList *openedcpuinfo (lua_State *L) {
+	CpuInfoList *list = checkcpuinfo(L);
+	luaL_argcheck(L, list->cpu, 1, "closed "LCU_CPUINFOLISTCLS);
+	return list;
+}
+
+static void closecpuinfo (CpuInfoList *list) {
+	if (list->cpu) {
+		uv_free_cpu_info(list->cpu, list->count);
+		list->cpu = NULL;
+		list->count = 0;
+	}
+}
+
 static int cpuinfo_gc (lua_State *L) {
 	CpuInfoList *list = checkcpuinfo(L);
-	uv_free_cpu_info(list->cpu, list->count);
+	closecpuinfo(list);
 	return 0;
+}
+
+/* true = cpuinfo:close() */
+static int cpuinfo_close (lua_State *L) {
+	CpuInfoList *list = openedcpuinfo(L);
+	closecpuinfo(list);
+	lua_pushboolean(L, 1);
+	return 1;
 }
 
 /* cpucount = cpuinfo:count() */
 static int cpuinfo_count (lua_State *L) {
-	CpuInfoList *list = checkcpuinfo(L);
+	CpuInfoList *list = openedcpuinfo(L);
 	lua_pushinteger(L, list->count);
 	return 1;
 }
 
 /* value = cpuinfo:stats(i, what) */
 static int cpuinfo_stats (lua_State *L) {
-	CpuInfoList *list = checkcpuinfo(L);
+	CpuInfoList *list = openedcpuinfo(L);
 	int i = (int)luaL_checkinteger(L, 2);
 	const char *mode = luaL_checkstring(L, 3);
 	uv_cpu_info_t *info = list->cpu+i-1;
@@ -123,9 +145,9 @@ static uv_passwd_t *sysuser (lua_State *L, SystemInfo *sysinf) {
 typedef int (*GetPathFunc) (char *buffer, size_t *len);
 
 static void pushbuffer(lua_State *L, SystemInfo *sysinf, GetPathFunc f) {
-	char array[1/*UV_MAXHOSTNAMESIZE*/];
+	char array[UV_MAXHOSTNAMESIZE];
 	char *buffer = array;
-	size_t len = 1/*UV_MAXHOSTNAMESIZE*/;
+	size_t len = sizeof(array);
 	int err = f(buffer, &len);
 	if (err == UV_ENOBUFS) {
 		buffer = (char *)malloc(len*sizeof(char));
@@ -203,9 +225,11 @@ static const luaL_Reg sysuserinfomt[] = {
 };
 static const luaL_Reg cpuinfomt[] = {
 	{"__gc", cpuinfo_gc},
+	{"__close", cpuinfo_gc},
 	{NULL, NULL}
 };
 static const luaL_Reg cpuinfof[] = {
+	{"close", cpuinfo_close},
 	{"count", cpuinfo_count},
 	{"stats", cpuinfo_stats},
 	{NULL, NULL}

@@ -53,17 +53,15 @@ for i = 1, cpuinfo:count() do
 end
 print()
 
-print("Network interfaces")
+print("Network interface addresses")
 print("  # |     Name     |        MAC        | Internal | Domain | Address")
 local rowfmt = " %2d | %-12s | %17s |   %-3s    |  %-4s  | %s/%d"
-local netifaces = system.netifaces()
+local netifaces = system.netiface("all")
 for i = 1, netifaces:count() do
-  local address, mask = netifaces:getaddress(i);
-  print(string.format(rowfmt, i, netifaces:getname(i),
-                                 netifaces:getmac(i),
-                                 netifaces:isinternal(i) and "yes" or "",
-                                 netifaces:getdomain(i),
-                                 address.literal,
-                                 mask))
+	print(string.format(rowfmt, i, netifaces:getname(i),
+	                               netifaces:getmac(i),
+	                               netifaces:isinternal(i) and "yes" or "",
+	                               netifaces:getdomain(i),
+	                               netifaces:getaddress(i)))
 end
 print()

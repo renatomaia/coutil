@@ -12,7 +12,6 @@ Summary
 9. [Thread Pools](#thread-pools)
 10. [Preemptive Coroutines](#preemptive-coroutines)
 11. [System Features](#system-features)
-12. [System Information](#system-information)
 
 Index
 =====
@@ -61,6 +60,7 @@ Index
 	- [`system.awaitch`](#systemawaitch-ch-endpoint-)
 	- [`system.awaitsig`](#systemawaitsig-signal)
 	- [`system.cpuinfo`](#systemcpuinfo-)
+		- [`cpuinfo:close`](#cpuinfoclose-)
 		- [`cpuinfo:count`](#cpuinfocount-)
 		- [`cpuinfo:stats`](#cpuinfostats-i-what)
 	- [`system.emitsig`](#systememitsig-pid-signal)
@@ -81,6 +81,14 @@ Index
 	- [`system.isrunning`](#systemisrunning-)
 	- [`system.nameaddr`](#systemnameaddr-address--mode)
 	- [`system.nanosecs`](#systemnanosecs-)
+	- [`system.netiface`](#systemnetiface-option--ifindex)
+		- [`netifaces:close`](#netifacesclose-)
+		- [`netifaces:count`](#netifacescount-)
+		- [`netifaces:getaddress`](#netifacesgetaddress-i--format)
+		- [`netifaces:getdomain`](#netifacesgetdomain-i)
+		- [`netifaces:getmac`](#netifacesgetmac-i--mode)
+		- [`netifaces:getname`](#netifacesgetname-i)
+		- [`netifaces:isinternal`](#netifacesisinternal-i)
 	- [`system.packenv`](#systempackenv-vars)
 	- [`system.resume`](#systemresume-preemptco-)
 	- [`system.run`](#systemrun-mode)
@@ -94,7 +102,7 @@ Index
 		- [`socket:listen`](#socketlisten-backlog)
 		- [`socket:receive`](#socketreceive-buffer--i--j--address)
 		- [`socket:send`](#socketsend-data--i--j--address)
-		- [`socket:setoption`](#socketsetoption-name-value)
+		- [`socket:setoption`](#socketsetoption-name-value-)
 		- [`socket:shutdown`](#socketshutdown-)
 	- [`system.suspend`](#systemsuspend-delay)
 	- [`system.time`](#systemtime-update)
@@ -1194,7 +1202,7 @@ Returns values corresponding to system information according to the following ch
 - `b`: total amount of physical memory in the system (**bytes**).
 - `c`: user **CPU** time used of the process (seconds).
 - `d`: integral unshared **data** size of the process (bytes).
-- `e`: **execution** image path of the process (path).
+- `e`: **executable** file path of the process (path).
 - `f`: amount of **free** memory available in the system (bytes).
 - `g`: current user **group** identifier (gid).
 - `h`: operating system **hardware** name.
@@ -1225,21 +1233,91 @@ Returns values corresponding to system information according to the following ch
 
 ### `system.cpuinfo ()`
 
-Returns a `cpuinfo` object with statistics about the individual CPU of the system.
+Returns a `cpuinfo` object with information about the individual CPU of the system.
+
+### `cpuinfo:close ()`
+
+Closes `cpuinfo`,
+releasing all its internal resources.
+It also prevents further use of its methods.
 
 ### `cpuinfo:count ()`
 
-Returns the number of individual CPU information contained in `cpus`.
+Returns the number of individual CPU information contained in `cpuinfo`.
 These CPU are identified by indexes from 1 to the number of individual CPU.
 
 ### `cpuinfo:stats (i, what)`
 
-Returns numbers corresponding to usage statistics stored in `cpuinfo` for the CPU with index `i`, according to the following characters present in string `what`:
+Returns values stored in `cpuinfo` for the CPU with index `i`,
+according to the following characters present in string `what`:
 
-- `m`: CPU model **name**.
+- `m`: CPU **model** name.
 - `c`: current CPU **clock** speed (MHz).
 - `u`: time the CPU spent executing normal processes in **user** mode (milliseconds).
 - `n`: time the CPU spent executing prioritized (**niced**) processes in user mode (milliseconds).
-- `s`: time the CPU spent executing processes in **kernel mode** (milliseconds).
-- `i`: time the CPU was **idle** (milliseconds).
+- `s`: time the CPU spent executing processes in **kernel** mode (milliseconds).
 - `d`: time the CPU spent servicing **device** interrupts. (milliseconds).
+- `i`: time the CPU was **idle** (milliseconds).
+
+### `system.netiface (option [, ifindex])`
+
+Returns a value according to the value of `option`,
+as described below:
+
+- `"all"`: a `netifaces` object with information about the individual network interfaces of the system.
+`ifindex` is ignored.
+- `"name"`: the name of the network interface corresponding to the interface index `ifindex`.
+`ifindex` is mandatory.
+- `"id"`: a string with the identifier suitable for use in an IPv6 scoped address corresponding to the interface index `ifindex`.
+`ifindex` is mandatory.
+
+### `netifaces:close ()`
+
+Closes `netifaces`,
+releasing all its internal resources.
+It also prevents further use of its methods.
+
+### `netifaces:count ()`
+
+Returns the number of individual network interface which information is contained in `netifaces`.
+These network interfaces are identified by indexes from 1 to the number of individual network interfaces.
+
+### `netifaces:isinternal (i)`
+
+Returns `true` if the network interface with index `i` is internal,
+or `false` otherwise.
+
+### `netifaces:getname (i)`
+
+Returns the name of the network interface with index `i`.
+
+### `netifaces:getdomain (i)`
+
+Returns the address domain of the network interface with index `i`.
+The possible values are the same of attribute `type` of an [`address`](#systemaddress-type--data--port--mode).
+
+### `netifaces:getaddress (i [, format])`
+
+Returns the host address of the network interface with index `i`,
+followed by the length of its subnet mask.
+
+The string `format` controls whether the address returned is textual or binary.
+It may be the string `"b"` (binary data),
+or `"t"` (text data).
+The default is `"t"`.
+
+Alternatively,
+`format` might be an [address](#systemaddress-type--data--port--mode) of the same domain of the network interface.
+In such case,
+the host address of the network interface is set to address `format`,
+and address `format` is returned as the first value.
+The `port` field of address `format` is left unchanged.
+
+### `netifaces:getmac (i [, mode])`
+
+Returns the physical address of the network interface with index `i`.
+
+The string `mode` controls whether the address returned is textual or binary.
+It may be the string `"b"` (binary data),
+or `"t"` (text data).
+The default is `"t"`.
