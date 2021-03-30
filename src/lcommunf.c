@@ -276,8 +276,7 @@ static int addr_index (lua_State *L) {
 		case 1: {  /* binary */
 			size_t sz;
 			const char *s = getaddrbytes(na, &sz);
-			if (s) lua_pushlstring(L, s, sz);
-			else lua_pushnil(L);
+			lua_pushlstring(L, s, sz);
 		} break;
 		case 2: {  /* literal */
 			char s[LCU_ADDRMAXLITERAL];
@@ -334,10 +333,11 @@ typedef struct AddressList {
 	struct addrinfo *current;
 } AddressList;
 
+#define checkaddrlist(L)	(AddressList *) luaL_checkudata(L, 1, LCU_NETADDRLISTCLS)
 
-static AddressList *openedlist (lua_State *L, int arg) {
-	AddressList *list = (AddressList *) luaL_checkudata(L, 1, LCU_NETADDRLISTCLS);
-	luaL_argcheck(L, list->start, arg, "closed "LCU_NETADDRLISTCLS);
+static AddressList *openedaddrlist (lua_State *L) {
+	AddressList *list = checkaddrlist(L);
+	luaL_argcheck(L, list->start, 1, "closed "LCU_NETADDRLISTCLS);
 	return list;
 }
 
@@ -361,14 +361,14 @@ static void closeaddrlist (AddressList *list) {
 }
 
 static int found_gc (lua_State *L) {
-	AddressList *list = (AddressList *)luaL_checkudata(L, 1, LCU_NETADDRLISTCLS);
+	AddressList *list = checkaddrlist(L);
 	closeaddrlist(list);
 	return 0;
 }
 
 /* true = found:close() */
 static int found_close (lua_State *L) {
-	AddressList *list = openedlist(L, 1);
+	AddressList *list = openedaddrlist(L);
 	closeaddrlist(list);
 	lua_pushboolean(L, 1);
 	return 1;
@@ -376,7 +376,7 @@ static int found_close (lua_State *L) {
 
 /* changed = found:next() */
 static int found_next (lua_State *L) {
-	AddressList *list = openedlist(L, 1);
+	AddressList *list = openedaddrlist(L);
 	struct addrinfo *found = findvalidaddr(list->current);
 	if (found) {
 		list->current = found;
@@ -388,7 +388,7 @@ static int found_next (lua_State *L) {
 
 /* found:reset() */
 static int found_reset (lua_State *L) {
-	AddressList *list = openedlist(L, 1);
+	AddressList *list = openedaddrlist(L);
 	list->current = findvalidaddr(list->start);
 	lcu_assert(list->current);
 	return 0;
@@ -396,7 +396,7 @@ static int found_reset (lua_State *L) {
 
 /* address = found:getaddress([address]) */
 static int found_getaddress (lua_State *L) {
-	AddressList *list = openedlist(L, 1);
+	AddressList *list = openedaddrlist(L);
 	struct addrinfo *found = list->current;
 	struct sockaddr *addr = tonetaddr(L, 2);
 	if (addr) {
@@ -412,7 +412,7 @@ static int found_getaddress (lua_State *L) {
 
 /* domain = found:getdomain() */
 static int found_getdomain (lua_State *L) {
-	AddressList *list = openedlist(L, 1);
+	AddressList *list = openedaddrlist(L);
 	struct addrinfo *found = list->current;
 	pushaddrtype(L, found->ai_family);
 	return 1;
@@ -420,7 +420,7 @@ static int found_getdomain (lua_State *L) {
 
 /* type = found:getsocktype() */
 static int found_getsocktype (lua_State *L) {
-	AddressList *list = openedlist(L, 1);
+	AddressList *list = openedaddrlist(L);
 	struct addrinfo *found = list->current;
 	lua_pushstring(L, (found->ai_socktype == SOCK_DGRAM ? "datagram" :
 	                  (found->ai_flags&AI_PASSIVE ? "passive" : "stream" )));
@@ -617,6 +617,181 @@ static int system_nameaddr (lua_State *L) {
 
 
 /*
+ * Network Interface Information
+ */
+
+typedef struct NetIfaceList {
+	int count;
+	uv_interface_address_t *list;
+} NetIfaceList;
+
+#define checkifaces(L)	((NetIfaceList *)luaL_checkudata(L, 1, LCU_NETIFACELISTCLS))
+
+static NetIfaceList *openedifaces (lua_State *L) {
+	NetIfaceList *ifaces = checkifaces(L);
+	luaL_argcheck(L, ifaces->list, 1, "closed "LCU_NETIFACELISTCLS);
+	return ifaces;
+}
+
+static void closeifaces (NetIfaceList *ifaces) {
+	if (ifaces->list) {
+		uv_free_interface_addresses(ifaces->list, ifaces->count);
+		ifaces->list = NULL;
+		ifaces->count = 0;
+	}
+}
+
+static int netifaces_gc (lua_State *L) {
+	NetIfaceList *ifaces = checkifaces(L);
+	closeifaces(ifaces);
+	return 0;
+}
+
+/* true = netifaces:close() */
+static int netifaces_close (lua_State *L) {
+	NetIfaceList *ifaces = openedifaces(L);
+	closeifaces(ifaces);
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+/* count = netifaces:count() */
+static int netifaces_count (lua_State *L) {
+	NetIfaceList *netifaces = openedifaces(L);
+	lua_pushinteger(L, netifaces->count);
+	return 1;
+}
+
+static uv_interface_address_t *toiface (lua_State *L) {
+	NetIfaceList *netifaces = openedifaces(L);
+	lua_Integer i = luaL_checkinteger(L, 2);
+	luaL_argcheck(L, 0 < i && i <= netifaces->count, 2, "out of range");
+	return netifaces->list+i-1;
+}
+
+/* value = netifaces:isinternal(i) */
+static int netifaces_isinternal (lua_State *L) {
+	uv_interface_address_t *iface = toiface(L);
+	lua_pushboolean(L, iface->is_internal);
+	return 1;
+}
+
+/* value = netifaces:getname(i) */
+static int netifaces_getname (lua_State *L) {
+	uv_interface_address_t *iface = toiface(L);
+	lua_pushstring(L, iface->name);
+	return 1;
+}
+
+/* value = netifaces:getdomain(i) */
+static int netifaces_getdomain (lua_State *L) {
+	uv_interface_address_t *iface = toiface(L);
+	pushaddrtype(L, iface->netmask.netmask4.sin_family);
+	return 1;
+}
+
+/* address, masklen = netifaces:getaddress(i [, format]) */
+static int netifaces_getaddress (lua_State *L) {
+	uv_interface_address_t *iface = toiface(L);
+	struct sockaddr *src = (struct sockaddr *)&iface->address;
+	int domain = src->sa_family;
+	struct sockaddr *dst = tonetaddr(L, 3);
+	if (dst) {
+		chkaddrdom(L, 3, dst, domain);
+		setaddrbytes(dst, getaddrbytes(src, NULL));
+		lua_settop(L, 3);
+	} else {
+		const char *mode = luaL_optstring(L, 3, "t");
+		if (mode[0] == 'b' && mode[1] == '\0') {  /* binary format */
+			size_t sz;
+			const char *s = getaddrbytes(src, &sz);
+			lua_pushlstring(L, s, sz);
+		} else if (mode[0] == 't' && mode[1] == '\0') {  /* literal format */
+			char s[LCU_ADDRMAXLITERAL];
+			getaddrliteral(src, s);
+			lua_pushstring(L, s);
+		} else {
+			return luaL_argerror(L, 4, "invalid mode");
+		}
+	}
+
+	{
+		/* calculate subnet mask length */
+		int sz;
+		const unsigned char *mask;
+		lua_Integer masklen;
+		unsigned char byte;
+		if (domain == AF_INET) {
+			sz = LCU_ADDRBINSZ_IPV4;
+			mask = (const unsigned char *)&iface->netmask.netmask4.sin_addr.s_addr;
+		} else {
+			sz = LCU_ADDRBINSZ_IPV6;
+			mask = (const unsigned char *)&iface->netmask.netmask6.sin6_addr;
+		}
+		while (sz && !mask[--sz]);
+		masklen = CHAR_BIT*(sz+1);
+		for (byte = ~(mask[sz]); byte; byte >>= 1) masklen--;
+		lua_pushinteger(L, masklen);
+	}
+
+	return 2;
+}
+
+/* value = netifaces:getmac(i [, mode]) */
+#define nibble2hex(N)	((N) < 10 ? '0'+(N) : 'a'+(N)%10);
+static int netifaces_getmac (lua_State *L) {
+	uv_interface_address_t *iface = toiface(L);
+	const char *mode = luaL_optstring(L, 3, "t");
+	if (mode[0] == 'b' && mode[1] == '\0') {  /* binary format */
+		lua_pushlstring(L, iface->phys_addr, 6);
+	} else if (mode[0] == 't' && mode[1] == '\0') {  /* literal format */
+		char literal[17];
+		int i = 0;
+		while (1) {
+			unsigned char byte = (unsigned char)iface->phys_addr[i/3];
+			literal[i++] = nibble2hex(byte>>4);
+			literal[i++] = nibble2hex(byte&0x0f);
+			if (i == 17) break;
+			literal[i++] = ':';
+		}
+		lua_pushlstring(L, literal, 17);
+	} else {
+		return luaL_argerror(L, 3, "invalid mode");
+	}
+	return 1;
+}
+
+typedef int (*GetStringByIdxFunc) (unsigned int idx, char *buffer, size_t *len);
+
+/* netifaces = system.netiface(option [, i]) */
+static int system_netiface (lua_State *L) {
+	static const char *const options[] = { "id", "name", "all", NULL };
+	int option = luaL_checkoption(L, 1, NULL, options);
+	switch (option) {
+		case 0:    /* id */
+		case 1: {  /* name */
+			lua_Integer i = luaL_checkinteger(L, 2);
+			GetStringByIdxFunc f = option ? uv_if_indextoname : uv_if_indextoiid;
+			char buffer[UV_IF_NAMESIZE];
+			size_t len = sizeof(buffer);
+			int err;
+			luaL_argcheck(L, 0 < i && i <= INT_MAX, 2, "out of range");
+			err = f((unsigned int)i, buffer, &len);
+			if (err < 0) return lcuL_pusherrres(L, err);
+			lua_pushlstring(L, buffer, len);
+		} break;
+		case 2: {  /* all */
+			NetIfaceList *ifaces = (NetIfaceList *)lua_newuserdatauv(L, sizeof(NetIfaceList), 0);
+			int err = uv_interface_addresses(&ifaces->list, &ifaces->count);
+			if (err < 0) return lcuL_pusherrres(L, err);
+			luaL_setmetatable(L, LCU_NETIFACELISTCLS);
+		} break;
+	}
+	return 1;
+}
+
+
+/*
  * Socket
  */
 
@@ -698,16 +873,16 @@ static const char *const AddrSites[] = {"self", "peer", NULL};
 
 #define netdomainof(O)	(lcuL_maskflag(O, LCU_SOCKIPV6FLAG) ? AF_INET6 : AF_INET)
 
-static struct sockaddr *getaddrarg (lua_State *L, int domain, int *sz) {
-	struct sockaddr *addr = tonetaddr(L, 3);
+static struct sockaddr *settopaddrarg (lua_State *L, int arg, int domain, int *sz) {
+	struct sockaddr *addr = tonetaddr(L, arg);
 	if (addr) {
-		lua_settop(L, 3);
-		chkaddrdom(L, 3, addr, domain);
+		lua_settop(L, arg);
+		chkaddrdom(L, arg, addr, domain);
 	} else {
-		lua_settop(L, 2);
+		lua_settop(L, arg-1);
 		addr = newaddress(L, domain);
 	}
-	*sz = (int)lua_rawlen(L, 3);
+	*sz = (int)lua_rawlen(L, arg);
 	return addr;
 }
 
@@ -746,7 +921,7 @@ static int udp_getaddress (lua_State *L) {
 	int peer = luaL_checkoption(L, 2, "self", AddrSites);
 	int domain = netdomainof(udp);
 	int addrsz;
-	struct sockaddr *addr = getaddrarg(L, domain, &addrsz);
+	struct sockaddr *addr = settopaddrarg(L, 3, domain, &addrsz);
 	int err = peer ? uv_udp_getpeername(handle, addr, &addrsz)
 	               : uv_udp_getsockname(handle, addr, &addrsz);
 	lcu_assert(addrsz == lua_rawlen(L, 3));
@@ -1225,7 +1400,7 @@ static int tcp_getaddress (lua_State *L) {
 	int peer = luaL_checkoption(L, 2, "self", AddrSites);
 	int domain = netdomainof(tcp);
 	int addrsz;
-	struct sockaddr *addr = getaddrarg(L, domain, &addrsz);
+	struct sockaddr *addr = settopaddrarg(L, 3, domain, &addrsz);
 	int err = peer ? uv_tcp_getpeername(handle, addr, &addrsz)
 	               : uv_tcp_getsockname(handle, addr, &addrsz);
 	lcu_assert(addrsz == lua_rawlen(L, 3));
@@ -1469,6 +1644,23 @@ static const luaL_Reg found[] = {
 	{NULL, NULL}
 };
 
+static const luaL_Reg ifacesmt[] = {
+	{"__gc", netifaces_gc},
+	{"__close", netifaces_gc},
+	{NULL, NULL}
+};
+
+static const luaL_Reg ifaces[] = {
+	{"close", netifaces_close},
+	{"count", netifaces_count},
+	{"isinternal", netifaces_isinternal},
+	{"getname", netifaces_getname},
+	{"getdomain", netifaces_getdomain},
+	{"getaddress", netifaces_getaddress},
+	{"getmac", netifaces_getmac},
+	{NULL, NULL}
+};
+
 static const luaL_Reg objectmt[] = {
 	{"__gc", object_gc},
 	{"__close", object_gc},
@@ -1556,6 +1748,7 @@ static const luaL_Reg terminal[] = {
 
 static const luaL_Reg modf[] = {
 	{"address", system_address},
+	{"netiface", system_netiface},
 };
 
 static const luaL_Reg upvf[] = {
@@ -1574,6 +1767,13 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	luaL_setfuncs(L, foundmt, 0);
 	lua_newtable(L);  /* create method table */
 	luaL_setfuncs(L, found, 0);
+	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
+	lua_pop(L, 1);  /* pop metatable */
+
+	luaL_newmetatable(L, LCU_NETIFACELISTCLS);
+	luaL_setfuncs(L, ifacesmt, 0);
+	lua_newtable(L);  /* create method table */
+	luaL_setfuncs(L, ifaces, 0);
 	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
 	lua_pop(L, 1);  /* pop metatable */
 
