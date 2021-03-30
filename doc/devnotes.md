@@ -96,6 +96,7 @@ Source Files
 | `loperaux.{c,h}` | internal | [await function](manual.md#await) support for [UV operations](#operations) |
 | `lprocesf.c` | Lua functions | process and signal functions of [`coutil.system`](manual.md#system-features) |
 | `lscheduf.c` | Lua functions | event loop functions of [`coutil.system`](manual.md#system-features) |
+| `lsckdefs.h` | internal | IPC socket structures |
 | `lsystemm.c` | Lua module | [`coutil.system`](manual.md#system-features) |
 | `lthpool.{c,h}` | internal | thread pool basic support |
 | `lthreadm.c` | Lua module | [`coutil.threads`](manual.md#thread-pools) |
@@ -251,11 +252,11 @@ typedef struct MyObject {
 	lua_CFunction step;
 	uv_myobject_t handle;  /* is 'uv_handle_t' in 'lcu_Object' */
 	/* any extra fields */
-}
+} MyObject;
 
 static int lua_myobject (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);  /* requires 'LCU_MODUPVS' upvalues */
-	MyObject *myobj = newobject(L, MyObject, MYOBJECT_CLASS);
+	MyObject *myobj = lcuT_newobject(L, MyObject, MYOBJECT_CLASS);
 	/* check argments and obtain desired configs for 'myobj' */
 	int err = uv_myobject_init(loop, lcu_toobjhdl(myobj), /* configs */);
 	if (err < 0) return lcuL_pusherrres(L, err);
@@ -281,11 +282,11 @@ static int myobj_await (lua_State *L) {
 	return lcuT_resetobjopk(L, object, startmyawait, stopmyawait, onreturn);
 }
 
-static int udpstartrecv (uv_handle_t *handle) {
+static int startmyawait (uv_handle_t *handle) {
 	return uv_myobj_myevent_start((uv_myobject_t *)handle, uv_onmyevent);
 }
 
-static int udpstoprecv (uv_handle_t *handle) {
+static int stopmyawait (uv_handle_t *handle) {
 	return uv_myobj_myevent_stop((uv_myobject_t *)handle);
 }
 
