@@ -216,7 +216,7 @@ static const luaL_Reg modulef[] = {
 	{NULL, NULL}
 };
 
-LCUI_FUNC void lcuM_addsysinff (lua_State *L) {
+LCUI_FUNC void lcuM_addinfof (lua_State *L) {
 	luaL_newmetatable(L, SYSUSERINFOCLS);
 	luaL_setfuncs(L, sysuserinfomt, 0);
 	lua_pop(L, 1);  /* pop metatable */
