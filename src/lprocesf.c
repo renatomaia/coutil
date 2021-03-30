@@ -360,7 +360,7 @@ static int system_execute (lua_State *L) {
 }
 
 
-LCUI_FUNC void lcuM_addsignalf (lua_State *L) {
+LCUI_FUNC void lcuM_addprocesf (lua_State *L) {
 	static const luaL_Reg envmt[] = {
 		{"__index", procenv_index},
 		{NULL, NULL}
