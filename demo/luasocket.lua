@@ -41,7 +41,9 @@ local now = system.time
 local sleep = system.suspend
 local newaddr = system.address
 local newsocket = system.socket
+local nameaddr = system.nameaddr
 local resolveaddr = system.findaddr
+local sysinfo = system.info
 
 local defaultsize = 8192
 
@@ -52,19 +54,17 @@ local function checkclass(self, expected)
 	end
 end
 
-local toaddr do
-	local addrset = getmetatable(newaddr("ipv4")).__newindex
+local addrset = getmetatable(newaddr("ipv4")).__newindex
 
-	function toaddr(addr, host, port)
-		if not pcall(addrset, addr, "literal", host) then
-			local found, errmsg = resolveaddr(host, port, "4")
-			if not found then return nil, errmsg end
-			found:getaddress(addr)
-		else
-			addr.port = port
-		end
-		return addr
+local function toaddr(addr, host, port)
+	if not pcall(addrset, addr, "literal", host) then
+		local found<close>, errmsg = resolveaddr(host, port, "4")
+		if not found then return nil, errmsg end
+		found:getaddress(addr)
+	else
+		addr.port = port
 	end
+	return addr
 end
 
 local function wrapsock(class, metatable, domain, result, errmsg)
@@ -529,18 +529,56 @@ function udp:setpeername(host, port)
 	                                                  or "udp{connected}")
 end
 
-local dns = {}
+local dns = {} do
+	local function resolve(address)
+		local addr = newaddr("ipv4")
+		local result<const>, errmsg = {
+			name = nil,
+			alias = {},
+			ip = {},
+		}
 
-function dns.gethostname()
-	error("not supported")
-end
+		-- pick a name
+		if pcall(addrset, addr, "literal", address) then
+			table.insert(result.ip, address)
+			address, errmsg = nameaddr(addr)
+			if not address then return nil, errmsg end
+		else
+			result.name = address
+		end
 
-function dns.tohostname()
-	error("not supported")
-end
+		-- get canonical name
+		result.name, errmsg = nameaddr(address)
+		if not result.name then return nil, errmsg end
+		if result.name ~= address then
+			table.insert(result.alias, address)
+		end
 
-function dns.toip()
-	error("not supported")
+		-- get IP addresses
+		local found<close>, errmsg = resolveaddr(result.name, 0, "4")
+		if not found then return nil, errmsg end
+		repeat
+			table.insert(result.ip, found:getaddress(addr).literal)
+		until not found:next()
+
+		return result
+	end
+
+	function dns.toip(...)
+		local result, errmsg = resolve(...)
+		if not result then return nil, errmsg end
+		return result.ip[1], result
+	end
+
+	function dns.tohostname(...)
+		local result, errmsg = resolve(...)
+		if not result then return nil, errmsg end
+		return result.name, result
+	end
+
+	function dns.gethostname()
+		return sysinfo("n")
+	end
 end
 
 local socket = {

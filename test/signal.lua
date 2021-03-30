@@ -1,10 +1,9 @@
-local info = require "coutil.info"
 local system = require "coutil.system"
 
 newtest "awaitsig" -------------------------------------------------------------
 
 local function sendsignal(signal)
-	system.emitsig(info.getprocess("#"), signal)
+	system.emitsig(system.info("#"), signal)
 end
 
 do case "error messages"

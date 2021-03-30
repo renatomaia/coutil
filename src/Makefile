@@ -39,8 +39,8 @@ MYOBJS=
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 
 MOD_O=	lmodaux.o loperaux.o lchaux.o lthpool.o \
-      	lscheduf.o ltimef.o lfilef.o lprocesf.o lsocketf.o \
-      	lcoroutm.o lthreadm.o lchannem.o lsystemm.o lsysinfm.o
+      	lcommunf.o lfilef.o linfof.o lprocesf.o lscheduf.o ltimef.o \
+      	lchannem.o lcoroutm.o lsystemm.o lthreadm.o
 
 
 
