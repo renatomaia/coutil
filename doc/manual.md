@@ -34,12 +34,6 @@ Index
 	- [`event.emitall`](#eventemitall-e-)
 	- [`event.emitone`](#eventemitone-e-)
 	- [`event.pending`](#eventpending-e)
-- [`coutil.info`](#system-information)
-	- [`info.getcpustats`](#infogetcpustats-)
-		- [`cpuinfo:count`](#cpuinfocount-)
-		- [`cpuinfo:stats`](#cpuinfostats-i-what)
-	- [`info.getsystem`](#infogetsystem-what)
-	- [`info.getprocess`](#infogetprocess-what)
 - [`coutil.mutex`](#mutex)
 	- [`mutex.islocked`](#mutexislocked-e)
 	- [`mutex.lock`](#mutexlock-e)
@@ -66,6 +60,9 @@ Index
 	- [`system.address`](#systemaddress-type--data--port--mode)
 	- [`system.awaitch`](#systemawaitch-ch-endpoint-)
 	- [`system.awaitsig`](#systemawaitsig-signal)
+	- [`system.cpuinfo`](#systemcpuinfo-)
+		- [`cpuinfo:count`](#cpuinfocount-)
+		- [`cpuinfo:stats`](#cpuinfostats-i-what)
 	- [`system.emitsig`](#systememitsig-pid-signal)
 	- [`system.execute`](#systemexecute-cmd-)
 	- [`system.file`](#systemfile-path--mode--uperm--gperm--operm)
@@ -80,6 +77,7 @@ Index
 		- [`addresses:next`](#addressesnext-)
 		- [`addresses:reset`](#addressesreset-)
 	- [`system.halt`](#systemhalt-)
+	- [`system.info`](#systeminfo-what)
 	- [`system.isrunning`](#systemisrunning-)
 	- [`system.nameaddr`](#systemnameaddr-address--mode)
 	- [`system.nanosecs`](#systemnanosecs-)
@@ -1182,49 +1180,50 @@ the current file offset is used and updated.
 In case of success,
 this function returns the number of bytes copied to `buffer`.
 
-System Information
-------------------
+### `system.info (what)`
 
-Module `coutil.info` provides functions to get information about the system.
+Returns values corresponding to system information according to the following characters present in string `what`:
 
-### `info.getprocess (what)`
+- `#`: current process identifier (**pid**).
+- `$`: current user **shell** path.
+- `^`: **parent** process identifier (pid).
+- `=`: integral unshared **stack** size of the process (bytes).
+- `<`: IPC messages **received** by the process.
+- `>`: IPC messages **sent** by the process.
+- `1`: system load of last **1 minute**.
+- `b`: total amount of physical memory in the system (**bytes**).
+- `c`: user **CPU** time used of the process (seconds).
+- `d`: integral unshared **data** size of the process (bytes).
+- `e`: **execution** image path of the process (path).
+- `f`: amount of **free** memory available in the system (bytes).
+- `g`: current user **group** identifier (gid).
+- `h`: operating system **hardware** name.
+- `H`: current user **home** directory path.
+- `i`: block **input** operations of the process.
+- `k`: operating system **kernel** name.
+- `l`: system **load** of last _5 minutes_.
+- `L`: system **load** of last _15 minutes_.
+- `m`: _integral_ shared **memory** size of the process (bytes).
+- `M`: _limit_ of **memory** available to the process (bytes).
+- `n`: **network** host name of the system.
+- `o`: block **output** operations of the process.
+- `p`: **page** _reclaims_ (soft page faults) of the process.
+- `P`: **page** _faults_ (hard page faults) of the process.
+- `r`: **resident** memory size of the process (bytes).
+- `R`: _maximum_ **resident** set size of the process (bytes).
+- `s`: **system** CPU time used of the process (seconds).
+- `S`: **signals** received by the process.
+- `t`: current system **uptime** (seconds).
+- `T`: current **temporary** directory path.
+- `u`: current **user** _identifier_ (uid).
+- `U`: current **user** _name_.
+- `v`: operating system _release_ **version** name.
+- `V`: operating system **version** _name_.
+- `w`: **swaps** of the process.
+- `x`: _voluntary_ **context** switches of the process.
+- `X`: _involuntary_ **context** switches of the process.
 
-Returns numbers corresponding to resource usage of the current process according to the following characters present in string `what`:
-
-| Char | Unsupported | Description |
-| ---- | ----------- | ----------- |
-| `#`  |             | process identifier of the current process (number). |
-| `^`  |             | process identifier of the parent process (number). |
-| `m`  |             | resident memory size (bytes). |
-| `U`  | Windows     | user CPU time used (seconds). |
-| `S`  | Windows     | system CPU time used (seconds). |
-| `T`  |             | maximum resident set size (bytes). |
-| `M`  | Linux       | integral shared memory size (bytes). |
-| `d`  | Linux       | integral unshared data size (bytes). |
-| `=`  | Linux       | integral unshared stack size (bytes). |
-| `p`  |             | page reclaims (soft page faults). |
-| `P`  | Windows     | page faults (hard page faults). |
-| `w`  | Linux       | swaps. |
-| `i`  | Windows     | block input operations. |
-| `o`  | Windows     | block output operations. |
-| `>`  | Linux       | IPC messages sent. |
-| `<`  | Linux       | IPC messages received. |
-| `s`  | Linux       | signals received. |
-| `x`  |             | voluntary context switches. |
-| `X`  |             | involuntary context switches. |
-
-### `info.getsystem (what)`
-
-Returns numbers corresponding to resource usage of the system according to the following characters present in string `what`:
-
-- `f`: amount of free memory available in the system, as reported by the kernel (bytes).
-- `p`: total amount of physical memory in the system (bytes).
-- `u`: current system uptime (seconds).
-- `1`: system load (last 1 minute).
-- `l`: system load (last 5 minutes).
-- `L`: system load (last 15 minutes).
-
-### `info.getcpustats ()`
+### `system.cpuinfo ()`
 
 Returns a `cpuinfo` object with statistics about the individual CPU of the system.
 
@@ -1237,10 +1236,10 @@ These CPU are identified by indexes from 1 to the number of individual CPU.
 
 Returns numbers corresponding to usage statistics stored in `cpuinfo` for the CPU with index `i`, according to the following characters present in string `what`:
 
-- `m`: CPU model name.
-- `c`: current CPU clock speed (MHz).
-- `u`: time the CPU spent executing normal processes in user mode (milliseconds).
-- `n`: time the CPU spent executing prioritized (niced) processes in user mode (milliseconds).
-- `s`: time the CPU spent executing processes in kernel mode (milliseconds).
-- `i`: time the CPU was idle (milliseconds).
-- `d`: time the CPU spent servicing device interrupts. (milliseconds).
+- `m`: CPU model **name**.
+- `c`: current CPU **clock** speed (MHz).
+- `u`: time the CPU spent executing normal processes in **user** mode (milliseconds).
+- `n`: time the CPU spent executing prioritized (**niced**) processes in user mode (milliseconds).
+- `s`: time the CPU spent executing processes in **kernel mode** (milliseconds).
+- `i`: time the CPU was **idle** (milliseconds).
+- `d`: time the CPU spent servicing **device** interrupts. (milliseconds).

@@ -698,16 +698,16 @@ static const char *const AddrSites[] = {"self", "peer", NULL};
 
 #define netdomainof(O)	(lcuL_maskflag(O, LCU_SOCKIPV6FLAG) ? AF_INET6 : AF_INET)
 
-static struct sockaddr *getaddrarg (lua_State *L, int domain, int *sz) {
-	struct sockaddr *addr = tonetaddr(L, 3);
+static struct sockaddr *settopaddrarg (lua_State *L, int arg, int domain, int *sz) {
+	struct sockaddr *addr = tonetaddr(L, arg);
 	if (addr) {
-		lua_settop(L, 3);
-		chkaddrdom(L, 3, addr, domain);
+		lua_settop(L, arg);
+		chkaddrdom(L, arg, addr, domain);
 	} else {
-		lua_settop(L, 2);
+		lua_settop(L, arg-1);
 		addr = newaddress(L, domain);
 	}
-	*sz = (int)lua_rawlen(L, 3);
+	*sz = (int)lua_rawlen(L, arg);
 	return addr;
 }
 
@@ -746,7 +746,7 @@ static int udp_getaddress (lua_State *L) {
 	int peer = luaL_checkoption(L, 2, "self", AddrSites);
 	int domain = netdomainof(udp);
 	int addrsz;
-	struct sockaddr *addr = getaddrarg(L, domain, &addrsz);
+	struct sockaddr *addr = settopaddrarg(L, 3, domain, &addrsz);
 	int err = peer ? uv_udp_getpeername(handle, addr, &addrsz)
 	               : uv_udp_getsockname(handle, addr, &addrsz);
 	lcu_assert(addrsz == lua_rawlen(L, 3));
@@ -1225,7 +1225,7 @@ static int tcp_getaddress (lua_State *L) {
 	int peer = luaL_checkoption(L, 2, "self", AddrSites);
 	int domain = netdomainof(tcp);
 	int addrsz;
-	struct sockaddr *addr = getaddrarg(L, domain, &addrsz);
+	struct sockaddr *addr = settopaddrarg(L, 3, domain, &addrsz);
 	int err = peer ? uv_tcp_getpeername(handle, addr, &addrsz)
 	               : uv_tcp_getsockname(handle, addr, &addrsz);
 	lcu_assert(addrsz == lua_rawlen(L, 3));
@@ -1442,6 +1442,121 @@ static int terminal_winsize (lua_State *L) {
 
 
 /*
+ * Network Interface Information
+ */
+
+typedef struct NetIfaceList {
+	int count;
+	uv_interface_address_t *list;
+} NetIfaceList;
+
+#define checkifaces(L)	((NetIfaceList *)luaL_checkudata(L, 1, LCU_NETIFACELISTCLS))
+
+static int netifaces_gc (lua_State *L) {
+	NetIfaceList *netifaces = checkifaces(L);
+	uv_free_interface_addresses(netifaces->list, netifaces->count);
+	return 0;
+}
+
+/* cpucount = netifaces:count() */
+static int netifaces_count (lua_State *L) {
+	NetIfaceList *netifaces = checkifaces(L);
+	lua_pushinteger(L, netifaces->count);
+	return 1;
+}
+
+static uv_interface_address_t *toiface (lua_State *L) {
+	NetIfaceList *netifaces = checkifaces(L);
+	lua_Integer i = luaL_checkinteger(L, 2);
+	luaL_argcheck(L, 0 < i && i <= netifaces->count, 2, "out of range");
+	return netifaces->list+i-1;
+}
+
+/* value = netifaces:isinternal(i) */
+static int netifaces_isinternal (lua_State *L) {
+	uv_interface_address_t *iface = toiface(L);
+	lua_pushboolean(L, iface->is_internal);
+	return 1;
+}
+
+/* value = netifaces:getname(i) */
+static int netifaces_getname (lua_State *L) {
+	uv_interface_address_t *iface = toiface(L);
+	lua_pushstring(L, iface->name);
+	return 1;
+}
+
+/* value = netifaces:getdomain(i) */
+static int netifaces_getdomain (lua_State *L) {
+	uv_interface_address_t *iface = toiface(L);
+	pushaddrtype(L, iface->netmask.netmask4.sin_family);
+	return 1;
+}
+
+/* value = netifaces:getaddress(i [, address]) */
+static int netifaces_getaddress (lua_State *L) {
+	uv_interface_address_t *iface = toiface(L);
+	struct sockaddr *src = (struct sockaddr *)&iface->address;
+	int domain = src->sa_family;
+	int len;
+	struct sockaddr *dst = settopaddrarg(L, 3, domain, &len);
+	lua_Integer masklen;
+	const unsigned char *mask;
+	unsigned char byte;
+	memcpy(dst, src, len);
+
+	/* calculate subnet mask length */
+	if (domain == AF_INET) {
+		mask = (const unsigned char *)&iface->netmask.netmask4.sin_addr.s_addr;
+		len = LCU_ADDRBINSZ_IPV4;
+	} else {
+		mask = (const unsigned char *)&iface->netmask.netmask6.sin6_addr;
+		len = LCU_ADDRBINSZ_IPV6;
+	}
+	while (len && !mask[--len]);
+	masklen = CHAR_BIT*(len+1);
+	for (byte = ~(mask[len]); byte; byte >>= 1) masklen--;
+	lua_pushinteger(L, masklen);
+
+	return 2;
+}
+
+/* value = netifaces:getmac(i [, mode]) */
+#define nibble2hex(N)	((N) < 10 ? '0'+(N) : 'a'+(N)%10);
+static int netifaces_getmac (lua_State *L) {
+	uv_interface_address_t *iface = toiface(L);
+	const char *mode = luaL_optstring(L, 3, "t");
+	if (mode[0] == 'b' && mode[1] == '\0') {  /* binary format */
+		lua_pushlstring(L, iface->phys_addr, 6);
+	} else if (mode[0] == 't' && mode[1] == '\0') {  /* literal format */
+		char literal[17];
+		int i = 0;
+		while (1) {
+			int byte = iface->phys_addr[i/3];
+			literal[i++] = nibble2hex((byte&0xf0)>>4);
+			literal[i++] = nibble2hex(byte&0x0f);
+			if (i == sizeof(literal)) break;
+			literal[i++] = ':';
+		}
+		lua_pushlstring(L, literal, sizeof(literal));
+	} else {
+		return luaL_argerror(L, 3, "invalid mode");
+	}
+	return 1;
+}
+
+
+/* netifaces = system.netifaces() */
+static int system_netifaces (lua_State *L) {
+	NetIfaceList *ifaces = (NetIfaceList *)lua_newuserdatauv(L, sizeof(NetIfaceList), 0);
+	int err = uv_interface_addresses(&ifaces->list, &ifaces->count);
+	if (err) lcu_error(L, err);
+	luaL_setmetatable(L, LCU_NETIFACELISTCLS);
+	return 1;
+}
+
+
+/*
  * Module
  */
 
@@ -1466,6 +1581,22 @@ static const luaL_Reg found[] = {
 	{"getaddress", found_getaddress},
 	{"getdomain", found_getdomain},
 	{"getsocktype", found_getsocktype},
+	{NULL, NULL}
+};
+
+static const luaL_Reg ifacesmt[] = {
+	{"__gc", netifaces_gc},
+	{"__close", netifaces_gc},
+	{NULL, NULL}
+};
+
+static const luaL_Reg ifaces[] = {
+	{"count", netifaces_count},
+	{"isinternal", netifaces_isinternal},
+	{"getname", netifaces_getname},
+	{"getdomain", netifaces_getdomain},
+	{"getaddress", netifaces_getaddress},
+	{"getmac", netifaces_getmac},
 	{NULL, NULL}
 };
 
@@ -1556,6 +1687,7 @@ static const luaL_Reg terminal[] = {
 
 static const luaL_Reg modf[] = {
 	{"address", system_address},
+	{"netifaces", system_netifaces},
 };
 
 static const luaL_Reg upvf[] = {
@@ -1574,6 +1706,13 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	luaL_setfuncs(L, foundmt, 0);
 	lua_newtable(L);  /* create method table */
 	luaL_setfuncs(L, found, 0);
+	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
+	lua_pop(L, 1);  /* pop metatable */
+
+	luaL_newmetatable(L, LCU_NETIFACELISTCLS);
+	luaL_setfuncs(L, ifacesmt, 0);
+	lua_newtable(L);  /* create method table */
+	luaL_setfuncs(L, ifaces, 0);
 	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
 	lua_pop(L, 1);  /* pop metatable */
 

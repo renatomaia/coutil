@@ -1,56 +1,54 @@
-local info = require "coutil.info"
+local system = require "coutil.system"
 
-local options = {
-	getprocess = "#^cmUSTMd=pPwio><sxX",
-	getsystem = "fpu1lL",
-}
+local options = "#$^=<>1bcdefghHiklLmMnopPrRsStTuUvVwxX"
 
-for fname, options in pairs(options) do
-	newtest(fname)
+newtest("info")
 
-	local func = info[fname]
-
-	do case "errors"
-		for i = 1, 255 do
-			local char = string.char(i)
-			if not string.find(options, char, 1, "plain search") then
-				asserterr("unknown mode char (got '"..char.."')",
-				          pcall(func, char))
-			end
+do case "errors"
+	for i = 1, 255 do
+		local char = string.char(i)
+		if not string.find(options, char, 1, "plain search") then
+			asserterr("unknown mode char (got '"..char.."')",
+			          pcall(system.info, char))
 		end
-
-		done()
 	end
 
-	do case "single value"
-		for c in string.gmatch(options , ".") do
-			local value = func(c)
-			assert(type(value) == "number")
-
-			local v1, v2, v3 = func(c..c..c)
-			assert(type(v1) == "number")
-			assert(v2 == v1)
-			assert(v3 == v1)
-		end
-
-		done()
-	end
-
-	do case "all values"
-		local packed = table.pack(func(options))
-		assert(#packed == #options)
-		for i = 1, #options do
-			assert(type(packed[i]) == "number")
-		end
-
-		done()
-	end
+	done()
 end
 
-newtest "getcpustat"
+do case "single value"
+	for c in string.gmatch(options , ".") do
+		local ltype = type(system.info(c))
+		assert(ltype == "number" or ltype == "string")
+
+		local v1, v2, v3 = system.info(c..c..c)
+
+		assert(type(v1) == ltype)
+		assert(v2 == v1)
+		assert(v3 == v1)
+	end
+
+	done()
+end
+
+do case "all values"
+	asserterr("unknown mode char (got '\255')",
+	          pcall(system.info, options.."\255"))
+
+	local packed = table.pack(system.info(options))
+	assert(#packed == #options)
+	for i = 1, #options do
+		local ltype = type(packed[i])
+		assert(ltype == "number" or ltype == "string")
+	end
+
+	done()
+end
+
+newtest "cpuinfo"
 
 local options = "mcunsid"
-local cpuinfo = info.getcpustats()
+local cpuinfo = system.cpuinfo()
 
 do case "errors"
 	for cpuidx = 1, cpuinfo:count() do
