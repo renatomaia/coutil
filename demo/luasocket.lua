@@ -584,10 +584,13 @@ end
 local socket = {
 	_VERSION = "LuaSocket 2.0.2",
 	dns = dns,
-	gettime = now,
 	sleep = sleep,
 	skip = select,
 }
+
+function socket.gettime()
+	return now("epoch")
+end
 
 function socket.newtry(func)
 	return function (ok, ...)

@@ -4,10 +4,23 @@
 
 /* timestamp = system.time([update]) */
 static int system_time (lua_State *L) {
-	lcu_Scheduler *sched = lcu_getsched(L);
-	uv_loop_t *loop = lcu_toloop(sched);
-	if (lua_toboolean(L, 1)) uv_update_time(loop);
-	lua_pushnumber(L, (lua_Number)(uv_now(loop))/1e3);
+	static const char *const modes[] = {"cached","updated","epoch",NULL};
+	int mode = luaL_checkoption(L, 1, "cached", modes);
+	switch (mode) {
+		case 0:
+		case 1: {
+			lcu_Scheduler *sched = lcu_getsched(L);
+			uv_loop_t *loop = lcu_toloop(sched);
+			if (mode) uv_update_time(loop);
+			lua_pushnumber(L, (lua_Number)(uv_now(loop))/1e3);
+		} break;
+		case 2: {
+			uv_timeval64_t time;
+			int err = uv_gettimeofday(&time);
+			if (err < 0) return lcuL_pusherrres(L, err);
+			lua_pushnumber(L, lcu_time2sec(time));
+		} break;
+	}
 	return 1;
 }
 

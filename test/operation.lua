@@ -529,7 +529,7 @@ do newtest "time" --------------------------------------------------------------
 		end,
 		trigger = function (self, cfgid)
 			local future = system.time() + cfgid / 100
-			repeat until system.time("update") >= future
+			repeat until system.time("updated") >= future
 		end,
 	})
 end

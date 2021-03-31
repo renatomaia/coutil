@@ -76,8 +76,6 @@ static int system_cpuinfo (lua_State *L) {
 }
 
 
-#define time2sec(T)	((T).tv_sec+((lua_Number)((T).tv_usec)*1e-3))
-
 /* ... = system.info(what) */
 
 typedef struct SystemInfo {
@@ -175,7 +173,7 @@ static int system_info (lua_State *L) {
 		case '>': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_msgsnd); break;
 		case '1': lua_pushnumber(L, (lua_Number)sysload(L, &sysinf)[0]); break;
 		case 'b': lua_pushinteger(L, (lua_Integer)uv_get_total_memory()); break;
-		case 'c': lua_pushnumber(L, time2sec(sysusage(L, &sysinf)->ru_utime)); break;
+		case 'c': lua_pushnumber(L, lcu_time2sec(sysusage(L, &sysinf)->ru_utime)); break;
 		case 'd': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_idrss*1024); break;
 		case 'e': pushbuffer(L, &sysinf, uv_exepath); break;
 		case 'f': lua_pushinteger(L, (lua_Integer)uv_get_free_memory()); break;
@@ -198,7 +196,7 @@ static int system_info (lua_State *L) {
 			lua_pushinteger(L, (lua_Integer)val);
 		} break;
 		case 'R': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_maxrss*1024); break;
-		case 's': lua_pushnumber(L, time2sec(sysusage(L, &sysinf)->ru_stime)); break;
+		case 's': lua_pushnumber(L, lcu_time2sec(sysusage(L, &sysinf)->ru_stime)); break;
 		case 'S': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_nsignals); break;
 		case 'u': lua_pushinteger(L, (lua_Integer)sysuser(L, &sysinf)->uid); break;
 		case 'U': lua_pushstring(L, sysuser(L, &sysinf)->username); break;
