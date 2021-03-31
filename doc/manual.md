@@ -1259,7 +1259,7 @@ Returns values corresponding to system information according to the following ch
 - `b`: total amount of physical memory in the system (**bytes**).
 - `c`: user **CPU** time used of the process (seconds).
 - `d`: integral unshared **data** size of the process (bytes).
-- `e`: **executable** file path of the process (path).
+- `e`: **executable** file path of the process (see note below).
 - `f`: amount of **free** memory available in the system (bytes).
 - `g`: current user **group** identifier (gid).
 - `h`: operating system **hardware** name.
@@ -1287,6 +1287,8 @@ Returns values corresponding to system information according to the following ch
 - `w`: **swaps** of the process.
 - `x`: _voluntary_ **context** switches of the process.
 - `X`: _involuntary_ **context** switches of the process.
+
+**Note**: option `"e"` may raise an error on Unix and AIX systems when used in the [standard standalone interpreter](http://www.lua.org/manual/5.4/manual.html#7) or any program that does not execute [`uv_setup_args`](http://docs.libuv.org/en/v1.x/misc.html#c.uv_setup_args) properly.
 
 ### `system.cpuinfo ()`
 
