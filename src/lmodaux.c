@@ -1,5 +1,6 @@
 #include "lmodaux.h"
 
+#include <stdlib.h>
 #include <lualib.h>
 #include <lmemlib.h>
 
@@ -81,6 +82,25 @@ LCUI_FUNC void lcu_getoutputbuf (lua_State *L, int arg, uv_buf_t *buf) {
 	size_t sz;
 	char *data = luamem_checkmemory(L, arg, &sz);
 	setupbuf(L, arg, buf, data, sz);
+}
+
+
+/*
+ * String getter
+ */
+
+LCUI_FUNC void lcu_pushstrout(lua_State *L, lcu_GetStringFunc getter) {
+	char array[UV_MAXHOSTNAMESIZE];
+	char *buffer = array;
+	size_t len = sizeof(array);
+	int err = getter(buffer, &len);
+	if (err == UV_ENOBUFS) {
+		buffer = (char *)malloc(len*sizeof(char));
+		err = getter(buffer, &len);
+	}
+	if (err >= 0) lua_pushstring(L, buffer);
+	if (buffer != array) free(buffer);
+	if (err < 0) lcu_error(L, err);
 }
 
 
