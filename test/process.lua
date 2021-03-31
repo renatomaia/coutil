@@ -815,3 +815,47 @@ do case "ignore errors after cancel"
 
 	done()
 end
+
+newtest "g|setpriority" ---------------------------------------------------------------
+
+do case "error messages"
+	asserterr("out of range", pcall(system.setpriority, 123, -21))
+	asserterr("out of range", pcall(system.setpriority, 123, 20))
+	asserterr("out of range", pcall(system.setpriority, 123, math.maxinteger))
+	asserterr("invalid option", pcall(system.setpriority, 123, "other"))
+
+	done()
+end
+
+do case "own priority"
+	local pid = system.info("#")
+	local name, value = system.getpriority(pid)
+	assert(type(name) == "string")
+	assert(type(value) == "number")
+
+	assert(system.setpriority(pid, value+1))
+
+	local name, newval = system.getpriority(pid)
+	assert(name == "other")
+	assert(newval == value+1)
+
+	done()
+end
+
+do case "change other process"
+	local proc = { execfile = "sleep", arguments = { "3" } }
+	spawn(system.execute, proc)
+
+	assert(system.setpriority(proc.pid, "below"))
+	assert(system.getpriority(proc.pid) == "below")
+
+	assert(system.setpriority(proc.pid, "low"))
+	assert(system.getpriority(proc.pid) == "low")
+
+	assert(system.emitsig(proc.pid, "terminate"))
+
+	assert(system.run() == false)
+
+	done()
+end
+

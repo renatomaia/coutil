@@ -79,6 +79,7 @@ Index
 		- [`addresses:reset`](#addressesreset-)
 	- [`system.getdir`](#systemgetdir-)
 	- [`system.getenv`](#systemgetenv-name)
+	- [`system.getpriority`](#systemgetpriority-pid)
 	- [`system.halt`](#systemhalt-)
 	- [`system.info`](#systeminfo-what)
 	- [`system.isrunning`](#systemisrunning-)
@@ -98,6 +99,7 @@ Index
 	- [`system.run`](#systemrun-mode)
 	- [`system.setdir`](#systemsetdir-path)
 	- [`system.setenv`](#systemsetenv-name-value)
+	- [`system.setpriority`](#systemsetpriority-pid-value)
 	- [`system.socket`](#systemsocket-type-domain)
 		- [`socket:accept`](#socketaccept-)
 		- [`socket:bind`](#socketbind-address)
@@ -684,6 +686,30 @@ as listed below:
 | `"winresize"` | SIGWINCH | ignore | Terminal **window size** has **changed**. |
 
 Returns string `signal` in case of success.
+
+### `system.getpriority (pid)`
+
+Returns a string and a number corresponding to the scheduling priority of the process with identifier `pid`.
+The first returned value is one of the following strings,
+which indicates some convenient distinct priority value (from highest to lowest):
+
+- `"highest"`
+- `"high"`
+- `"above"`
+- `"normal"`
+- `"below"`
+- `"low"`
+
+The string `"other"` is returned for any other priorities values placed inbetween these reference values.
+
+The second returned value is a number ranging from -20 (for highest priority) to 19 (for lowest priority) corresponding to the scheduling priority of the process.
+
+### `system.setpriority (pid, value)`
+
+Changes the scheduling priority of the process with identifier `pid`.
+`value` can be any of the string or number values described as the return values of [`system.getpriority`](#systemgetpriority-pid),
+except string `"other"`,
+which does not denote a specific priority value.
 
 ### `system.getdir ()`
 

@@ -45,7 +45,7 @@ static const struct { const char *name; int value; } signals[] = {
 #ifdef SIGSYS
 	{ "sysargerr", SIGSYS },
 #endif
-	{ NULL, 0 },
+	{ NULL, 0 }
 };
 
 static void pushsignal (lua_State *L, int signum) {
@@ -67,9 +67,11 @@ static int checksignal (lua_State *L, int arg, int catch) {
 }
 
 
+#define checkpid(L,A)	((uv_pid_t)luaL_checkinteger(L,A))
+
 /* success [, errmsg] = system.emitsig (process, signal) */
 static int system_emitsig (lua_State *L) {
-	lua_Integer pid = luaL_checkinteger(L, 1);
+	uv_pid_t pid = checkpid(L, 1);
 	lua_Integer signal = lua_isinteger(L, 2) ? lua_tointeger(L, 2)
 	                                         : checksignal(L, 2, 0);
 	int err = uv_kill(pid, signal);
@@ -106,6 +108,51 @@ static int k_setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 static int system_awaitsig (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
 	return lcuT_resetthropk(L, UV_SIGNAL, sched, k_setupsignal, returnsignal, NULL);
+}
+
+
+/* string, number = system.getpriority (pid) */
+static int system_getpriority (lua_State *L) {
+	uv_pid_t pid = checkpid(L, 1);
+	int value;
+	int err = uv_os_getpriority(pid, &value);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	switch (value) {
+		case UV_PRIORITY_HIGHEST: lua_pushliteral(L, "highest"); break;
+		case UV_PRIORITY_HIGH: lua_pushliteral(L, "high"); break;
+		case UV_PRIORITY_ABOVE_NORMAL: lua_pushliteral(L, "above"); break;
+		case UV_PRIORITY_NORMAL: lua_pushliteral(L, "normal"); break;
+		case UV_PRIORITY_BELOW_NORMAL: lua_pushliteral(L, "below"); break;
+		case UV_PRIORITY_LOW: lua_pushliteral(L, "low"); break;
+		default: lua_pushliteral(L, "other"); break;
+	}
+	lua_pushinteger(L, value);
+	return 2;
+}
+
+/* true = system.setpriority (pid, value) */
+static int system_setpriority (lua_State *L) {
+	uv_pid_t pid = checkpid(L, 1);
+	int priority, err;
+	if (lua_isinteger(L, 2)) {
+		lua_Integer value = luaL_checkinteger(L, 2);
+		luaL_argcheck(L, -20 <= value && value < 20, 2, "out of range");
+		priority = (int)value;
+	} else {
+		static const char *const options[] = { "highest", "high", "above",
+		                                       "normal", "below", "low", NULL };
+		int option = luaL_checkoption(L, 2, NULL, options);
+		switch (option) {
+			case 0: priority = UV_PRIORITY_HIGHEST; break;
+			case 1: priority = UV_PRIORITY_HIGH; break;
+			case 2: priority = UV_PRIORITY_ABOVE_NORMAL; break;
+			case 3: priority = UV_PRIORITY_NORMAL; break;
+			case 4: priority = UV_PRIORITY_BELOW_NORMAL; break;
+			default: priority = UV_PRIORITY_LOW; break;
+		}
+	}
+	err = uv_os_setpriority(pid, priority);
+	return lcuL_pushresults(L, 0, err);
 }
 
 
@@ -449,6 +496,8 @@ LCUI_FUNC void lcuM_addprocesf (lua_State *L) {
 		{NULL, NULL}
 	};
 	static const luaL_Reg luaf[] = {
+		{"getpriority", system_getpriority},
+		{"setpriority", system_setpriority},
 		{"getdir", system_getdir},
 		{"setdir", system_setdir},
 		{"getenv", system_getenv},

@@ -929,6 +929,8 @@ do case "generation"
 
 	asserterr("unable to yield", pcall(system.random, buffer))
 
+	assert(buffer:tostring() == string.rep("\0", #buffer))
+
 	spawn(system.random, buffer)
 
 	assert(system.run() == false)
