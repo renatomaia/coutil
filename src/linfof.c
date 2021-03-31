@@ -151,9 +151,9 @@ static void pushbuffer(lua_State *L, SystemInfo *sysinf, GetPathFunc f) {
 		buffer = (char *)malloc(len*sizeof(char));
 		err = f(buffer, &len);
 	}
-	if (!err) lua_pushstring(L, buffer);
+	if (err >= 0) lua_pushstring(L, buffer);
 	if (buffer != array) free(buffer);
-	if (err) lcu_error(L, err);
+	if (err < 0) lcu_error(L, err);
 }
 
 static int system_info (lua_State *L) {
