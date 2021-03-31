@@ -1,3 +1,4 @@
+local memory = require "memory"
 local system = require "coutil.system"
 
 local function testbooloption(sock, name)
@@ -909,6 +910,37 @@ do case "used after library collection"
 			end)
 		end
 	]===])
+
+	done()
+end
+
+newtest "random"
+
+do case "generation"
+	local buffer = memory.create(4)
+
+	assert(coroutine.resume(coroutine.create(function ()
+		for value in pairs(types) do
+			asserterr("bad argument", pcall(system.random, value))
+		end
+
+		asserterr("out of range", pcall(system.random, buffer, -1))
+		asserterr("out of range", pcall(system.random, buffer, 0))
+		asserterr("out of range", pcall(system.random, buffer, 1, #buffer+1))
+	end)))
+
+
+	asserterr("unable to yield", pcall(system.random, buffer))
+
+	assert(buffer:tostring() == string.rep("\0", #buffer))
+
+	spawn(function ()
+		system.random(buffer)
+	end)
+
+	assert(system.run() == false)
+
+	assert(buffer:tostring() ~= string.rep("\0", #buffer))
 
 	done()
 end
