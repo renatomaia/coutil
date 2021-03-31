@@ -683,6 +683,14 @@ as listed below:
 
 Returns string `signal` in case of success.
 
+### `system.getdir ()`
+
+Return the path of the current working directory.
+
+### `system.setdir (path)`
+
+Changes the current working directory to the path in string `path`.
+
 ### `system.getenv ([name])`
 
 If `name` is not provided,

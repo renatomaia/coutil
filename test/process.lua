@@ -52,9 +52,24 @@ do
 	end
 end
 
+newtest "g|setdir" ---------------------------------------------------------------
+
+do case "change value"
+	local path = system.getdir()
+	assert(type(path) == "string")
+
+	local homedir = system.info("H")
+	assert(system.setdir(homedir) == true)
+
+	assert(system.getdir() == homedir)
+	assert(system.setdir(path) == true)
+
+	done()
+end
+
 newtest "g|setenv" ---------------------------------------------------------------
 
-do case "invalir arguments"
+do case "invalid arguments"
 	local acceptable = {
 		string = true,
 		number = true,
