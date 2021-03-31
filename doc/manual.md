@@ -124,7 +124,7 @@ Await Function
 
 An _await function_ [suspends](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) the execution of the calling coroutine
 (yields no value),
-and also implies that the coroutine will be resumed on some specitic condition.
+and also implies that the coroutine will be resumed on some specific condition.
 
 Coroutines executing an _await function_ can be resumed explicitly by [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume).
 In such case,
