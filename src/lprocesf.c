@@ -109,6 +109,20 @@ static int system_awaitsig (lua_State *L) {
 }
 
 
+/* path = system.getdir () */
+static int system_getdir (lua_State *L) {
+	lcu_pushstrout(L, uv_cwd);
+	return 1;
+}
+
+/* true = system.setdir (path) */
+static int system_setdir (lua_State *L) {
+	const char *path = luaL_checkstring(L, 1);
+	int err = uv_chdir(path);
+	return lcuL_pushresults(L, 0, err);
+}
+
+
 /* value = system.getenv ([name]) */
 static int environ2table (lua_State *L) {
 	uv_env_item_t *envlist = (uv_env_item_t *)lua_touserdata(L, 2);
@@ -435,6 +449,8 @@ LCUI_FUNC void lcuM_addprocesf (lua_State *L) {
 		{NULL, NULL}
 	};
 	static const luaL_Reg luaf[] = {
+		{"getdir", system_getdir},
+		{"setdir", system_setdir},
 		{"getenv", system_getenv},
 		{"setenv", system_setenv},
 		{"packenv", system_packenv},

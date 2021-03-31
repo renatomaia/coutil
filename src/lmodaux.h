@@ -33,6 +33,10 @@ LCUI_FUNC void lcu_getinputbuf (lua_State *L, int arg, uv_buf_t *buf);
 
 LCUI_FUNC void lcu_getoutputbuf (lua_State *L, int arg, uv_buf_t *buf);
 
+typedef int (*lcu_GetStringFunc) (char *buffer, size_t *len);
+
+LCUI_FUNC void lcu_pushstrout(lua_State *L, lcu_GetStringFunc getter);
+
 #define lcuL_maskflag(O,F) ((O)->flags&(F))
 #define lcuL_setflag(O,F) ((O)->flags |= (F))
 #define lcuL_clearflag(O,F) ((O)->flags &= ~(F))
@@ -57,6 +61,7 @@ LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup);
 
 LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
                                               const char *func);
+
 
 
 #endif

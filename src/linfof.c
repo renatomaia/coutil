@@ -1,7 +1,5 @@
 #include "lmodaux.h"
 
-#include <stdlib.h>
-
 
 typedef struct CpuInfoList {
 	int count;
@@ -142,20 +140,6 @@ static uv_passwd_t *sysuser (lua_State *L, SystemInfo *sysinf) {
 
 typedef int (*GetPathFunc) (char *buffer, size_t *len);
 
-static void pushbuffer(lua_State *L, SystemInfo *sysinf, GetPathFunc f) {
-	char array[UV_MAXHOSTNAMESIZE];
-	char *buffer = array;
-	size_t len = sizeof(array);
-	int err = f(buffer, &len);
-	if (err == UV_ENOBUFS) {
-		buffer = (char *)malloc(len*sizeof(char));
-		err = f(buffer, &len);
-	}
-	if (err >= 0) lua_pushstring(L, buffer);
-	if (buffer != array) free(buffer);
-	if (err < 0) lcu_error(L, err);
-}
-
 static int system_info (lua_State *L) {
 	SystemInfo sysinf;
 	size_t sz;
@@ -175,7 +159,7 @@ static int system_info (lua_State *L) {
 		case 'b': lua_pushinteger(L, (lua_Integer)uv_get_total_memory()); break;
 		case 'c': lua_pushnumber(L, lcu_time2sec(sysusage(L, &sysinf)->ru_utime)); break;
 		case 'd': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_idrss*1024); break;
-		case 'e': pushbuffer(L, &sysinf, uv_exepath); break;
+		case 'e': lcu_pushstrout(L, uv_exepath); break;
 		case 'f': lua_pushinteger(L, (lua_Integer)uv_get_free_memory()); break;
 		case 'g': lua_pushinteger(L, (lua_Integer)sysuser(L, &sysinf)->gid); break;
 		case 'h': lua_pushstring(L, sysname(L, &sysinf)->machine); break;
@@ -186,7 +170,7 @@ static int system_info (lua_State *L) {
 		case 'L': lua_pushnumber(L, (lua_Number)sysload(L, &sysinf)[2]); break;
 		case 'm': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_ixrss*1024); break;
 		case 'M': lua_pushinteger(L, (lua_Integer)uv_get_constrained_memory()); break;
-		case 'n': pushbuffer(L, &sysinf, uv_os_gethostname); break;
+		case 'n': lcu_pushstrout(L, uv_os_gethostname); break;
 		case 'o': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_oublock); break;
 		case 'P': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_majflt); break;
 		case 'p': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_minflt); break;
@@ -205,7 +189,7 @@ static int system_info (lua_State *L) {
 			uv_uptime(&val);
 			lua_pushnumber(L, (lua_Number)val);
 		} break;
-		case 'T': pushbuffer(L, &sysinf, uv_os_tmpdir); break;
+		case 'T': lcu_pushstrout(L, uv_os_tmpdir); break;
 		case 'v': lua_pushstring(L, sysname(L, &sysinf)->release); break;
 		case 'V': lua_pushstring(L, sysname(L, &sysinf)->version); break;
 		case 'w': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_nswap); break;
