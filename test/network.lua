@@ -1,3 +1,4 @@
+local memory = require "memory"
 local system = require "coutil.system"
 
 local function testbooloption(sock, name)
@@ -908,7 +909,31 @@ do case "used after library collection"
 				end
 			end)
 		end
+
+		os.remove(path)
 	]===])
+
+	done()
+end
+
+newtest "random"
+
+do case "generation"
+	local buffer = memory.create(4)
+
+	spawn(function ()
+		for value in pairs(types) do
+			asserterr("bad argument", pcall(system.random, value))
+		end
+	end)
+
+	asserterr("unable to yield", pcall(system.random, buffer))
+
+	spawn(system.random, buffer)
+
+	assert(system.run() == false)
+
+	assert(buffer:tostring() ~= string.rep("\0", #buffer))
 
 	done()
 end

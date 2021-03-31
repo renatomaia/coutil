@@ -91,6 +91,7 @@ Index
 		- [`netifaces:getname`](#netifacesgetname-i)
 		- [`netifaces:isinternal`](#netifacesisinternal-i)
 	- [`system.packenv`](#systempackenv-vars)
+	- [`system.random`](#systemrandom-buffer)
 	- [`system.resume`](#systemresume-preemptco-)
 	- [`system.run`](#systemrun-mode)
 	- [`system.socket`](#systemsocket-type-domain)
@@ -164,7 +165,7 @@ for _, module in ipairs{
 end
 ```
 
-__Note__: These independent states run in a separate thread,
+**Note**: These independent states run in a separate thread,
 but share the same [memory allocation](http://www.lua.org/manual/5.4/manual.html#lua_Alloc) and [panic function](http://www.lua.org/manual/5.4/manual.html#lua_atpanic) of the caller.
 Therefore, it is required that thread-safe implementations are used,
 such as the ones used in the [standard standalone interpreter](http://www.lua.org/manual/5.4/manual.html#7).
@@ -498,7 +499,7 @@ and gerenate a [warning](http://www.lua.org/manual/5.4/manual.html#pdf-warn).
 
 Returns `true` if `chunk` is loaded successfully.
 
-__Note__: A _task_ can [yield](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) a string with a channel name followed by an endpoint name and the other arguments of [`system.awaitch`](#systemawaitch-ch-endpoint-) to be suspended awaiting on a channel without the need to load other modules.
+**Note**: A _task_ can [yield](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) a string with a channel name followed by an endpoint name and the other arguments of [`system.awaitch`](#systemawaitch-ch-endpoint-) to be suspended awaiting on a channel without the need to load other modules.
 In such case,
 [coroutine.yield](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) returns just like [`system.awaitch`](#systemawaitch-ch-endpoint-).
 
@@ -583,7 +584,7 @@ or waits to resume at least one coroutine that becomes ready.
 Returns `true` if there are remaining awaiting coroutines,
 or `false` otherwise.
 
-__Note__: when called with mode `"loop"` from the main thread of a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) and there are only [`system.awaitch`](#systemawaitch-ch-endpoint-) calls pending, the task is suspended until one of the pending calls are resolved.
+**Note**: when called with mode `"loop"` from the main thread of a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) and there are only [`system.awaitch`](#systemawaitch-ch-endpoint-) calls pending, the task is suspended until one of the pending calls are resolved.
 
 ### `system.isrunning ()`
 
@@ -685,7 +686,7 @@ Returns string `signal` in case of success.
 Returns a _packed environment_ that encapsulates environment variables from table `vars`,
 which shall map variable names to the values they must assume.
 
-__Note__: by indexing a _packed environment_,
+**Note**: by indexing a _packed environment_,
 like `env.LUA_PATH`,
 a linear search is performed in the list of packed variables to find the value of variable `LUA_PATH`.
 If such variable does not exist in the packed environment,
@@ -1072,7 +1073,7 @@ This operation is not available for passive sockets.
 
 Returns `true` in case of success.
 
-__Note__: if `data` is a [memory](https://github.com/renatomaia/lua-memory),
+**Note**: if `data` is a [memory](https://github.com/renatomaia/lua-memory),
 it is not converted to a Lua string prior to have its specified contents transfered.
 
 ### `socket:receive (buffer [, i [, j [, address]]])`
@@ -1171,7 +1172,7 @@ but that takes an unpredictable amount of time to happen.
 
 Returns `true` in case of success.
 
-### `file:write(data [, i [, j [, offset]]])`
+### `file:write (data [, i [, j [, offset]]])`
 
 [Await function](#await-function) that awaits until it writes to file `file` the substring of `data` that starts at `i` and continues until `j`,
 following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
@@ -1186,7 +1187,7 @@ the current file offset is used and updated.
 In case of success,
 this function returns the number of bytes written to `file`.
 
-### `file:read(buffer [, i [, j [, offset]]])`
+### `file:read (buffer [, i [, j [, offset]]])`
 
 [Await function](#await-function) that awaits until it reads from file `file` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
 following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
@@ -1200,6 +1201,17 @@ the current file offset is used and updated.
 
 In case of success,
 this function returns the number of bytes copied to `buffer`.
+
+### `system.random (buffer [, i [, j]])`
+
+[Await function](#await-function) that awaits until it fills [memory](https://github.com/renatomaia/lua-memory) `buffer` with [cryptographically strong random bytes](https://en.wikipedia.org/wiki/Cryptographically_secure_pseudorandom_number_generator),
+from position `i` until `j`,
+following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+
+In case of success,
+this function returns `buffer`.
+
+**Note**: this function may not complete when the system is [low on entropy](http://docs.libuv.org/en/v1.x/misc.html#c.uv_random).
 
 ### `system.info (what)`
 
