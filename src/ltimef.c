@@ -2,6 +2,12 @@
 #include "loperaux.h"
 
 
+/* timestamp = system.nanosecs() */
+static int system_nanosecs (lua_State *L) {
+	lua_pushinteger(L, (lua_Integer)uv_hrtime());
+	return 1;
+}
+
 /* timestamp = system.time([update]) */
 static int system_time (lua_State *L) {
 	static const char *const modes[] = {"cached","updated","epoch",NULL};
@@ -24,10 +30,12 @@ static int system_time (lua_State *L) {
 	return 1;
 }
 
-/* timestamp = system.nanosecs() */
-static int system_nanosecs (lua_State *L) {
-	lua_pushinteger(L, (lua_Integer)uv_hrtime());
-	return 1;
+/* system.block(delay) */
+static int system_block (lua_State *L) {
+	lua_Number delay = luaL_checknumber(L, 1)*1e3;
+	luaL_argcheck(L, 0 <= delay && delay <= UINT_MAX, 1, "out of range");
+	uv_sleep((unsigned int)delay);
+	return 0;
 }
 
 /* succ [, errmsg] = system.suspend([delay]) */
@@ -52,7 +60,7 @@ static void uv_ontimer (uv_timer_t *handle) {
 }
 static int k_setuptimer (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_timer_t *timer = (uv_timer_t *)handle;
-	uint64_t msecs = (uint64_t)(lua_tonumber(L, 1)*1000);
+	uint64_t msecs = (uint64_t)(lua_tonumber(L, 1)*1e3);
 	int err;
 	if (loop) err = lcuT_armthrop(L, uv_timer_init(loop, timer));
 	else if (uv_timer_get_repeat(timer) != msecs) err = uv_timer_stop(timer);
@@ -79,6 +87,7 @@ LCUI_FUNC void lcuM_addtimef (lua_State *L) {
 	};
 	static const luaL_Reg modf[] = {
 		{"time", system_time},
+		{"block", system_block},
 		{"suspend", system_suspend},
 		{NULL, NULL}
 	};

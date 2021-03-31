@@ -59,6 +59,7 @@ Index
 	- [`system.address`](#systemaddress-type--data--port--mode)
 	- [`system.awaitch`](#systemawaitch-ch-endpoint-)
 	- [`system.awaitsig`](#systemawaitsig-signal)
+	- [`system.block`](#systemblock-seconds)
 	- [`system.cpuinfo`](#systemcpuinfo-)
 		- [`cpuinfo:close`](#cpuinfoclose-)
 		- [`cpuinfo:count`](#cpuinfocount-)
@@ -104,7 +105,7 @@ Index
 		- [`socket:send`](#socketsend-data--i--j--address)
 		- [`socket:setoption`](#socketsetoption-name-value-)
 		- [`socket:shutdown`](#socketshutdown-)
-	- [`system.suspend`](#systemsuspend-delay)
+	- [`system.suspend`](#systemsuspend-seconds)
 	- [`system.time`](#systemtime-update)
 	- [`system.unpackenv`](#systemunpackenv-env--tab)
 - [`coutil.threads`](#thread-pools)
@@ -598,7 +599,7 @@ Causes [`system.run`](#systemrun-mode) to return prematurely after this function
 Returns a timestamp as a number of seconds with precision of milliseconds according to the value of `mode`,
 as described below:
 
-- `"cached"` (default): the last calculated timestamp used to evaluate [time-related events](#systemsuspend-delay).
+- `"cached"` (default): the last calculated timestamp used to evaluate [time-related events](#systemsuspend-seconds).
 It increases monotonically from some arbitrary point in time
 (_i.e._, it is not subject to clock drift).
 - `"updated"`: updates the cached timestamp to reflect the current time,
@@ -616,11 +617,16 @@ Returns a timestamp in nanoseconds that represents the current time of the syste
 It increases monotonically from some arbitrary point in time
 (_i.e._, it is not subject to clock drift).
 
-### `system.suspend ([delay])`
+### `system.block (seconds)`
 
-[Await function](#await-function) that awaits `delay` seconds since timestamp provided by [`system.time`](#systemtime-update).
+Blocks the entire current execution (system thread) for `seconds` seconds,
+preventing any other coroutine to execute.
 
-If `delay` is not provided,
+### `system.suspend ([seconds])`
+
+[Await function](#await-function) that awaits `seconds` since timestamp provided by [`system.time`](#systemtime-update).
+
+If `seconds` is not provided,
 is `nil`,
 or negative,
 it is assumed as zero,

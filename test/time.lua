@@ -53,6 +53,60 @@ do case "nanosecs"
 	done()
 end
 
+newtest "block" --------------------------------------------------------------
+
+do case "error messages"
+	asserterr("number expected", pcall(system.block, false))
+	asserterr("out of range", pcall(system.block, -1))
+	asserterr("out of range", pcall(system.block, math.maxinteger))
+
+	done()
+end
+
+do case "block main thread"
+	local before = system.nanosecs()
+	system.block(.1)
+	assert(system.nanosecs()-before > 1e8)
+
+	done()
+end
+
+do case "block other coroutines"
+	local a,b
+
+	spawn(function ()
+		a = 0
+		system.suspend(0)
+		assert(b == 1)
+		a = 1
+		system.block(.1)
+		a = 2
+	end)
+	assert(a == 0)
+
+	spawn(function ()
+		b = 0
+		system.suspend(0)
+		assert(a == 0)
+		local before = system.nanosecs()
+		b = 1
+		system.suspend(0)
+		assert(a == 2)
+		assert(system.nanosecs()-before > 1e8)
+		b = 2
+	end)
+	assert(b == 0)
+
+	local before = system.nanosecs()
+	assert(system.run() == false)
+	assert(system.nanosecs()-before > 1e8)
+
+	assert(a == 2)
+	assert(b == 2)
+
+	done()
+end
+
 newtest "suspend" --------------------------------------------------------------
 
 do case "error messages"
