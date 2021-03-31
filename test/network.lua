@@ -929,10 +929,9 @@ do case "generation"
 		asserterr("out of range", pcall(system.random, buffer, 1, #buffer+1))
 	end)))
 
+	assert(buffer:tostring() == string.rep("\0", #buffer))
 
 	asserterr("unable to yield", pcall(system.random, buffer))
-
-	assert(buffer:tostring() == string.rep("\0", #buffer))
 
 	spawn(function ()
 		system.random(buffer)
