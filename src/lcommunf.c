@@ -1617,6 +1617,42 @@ static int terminal_winsize (lua_State *L) {
 
 
 /*
+ * Random
+ */
+
+/* system.random(buffer [, i [, j]]) */
+static int returnrand (lua_State *L) {
+	int err = (int)lua_tointeger(L, 2);
+	lua_settop(L, 1);
+	if (err) return lcuL_pusherrres(L, err);
+	return 1;
+}
+static void uv_onrandom (uv_random_t *random, int err, void *buf, size_t sz) {
+	uv_loop_t *loop = random->loop;
+	uv_req_t *request = (uv_req_t *)random;
+	lua_State *thread = lcuU_endreqop(loop, request);
+	if (thread) {
+		lua_pushinteger(thread, err);
+		lcuU_resumereqop(loop, request, 1);
+	}
+}
+static int k_setuprand (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_random_t *random = (uv_random_t *)request;
+	uv_buf_t buf;
+	int err;
+	lcu_getoutputbuf(L, 1, &buf);
+	lua_settop(L, 1);
+	err = uv_random(loop, random, buf.base, buf.len, 0, uv_onrandom);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
+}
+static int system_random (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);
+	return lcuT_resetreqopk(L, sched, k_setuprand, returnrand, NULL);
+}
+
+
+/*
  * Module
  */
 
@@ -1755,6 +1791,7 @@ static const luaL_Reg upvf[] = {
 	{"findaddr", system_findaddr},
 	{"nameaddr", system_nameaddr},
 	{"socket", system_socket},
+	{"random", system_random},
 	{NULL, NULL}
 };
 
