@@ -2,6 +2,7 @@
 #include "loperaux.h"
 #include "lsckdefs.h"
 
+#include <stdlib.h>
 #include <string.h>
 #include <signal.h>
 
@@ -108,6 +109,70 @@ static int system_awaitsig (lua_State *L) {
 }
 
 
+/* value = system.getenv ([name]) */
+static int environ2table (lua_State *L) {
+	uv_env_item_t *envlist = (uv_env_item_t *)lua_touserdata(L, 2);
+	int envcount = (int)lua_tointeger(L, 3);
+	lua_settop(L, 1);
+	while (envcount--) {
+		lua_pushstring(L, envlist[envcount].name);
+		lua_pushstring(L, envlist[envcount].value);
+		lua_settable(L, 1);
+	}
+	return 1;
+}
+static int system_getenv (lua_State *L) {
+	switch (lua_type(L, 1)) {
+		case LUA_TNONE:
+		case LUA_TTABLE: {
+			uv_env_item_t *envlist;
+			int envcount;
+			int err = uv_os_environ(&envlist, &envcount);
+			if (err < 0) return lcuL_pusherrres(L, err);
+			lua_pushcfunction(L, environ2table);
+			if (lua_gettop(L) > 1) {
+				lua_settop(L, 2);
+				lua_insert(L, 1);
+			} else {
+				lua_createtable(L, 0, envcount);
+			}
+			lua_pushlightuserdata(L, envlist);
+			lua_pushinteger(L, envcount);
+			err = lua_pcall(L, 3, 1, 0);
+			uv_os_free_environ(envlist, envcount);
+			if (err) return lua_error(L);
+		} break;
+		default: {
+			const char *name = luaL_checkstring(L, 1);
+			char array[256];
+			char *buffer = array;
+			size_t len = sizeof(array);
+			luaL_argcheck(L, !strchr(name, '='), 1, "cannot contain '='");
+			int err = uv_os_getenv(name, buffer, &len);
+			if (err == UV_ENOBUFS) {
+				buffer = (char *)malloc(len*sizeof(char));
+				err = uv_os_getenv(name, buffer, &len);
+			}
+			if (err >= 0) lua_pushlstring(L, buffer, len);
+			if (buffer != array) free(buffer);
+			if (err < 0) return lcuL_pusherrres(L, err);
+		}
+	}
+	return 1;
+}
+
+
+/* true = system.setenv (name, value) */
+static int system_setenv (lua_State *L) {
+	int err;
+	const char *name = luaL_checkstring(L, 1);
+	luaL_argcheck(L, !strchr(name, '='), 1, "cannot contain '='");
+	err = lua_isnil(L, 2) ? uv_os_unsetenv(name)
+	                      : uv_os_setenv(name, luaL_checkstring(L, 2));
+	return lcuL_pushresults(L, 0, err);
+}
+
+
 static char **newprocenv (lua_State *L, int idx) {
 	void *mem;
 	char **envl, *envv;
@@ -120,7 +185,7 @@ static char **newprocenv (lua_State *L, int idx) {
 		const char *name = lua_tostring(L, -2);
 		const char *value = lua_tostring(L, -1);
 		if (name && (value == NULL || strchr(name, '='))) luaL_error(L,
-			"bad name '%s' in environment (must be a string without '=')", name);
+			"bad name '%s' in environment (cannot contain '=')", name);
 		envc++;
 		envsz += sizeof(char *)+sizeof(char)*(strlen(name)+1+strlen(value)+1);
 		lua_pop(L, 1);
@@ -143,6 +208,7 @@ static char **newprocenv (lua_State *L, int idx) {
 	return envl;
 }
 
+/* env = system.packenv (tab) */
 static int system_packenv (lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	newprocenv(L, 1);
@@ -150,6 +216,7 @@ static int system_packenv (lua_State *L) {
 	return 1;
 }
 
+/* tab = system.unpackenv (env [, tab]) */
 static int system_unpackenv (lua_State *L) {
 	const char **envl = (const char **)luaL_checkudata(L, 1, LCU_PROCENVCLS);
 	if (lua_gettop(L) == 1) lua_newtable(L);
@@ -163,10 +230,12 @@ static int system_unpackenv (lua_State *L) {
 	return 1;
 }
 
+/* value = env[name] */
 static int procenv_index (lua_State *L) {
 	const char **envl = (const char **)luaL_checkudata(L, 1, LCU_PROCENVCLS);
 	size_t len;
 	const char *name = luaL_checklstring(L, 2, &len);
+	luaL_argcheck(L, !strchr(name, '='), 2, "cannot contain '='");
 	for (; *envl; envl++) {
 		if (strncmp(name, *envl, len) == 0 && (*envl)[len] == '=') {
 			lua_pushstring(L, *envl+len+1);
@@ -366,6 +435,8 @@ LCUI_FUNC void lcuM_addprocesf (lua_State *L) {
 		{NULL, NULL}
 	};
 	static const luaL_Reg luaf[] = {
+		{"getenv", system_getenv},
+		{"setenv", system_setenv},
 		{"packenv", system_packenv},
 		{"unpackenv", system_unpackenv},
 		{"emitsig", system_emitsig},

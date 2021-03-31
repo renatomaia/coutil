@@ -68,8 +68,8 @@ Index
 	- [`system.execute`](#systemexecute-cmd-)
 	- [`system.file`](#systemfile-path--mode--uperm--gperm--operm)
 		- [`file:close`](#fileclose-)
-		- [`file:read`](#filereadbuffer--i--j--offset)
-		- [`file:write`](#filewritedata--i--j--offset)
+		- [`file:read`](#fileread-buffer--i--j--offset)
+		- [`file:write`](#filewrite-data--i--j--offset)
 	- [`system.findaddr`](#systemfindaddr-name--service--mode)
 		- [`addresses:close`](#addressesclose-)
 		- [`addresses:getaddress`](#addressesgetaddress-address)
@@ -77,6 +77,7 @@ Index
 		- [`addresses:getsocktype`](#addressesgetsocktype-)
 		- [`addresses:next`](#addressesnext-)
 		- [`addresses:reset`](#addressesreset-)
+	- [`system.getenv`](#systemgetenv-name)
 	- [`system.halt`](#systemhalt-)
 	- [`system.info`](#systeminfo-what)
 	- [`system.isrunning`](#systemisrunning-)
@@ -91,9 +92,10 @@ Index
 		- [`netifaces:getname`](#netifacesgetname-i)
 		- [`netifaces:isinternal`](#netifacesisinternal-i)
 	- [`system.packenv`](#systempackenv-vars)
-	- [`system.random`](#systemrandom-buffer)
+	- [`system.random`](#systemrandom-buffer--i--j)
 	- [`system.resume`](#systemresume-preemptco-)
 	- [`system.run`](#systemrun-mode)
+	- [`system.setenv`](#systemsetenv-name-value)
 	- [`system.socket`](#systemsocket-type-domain)
 		- [`socket:accept`](#socketaccept-)
 		- [`socket:bind`](#socketbind-address)
@@ -107,7 +109,7 @@ Index
 		- [`socket:setoption`](#socketsetoption-name-value-)
 		- [`socket:shutdown`](#socketshutdown-)
 	- [`system.suspend`](#systemsuspend-seconds)
-	- [`system.time`](#systemtime-update)
+	- [`system.time`](#systemtime-mode)
 	- [`system.unpackenv`](#systemunpackenv-env--tab)
 - [`coutil.threads`](#thread-pools)
 	- [`threads.close`](#threadsclose-pool)
@@ -601,8 +603,8 @@ Returns a timestamp as a number of seconds with precision of milliseconds accord
 as described below:
 
 - `"cached"` (default): the last calculated timestamp used to evaluate [time-related events](#systemsuspend-seconds).
-It increases monotonically from some arbitrary point in time
-(_i.e._, it is not subject to clock drift).
+It increases monotonically from some arbitrary point in time,
+and is not subject to clock drift.
 - `"updated"`: updates the cached timestamp to reflect the current time,
 and returns this updated timestamp.
 - `"epoch"`: a timestamp relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time),
@@ -615,8 +617,8 @@ it is affected by discontinuous jumps in the system time
 ### `system.nanosecs ()`
 
 Returns a timestamp in nanoseconds that represents the current time of the system.
-It increases monotonically from some arbitrary point in time
-(_i.e._, it is not subject to clock drift).
+It increases monotonically from some arbitrary point in time,
+and is not subject to clock drift.
 
 ### `system.block (seconds)`
 
@@ -625,7 +627,7 @@ preventing any other coroutine to execute.
 
 ### `system.suspend ([seconds])`
 
-[Await function](#await-function) that awaits `seconds` since timestamp provided by [`system.time`](#systemtime-update).
+[Await function](#await-function) that awaits `seconds` since timestamp provided by [`system.time("cached")`](#systemtime-mode).
 
 If `seconds` is not provided,
 is `nil`,
@@ -681,6 +683,26 @@ as listed below:
 
 Returns string `signal` in case of success.
 
+### `system.getenv ([name])`
+
+If `name` is not provided,
+returns a table mapping all current environment variable names to their corresponding values.
+Alternatively,
+If `name` is a table,
+the results are added to it,
+and `name` is returned.
+
+Otherwise,
+`name` is the name of the process environment variable which value must be returned.
+Fails if the variable `name` is not defined
+(_i.e._, returns `nil` and a error message).
+
+### `system.setenv (name, value)`
+
+Sets `value` as the value of the process environment variable `name`.
+If `value` is `nil`,
+deletes the environment variable.
+
 ### `system.packenv (vars)`
 
 Returns a _packed environment_ that encapsulates environment variables from table `vars`,
@@ -696,8 +718,8 @@ If such variable does not exist in the packed environment,
 
 Returns a table mapping all environment variable names in [packed environment](#systempackenv-vars) `env` to their corresponding values.
 If table `tab` is provided,
-no table is created,
-and it is used to store the results returned.
+the results are added to it,
+and `tab` is returned.
 
 ### `system.execute (cmd, ...)`
 

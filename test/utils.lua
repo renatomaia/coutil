@@ -36,6 +36,7 @@ end
 do
 	local function catcherr(errmsg)
 		io.stderr:write(debug.traceback(errmsg), "\n")
+		spawnerr = errmsg
 		return errmsg
 	end
 

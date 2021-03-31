@@ -52,7 +52,94 @@ do
 	end
 end
 
-newtest "execute" ------------------------------------------------------------------
+newtest "g|setenv" ---------------------------------------------------------------
+
+do case "invalir arguments"
+	local acceptable = {
+		string = true,
+		number = true,
+		table = false,
+	}
+	for _, value in ipairs(types) do
+		local argok = acceptable[type(value)]
+		if not argok then
+			asserterr("string expected", pcall(system.setenv, "name", value))
+			if argok == nil then
+				asserterr("string expected", pcall(system.setenv, value, "value"))
+				asserterr("string expected", pcall(system.getenv, value))
+			end
+		end
+	end
+
+	done()
+end
+
+do case "inexistent variable"
+	asserterr("no such file or directory",
+		system.getenv("COUTIL_TEST_MISSING"))
+	assert(system.setenv("COUTIL_TEST_MISSING", nil))
+
+	done()
+end
+
+do case "invalid variable names"
+	asserterr("cannot contain '='", pcall(system.setenv, "COUTIL_TEST=abc", "def"))
+	asserterr("cannot contain '='", pcall(system.getenv, "COUTIL_TEST=abc"))
+	asserterr("no such file or directory", system.getenv("COUTIL_TEST"))
+	assert(os.getenv("COUTIL_TEST=abc") == nil)
+	assert(os.getenv("COUTIL_TEST") == nil)
+
+	assert(system.setenv("COUTIL_TEST", "abc=def"))
+	assert(system.getenv("COUTIL_TEST") == "abc=def")
+	assert(os.getenv("COUTIL_TEST") == "abc=def")
+	asserterr("cannot contain '='", pcall(system.getenv, "COUTIL_TEST=abc"))
+
+	done()
+end
+
+do case "large values"
+	local value = string.rep("X", 1024)
+	assert(system.setenv("COUTIL_TEST_HUGE", value))
+	assert(system.getenv("COUTIL_TEST_HUGE") == value)
+	assert(os.getenv("COUTIL_TEST_HUGE") == value)
+
+	done()
+end
+
+do case "listing all variables"
+	local env1 = assert(system.getenv())
+	assert(type(env1) == "table")
+	for name, value in pairs(env1) do
+		assert(type(name) == "string")
+		assert(type(value) == "string")
+		assert(system.getenv(name) == value)
+		assert(os.getenv(name) == value)
+	end
+
+	local tab = { 1,2,3, extra = "unchanged", COUTIL_TEST = "oops!" }
+	local env2 = system.getenv(tab)
+	assert(env2 == tab)
+	for name, value in pairs(env1) do
+		assert(env2[name] == value)
+	end
+	assert(env2[1] == 1)
+	assert(env2[2] == 2)
+	assert(env2[3] == 3)
+	assert(env2.extra == "unchanged")
+	assert(env2.COUTIL_TEST ~= "oops!")
+
+	done()
+end
+
+do case "clearing variable"
+	assert(system.setenv("COUTIL_TEST", nil))
+	asserterr("no such", system.getenv("COUTIL_TEST"))
+	assert(os.getenv("COUTIL_TEST") == nil)
+
+	done()
+end
+
+newtest "execute" --------------------------------------------------------------
 
 do case "error messages"
 	asserterr("unable to yield", pcall(system.execute))
@@ -250,7 +337,7 @@ end
 do case "environment illegal char"
 	spawn(function ()
 		asserterr(
-			"bad name '=ENV' in environment (must be a string without '=')",
+			"bad name '=ENV' in environment (cannot contain '=')",
 			pcall(system.execute, {
 				execfile = luabin,
 				environment = { ["=ENV"] = "illegal" },
