@@ -6,7 +6,7 @@ do case "cached time"
 	local function testtime()
 		local factor = 1e3 -- to milliseconds
 
-		local cached = system.time("update")*factor
+		local cached = system.time("updated")*factor
 		assert(cached > 0, cached)
 		--assert(cached%1 < 1, cached)
 
@@ -14,9 +14,12 @@ do case "cached time"
 		repeat until system.nanosecs() > actual+1e6
 
 		assert(cached == system.time()*factor)
-		local updated = system.time("update")*factor
+		local updated = system.time("updated")*factor
 		assert(updated-cached <= 1, updated-cached)
 		--assert(updated%1 < 1, updated)
+
+		local epoch, luatime = system.time("epoch"), os.time()
+		assert(math.abs(epoch - luatime) < 1)
 	end
 
 	testtime()
@@ -38,7 +41,7 @@ do case "nanosecs"
 
 	spawn(function ()
 		before = system.nanosecs()
-		system.time("update")
+		system.time("updated")
 		system.suspend(1e-3)
 		elapsed = system.nanosecs()-before
 	end)

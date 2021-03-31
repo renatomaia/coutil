@@ -457,7 +457,7 @@ Returns a new _thread pool_ with `size` system threads to execute its [_tasks_](
 
 If `size` is omitted,
 returns a new reference to the _thread pool_ where the calling code is executing,
-or `nil` if it is not executing in a _thread pool_ (_e.g._ the main process thread).
+or `nil` if it is not executing in a _thread pool_ (_e.g._, the main process thread).
 
 ### `threads.resize (pool, size [, create])`
 
@@ -593,21 +593,28 @@ or `false` otherwise.
 
 Causes [`system.run`](#systemrun-mode) to return prematurely after this function returns.
 
-### `system.time ([update])`
+### `system.time ([mode])`
 
-Returns the last calculated timestamp used to evaluate time-related system events.
-The timestamp is a number of seconds with precision of milliseconds.
-It increases monotonically from some arbitrary point in time,
-and is not subject to clock drift.
+Returns a timestamp as a number of seconds with precision of milliseconds according to the value of `mode`,
+as described below:
 
-If `update` is provided and evaluates to `true`,
-the cached timestamp is updated to the current time of the system before it is returned.
+- `"cached"` (default): the last calculated timestamp used to evaluate [time-related events](#systemsuspend-delay).
+It increases monotonically from some arbitrary point in time
+(_i.e._, it is not subject to clock drift).
+- `"updated"`: updates the cached timestamp to reflect the current time,
+and returns this updated timestamp.
+- `"epoch"`: a timestamp relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time),
+based on the current time set in the system.
+Therefore,
+unlike the other options,
+it is affected by discontinuous jumps in the system time
+(_e.g._, if the system administrator manually changes the system time).
 
 ### `system.nanosecs ()`
 
 Returns a timestamp in nanoseconds that represents the current time of the system.
-It increases monotonically from some arbitrary point in time,
-and is not subject to clock drift.
+It increases monotonically from some arbitrary point in time
+(_i.e._, it is not subject to clock drift).
 
 ### `system.suspend ([delay])`
 
@@ -651,12 +658,12 @@ as listed below:
 | `"cputotal"` | SIGPROF | terminate | **CPU** time used by the **process** and by the **system on behalf of the process** elapses. |
 | `"filelimit"` | SIGXFSZ | core dump | Allowed **file** size **limit** exceeded. |
 | `"hangup"` | SIGHUP | terminate | Terminal was closed. |
-| `"interrupt"` | SIGINT | terminate | Terminal requests the process to terminate. (_e.g._ Ctrl+`C`) |
+| `"interrupt"` | SIGINT | terminate | Terminal requests the process to terminate. (_e.g._, Ctrl+`C`) |
 | `"polling"` | SIGPOLL | terminate | Event occurred on [watched file descriptor](https://pubs.opengroup.org/onlinepubs/9699919799/functions/ioctl.html). |
-| `"quit"` | SIGQUIT | core dump | Terminal requests the process to **quit** with a [core dump](https://en.wikipedia.org/wiki/Core_dump). (_e.g._ Ctrl+`\`) |
+| `"quit"` | SIGQUIT | core dump | Terminal requests the process to **quit** with a [core dump](https://en.wikipedia.org/wiki/Core_dump). (_e.g._, Ctrl+`\`) |
 | `"stdinoff"` | SIGTTIN | stop | **Read** from terminal while in **background**. |
 | `"stdoutoff"` | SIGTTOU | stop | **Write** to terminal while in **background**. |
-| `"stop"` | SIGTSTP | stop | Terminal requests the process to **stop**. (_e.g._ Ctrl+`Z`) |
+| `"stop"` | SIGTSTP | stop | Terminal requests the process to **stop**. (_e.g._, Ctrl+`Z`) |
 | `"sysargerr"` | SIGSYS | core dump | **System** call with a **bad argument**. |
 | `"terminate"` | SIGTERM | terminate | Process shall **terminate**. |
 | `"trap"` | SIGTRAP | core dump | Exception or debug **trap** occurs. |
@@ -714,7 +721,7 @@ the standard input, output or error output of the new process.
 The possible values are:
 	- A [Lua file](http://www.lua.org/manual/5.4/manual.html#pdf-io.open) to be provided to the process.
 	- A [stream socket](#systemsocket-type-domain) to be provided to the process.
-	- `false` to indicate it should be discarded (_e.g._ `/dev/null` shall be used).
+	- `false` to indicate it should be discarded (_e.g._, `/dev/null` shall be used).
 	- A string with the following characters that indicate a [stream socket](#systemsocket-type-domain) shall be created and stored in the field to allow communication with the process.
 		- `r`: a readable stream socket to send data to the process.
 		- `w`: a writable stream socket to receive data from the process.
