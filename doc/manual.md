@@ -77,6 +77,7 @@ Index
 		- [`addresses:getsocktype`](#addressesgetsocktype-)
 		- [`addresses:next`](#addressesnext-)
 		- [`addresses:reset`](#addressesreset-)
+	- [`system.getdir`](#systemgetdir-)
 	- [`system.getenv`](#systemgetenv-name)
 	- [`system.halt`](#systemhalt-)
 	- [`system.info`](#systeminfo-what)
@@ -95,6 +96,7 @@ Index
 	- [`system.random`](#systemrandom-buffer--i--j)
 	- [`system.resume`](#systemresume-preemptco-)
 	- [`system.run`](#systemrun-mode)
+	- [`system.setdir`](#systemsetdir-path)
 	- [`system.setenv`](#systemsetenv-name-value)
 	- [`system.socket`](#systemsocket-type-domain)
 		- [`socket:accept`](#socketaccept-)
@@ -685,7 +687,7 @@ Returns string `signal` in case of success.
 
 ### `system.getdir ()`
 
-Return the path of the current working directory.
+Returns the path of the current working directory.
 
 ### `system.setdir (path)`
 
