@@ -620,151 +620,101 @@ static int system_nameaddr (lua_State *L) {
  * Network Interface Information
  */
 
-typedef struct NetIfaceList {
+typedef struct NetInfoList {
 	int count;
 	uv_interface_address_t *list;
-} NetIfaceList;
+} NetInfoList;
 
-#define checkifaces(L)	((NetIfaceList *)luaL_checkudata(L, 1, LCU_NETIFACELISTCLS))
+#define checknetinfo(L)	((NetInfoList *)luaL_checkudata(L, 1, LCU_NETINFOLISTCLS))
 
-static NetIfaceList *openedifaces (lua_State *L) {
-	NetIfaceList *ifaces = checkifaces(L);
-	luaL_argcheck(L, ifaces->list, 1, "closed "LCU_NETIFACELISTCLS);
-	return ifaces;
+static NetInfoList *openednetinfo (lua_State *L) {
+	NetInfoList *netinfo = checknetinfo(L);
+	luaL_argcheck(L, netinfo->list, 1, "closed "LCU_NETINFOLISTCLS);
+	return netinfo;
 }
 
-static void closeifaces (NetIfaceList *ifaces) {
-	if (ifaces->list) {
-		uv_free_interface_addresses(ifaces->list, ifaces->count);
-		ifaces->list = NULL;
-		ifaces->count = 0;
+/* getmetatable(cpuinfo).__{gc,close}(cpuinfo) */
+static int netinfo_gc (lua_State *L) {
+	NetInfoList *netinfo = checknetinfo(L);
+	if (netinfo->list) {
+		uv_free_interface_addresses(netinfo->list, netinfo->count);
+		netinfo->list = NULL;
+		netinfo->count = 0;
 	}
-}
-
-static int netifaces_gc (lua_State *L) {
-	NetIfaceList *ifaces = checkifaces(L);
-	closeifaces(ifaces);
 	return 0;
 }
 
-/* true = netifaces:close() */
-static int netifaces_close (lua_State *L) {
-	NetIfaceList *ifaces = openedifaces(L);
-	closeifaces(ifaces);
-	lua_pushboolean(L, 1);
+/* cpucount = getmetatable(netinfo).__len(netinfo) */
+static int netinfo_len (lua_State *L) {
+	NetInfoList *netinfo = openednetinfo(L);
+	lua_pushinteger(L, netinfo->count);
 	return 1;
 }
 
-/* count = netifaces:count() */
-static int netifaces_count (lua_State *L) {
-	NetIfaceList *netifaces = openedifaces(L);
-	lua_pushinteger(L, netifaces->count);
-	return 1;
-}
-
-static uv_interface_address_t *toiface (lua_State *L) {
-	NetIfaceList *netifaces = openedifaces(L);
-	lua_Integer i = luaL_checkinteger(L, 2);
-	luaL_argcheck(L, 0 < i && i <= netifaces->count, 2, "out of range");
-	return netifaces->list+i-1;
-}
-
-/* value = netifaces:isinternal(i) */
-static int netifaces_isinternal (lua_State *L) {
-	uv_interface_address_t *iface = toiface(L);
-	lua_pushboolean(L, iface->is_internal);
-	return 1;
-}
-
-/* value = netifaces:getname(i) */
-static int netifaces_getname (lua_State *L) {
-	uv_interface_address_t *iface = toiface(L);
-	lua_pushstring(L, iface->name);
-	return 1;
-}
-
-/* value = netifaces:getdomain(i) */
-static int netifaces_getdomain (lua_State *L) {
-	uv_interface_address_t *iface = toiface(L);
-	pushaddrtype(L, iface->netmask.netmask4.sin_family);
-	return 1;
-}
-
-/* address, masklen = netifaces:getaddress(i [, format]) */
-static int netifaces_getaddress (lua_State *L) {
-	uv_interface_address_t *iface = toiface(L);
-	struct sockaddr *src = (struct sockaddr *)&iface->address;
-	int domain = src->sa_family;
-	struct sockaddr *dst = tonetaddr(L, 3);
-	if (dst) {
-		chkaddrdom(L, 3, dst, domain);
-		setaddrbytes(dst, getaddrbytes(src, NULL));
-		lua_settop(L, 3);
-	} else {
-		const char *mode = luaL_optstring(L, 3, "t");
-		if (mode[0] == 'b' && mode[1] == '\0') {  /* binary format */
-			size_t sz;
-			const char *s = getaddrbytes(src, &sz);
-			lua_pushlstring(L, s, sz);
-		} else if (mode[0] == 't' && mode[1] == '\0') {  /* literal format */
-			char s[LCU_ADDRMAXLITERAL];
-			getaddrliteral(src, s);
-			lua_pushstring(L, s);
-		} else {
-			return luaL_argerror(L, 4, "invalid mode");
-		}
-	}
-
-	{
-		/* calculate subnet mask length */
-		int sz;
-		const unsigned char *mask;
-		lua_Integer masklen;
-		unsigned char byte;
-		if (domain == AF_INET) {
-			sz = LCU_ADDRBINSZ_IPV4;
-			mask = (const unsigned char *)&iface->netmask.netmask4.sin_addr.s_addr;
-		} else {
-			sz = LCU_ADDRBINSZ_IPV6;
-			mask = (const unsigned char *)&iface->netmask.netmask6.sin6_addr;
-		}
-		while (sz && !mask[--sz]);
-		masklen = CHAR_BIT*(sz+1);
-		for (byte = ~(mask[sz]); byte; byte >>= 1) masklen--;
-		lua_pushinteger(L, masklen);
-	}
-
-	return 2;
-}
-
-/* value = netifaces:getmac(i [, mode]) */
+/* ... = getmetatable(cpuinfo).__call(cpuinfo, what [, previdx]) */
 #define nibble2hex(N)	((N) < 10 ? '0'+(N) : 'a'+(N)%10);
-static int netifaces_getmac (lua_State *L) {
-	uv_interface_address_t *iface = toiface(L);
-	const char *mode = luaL_optstring(L, 3, "t");
-	if (mode[0] == 'b' && mode[1] == '\0') {  /* binary format */
-		lua_pushlstring(L, iface->phys_addr, 6);
-	} else if (mode[0] == 't' && mode[1] == '\0') {  /* literal format */
-		char literal[17];
-		int i = 0;
-		while (1) {
-			unsigned char byte = (unsigned char)iface->phys_addr[i/3];
-			literal[i++] = nibble2hex(byte>>4);
-			literal[i++] = nibble2hex(byte&0x0f);
-			if (i == 17) break;
-			literal[i++] = ':';
+static int netinfo_call (lua_State *L) {
+	NetInfoList *netinfo = openednetinfo(L);
+	const char *mode = luaL_checkstring(L, 2);
+	int i = (int)luaL_optinteger(L, 3, 0);
+	if (0 <= i && i < netinfo->count) {
+		uv_interface_address_t *iface = netinfo->list+i;
+		lua_settop(L, 2);
+		lua_pushinteger(L, i+1);
+		for (; *mode; mode++) switch (*mode) {
+			case 'n': lua_pushstring(L, iface->name); break;
+			case 'i': lua_pushboolean(L, iface->is_internal); break;
+			case 'd': pushaddrtype(L, iface->address.address4.sin_family); break;
+			case 'B': lua_pushlstring(L, iface->phys_addr, 6); break;
+			case 'T': {
+				char literal[17];
+				int i = 0;
+				while (1) {
+					unsigned char byte = (unsigned char)iface->phys_addr[i/3];
+					literal[i++] = nibble2hex(byte>>4);
+					literal[i++] = nibble2hex(byte&0x0f);
+					if (i == 17) break;
+					literal[i++] = ':';
+				}
+				lua_pushlstring(L, literal, 17);
+			} break;
+			case 'b': {
+				size_t sz;
+				const char *s = getaddrbytes((struct sockaddr *)&iface->address, &sz);
+				lua_pushlstring(L, s, sz);
+			} break;
+			case 't': {
+				char s[LCU_ADDRMAXLITERAL];
+				getaddrliteral((struct sockaddr *)&iface->address, s);
+				lua_pushstring(L, s);
+			} break;
+			case 'l': {
+				size_t sz;
+				const unsigned char *mask = (const unsigned char *)
+					getaddrbytes((struct sockaddr *)&iface->netmask, &sz);
+				lua_Integer masklen;
+				unsigned char byte;
+				while (sz && !mask[--sz]);
+				masklen = CHAR_BIT*(sz+1);
+				for (byte = ~(mask[sz]); byte; byte >>= 1) masklen--;
+				lua_pushinteger(L, masklen);
+			} break;
+			case 'm': {
+				size_t sz;
+				const char *s = getaddrbytes((struct sockaddr *)&iface->netmask, &sz);
+				lua_pushlstring(L, s, sz);
+			} break;
+			default: return luaL_error(L, "unknown mode char (got '%c')", *mode);
 		}
-		lua_pushlstring(L, literal, 17);
-	} else {
-		return luaL_argerror(L, 3, "invalid mode");
+		return lua_gettop(L)-2;
 	}
-	return 1;
+	return 0;
 }
 
 typedef int (*GetStringByIdxFunc) (unsigned int idx, char *buffer, size_t *len);
 
-/* netifaces = system.netiface(option [, i]) */
-static int system_netiface (lua_State *L) {
+/* netinfo = system.netinfo(option, which) */
+static int system_netinfo (lua_State *L) {
 	static const char *const options[] = { "id", "name", "all", NULL };
 	int option = luaL_checkoption(L, 1, NULL, options);
 	switch (option) {
@@ -779,15 +729,20 @@ static int system_netiface (lua_State *L) {
 			err = f((unsigned int)i, buffer, &len);
 			if (err < 0) return lcuL_pusherrres(L, err);
 			lua_pushlstring(L, buffer, len);
-		} break;
-		case 2: {  /* all */
-			NetIfaceList *ifaces = (NetIfaceList *)lua_newuserdatauv(L, sizeof(NetIfaceList), 0);
-			int err = uv_interface_addresses(&ifaces->list, &ifaces->count);
+			return 1;
+		}
+		default: {  /* all */
+			NetInfoList *netinfo = (NetInfoList *)lua_newuserdatauv(L, sizeof(NetInfoList), 0);
+			int err = uv_interface_addresses(&netinfo->list, &netinfo->count);
 			if (err < 0) return lcuL_pusherrres(L, err);
-			luaL_setmetatable(L, LCU_NETIFACELISTCLS);
-		} break;
+			luaL_setmetatable(L, LCU_NETINFOLISTCLS);
+			lua_replace(L, 1);  /* cpuinfo replaces 'option' */
+			lua_settop(L, 2);
+			lua_pushinteger(L, 0);
+			lua_pushvalue(L, -3);  /* netinfo */
+			return 4;
+		}
 	}
-	return 1;
 }
 
 
@@ -1680,20 +1635,11 @@ static const luaL_Reg found[] = {
 	{NULL, NULL}
 };
 
-static const luaL_Reg ifacesmt[] = {
-	{"__gc", netifaces_gc},
-	{"__close", netifaces_gc},
-	{NULL, NULL}
-};
-
-static const luaL_Reg ifaces[] = {
-	{"close", netifaces_close},
-	{"count", netifaces_count},
-	{"isinternal", netifaces_isinternal},
-	{"getname", netifaces_getname},
-	{"getdomain", netifaces_getdomain},
-	{"getaddress", netifaces_getaddress},
-	{"getmac", netifaces_getmac},
+static const luaL_Reg netinfomt[] = {
+	{"__gc", netinfo_gc},
+	{"__close", netinfo_gc},
+	{"__len", netinfo_len},
+	{"__call", netinfo_call},
 	{NULL, NULL}
 };
 
@@ -1784,7 +1730,7 @@ static const luaL_Reg terminal[] = {
 
 static const luaL_Reg modf[] = {
 	{"address", system_address},
-	{"netiface", system_netiface},
+	{"netinfo", system_netinfo},
 };
 
 static const luaL_Reg upvf[] = {
@@ -1807,11 +1753,8 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
 	lua_pop(L, 1);  /* pop metatable */
 
-	luaL_newmetatable(L, LCU_NETIFACELISTCLS);
-	luaL_setfuncs(L, ifacesmt, 0);
-	lua_newtable(L);  /* create method table */
-	luaL_setfuncs(L, ifaces, 0);
-	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
+	luaL_newmetatable(L, LCU_NETINFOLISTCLS);
+	luaL_setfuncs(L, netinfomt, 0);
 	lua_pop(L, 1);  /* pop metatable */
 
 	lua_pushstring(L, LCU_UDPSOCKETCLS);

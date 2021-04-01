@@ -14,63 +14,59 @@ static CpuInfoList *openedcpuinfo (lua_State *L) {
 	return list;
 }
 
-static void closecpuinfo (CpuInfoList *list) {
+/* getmetatable(cpuinfo).__{gc,close}(cpuinfo) */
+static int cpuinfo_gc (lua_State *L) {
+	CpuInfoList *list = checkcpuinfo(L);
 	if (list->cpu) {
 		uv_free_cpu_info(list->cpu, list->count);
 		list->cpu = NULL;
 		list->count = 0;
 	}
-}
-
-static int cpuinfo_gc (lua_State *L) {
-	CpuInfoList *list = checkcpuinfo(L);
-	closecpuinfo(list);
 	return 0;
 }
 
-/* true = cpuinfo:close() */
-static int cpuinfo_close (lua_State *L) {
-	CpuInfoList *list = openedcpuinfo(L);
-	closecpuinfo(list);
-	lua_pushboolean(L, 1);
-	return 1;
-}
-
-/* cpucount = cpuinfo:count() */
-static int cpuinfo_count (lua_State *L) {
+/* cpucount = getmetatable(cpuinfo).__len(cpuinfo) */
+static int cpuinfo_len (lua_State *L) {
 	CpuInfoList *list = openedcpuinfo(L);
 	lua_pushinteger(L, list->count);
 	return 1;
 }
 
-/* value = cpuinfo:stats(i, what) */
-static int cpuinfo_stats (lua_State *L) {
+/* ... = getmetatable(cpuinfo).__call(cpuinfo, what [, previdx]) */
+static int cpuinfo_call (lua_State *L) {
 	CpuInfoList *list = openedcpuinfo(L);
-	int i = (int)luaL_checkinteger(L, 2);
-	const char *mode = luaL_checkstring(L, 3);
+	const char *mode = luaL_checkstring(L, 2);
+	int i = 1+(int)luaL_optinteger(L, 3, 0);
 	uv_cpu_info_t *info = list->cpu+i-1;
-	luaL_argcheck(L, 0 < i && i <= list->count, 2, "index out of bounds");
-	lua_settop(L, 3);
-	for (; *mode; mode++) switch (*mode) {
-		case 'm': lua_pushstring(L, info->model); break;
-		case 'c': lua_pushinteger(L, info->speed); break;
-		case 'u': lua_pushinteger(L, info->cpu_times.user); break;
-		case 'n': lua_pushinteger(L, info->cpu_times.nice); break;
-		case 's': lua_pushinteger(L, info->cpu_times.sys); break;
-		case 'i': lua_pushinteger(L, info->cpu_times.idle); break;
-		case 'd': lua_pushinteger(L, info->cpu_times.irq); break;
-		default: return luaL_error(L, "unknown mode char (got '%c')", *mode);
+	if (0 < i && i <= list->count) {
+		lua_settop(L, 2);
+		lua_pushinteger(L, i);
+		for (; *mode; mode++) switch (*mode) {
+			case 'm': lua_pushstring(L, info->model); break;
+			case 'c': lua_pushinteger(L, info->speed); break;
+			case 'u': lua_pushinteger(L, info->cpu_times.user); break;
+			case 'n': lua_pushinteger(L, info->cpu_times.nice); break;
+			case 's': lua_pushinteger(L, info->cpu_times.sys); break;
+			case 'i': lua_pushinteger(L, info->cpu_times.idle); break;
+			case 'd': lua_pushinteger(L, info->cpu_times.irq); break;
+			default: return luaL_error(L, "unknown mode char (got '%c')", *mode);
+		}
+		return lua_gettop(L)-2;
 	}
-	return lua_gettop(L)-3;
+	return 0;
 }
 
-/* cpuinfo = system.cpuinfo() */
+/* cpuinfo = system.cpuinfo(which) */
 static int system_cpuinfo (lua_State *L) {
 	CpuInfoList *list = (CpuInfoList *)lua_newuserdatauv(L, sizeof(CpuInfoList), 0);
 	int err = uv_cpu_info(&list->cpu, &list->count);
-	if (err) lcu_error(L, err);
+	if (err < 0) return lcu_error(L, err);
 	luaL_setmetatable(L, LCU_CPUINFOLISTCLS);
-	return 1;
+	lua_insert(L, 1);  /* cpuinfo below 'which' */
+	lua_settop(L, 2);
+	lua_pushinteger(L, 0);
+	lua_pushvalue(L, 1);  /* cpuinfo */
+	return 4;
 }
 
 
@@ -208,12 +204,8 @@ static const luaL_Reg sysuserinfomt[] = {
 static const luaL_Reg cpuinfomt[] = {
 	{"__gc", cpuinfo_gc},
 	{"__close", cpuinfo_gc},
-	{NULL, NULL}
-};
-static const luaL_Reg cpuinfof[] = {
-	{"close", cpuinfo_close},
-	{"count", cpuinfo_count},
-	{"stats", cpuinfo_stats},
+	{"__len", cpuinfo_len},
+	{"__call", cpuinfo_call},
 	{NULL, NULL}
 };
 static const luaL_Reg modulef[] = {
@@ -229,9 +221,6 @@ LCUI_FUNC void lcuM_addinfof (lua_State *L) {
 
 	luaL_newmetatable(L, LCU_CPUINFOLISTCLS);
 	luaL_setfuncs(L, cpuinfomt, 0);
-	lua_newtable(L);  /* create method table */
-	luaL_setfuncs(L, cpuinfof, 0);
-	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
 	lua_pop(L, 1);  /* pop metatable */
 
 	luaL_setfuncs(L, modulef, 0);
