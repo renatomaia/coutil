@@ -47,21 +47,15 @@ Process
 print("CPU")
 print("  # |    Speed     |    User     |    Nice     |   System    |    Idle     |     IRQ     | Name")
 local rowfmt = " %2d | %8d MHz | "..string.rep("%8d ms | ", 5).."%s"
-local cpuinfo = system.cpuinfo()
-for i = 1, cpuinfo:count() do
-	print(string.format(rowfmt, i, cpuinfo:stats(i, "cunsidm")))
+for i, clk, usr, nice, sys, idle, irq, model in system.cpuinfo("cunsidm") do
+	print(string.format(rowfmt, i, clk, usr, nice, sys, idle, irq, model))
 end
 print()
 
 print("Network interface addresses")
 print("  # |     Name     |        MAC        | Internal | Domain | Address")
 local rowfmt = " %2d | %-12s | %17s |   %-3s    |  %-4s  | %s/%d"
-local netifaces = system.netiface("all")
-for i = 1, netifaces:count() do
-	print(string.format(rowfmt, i, netifaces:getname(i),
-	                               netifaces:getmac(i),
-	                               netifaces:isinternal(i) and "yes" or "",
-	                               netifaces:getdomain(i),
-	                               netifaces:getaddress(i)))
+for i, name, mac, isint, dom, addr, masklen in system.netinfo("all", "nTidtl") do
+	print(string.format(rowfmt, i, name, mac, isint and "yes" or "", dom, addr, masklen))
 end
 print()

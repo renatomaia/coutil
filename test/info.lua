@@ -48,17 +48,17 @@ end
 newtest "cpuinfo"
 
 local options = "mcunsid"
-local cpuinfo = system.cpuinfo()
+local cpuinfo<close> = system.cpuinfo()
 
-assert(cpuinfo:count() > 0)
+assert(#cpuinfo > 0)
 
 do case "errors"
-	for cpuidx = 1, cpuinfo:count() do
+	for cpuidx = 1, #cpuinfo do
 		for i = 1, 255 do
 			local char = string.char(i)
 			if not string.find(options, char, 1, "plain search") then
 				asserterr("unknown mode char (got '"..char.."')",
-				          pcall(cpuinfo.stats, cpuinfo, cpuidx, char))
+				          pcall(cpuinfo, char, cpuidx-1))
 			end
 		end
 	end
@@ -67,13 +67,15 @@ do case "errors"
 end
 
 do case "single value"
-	for cpuidx = 1, cpuinfo:count() do
+	for cpuidx = 1, #cpuinfo do
 		for c in string.gmatch(options , ".") do
 			local ltype = (c == "m") and "string" or "number"
-			local value = cpuinfo:stats(cpuidx, c)
+			local i, value = cpuinfo(c, cpuidx-1)
+			assert(i == cpuidx)
 			assert(type(value) == ltype)
 
-			local v1, v2, v3 = cpuinfo:stats(cpuidx, c..c..c)
+			local i, v1, v2, v3 = cpuinfo(c..c..c, cpuidx-1)
+			assert(i == cpuidx)
 			assert(type(v1) == ltype)
 			assert(v2 == v1)
 			assert(v3 == v1)
@@ -84,12 +86,13 @@ do case "single value"
 end
 
 do case "all values"
-	for cpuidx = 1, cpuinfo:count() do
-		local packed = table.pack(cpuinfo:stats(cpuidx, options))
-		assert(#packed == #options)
+	for cpuidx = 1, #cpuinfo do
+		local packed = table.pack(cpuinfo(options, cpuidx-1))
+		assert(#packed == 1+#options)
+		assert(packed[1] == cpuidx)
 		for i = 1, #options do
 			local ltype = (options:sub(i, i) == "m") and "string" or "number"
-			assert(type(packed[i]) == ltype)
+			assert(type(packed[i+1]) == ltype)
 		end
 	end
 
@@ -97,99 +100,103 @@ do case "all values"
 end
 
 do case "close"
-	assert(cpuinfo:close() == true)
-	asserterr("closed", pcall(cpuinfo.close, cpuinfo))
-	asserterr("closed", pcall(cpuinfo.count, cpuinfo))
-	asserterr("closed", pcall(cpuinfo.stats, cpuinfo, 1))
+	do local tobeclosed<close> = cpuinfo end
+	asserterr("closed", pcall(cpuinfo, "m"))
+	asserterr("closed", pcall(function () return #cpuinfo end))
 
 	done()
 end
 
-newtest "netiface"
+newtest "netinfo"
 
-local netifaces = assert(system.netiface("all"))
+local options = "nidbBtTlm"
+local netinfo = assert(system.netinfo("all"))
 
 do case "errors"
-	asserterr("invalid option", pcall(system.netiface, "list"))
-	asserterr("number expected", pcall(system.netiface, "name"))
-	asserterr("number expected", pcall(system.netiface, "id"))
-	asserterr("out of range", pcall(system.netiface, "id", -1))
-	asserterr("out of range", pcall(system.netiface, "id", 0))
-	asserterr("out of range", pcall(system.netiface, "id", math.maxinteger))
+	asserterr("invalid option", pcall(system.netinfo, "list"))
+	asserterr("number expected", pcall(system.netinfo, "name"))
+	asserterr("number expected", pcall(system.netinfo, "id"))
+	asserterr("out of range", pcall(system.netinfo, "id", -1))
+	asserterr("out of range", pcall(system.netinfo, "id", 0))
+	asserterr("out of range", pcall(system.netinfo, "id", math.maxinteger))
 
-	for _, i in ipairs{ 0, netifaces:count()+1 } do
-		asserterr("out of range", pcall(netifaces.isinternal, netifaces, i))
-		asserterr("out of range", pcall(netifaces.getname, netifaces, i))
-		asserterr("out of range", pcall(netifaces.getdomain, netifaces, i))
-		asserterr("out of range", pcall(netifaces.getaddress, netifaces, i))
-	end
-
-	asserterr("invalid mode", pcall(netifaces.getaddress, netifaces, 1, "binary"))
-	asserterr("invalid mode", pcall(netifaces.getaddress, netifaces, 1, "text"))
-	asserterr("invalid mode", pcall(netifaces.getaddress, netifaces, 1, "address"))
-
-	for _, e in ipairs(types) do
-		if type(e) ~= "string" and type(e) ~= "number" then
-			asserterr("string expected", pcall(netifaces.getaddress, netifaces, 1, e))
+	for i = 1, 255 do
+		local char = string.char(i)
+		if not string.find(options, char, 1, "plain search") then
+			asserterr("unknown mode char (got '"..char.."')",
+			          pcall(netinfo, char, 0))
 		end
 	end
+
+	assert(netinfo("indt", -2) == nil)
+	assert(netinfo("indt", -1) == nil)
+	assert(netinfo("indt", #netinfo) == nil)
+	assert(netinfo("indt", #netinfo+1) == nil)
 
 	done()
 end
 
 do case "values"
 	for i = 1, math.huge do
-		local result = system.netiface("name", i)
+		local result = system.netinfo("name", i)
 		if not result then break end
 		assert(type(result) == "string")
-		assert(type(system.netiface("id", i)) == "string")
+		assert(type(system.netinfo("id", i)) == "string")
 	end
 
-	assert(netifaces:count() >= 0)
+	assert(#netinfo >= 0)
 
-	for i = 1, netifaces:count() do
-		assert(type(netifaces:isinternal(i)) == "boolean")
-		assert(type(netifaces:getname(i)) == "string")
+	local typeof = {
+		n = "string",
+		i = "boolean",
+		d = "string",
+		b = "string",
+		B = "string",
+		t = "string",
+		T = "string",
+		l = "number",
+		m = "string",
+	}
+	for i = 0, #netinfo-1 do
+		for c in string.gmatch(options , ".") do
+			local index, value = netinfo(c, i)
+			assert(index == i+1)
 
-		local domain = netifaces:getdomain(i)
+			local ltype = type(value)
+			assert(ltype == typeof[c])
+
+			local index, v1, v2, v3 = netinfo(c..c..c, i)
+			assert(index == i+1)
+
+			assert(type(v1) == ltype)
+			assert(v2 == v1)
+			assert(v3 == v1)
+		end
+
+		local _, domain = netinfo("d", i)
 		assert(domain:match("^ipv[46]$"))
 
-		local literal, masklenT = netifaces:getaddress(i)
-		assert(literal == netifaces:getaddress(i, "t"))
-
-		local binary, masklenB = netifaces:getaddress(i, "b")
-		assert(masklenB <= 8*#binary)
+		local _, masklen, literal, binary = netinfo("ltb", i)
+		assert(masklen <= 8*#binary)
 
 		local addressT = system.address(domain, literal, 65432, "t")
 		local addressB = system.address(domain, binary, 65432, "b")
 		assert(addressT == addressB)
-		assert(masklenT == masklenB)
 
-		local address = system.address(domain)
-		address.port = 65432
-		assert(rawequal(netifaces:getaddress(i, address), address))
-		assert(address == addressT)
-
-		local literal = netifaces:getmac(i)
-		assert(literal == netifaces:getmac(i, "t"))
-
-		local binary = netifaces:getmac(i, "b")
-		assert(#binary == 6)
-		assert(literal == string.format("%02x:%02x:%02x:%02x:%02x:%02x", string.byte(binary, 1, 6)))
+		local _, macliteral = netinfo("T", i)
+		local _, macbinary = netinfo("B", i)
+		assert(#macbinary == 6)
+		assert(macliteral == string.format("%02x:%02x:%02x:%02x:%02x:%02x",
+		                                   string.byte(macbinary, 1, 6)))
 	end
 
 	done()
 end
 
 do case "close"
-	assert(netifaces:close() == true)
-	asserterr("closed", pcall(netifaces.close, netifaces))
-	asserterr("closed", pcall(netifaces.count, netifaces))
-	asserterr("closed", pcall(netifaces.isinternal, netifaces, 1))
-	asserterr("closed", pcall(netifaces.getname, netifaces, 1))
-	asserterr("closed", pcall(netifaces.getdomain, netifaces, 1))
-	asserterr("closed", pcall(netifaces.getaddress, netifaces, 1))
-	asserterr("closed", pcall(netifaces.getmac, netifaces, 1))
+	do local tobeclosed<close> = netinfo end
+	asserterr("closed", pcall(netinfo, "t", 0))
+	asserterr("closed", pcall(function () return #netinfo end))
 
 	done()
 end
