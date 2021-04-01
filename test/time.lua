@@ -18,11 +18,8 @@ do case "cached time"
 		assert(updated-cached <= 1, updated-cached)
 		--assert(updated%1 < 1, updated)
 
-		local epoch, luatime
-		repeat
-			epoch, luatime = system.time("epoch"), os.time()
-		until epoch%1 < .8
-		assert(math.floor(epoch) == luatime)
+		local epoch, luatime = system.time("epoch"), os.time()
+		assert(math.abs(epoch - luatime) < 1)
 	end
 
 	testtime()
