@@ -82,7 +82,7 @@
 #define LCU_THREADSCLS	LCU_PREFIX"threads"
 #define LCU_TPOOLGCCLS	LCU_PREFIX"lcu_ThreadPool *"
 #define LCU_CPUINFOLISTCLS	LCU_PREFIX"cpustats"
-#define LCU_NETIFACELISTCLS	LCU_PREFIX"netifaces"
+#define LCU_NETINFOLISTCLS	LCU_PREFIX"netifaces"
 
 
 #endif

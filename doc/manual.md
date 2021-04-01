@@ -60,10 +60,7 @@ Index
 	- [`system.awaitch`](#systemawaitch-ch-endpoint-)
 	- [`system.awaitsig`](#systemawaitsig-signal)
 	- [`system.block`](#systemblock-seconds)
-	- [`system.cpuinfo`](#systemcpuinfo-)
-		- [`cpuinfo:close`](#cpuinfoclose-)
-		- [`cpuinfo:count`](#cpuinfocount-)
-		- [`cpuinfo:stats`](#cpuinfostats-i-what)
+	- [`system.cpuinfo`](#systemcpuinfo-which)
 	- [`system.emitsig`](#systememitsig-pid-signal)
 	- [`system.execute`](#systemexecute-cmd-)
 	- [`system.file`](#systemfile-path--mode--uperm--gperm--operm)
@@ -81,18 +78,11 @@ Index
 	- [`system.getenv`](#systemgetenv-name)
 	- [`system.getpriority`](#systemgetpriority-pid)
 	- [`system.halt`](#systemhalt-)
-	- [`system.info`](#systeminfo-what)
+	- [`system.info`](#systeminfo-which)
 	- [`system.isrunning`](#systemisrunning-)
 	- [`system.nameaddr`](#systemnameaddr-address--mode)
 	- [`system.nanosecs`](#systemnanosecs-)
-	- [`system.netiface`](#systemnetiface-option--ifindex)
-		- [`netifaces:close`](#netifacesclose-)
-		- [`netifaces:count`](#netifacescount-)
-		- [`netifaces:getaddress`](#netifacesgetaddress-i--format)
-		- [`netifaces:getdomain`](#netifacesgetdomain-i)
-		- [`netifaces:getmac`](#netifacesgetmac-i--mode)
-		- [`netifaces:getname`](#netifacesgetname-i)
-		- [`netifaces:isinternal`](#netifacesisinternal-i)
+	- [`system.netinfo`](#systemnetinfo-option--ifindex)
 	- [`system.packenv`](#systempackenv-vars)
 	- [`system.random`](#systemrandom-buffer--i--j)
 	- [`system.resume`](#systemresume-preemptco-)
@@ -1271,9 +1261,9 @@ this function returns `buffer`.
 
 **Note**: this function may not complete when the system is [low on entropy](http://docs.libuv.org/en/v1.x/misc.html#c.uv_random).
 
-### `system.info (what)`
+### `system.info (which)`
 
-Returns values corresponding to system information according to the following characters present in string `what`:
+Returns values corresponding to system information according to the following characters present in string `which`:
 
 - `#`: current process identifier (**pid**).
 - `$`: current user **shell** path.
@@ -1316,25 +1306,11 @@ Returns values corresponding to system information according to the following ch
 
 **Note**: option `"e"` may raise an error on Unix and AIX systems when used in the [standard standalone interpreter](http://www.lua.org/manual/5.4/manual.html#7) or any program that does not execute [`uv_setup_args`](http://docs.libuv.org/en/v1.x/misc.html#c.uv_setup_args) properly.
 
-### `system.cpuinfo ()`
+### `system.cpuinfo (which)`
 
-Returns a `cpuinfo` object with information about the individual CPU of the system.
-
-### `cpuinfo:close ()`
-
-Closes `cpuinfo`,
-releasing all its internal resources.
-It also prevents further use of its methods.
-
-### `cpuinfo:count ()`
-
-Returns the number of individual CPU information contained in `cpuinfo`.
-These CPU are identified by indexes from 1 to the number of individual CPU.
-
-### `cpuinfo:stats (i, what)`
-
-Returns values stored in `cpuinfo` for the CPU with index `i`,
-according to the following characters present in string `what`:
+Returns an [interator](http://www.lua.org/manual/5.4/manual.html#3.3.5) that produces information about each individual CPU of the system in each iteration.
+The _control variable_ is the index of the CPU.
+The values of the other _loop variables_ are given by the following characters in string `which`:
 
 - `m`: CPU **model** name.
 - `c`: current CPU **clock** speed (MHz).
@@ -1344,65 +1320,39 @@ according to the following characters present in string `what`:
 - `d`: time the CPU spent servicing **device** interrupts. (milliseconds).
 - `i`: time the CPU was **idle** (milliseconds).
 
-### `system.netiface (option [, ifindex])`
+This function never fails.
+It raises errors instead.
 
-Returns a value according to the value of `option`,
+**Note**: The _state value_ is the value `which`,
+and it only dictates how the values are returned in each call,
+because the _iterator_ contains all the information that can be produced.
+The initial value for the _control variable_ is `0`.
+Also,
+the _iterator_ is the _closing value_ used,
+therefore it can be used in a [_to-be-closed_ variable](http://www.lua.org/manual/5.4/manual.html#3.3.8).
+Finally,
+the _iterator_ supports the length operator `#` to obtain the number of elements to be iterated.
+
+### `system.netinfo (option, which)`
+
+Returns values according to the value of `option`,
 as described below:
 
-- `"all"`: a `netifaces` object with information about the individual network interfaces of the system.
-`ifindex` is ignored.
-- `"name"`: the name of the network interface corresponding to the interface index `ifindex`.
-`ifindex` is mandatory.
-- `"id"`: a string with the identifier suitable for use in an IPv6 scoped address corresponding to the interface index `ifindex`.
-`ifindex` is mandatory.
+- `"name"`: the name of the network interface corresponding to the interface index `which`.
+- `"id"`: a string with the identifier suitable for use in an IPv6 scoped address corresponding to the interface index `which`.
+- `"all"`: an [interator](http://www.lua.org/manual/5.4/manual.html#3.3.5) that produces information about the addresses of the network interfaces of the system.
+The _control variable_ is the index of the network interface address,
+not the interface index.
+The values of the other _loop variables_ are given by the following characters in string `which`:
 
-### `netifaces:close ()`
+- `n`: the name of the network interface.
+- `i`: `true` if the network interface address is internal, or `false` otherwise.
+- `d`: the domain of the network interface address (`"ipv4"` or `"ipv6"`).
+- `l`: the length of the subnet mask of the network interface address.
+- `m`: the binary representation of the subnet mask of the network interface address.
+- `t`: the text representation of the network interface address.
+- `b`: the binary representation of the network interface address.
+- `T`: the text representation of the physical address (MAC) of the network interface.
+- `B`: the binary representation physical address (MAC) of the network interface.
 
-Closes `netifaces`,
-releasing all its internal resources.
-It also prevents further use of its methods.
-
-### `netifaces:count ()`
-
-Returns the number of individual network interface which information is contained in `netifaces`.
-These network interfaces are identified by indexes from 1 to the number of individual network interfaces.
-
-### `netifaces:isinternal (i)`
-
-Returns `true` if the network interface with index `i` is internal,
-or `false` otherwise.
-
-### `netifaces:getname (i)`
-
-Returns the name of the network interface with index `i`.
-
-### `netifaces:getdomain (i)`
-
-Returns the address domain of the network interface with index `i`.
-The possible values are the same of attribute `type` of an [`address`](#systemaddress-type--data--port--mode).
-
-### `netifaces:getaddress (i [, format])`
-
-Returns the host address of the network interface with index `i`,
-followed by the length of its subnet mask.
-
-The string `format` controls whether the address returned is textual or binary.
-It may be the string `"b"` (binary data),
-or `"t"` (text data).
-The default is `"t"`.
-
-Alternatively,
-`format` might be an [address](#systemaddress-type--data--port--mode) of the same domain of the network interface.
-In such case,
-the host address of the network interface is set to address `format`,
-and address `format` is returned as the first value.
-The `port` field of address `format` is left unchanged.
-
-### `netifaces:getmac (i [, mode])`
-
-Returns the physical address of the network interface with index `i`.
-
-The string `mode` controls whether the address returned is textual or binary.
-It may be the string `"b"` (binary data),
-or `"t"` (text data).
-The default is `"t"`.
+**Note**: This _iterator_ have the same characteristics of the one returned by [`system.cpuinfo`](#systemcpuinfo-which).
