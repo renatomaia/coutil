@@ -909,6 +909,8 @@ do case "used after library collection"
 				end
 			end)
 		end
+
+		os.remove(path)
 	]===])
 
 	done()
@@ -919,23 +921,17 @@ newtest "random"
 do case "generation"
 	local buffer = memory.create(4)
 
-	assert(coroutine.resume(coroutine.create(function ()
+	spawn(function ()
 		for value in pairs(types) do
 			asserterr("bad argument", pcall(system.random, value))
 		end
-
-		asserterr("out of range", pcall(system.random, buffer, -1))
-		asserterr("out of range", pcall(system.random, buffer, 0))
-		asserterr("out of range", pcall(system.random, buffer, 1, #buffer+1))
-	end)))
-
-	assert(buffer:tostring() == string.rep("\0", #buffer))
+	end)
 
 	asserterr("unable to yield", pcall(system.random, buffer))
 
-	spawn(function ()
-		system.random(buffer)
-	end)
+	assert(buffer:tostring() == string.rep("\0", #buffer))
+
+	spawn(system.random, buffer)
 
 	assert(system.run() == false)
 
