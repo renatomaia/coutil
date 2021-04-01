@@ -58,7 +58,7 @@ local addrset = getmetatable(newaddr("ipv4")).__newindex
 
 local function toaddr(addr, host, port)
 	if not pcall(addrset, addr, "literal", host) then
-		local found, errmsg = resolveaddr(host, port, "4")
+		local found<close>, errmsg = resolveaddr(host, port, "4")
 		if not found then return nil, errmsg end
 		found:getaddress(addr)
 	else
@@ -532,7 +532,7 @@ end
 local dns = {} do
 	local function resolve(address)
 		local addr = newaddr("ipv4")
-		local result, errmsg = {
+		local result<const>, errmsg = {
 			name = nil,
 			alias = {},
 			ip = {},
@@ -555,11 +555,11 @@ local dns = {} do
 		end
 
 		-- get IP addresses
-		address, errmsg = resolveaddr(result.name, 0, "4")
-		if not address then return nil, errmsg end
+		local found<close>, errmsg = resolveaddr(result.name, 0, "4")
+		if not found then return nil, errmsg end
 		repeat
-			table.insert(result.ip, address:getaddress(addr).literal)
-		until not address:next()
+			table.insert(result.ip, found:getaddress(addr).literal)
+		until not found:next()
 
 		return result
 	end
