@@ -9,6 +9,7 @@
 
 
 #define LCU_MODUPVS	1
+#define LCU_NOYIELDMODE '~'
 
 /* scheduler operations */
 
@@ -90,6 +91,8 @@ LCUI_FUNC int lcuT_resetobjopk (lua_State *L,
                                 lua_CFunction step);
 
 LCUI_FUNC void lcuU_resumeobjop (uv_handle_t *handle, int narg);
+
+LCUI_FUNC int lcuL_checknoyieldmode (lua_State *L, int arg);
 
 
 #endif
