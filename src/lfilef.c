@@ -58,9 +58,9 @@ static int k_setupfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 			mode = luaL_optstring(L, arg, mode);
 			perm <<= 8;
 			for (; *mode; mode++) switch (*mode) {
-				case 'r': perm |= 1; break;
+				case 'x': perm |= 1; break;
 				case 'w': perm |= 2; break;
-				case 'x': perm |= 4; break;
+				case 'r': perm |= 4; break;
 				default: luaL_error(L, "bad argument #%d, unknown perm char (got '%c')",
 				                       arg, *mode);
 			}
@@ -79,23 +79,41 @@ static int system_file (lua_State *L) {
 	return lcuT_resetreqopk(L, sched, k_setupfile, returnopenfile, NULL);
 }
 
-static uv_file *checkopenfile (lua_State *L, lcu_Scheduler **sched) {
-	uv_file *file = (uv_file *)luaL_checkudata(L, 1, LCU_FILECLS);
-	luaL_argcheck(L, *file >= 0, 1, "closed file");
+#define checkfile(L)	((uv_file *)luaL_checkudata(L, 1, LCU_FILECLS))
+
+static lcu_Scheduler *tosched (lua_State *L) {
+	lcu_Scheduler *sched;
 	lua_getiuservalue(L, 1, 1);
-	*sched = (lcu_Scheduler *)lua_touserdata(L, -1);
+	sched = (lcu_Scheduler *)lua_touserdata(L, -1);
 	lua_pop(L, 1);
+	return sched;
+}
+
+static uv_file *openedfile (lua_State *L) {
+	uv_file *file = checkfile(L);
+	luaL_argcheck(L, *file >= 0, 1, "closed file");
 	return file;
+}
+
+static int closefile (lua_State *L, uv_file *file) {
+	uv_fs_t closereq;
+	int err = uv_fs_close(lcu_toloop(tosched(L)), &closereq, *file, NULL);
+	if (err >= 0) *file = -1;
+	return err;
 }
 
 /* ok [, err] = file:close() */
 static int file_gc (lua_State *L) {
-	lcu_Scheduler *sched;
-	uv_file *file = checkopenfile(L, &sched);
-	uv_fs_t closereq;
-	int err = uv_fs_close(lcu_toloop(sched), &closereq, *file, NULL);
-	if (err >= 0) *file = -1;
+	uv_file *file = checkfile(L);
+	closefile(L, file);
 	return 0;
+}
+
+/* ok [, err] = file:close() */
+static int file_close (lua_State *L) {
+	uv_file *file = openedfile(L);
+	int err = closefile(L, file);
+	return lcuL_pushresults(L, 0, err);
 }
 
 static void on_fileopdone (uv_fs_t *filereq) {
@@ -106,8 +124,9 @@ static void on_fileopdone (uv_fs_t *filereq) {
 	uv_fs_req_cleanup(filereq);
 	if (thread) {
 		int nret;
-		if (result < 0) nret = lcuL_pusherrres(thread, result);
-		else {
+		if (result < 0) {
+			nret = lcuL_pusherrres(thread, result);
+		} else {
 			lua_pushinteger(thread, result);
 			nret = 1;
 		}
@@ -115,37 +134,67 @@ static void on_fileopdone (uv_fs_t *filereq) {
 	}
 }
 
-/* bytes [, err] = file:read(buffer [, i [, j [, offset]]]) */
+/* bytes [, err] = file:read(buffer [, i [, j [, offset [, mode]]]]) */
+static int callread (lua_State *L,
+                     uv_loop_t* loop,
+                     uv_fs_t* filereq,
+                     uv_file file,
+                     uv_fs_cb callback) {
+	uv_buf_t buf;  /* args from 2 to 4 (data, i, j) */
+	int64_t offset = (int64_t)luaL_optinteger(L, 5, -1);
+	lcu_getoutputbuf(L, 2, &buf);
+	return uv_fs_read(loop, filereq, file, &buf, 1, offset, callback);
+}
 static int k_setupreadfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	uv_file *file = (uv_file *)lua_touserdata(L, 1);
-	uv_buf_t bufs[1];  /* args from 2 to 4 (buffer, i, j) */
-	int64_t offset = (int64_t)luaL_optinteger(L, 5, -1);
-	lcu_getoutputbuf(L, 2, bufs);
-	int err = uv_fs_read(loop, filereq, *file, bufs, 1, offset, on_fileopdone);
+	int err = callread(L, loop, filereq, *file, on_fileopdone);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
 static int file_read (lua_State *L) {
-	lcu_Scheduler *sched;
-	checkopenfile(L, &sched);
+	uv_file file = *openedfile(L);
+	lcu_Scheduler *sched = tosched(L);
+	if (lcuL_checknoyieldmode(L, 6)) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		int err = callread(L, loop, &filereq, file, NULL);
+		if (err < 0) return lcuL_pusherrres(L, err);
+		lua_pushinteger(L, filereq.result);
+		return 1;
+	}
 	return lcuT_resetreqopk(L, sched, k_setupreadfile, NULL, NULL);
 }
 
-/* bytes [, err] = file:write(data [, i [, j [, offset]]]) */
+/* bytes [, err] = file:write(data [, i [, j [, offset [, mode]]]]) */
+static int callwrite (lua_State *L,
+                      uv_loop_t* loop,
+                      uv_fs_t* filereq,
+                      uv_file file,
+                      uv_fs_cb callback) {
+	uv_buf_t buf;  /* args from 2 to 4 (data, i, j) */
+	int64_t offset = (int64_t)luaL_optinteger(L, 5, -1);
+	lcu_getinputbuf(L, 2, &buf);
+	return uv_fs_write(loop, filereq, file, &buf, 1, offset, callback);
+}
 static int k_setupwritefile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	uv_file *file = (uv_file *)lua_touserdata(L, 1);
-	uv_buf_t bufs[1];  /* args from 2 to 4 (data, i, j) */
-	int64_t offset = (int64_t)luaL_optinteger(L, 5, -1);
-	lcu_getinputbuf(L, 2, bufs);
-	int err = uv_fs_write(loop, filereq, *file, bufs, 1, offset, on_fileopdone);
+	int err = callwrite(L, loop, filereq, *file, on_fileopdone);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
 static int file_write (lua_State *L) {
-	lcu_Scheduler *sched;
-	checkopenfile(L, &sched);
+	uv_file file = *openedfile(L);
+	lcu_Scheduler *sched = tosched(L);
+	if (lcuL_checknoyieldmode(L, 6)) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		int err = callwrite(L, loop, &filereq, file, NULL);
+		if (err < 0) return lcuL_pusherrres(L, err);
+		lua_pushinteger(L, filereq.result);
+		return 1;
+	}
 	return lcuT_resetreqopk(L, sched, k_setupwritefile, NULL, NULL);
 }
 
@@ -157,7 +206,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{NULL, NULL}
 	};
 	static const luaL_Reg filef[] = {
-		{"close", file_gc},
+		{"close", file_close},
 		{"read", file_read},
 		{"write", file_write},
 		{NULL, NULL}

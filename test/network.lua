@@ -920,6 +920,7 @@ newtest "random"
 
 do case "generation"
 	local buffer = memory.create(4)
+	local zeros = string.rep("\0", #buffer)
 
 	spawn(function ()
 		for value in pairs(types) do
@@ -928,14 +929,15 @@ do case "generation"
 	end)
 
 	asserterr("unable to yield", pcall(system.random, buffer))
+	assert(buffer:tostring() == zeros)
 
-	assert(buffer:tostring() == string.rep("\0", #buffer))
+	assert(system.random(buffer, nil, nil, "~") == buffer)
+	local value = buffer:tostring()
+	assert(value ~= zeros)
 
 	spawn(system.random, buffer)
-
 	assert(system.run() == false)
-
-	assert(buffer:tostring() ~= string.rep("\0", #buffer))
+	assert(buffer:tostring() ~= value)
 
 	done()
 end

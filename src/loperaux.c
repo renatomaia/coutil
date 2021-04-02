@@ -577,3 +577,12 @@ LCUI_FUNC void lcuU_resumeobjop (uv_handle_t *handle, int narg) {
 	if (handle->data == NULL) stopobjop(L, lcu_tohdlobj(handle));
 	lcuU_checksuspend(loop);
 }
+
+LCUI_FUNC int lcuL_checknoyieldmode (lua_State *L, int arg) {
+	const char *mode = luaL_optstring(L, arg, "");
+	int i;
+	for (i = 0; mode[i]; i++)
+		if (mode[i] != LCU_NOYIELDMODE)
+			return luaL_error(L, "unknown mode char (got '%c')", mode[i]);
+	return i;
+}

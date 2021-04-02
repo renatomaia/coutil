@@ -1579,8 +1579,7 @@ static int terminal_winsize (lua_State *L) {
 static int returnrand (lua_State *L) {
 	int err = (int)lua_tointeger(L, 2);
 	lua_settop(L, 1);
-	if (err) return lcuL_pusherrres(L, err);
-	return 1;
+	return lcuL_pushresults(L, 1, err);
 }
 static void uv_onrandom (uv_random_t *random, int err, void *buf, size_t sz) {
 	uv_loop_t *loop = random->loop;
@@ -1591,19 +1590,29 @@ static void uv_onrandom (uv_random_t *random, int err, void *buf, size_t sz) {
 		lcuU_resumereqop(loop, request, 1);
 	}
 }
-static int k_setuprand (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
-	uv_random_t *random = (uv_random_t *)request;
+static int callrandom (lua_State *L,
+                       uv_loop_t *loop,
+                       uv_random_t *random,
+                       uv_random_cb callback) {
 	uv_buf_t buf;
-	int err;
 	lcu_getoutputbuf(L, 1, &buf);
 	lua_settop(L, 1);
-	err = uv_random(loop, random, buf.base, buf.len, 0, uv_onrandom);
+	return uv_random(loop, random, buf.base, buf.len, 0, callback);
+}
+static int k_setuprand (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_random_t *random = (uv_random_t *)request;
+	int err = callrandom(L, loop, random, uv_onrandom);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
 static int system_random (lua_State *L) {
-	lcu_Scheduler *sched = lcu_getsched(L);
-	return lcuT_resetreqopk(L, sched, k_setuprand, returnrand, NULL);
+	if (lcuL_checknoyieldmode(L, 4)) {
+		int err = callrandom(L, NULL, NULL, NULL);
+		return lcuL_pushresults(L, 1, err);
+	} else {
+		lcu_Scheduler *sched = lcu_getsched(L);
+		return lcuT_resetreqopk(L, sched, k_setuprand, returnrand, NULL);
+	}
 }
 
 
