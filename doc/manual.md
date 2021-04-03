@@ -1169,6 +1169,50 @@ This operation is only available for passive sockets.
 In case of success,
 this function returns a new stream socket for the accepted connection.
 
+### `system.pathinfo (which [, mode])`
+
+Returns values corresponding to information related to file in `path` according to the following characters present in string `mode`:
+
+- `?`: File type                                                      st_mode
+- `U`: File set-user-ID bit                                           st_mode
+- `G`: File set-group-ID bit                                          st_mode
+- `S`: File sticky bit                                                st_mode
+- `r`: File read permission for onwer user                            st_mode
+- `w`: File write permission for onwer user                           st_mode
+- `x`: File execute permission for onwer user                         st_mode
+- `R`: File read permission for owner group                           st_mode
+- `W`: File write permission for owner group                          st_mode
+- `X`: File execute permission for owner group                        st_mode
+- `4`: File read permission for others                                st_mode
+- `2`: File write permission for others                               st_mode
+- `1`: File execute permission for others                             st_mode
+- `M`: File mode bits                                                 st_mode
+- `d`: Device ID containing the file                                  st_dev
+- `#`: File ID in the file system (_inode_ number)                    st_ino
+- `*`: Number of hard links to the file                               st_nlink
+- `u`: User ID of the file's owner                                    st_uid
+- `g`: Group ID of the file's owner                                   st_gid
+- `D`: File's device ID (if special file)                             st_rdev
+- `B`: Total size of the file (bytes)                                 st_size
+- `i`: Ideal transfer block size (from this file)                     st_blksize
+- `b`: Number of 512B blocks allocated                                st_blocks
+- `_`: User defined flags for the file                                st_flags
+- `v`: File generation number                                         st_gen
+- `a`: Time of last access                                            st_atim
+- `m`: Time of last modification                                      st_mtim
+- `s`: Time of last status change                                     st_ctim
+- `c`: Time of file creation (birth)                                  st_birthtim
+- `@`: Type of the filesystem                                         f_type
+- `N`: Numeric ID of the type of the filesystem                       f_type
+- `I`: Ideal transfer block size (from file system)                   f_bsize
+- `T`: Total data blocks in the file system                           f_blocks
+- `F`: Free blocks in the filesystem                                  f_bfree
+- `A`: Free blocks available to unprivileged user in the filesystem   f_bavail
+- `t`: Total inodes in the filesystem                                 f_files
+- `f`: Free inodes in the filesystem                                  f_ffree
+- `p`: Canonicalized absolute path name for file                      uv_fs_realpath
+- `=`: Symbolic link value of path                                    uv_fs_readlink
+
 ### `system.file (path [, mode [, uperm [, gperm [, operm]]]])`
 
 Opens file from the path indicated by string `path`.
