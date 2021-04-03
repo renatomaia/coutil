@@ -14,6 +14,7 @@
 #define LCU_CHANNELSREGKEY	LCU_PREFIX"ChannelMap channelMap"
 
 #define lcu_time2sec(T)	((T).tv_sec+((lua_Number)((T).tv_usec)*1e-6))
+#define lcu_ntime2sec(T)	((T).tv_sec+((lua_Number)((T).tv_nsec)*1e-9))
 
 #define lcu_error(L,e)	luaL_error(L, uv_strerror(e))
 

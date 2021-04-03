@@ -1,13 +1,13 @@
 local system = require "coutil.system"
 
-newtest "open" -----------------------------------------------------------------
+newtest "openfile" -------------------------------------------------------------
 
 local validpath = "/dev/null"
 local validmodes = "rwanNrstwx"
 
 do case "non existent file"
 	spawn(function ()
-		asserterr("no such file or directory", system.file("./non/existent/file/path"))
+		asserterr("no such file or directory", system.openfile("./non/existent/file/path"))
 	end)
 	system.run()
 
@@ -19,7 +19,7 @@ do case "invalid modes"
 		for i = 1, 255 do
 			local char = string.char(i)
 			if not string.find(validmodes, char, 1, true) then
-				asserterr("unknown mode char", pcall(system.file, validpath, char))
+				asserterr("unknown mode char", pcall(system.openfile, validpath, char))
 			end
 		end
 	end)
@@ -30,9 +30,9 @@ end
 
 do case "ignore invalid permission"
 	spawn(function ()
-		assert(system.file(validpath, "w", "invalid")):close()
-		assert(system.file(validpath, "w", "rw", "invalid")):close()
-		assert(system.file(validpath, "w", "rw", "rw", "invalid")):close()
+		assert(system.openfile(validpath, "w", "invalid")):close()
+		assert(system.openfile(validpath, "w", "rw", "invalid")):close()
+		assert(system.openfile(validpath, "w", "rw", "rw", "invalid")):close()
 	end)
 	system.run()
 
@@ -41,10 +41,11 @@ end
 
 do case "invalid permission"
 	spawn(function ()
+		local valid = "UGSrwxRWX421"
 		for i = 1, 255 do
 			local char = string.char(i)
-			if char ~= "r" and char ~= "w" and char ~= "x" then
-				asserterr("unknown perm char", pcall(system.file, "./non-existent.txt", "N", char))
+			if not valid:find(char, 1, true) then
+				asserterr("unknown perm char", pcall(system.openfile, "./non-existent.txt", "N", char))
 			end
 		end
 	end)
@@ -52,3 +53,117 @@ do case "invalid permission"
 
 	done()
 end
+
+--------------------------------------------------------------------------------
+
+local common = {
+	boolean = "UGSrwxRWX421",
+	number = "Md#*ugDBib_vamsc",
+	string = "?",
+}
+local values = {}
+local path = "info.lua"
+local file
+spawn(function ()
+	file = assert(system.openfile(path))
+end)
+assert(system.run() == false)
+
+for _, spec in ipairs{
+	{
+		name = "fileinfo",
+		func = system.fileinfo,
+		arg = path,
+		extra = {
+			number = "NITFAtf",
+			string = "@p",
+			["nil"] = "=",
+		},
+	},
+	{
+		name = "file:info",
+		func = file.info,
+		arg = file,
+	},
+} do
+
+	newtest(spec.name)
+
+	local typemap = {}
+	for ltype, chars in pairs(common) do
+		typemap[ltype] = chars
+	end
+	if spec.extra then
+		for ltype, chars in pairs(spec.extra) do
+			typemap[ltype] = (typemap[ltype] or "")..chars
+		end
+	end
+	local options = {}
+	for _, chars in pairs(typemap) do
+		table.insert(options, chars)
+	end
+	options = table.concat(options)
+
+	do case "errors"
+		for i = 1, 255 do
+			local char = string.char(i)
+			if not string.find("~l"..options, char, 1, "plain search") then
+				asserterr("unknown mode char (got '"..char.."')",
+				          pcall(spec.func, spec.arg, char))
+			end
+		end
+
+		asserterr("unknown mode char (got '\255')",
+		          pcall(spec.func, spec.arg, options.."\255"))
+
+		asserterr("unable to yield", pcall(spec.func, spec.arg, options))
+
+		done()
+	end
+
+	do case "single value"
+		for c in string.gmatch(options , ".") do
+			local ltype = type(spec.func(spec.arg, "~"..c))
+			assert(string.find(typemap[ltype], c, 1, "plain"))
+
+			local v1, v2, v3 = spec.func(spec.arg, "~"..c..c..c)
+
+			assert(type(v1) == ltype)
+			assert(v2 == v1)
+			assert(v3 == v1)
+		end
+
+		done()
+	end
+
+	do case "all values"
+		local vararg = require "vararg"
+		local packed
+		spawn(function ()
+			packed = vararg.pack(spec.func(spec.arg, options))
+		end)
+
+		assert(packed == nil)
+		assert(system.run() == false)
+
+		assert(packed("#") == #options)
+		for i = 1, #options do
+			local c = options:sub(i, i)
+			local value = packed(i)
+			local ltype = type(value)
+			assert(string.find(typemap[ltype], c, 1, "plain"))
+
+			local previous = values[c]
+			if previous == nil then
+				values[c] = value
+			else
+				assert(previous == value)
+			end
+		end
+
+		done()
+	end
+
+end
+
+file:close()
