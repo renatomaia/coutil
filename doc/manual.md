@@ -549,7 +549,7 @@ which are the same arguments of [`load`](http://www.lua.org/manual/5.4/manual.ht
 
 ### `coroutine.loadfile ([filepath [, mode]])`
 
-Similar to [`system.load`](#coroutineload-chunk--chunkname--mode), but gets the chunk from a file.
+Similar to [`coroutine.load`](#coroutineload-chunk--chunkname--mode), but gets the chunk from a file.
 The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.4/manual.html#pdf-loadfile).
 
 ### `coroutine.status (preemptco)`
