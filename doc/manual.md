@@ -63,10 +63,8 @@ Index
 	- [`system.cpuinfo`](#systemcpuinfo-which)
 	- [`system.emitsig`](#systememitsig-pid-signal)
 	- [`system.execute`](#systemexecute-cmd-)
-	- [`system.file`](#systemfile-path--mode--uperm--gperm--operm)
-		- [`file:close`](#fileclose-)
-		- [`file:read`](#fileread-buffer--i--j--offset)
-		- [`file:write`](#filewrite-data--i--j--offset)
+	- [`system.filebits`](#systemfilebits)
+	- [`system.fileinfo`](#systemfileinfo-path-mode)
 	- [`system.findaddr`](#systemfindaddr-name--service--mode)
 		- [`addresses:close`](#addressesclose-)
 		- [`addresses:getaddress`](#addressesgetaddress-address)
@@ -82,7 +80,12 @@ Index
 	- [`system.isrunning`](#systemisrunning-)
 	- [`system.nameaddr`](#systemnameaddr-address--mode)
 	- [`system.nanosecs`](#systemnanosecs-)
-	- [`system.netinfo`](#systemnetinfo-option--ifindex)
+	- [`system.netinfo`](#systemnetinfo-option-which)
+	- [`system.openfile`](#systemopenfile-path--mode--perm)
+		- [`file:close`](#fileclose-)
+		- [`file:info`](#fileinfo-mode)
+		- [`file:read`](#fileread-buffer--i--j--offset)
+		- [`file:write`](#filewrite-data--i--j--offset)
 	- [`system.packenv`](#systempackenv-vars)
 	- [`system.random`](#systemrandom-buffer--i--j)
 	- [`system.resume`](#systemresume-preemptco-)
@@ -1169,51 +1172,59 @@ This operation is only available for passive sockets.
 In case of success,
 this function returns a new stream socket for the accepted connection.
 
-### `system.pathinfo (which [, mode])`
+### `system.filebits`
 
-Returns values corresponding to information related to file in `path` according to the following characters present in string `mode`:
+Table with the following fields containing numbers with the bit values for a [file mode] (_imode_ mode).
 
-- `?`: File type                                                      st_mode
-- `U`: File set-user-ID bit                                           st_mode
-- `G`: File set-group-ID bit                                          st_mode
-- `S`: File sticky bit                                                st_mode
-- `r`: File read permission for onwer user                            st_mode
-- `w`: File write permission for onwer user                           st_mode
-- `x`: File execute permission for onwer user                         st_mode
-- `R`: File read permission for owner group                           st_mode
-- `W`: File write permission for owner group                          st_mode
-- `X`: File execute permission for owner group                        st_mode
-- `4`: File read permission for others                                st_mode
-- `2`: File write permission for others                               st_mode
-- `1`: File execute permission for others                             st_mode
-- `M`: File mode bits                                                 st_mode
-- `d`: Device ID containing the file                                  st_dev
-- `#`: File ID in the file system (_inode_ number)                    st_ino
-- `*`: Number of hard links to the file                               st_nlink
-- `u`: User ID of the file's owner                                    st_uid
-- `g`: Group ID of the file's owner                                   st_gid
-- `D`: File's device ID (if special file)                             st_rdev
-- `B`: Total size of the file (bytes)                                 st_size
-- `i`: Ideal transfer block size (from this file)                     st_blksize
-- `b`: Number of 512B blocks allocated                                st_blocks
-- `_`: User defined flags for the file                                st_flags
-- `v`: File generation number                                         st_gen
-- `a`: Time of last access                                            st_atim
-- `m`: Time of last modification                                      st_mtim
-- `s`: Time of last status change                                     st_ctim
-- `c`: Time of file creation (birth)                                  st_birthtim
-- `@`: Type of the filesystem                                         f_type
-- `N`: Numeric ID of the type of the filesystem                       f_type
-- `I`: Ideal transfer block size (from file system)                   f_bsize
-- `T`: Total data blocks in the file system                           f_blocks
-- `F`: Free blocks in the filesystem                                  f_bfree
-- `A`: Free blocks available to unprivileged user in the filesystem   f_bavail
-- `t`: Total inodes in the filesystem                                 f_files
-- `f`: Free inodes in the filesystem                                  f_ffree
-- `p`: Canonicalized absolute path name for file                      uv_fs_realpath
-- `=`: Symbolic link value of path                                    uv_fs_readlink
+- `type`: Bit mask for the type of the file .
+- `socket`: Socket file type.
+- `link`: Symbolic link file type.
+- `regular`: Regular file type.
+- `block`: Block device file type.
+- `directory`: Directory file type.
+- `character`: Character device file type.
+- `fifo`: FIFO file type.
+- `setuid`: Set-user-ID bit.
+- `setgid`: Set-group-ID bit.
+- `sticky`: Sticky bit.
+- `ruser`: Read permission bit for the file's onwer user ID.
+- `wuser`: Write permission bit for the file's onwer user ID.
+- `xuser`: Execute permission bit for the file's onwer user ID.
+- `rgroup`: Read permission bit for the file's owner group ID.
+- `wgroup`: Write permission bit for the file's owner group ID.
+- `xgroup`: Execute permission bit for the file's owner group ID.
+- `rother`: Read permission bit for others.
+- `wother`: Write permission bit for others.
+- `xother`: Execute permission bit for others.
 
-### `system.file (path [, mode [, uperm [, gperm [, operm]]]])`
+### `system.fileinfo (path, mode)`
+
+Returns values corresponding to information related to file in `path`,
+according to the following characters in string `mode`:
+
+| Character | Type  | Description |
+| --------- | ----- | ----------- |
+| `p` | string <!-- uv_fs_realpath --> | Canonicalized absolute **path** name for the file. |
+| `=` | string <!-- uv_fs_readlink --> | The **value** of the symbolic link, or `nil` if `path` does not refer a symbolic link. |
+| `@` | string <!-- f_type --> | _Type_ of the **file system** of the file. |
+| `N` | integer <!-- f_type --> | **Numeric** ID of the _type_ of the file system of the file. |
+| `I` | integer <!-- f_bsize --> | **Ideal** transfer _block size_ for the file system of the file. |
+| `A` | integer <!-- f_bavail --> | Free blocks **available** to unprivileged user in the file system of the file. |
+| `F` | integer <!-- f_bfree --> | **Free** _blocks_ in the file system of the file. |
+| `f` | integer <!-- f_ffree --> | **Free** _inodes_ in the file system of the file. |
+| `T` | integer <!-- f_blocks --> | **Total** data _blocks_ in the file system of the file. |
+| `t` | integer <!-- f_files --> | **Total** _inodes_ in the file system of the file. |
+
+Additionally,
+this function supports the same options of [`file:info`](#fileinfo-mode).
+Moreover,
+`mode` can also be prefixed with `l` to indicate that,
+if `path` refers a symbolic link,
+all options from [`file:info`](#fileinfo-mode) shall be about the symbolic link file instead of the link's target file.
+Similar to `~`,
+`l` does not produce a value to be returned.
+
+### `system.openfile (path [, mode [, perm]])`
 
 Opens file from the path indicated by string `path`.
 The string `mode` can contain the following characters that define properties of the file opened.
@@ -1232,26 +1243,27 @@ it is truncated to length 0 (implies `w`).
 - `w`: allows writing operations.
 - `x`: file is not inheritable to child processes.
 
-The remaining arguments are strings that indicate the file permissions for the current user (`uperm`),
-users in the current group (`gperm`),
-and other users (`operm`) to be used to create a new file when `n` or `N` are present in `mode`.
-The following characters are allowed in these arguments to define the permissions:
+When either `n` or `N` are present in `mode`,
+`perm` must be either a number with the [file bits](#systemfilebits),
+or a string with characters defining the bits to be set for the file to be created,
+as listed below:
 
-- `r`: read permission.
-- `w`: write permission.
-- `x`: execute permission.
+- `U` Set-**user**-ID _bit_.
+- `G` Set-**group**-ID _bit_.
+- `S` **Sticky** bit.
+- `r` **Read** permission for the file's onwer _user_ ID.
+- `w` **Write** permission for the file's onwer _user_ ID.
+- `x` **Execute** permission for the file's onwer _user_ ID.
+- `R` **Read** permission for the file's owner _group_ ID.
+- `W` **Write** permission for the file's owner _group_ ID.
+- `X` **Execute** permission for the file's owner _group_ ID.
+- `4` **Read** permission for _others_.
+- `2` **Write** permission for _others_.
+- `1` **Execute** permission for _others_.
 
 **Note**: these file permissions are not enforced by the call that creates the file.
 They only affect future accesses.
 Files created by this call always allows for all permissions regardless of the permissions defined.
-
-When absent,
-the default value for the arguments are:
-
-- `mode` is `"r"`.
-- `uperm` is `"rw"`.
-- `gperm` is the value of `uperm`.
-- `operm` is the value of `gperm`.
 
 In case of success,
 it returns the file opened.
@@ -1263,6 +1275,40 @@ Note that files are automatically closed when they are garbage collected,
 but that takes an unpredictable amount of time to happen. 
 
 Returns `true` in case of success.
+
+### `file:info (mode)`
+
+Returns values corresponding to file `file`,
+according to the following characters in string `mode`:
+
+| Character | Type  | Description |
+| --------- | ----- | ----------- |
+| `?` | string <!-- st_mode --> | **Type** of the file. |
+| `M` | integer <!-- st_mode --> | [_Bit flags_](#systemfilebits) of the file (_imode_ **mode**). |
+| `_` | integer <!-- st_flags --> | User **defined** flags for the file. |
+| `#` | integer <!-- st_ino --> | ID of the file in the file system (_inode_ **number**). |
+| `d` | integer <!-- st_dev --> | _ID_ of the **device** containing the file. |
+| `D` | integer <!-- st_rdev --> | ID of the **device** _represented_ by the file, or `0` is not applicable. |
+| `*` | integer <!-- st_nlink --> | _Number_ of **hard links** to the file. |
+| `B` | integer <!-- st_size --> | Total size of the file (**bytes**). |
+| `b` | integer <!-- st_blocks --> | Number of 512B **blocks** allocated for the file. |
+| `i` | integer <!-- st_blksize --> | **Ideal** transfer _block size_ for the file. |
+| `v` | integer <!-- st_gen --> | **Generation** number of the file. |
+| `a` | number <!-- st_atim --> | Time of last **access** of the file. |
+| `s` | number <!-- st_ctim --> | Time of last **status** change of the file. |
+| `m` | number <!-- st_mtim --> | Time of last **modification** of the file. |
+| `c` | number <!-- st_birthtim --> | Time of file **creation**. |
+
+`mode` can also contain any of the characters valid for argument `perm` of [`system.openfile`](#systemopenfile-path--mode--perm).
+For these characters a boolean is returned indicating whether such bit is set.
+
+Moreover,
+`mode` can be prefixed with `~` to avoid this function to yield.
+Therefore it blocks the entire thread until its completion.
+Unlike other characters,
+`~` does not produce a value to be returned.
+
+**Note**: all time values are seconds relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time).
 
 ### `file:write (data [, i [, j [, offset]]])`
 

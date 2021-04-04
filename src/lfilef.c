@@ -7,55 +7,10 @@
 #endif
 
 
-/* succ [, errmsg] = system.file (path [, mode [, uperm [, gperm [, operm]]]]) */
-static int returnopenfile (lua_State *L) {
-	uv_file *file = (uv_file *)lua_touserdata(L, 1);
-	ssize_t result = (ssize_t)lua_tointeger(L, 2);
-	lua_pop(L, 1);
-	if (result < 0) return lcuL_pusherrres(L, result);
-	*file = result;
-	luaL_setmetatable(L, LCU_FILECLS);
-	return 1;
-}
-static void on_fileopen (uv_fs_t *filereq) {
-	uv_loop_t *loop = filereq->loop;
-	uv_req_t *request = (uv_req_t *)filereq;
-	lua_State *thread = lcuU_endreqop(loop, request);
-	ssize_t result = filereq->result;
-	uv_fs_req_cleanup(filereq);
-	if (thread) {
-		lua_pushinteger(thread, result);
-		lcuU_resumereqop(loop, request, 1);
-	}
-}
-static int k_setupfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
-	uv_fs_t *filereq = (uv_fs_t *)request;
-	const char *path = luaL_checkstring(L, 1);
-	const char *mode = luaL_optstring(L, 2, "r");
-	int flags = 0;
-	int perm = 0;
-	int err;
-	for (; *mode; mode++) switch (*mode) {
-		case 'r': perm |= 1; break;
-		case 'w': perm |= 2; break;
-		case 'a': perm |= 2; flags |= UV_FS_O_APPEND; break;
-		case 's': perm |= 2; flags |= UV_FS_O_SYNC; break;
-		case 't': perm |= 2; flags |= UV_FS_O_TRUNC; break;
-		case 'n': flags |= UV_FS_O_CREAT; break;
-		case 'N': flags |= UV_FS_O_CREAT|UV_FS_O_EXCL; break;
-#ifdef O_CLOEXEC
-		case 'x': flags |= O_CLOEXEC; break;
-#endif
-		default: return luaL_error(L, "unknown mode char (got '%c')", *mode);
-	}
-	switch (perm) {
-		case 1: flags |= UV_FS_O_RDONLY; break;
-		case 2: flags |= UV_FS_O_WRONLY; break;
-		case 3: flags |= UV_FS_O_RDWR; break;
-	}
-	perm = 0;
-	if (flags&UV_FS_O_CREAT) {
-		mode = luaL_checkstring(L, 3);
+static int checkperm (lua_State *L, int arg) {
+	const char *mode = lua_tostring(L, arg);
+	if (mode) {
+		int perm = 0;
 		for (; *mode; mode++) switch (*mode) {
 			case 'U': perm |= S_ISUID; break;
 			case 'G': perm |= S_ISGID; break;
@@ -69,232 +24,12 @@ static int k_setupfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 			case '4': perm |= S_IROTH; break;
 			case '2': perm |= S_IWOTH; break;
 			case '1': perm |= S_IXOTH; break;
-			case '_':
-			case ' ':
-			case '-': break;  /* ignored */
-			default: luaL_error(L, "bad argument #3, unknown char (got '%c')", *mode);
+			default: luaL_error(L,
+				"bad argument #%d, unknown perm char (got '%c')", arg, *mode);
 		}
+		return perm;
 	}
-	lua_settop(L, 0);
-	lua_newuserdatauv(L, sizeof(uv_file), 1);  /* raise memory errors */
-	lua_pushvalue(L, lua_upvalueindex(1));  /* push scheduler */
-	lua_setiuservalue(L, -2, 1);
-	err = uv_fs_open(loop, filereq, path, flags, perm, on_fileopen);
-	if (err < 0) return lcuL_pusherrres(L, err);
-	return -1;  /* yield on success */
-}
-static int system_file (lua_State *L) {
-	lcu_Scheduler *sched = lcu_getsched(L);
-	return lcuT_resetreqopk(L, sched, k_setupfile, returnopenfile, NULL);
-}
-
-#define checkfile(L)	((uv_file *)luaL_checkudata(L, 1, LCU_FILECLS))
-
-static lcu_Scheduler *tosched (lua_State *L) {
-	lcu_Scheduler *sched;
-	lua_getiuservalue(L, 1, 1);
-	sched = (lcu_Scheduler *)lua_touserdata(L, -1);
-	lua_pop(L, 1);
-	return sched;
-}
-
-static uv_file *openedfile (lua_State *L) {
-	uv_file *file = checkfile(L);
-	luaL_argcheck(L, *file >= 0, 1, "closed file");
-	return file;
-}
-
-static int closefile (lua_State *L, uv_file *file) {
-	uv_fs_t closereq;
-	int err = uv_fs_close(lcu_toloop(tosched(L)), &closereq, *file, NULL);
-	if (err >= 0) *file = -1;
-	return err;
-}
-
-/* ok [, err] = file:close() */
-static int file_gc (lua_State *L) {
-	uv_file *file = checkfile(L);
-	closefile(L, file);
-	return 0;
-}
-
-/* ok [, err] = file:close() */
-static int file_close (lua_State *L) {
-	uv_file *file = openedfile(L);
-	int err = closefile(L, file);
-	return lcuL_pushresults(L, 0, err);
-}
-
-static void on_fileopdone (uv_fs_t *filereq) {
-	uv_loop_t *loop = filereq->loop;
-	uv_req_t *request = (uv_req_t *)filereq;
-	lua_State *thread = lcuU_endreqop(loop, request);
-	ssize_t result = filereq->result;
-	uv_fs_req_cleanup(filereq);
-	if (thread) {
-		int nret;
-		if (result < 0) {
-			nret = lcuL_pusherrres(thread, result);
-		} else {
-			lua_pushinteger(thread, result);
-			nret = 1;
-		}
-		lcuU_resumereqop(loop, request, nret);
-	}
-}
-
-/* bytes [, err] = file:read(buffer [, i [, j [, offset [, mode]]]]) */
-static int callread (lua_State *L,
-                     uv_loop_t* loop,
-                     uv_fs_t* filereq,
-                     uv_file file,
-                     uv_fs_cb callback) {
-	uv_buf_t buf;  /* args from 2 to 4 (data, i, j) */
-	int64_t offset = (int64_t)luaL_optinteger(L, 5, -1);
-	lcu_getoutputbuf(L, 2, &buf);
-	return uv_fs_read(loop, filereq, file, &buf, 1, offset, callback);
-}
-static int k_setupreadfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
-	uv_fs_t *filereq = (uv_fs_t *)request;
-	uv_file *file = (uv_file *)lua_touserdata(L, 1);
-	int err = callread(L, loop, filereq, *file, on_fileopdone);
-	if (err < 0) return lcuL_pusherrres(L, err);
-	return -1;  /* yield on success */
-}
-static int file_read (lua_State *L) {
-	uv_file file = *openedfile(L);
-	lcu_Scheduler *sched = tosched(L);
-	if (lcuL_checknoyieldmode(L, 6)) {
-		uv_loop_t *loop = lcu_toloop(sched);
-		uv_fs_t filereq;
-		int err = callread(L, loop, &filereq, file, NULL);
-		if (err < 0) return lcuL_pusherrres(L, err);
-		lua_pushinteger(L, filereq.result);
-		return 1;
-	}
-	return lcuT_resetreqopk(L, sched, k_setupreadfile, NULL, NULL);
-}
-
-/* bytes [, err] = file:write(data [, i [, j [, offset [, mode]]]]) */
-static int callwrite (lua_State *L,
-                      uv_loop_t* loop,
-                      uv_fs_t* filereq,
-                      uv_file file,
-                      uv_fs_cb callback) {
-	uv_buf_t buf;  /* args from 2 to 4 (data, i, j) */
-	int64_t offset = (int64_t)luaL_optinteger(L, 5, -1);
-	lcu_getinputbuf(L, 2, &buf);
-	return uv_fs_write(loop, filereq, file, &buf, 1, offset, callback);
-}
-static int k_setupwritefile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
-	uv_fs_t *filereq = (uv_fs_t *)request;
-	uv_file *file = (uv_file *)lua_touserdata(L, 1);
-	int err = callwrite(L, loop, filereq, *file, on_fileopdone);
-	if (err < 0) return lcuL_pusherrres(L, err);
-	return -1;  /* yield on success */
-}
-static int file_write (lua_State *L) {
-	uv_file file = *openedfile(L);
-	lcu_Scheduler *sched = tosched(L);
-	if (lcuL_checknoyieldmode(L, 6)) {
-		uv_loop_t *loop = lcu_toloop(sched);
-		uv_fs_t filereq;
-		int err = callwrite(L, loop, &filereq, file, NULL);
-		if (err < 0) return lcuL_pusherrres(L, err);
-		lua_pushinteger(L, filereq.result);
-		return 1;
-	}
-	return lcuT_resetreqopk(L, sched, k_setupwritefile, NULL, NULL);
-}
-
-
-/* ... = system.pathinfo (path, which) */
-
-#define PATHINFO_READLINK 0x01  /* uv_fs_readlink */
-#define PATHINFO_REALPATH 0x02  /* uv_fs_realpath */
-#define PATHINFO_STATFS   0x04  /* uv_fs_statfs */
-#define PATHINFO_STAT     0x08  /* uv_fs_stat|uv_fs_lstat */
-#define PATHINFO_LSTAT    0x10  /* use 'uv_fs_lstat' */
-#define PATHINFO_NOYIELD  0x20
-#define PATHINFO_SRCMASK  0x0f
-#define PATHINFO_BITMASK  0x3f
-#define PATHINFO_BITCOUNT 6
-
-static int checksrc (lua_State *L, const char mode) {
-	switch (mode) {
-		case '?':
-		case 'U':
-		case 'G':
-		case 'S':
-		case 'r':
-		case 'w':
-		case 'x':
-		case 'R':
-		case 'W':
-		case 'X':
-		case '4':
-		case '2':
-		case '1':
-		case 'M':
-		case 'd':
-		case '#':
-		case '*':
-		case 'u':
-		case 'g':
-		case 'D':
-		case 'B':
-		case 'i':
-		case 'b':
-		case '_':
-		case 'v':
-		case 'a':
-		case 'm':
-		case 's':
-		case 'c': return PATHINFO_STAT;
-		case '@':
-		case 'N':
-		case 'I':
-		case 'T':
-		case 'F':
-		case 'A':
-		case 't':
-		case 'f': return PATHINFO_STATFS;
-		case 'p': return PATHINFO_REALPATH;
-		case '=': return PATHINFO_READLINK;
-		/* options */
-		case 'l':
-		case LCU_NOYIELDMODE:
-			return luaL_error(L, "'%c' must be in the begin of 'mode'", mode);
-		default:
-			return luaL_error(L, "unknown mode char (got '%c')", mode);
-	}
-}
-
-static int misssrc (int *bits, int src) {
-	if (*bits&src) {
-		*bits = (src<<PATHINFO_BITCOUNT)          /* set current source */
-		      | ((*bits&~src)&PATHINFO_BITMASK);  /* clear required source */
-		return 1;
-	}
-	return 0;
-}
-
-typedef int (*SourceFunc) (uv_loop_t *loop,
-                           uv_fs_t *filereq,
-                           const char *path,
-                           uv_fs_cb callback);
-
-static SourceFunc getsrc (int *bits) {
-	if (misssrc(bits, PATHINFO_READLINK))
-		return uv_fs_readlink;
-	else if (misssrc(bits, PATHINFO_REALPATH))
-		return uv_fs_realpath;
-	else if (misssrc(bits, PATHINFO_STATFS))
-		return uv_fs_statfs;
-	else if (misssrc(bits, PATHINFO_STAT))
-		return (*bits&PATHINFO_LSTAT) ? uv_fs_lstat : uv_fs_stat;
-	lcu_assert(0);
-	return NULL;
+	return (int)luaL_checkinteger(L, arg);
 }
 
 static void pushfiletype (lua_State *L, uint64_t type) {
@@ -563,6 +298,57 @@ static void pushfilesystype (lua_State *L, uint64_t type) {
 	}
 }
 
+static int pushfilestat (lua_State *L, char mode, uv_fs_t *filereq) {
+	switch (mode) {
+		case '?': pushfiletype(L, filereq->statbuf.st_mode&S_IFMT); break;
+		case 'U': lua_pushboolean(L, filereq->statbuf.st_mode&S_ISUID); break;
+		case 'G': lua_pushboolean(L, filereq->statbuf.st_mode&S_ISGID); break;
+		case 'S': lua_pushboolean(L, filereq->statbuf.st_mode&S_ISVTX); break;
+		case 'r': lua_pushboolean(L, filereq->statbuf.st_mode&S_IRUSR); break;
+		case 'w': lua_pushboolean(L, filereq->statbuf.st_mode&S_IWUSR); break;
+		case 'x': lua_pushboolean(L, filereq->statbuf.st_mode&S_IXUSR); break;
+		case 'R': lua_pushboolean(L, filereq->statbuf.st_mode&S_IRGRP); break;
+		case 'W': lua_pushboolean(L, filereq->statbuf.st_mode&S_IWGRP); break;
+		case 'X': lua_pushboolean(L, filereq->statbuf.st_mode&S_IXGRP); break;
+		case '4': lua_pushboolean(L, filereq->statbuf.st_mode&S_IROTH); break;
+		case '2': lua_pushboolean(L, filereq->statbuf.st_mode&S_IWOTH); break;
+		case '1': lua_pushboolean(L, filereq->statbuf.st_mode&S_IXOTH); break;
+		case 'M': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_mode); break;
+		case 'd': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_dev); break;
+		case '#': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_ino); break;
+		case '*': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_nlink); break;
+		case 'u': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_uid); break;
+		case 'g': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_gid); break;
+		case 'D': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_rdev); break;
+		case 'B': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_size); break;
+		case 'i': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_blksize); break;
+		case 'b': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_blocks); break;
+		case '_': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_flags); break;
+		case 'v': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_gen); break;
+		case 'a': lua_pushnumber(L, lcu_ntime2sec(filereq->statbuf.st_atim)); break;
+		case 'm': lua_pushnumber(L, lcu_ntime2sec(filereq->statbuf.st_mtim)); break;
+		case 's': lua_pushnumber(L, lcu_ntime2sec(filereq->statbuf.st_ctim)); break;
+		case 'c': lua_pushnumber(L, lcu_ntime2sec(filereq->statbuf.st_birthtim)); break;
+		default: return 0;
+	}
+	return 1;
+}
+
+
+/*
+ * File Info
+ */
+
+#define INFO_READLINK 0x01  /* uv_fs_readlink */
+#define INFO_REALPATH 0x02  /* uv_fs_realpath */
+#define INFO_STATFS   0x04  /* uv_fs_statfs */
+#define INFO_STAT     0x08  /* uv_fs_stat|uv_fs_lstat */
+#define INFO_LSTAT    0x10  /* use 'uv_fs_lstat' instead */
+#define INFO_NOYIELD  0x20
+#define INFO_SRCMASK  0x0f
+#define INFO_BITMASK  0x3f
+#define INFO_BITCOUNT 6
+
 static void placeat (lua_State *L, int idx) {
 	int top = lua_gettop(L);
 	if (idx < top) {
@@ -573,22 +359,23 @@ static void placeat (lua_State *L, int idx) {
 	}
 }
 
-static void pushpathinfo (lua_State *L,
+static void pushfileinfo (lua_State *L,
 	                        int base,
 	                        int bits,
 	                        const char *mode,
 	                        uv_fs_t *filereq) {
 	char selected = 'p';
 	int i;
-	switch (bits>>PATHINFO_BITCOUNT) {  /* get current source */
-		case PATHINFO_READLINK: selected = '=';
-		case PATHINFO_REALPATH: {
+	switch (bits>>INFO_BITCOUNT) {  /* get current source */
+		case INFO_READLINK: selected = '=';
+		case INFO_REALPATH: {
 			for (i = 0; mode[i]; i++) if (mode[i] == selected) {
-				lua_pushstring(L, (const char *)filereq->ptr);
+				if (filereq->result == UV_EINVAL) lua_pushnil(L);
+				else lua_pushstring(L, (const char *)filereq->ptr);
 				placeat(L, i+1+base);
 			}
 		} break;
-		case PATHINFO_STATFS: {
+		case INFO_STATFS: {
 			uv_statfs_t *statfs = (uv_statfs_t *)filereq->ptr;
 			for (i = 0; mode[i]; i++) {
 				switch (mode[i]) {
@@ -605,64 +392,137 @@ static void pushpathinfo (lua_State *L,
 				placeat(L, i+1+base);
 			}
 		} break;
-		case PATHINFO_STAT: {
-			for (i = 0; mode[i]; i++) {
-				switch (mode[i]) {
-					case '?': pushfiletype(L, filereq->statbuf.st_mode&S_IFMT); break;
-					case 'U': lua_pushboolean(L, filereq->statbuf.st_mode&S_ISUID); break;
-					case 'G': lua_pushboolean(L, filereq->statbuf.st_mode&S_ISGID); break;
-					case 'S': lua_pushboolean(L, filereq->statbuf.st_mode&S_ISVTX); break;
-					case 'r': lua_pushboolean(L, filereq->statbuf.st_mode&S_IRUSR); break;
-					case 'w': lua_pushboolean(L, filereq->statbuf.st_mode&S_IWUSR); break;
-					case 'x': lua_pushboolean(L, filereq->statbuf.st_mode&S_IXUSR); break;
-					case 'R': lua_pushboolean(L, filereq->statbuf.st_mode&S_IRGRP); break;
-					case 'W': lua_pushboolean(L, filereq->statbuf.st_mode&S_IWGRP); break;
-					case 'X': lua_pushboolean(L, filereq->statbuf.st_mode&S_IXGRP); break;
-					case '4': lua_pushboolean(L, filereq->statbuf.st_mode&S_IROTH); break;
-					case '2': lua_pushboolean(L, filereq->statbuf.st_mode&S_IWOTH); break;
-					case '1': lua_pushboolean(L, filereq->statbuf.st_mode&S_IXOTH); break;
-					case 'M': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_mode); break;
-					case 'd': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_dev); break;
-					case '#': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_ino); break;
-					case '*': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_nlink); break;
-					case 'u': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_uid); break;
-					case 'g': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_gid); break;
-					case 'D': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_rdev); break;
-					case 'B': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_size); break;
-					case 'i': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_blksize); break;
-					case 'b': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_blocks); break;
-					case '_': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_flags); break;
-					case 'v': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_gen); break;
-					case 'a': lua_pushnumber(L, lcu_ntime2sec(filereq->statbuf.st_atim)); break;
-					case 'm': lua_pushnumber(L, lcu_ntime2sec(filereq->statbuf.st_mtim)); break;
-					case 's': lua_pushnumber(L, lcu_ntime2sec(filereq->statbuf.st_ctim)); break;
-					case 'c': lua_pushnumber(L, lcu_ntime2sec(filereq->statbuf.st_birthtim)); break;
-					default: continue;
-				}
-				placeat(L, i+1+base);
-			}
+		case INFO_STAT: {
+			for (i = 0; mode[i]; i++)
+				if (pushfilestat(L, mode[i], filereq))
+					placeat(L, i+1+base);
 		} break;
 	}
 }
 
-static int yieldpathinfo (lua_State *L);
+static int toinfosrc (lua_State *L, const char mode, int mask) {
+	switch (mode) {
+		case '?':
+		case 'U':
+		case 'G':
+		case 'S':
+		case 'r':
+		case 'w':
+		case 'x':
+		case 'R':
+		case 'W':
+		case 'X':
+		case '4':
+		case '2':
+		case '1':
+		case 'M':
+		case 'd':
+		case '#':
+		case '*':
+		case 'u':
+		case 'g':
+		case 'D':
+		case 'B':
+		case 'i':
+		case 'b':
+		case '_':
+		case 'v':
+		case 'a':
+		case 'm':
+		case 's':
+		case 'c': return INFO_STAT;
+		case '@':
+		case 'N':
+		case 'I':
+		case 'T':
+		case 'F':
+		case 'A':
+		case 't':
+		case 'f': return INFO_STATFS;
+		case 'p': return INFO_REALPATH;
+		case '=': return INFO_READLINK;
+		/* options */
+		case 'l': if (!(mask&INFO_LSTAT)) break;
+		case LCU_NOYIELDMODE: if (!(mask&INFO_NOYIELD)) break;
+			return luaL_error(L, "'%c' must be in the begin of 'mode'", mode);
+	}
+	return 0;
+}
 
-static int returnpathinfo (lua_State *L) {
+static const char *checkinfomode (lua_State *L, int arg, int *bits) {
+	const char *mode = luaL_checkstring(L, arg);
+	int i, mask = *bits;
+	*bits = 0;
+	for (; *mode; mode++) {
+		switch (*mode) {
+			case 'l': i = INFO_LSTAT; break;
+			case LCU_NOYIELDMODE: i = INFO_NOYIELD; break;
+			default: i = 0;
+		}
+		if (i&mask) *bits |= i;
+		else if (i == 0) break;
+	}
+	for (i = 0; mode[i]; i++) {
+		int sel = toinfosrc(L, mode[i], mask);
+		if (sel&mask) *bits |= sel;
+		else luaL_error(L, "unknown mode char (got '%c')", mode);
+	}
+	lua_settop(L, arg);
+	luaL_checkstack(L, i+5, "too many values");  /* 5 extra slots */
+	return mode;
+}
+
+static int missinfosrc (int *bits, int src) {
+	if (*bits&src) {
+		*bits = (src<<INFO_BITCOUNT)          /* set current source */
+		      | ((*bits&~src)&INFO_BITMASK);  /* clear required source */
+		return 1;
+	}
+	return 0;
+}
+
+static void getinfosrc (lua_State *L,
+                        int *bits,
+                        uv_loop_t *loop,
+                        uv_fs_t *filereq,
+                        const char *path,
+                        uv_fs_cb callback) {
+	int err;
+	if (missinfosrc(bits, INFO_STAT)) {
+		err = (*bits&INFO_LSTAT) ? uv_fs_lstat(loop, filereq, path, callback)
+		                         : uv_fs_stat(loop, filereq, path, callback);
+	} else if (missinfosrc(bits, INFO_STATFS)) {
+		err = uv_fs_statfs(loop, filereq, path, callback);
+	} else if (missinfosrc(bits, INFO_REALPATH)) {
+		err = uv_fs_realpath(loop, filereq, path, callback);
+	} else if (missinfosrc(bits, INFO_READLINK)) {
+		err = uv_fs_readlink(loop, filereq, path, callback);
+		if (err == UV_EINVAL) {
+			filereq->result = UV_EINVAL;
+			err = 0;
+		}
+	}
+	if (err < 0) lcu_error(L, err);
+}
+
+/* ... = system.fileinfo (path, which) */
+static int yieldfileinfo (lua_State *L);
+static int returnfileinfo (lua_State *L) {
 	uv_fs_t *filereq = (uv_fs_t *)lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	if (filereq->result >= 0) {
 		int bits = lua_tointeger(L, 3);
 		const char *mode = (const char *)lua_touserdata(L, 4);
-		pushpathinfo(L, 4, bits, mode, filereq);
+		pushfileinfo(L, 4, bits, mode, filereq);
 		uv_fs_req_cleanup(filereq);
-		return yieldpathinfo(L);
+		return yieldfileinfo(L);
 	} else {
 		ssize_t result = filereq->result;
 		uv_fs_req_cleanup(filereq);
-		return lcuL_pusherrres(L, result);
+		return lcu_error(L, result);
 	}
 }
-static void on_pathinfo (uv_fs_t *filereq) {
+static void on_fileinfo (uv_fs_t *filereq) {
 	uv_loop_t *loop = filereq->loop;
 	uv_req_t *request = (uv_req_t *)filereq;
 	lua_State *thread = lcuU_endreqop(loop, request);
@@ -672,58 +532,265 @@ static void on_pathinfo (uv_fs_t *filereq) {
 	}
 	else uv_fs_req_cleanup(filereq);
 }
-
-static int k_setuppathinfo (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupfileinfo (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *path = lua_tostring(L, 1);
 	int bits = lua_tointeger(L, 3);
-	int err = getsrc(&bits)(loop, filereq, path, on_pathinfo);
-	if (err < 0) return lcuL_pusherrres(L, err);
+	getinfosrc(L, &bits, loop, filereq, path, on_fileinfo);
 	lua_pushinteger(L, bits);
 	lua_replace(L, 3);
 	return -1;  /* yield on success */
 }
-
-static int yieldpathinfo (lua_State *L) {
+static int yieldfileinfo (lua_State *L) {
 	int bits = lua_tointeger(L, 3);
-	if (bits&PATHINFO_SRCMASK) {
+	if (bits&INFO_SRCMASK) {
 		lcu_Scheduler *sched = lcu_getsched(L);
-		return lcuT_resetreqopk(L, sched, k_setuppathinfo, returnpathinfo, NULL);
+		return lcuT_resetreqopk(L, sched, k_setupfileinfo, returnfileinfo, NULL);
 	}
 	return lua_gettop(L)-4;
 }
-
-static int system_pathinfo (lua_State *L) {
+static int system_fileinfo (lua_State *L) {
+	int bits = INFO_BITMASK;  /* accept all options */
 	const char *path = luaL_checkstring(L, 1);
-	const char *mode = luaL_checkstring(L, 2);
-	int i, bits = 0;
-	for (; *mode; mode++) {
-		switch (*mode) {
-			case 'l': i = PATHINFO_LSTAT; break;
-			case LCU_NOYIELDMODE: i = PATHINFO_NOYIELD; break;
-			default: i = 0;
-		}
-		if (i == 0) break;
-		bits |= i;
-	}
-	for (i = 0; mode[i]; i++) bits |= checksrc(L, mode[i]);
-	lua_settop(L, 2);
-	luaL_checkstack(L, i+5, "too many values");  /* 5 extra slots */
-	if (bits&PATHINFO_NOYIELD) {
+	const char *mode = checkinfomode(L, 2, &bits);
+	if (bits&INFO_NOYIELD) {
 		lcu_Scheduler *sched = lcu_getsched(L);
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
-		while (bits&PATHINFO_SRCMASK) {
-			int err = getsrc(&bits)(loop, &filereq, path, NULL);
-			if (err < 0) return lcuL_pusherrres(L, err);
-			pushpathinfo(L, 2, bits, mode, &filereq);
+		while (bits&INFO_SRCMASK) {
+			getinfosrc(L, &bits, loop, &filereq, path, NULL);
+			pushfileinfo(L, 2, bits, mode, &filereq);
 			uv_fs_req_cleanup(&filereq);
 		}
-		return i;
+		return lua_gettop(L)-2;
 	}
 	lua_pushinteger(L, bits);
 	lua_pushlightuserdata(L, (void *)mode);
-	return yieldpathinfo(L);
+	return yieldfileinfo(L);
+}
+
+
+/*
+ * Files
+ */
+
+/* succ [, errmsg] = system.openfile (path [, mode [, perm]]) */
+static int returnopenfile (lua_State *L) {
+	uv_file *file = (uv_file *)lua_touserdata(L, 1);
+	ssize_t result = (ssize_t)lua_tointeger(L, 2);
+	lua_pop(L, 1);
+	if (result < 0) return lcuL_pusherrres(L, result);
+	*file = result;
+	luaL_setmetatable(L, LCU_FILECLS);
+	return 1;
+}
+static void on_fileopen (uv_fs_t *filereq) {
+	uv_loop_t *loop = filereq->loop;
+	uv_req_t *request = (uv_req_t *)filereq;
+	lua_State *thread = lcuU_endreqop(loop, request);
+	ssize_t result = filereq->result;
+	uv_fs_req_cleanup(filereq);
+	if (thread) {
+		lua_pushinteger(thread, result);
+		lcuU_resumereqop(loop, request, 1);
+	}
+}
+static int k_setupfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	const char *path = luaL_checkstring(L, 1);
+	const char *mode = luaL_optstring(L, 2, "r");
+	int flags = 0;
+	int perm = 0;
+	int err;
+	for (; *mode; mode++) switch (*mode) {
+		case 'r': perm |= 1; break;
+		case 'w': perm |= 2; break;
+		case 'a': perm |= 2; flags |= UV_FS_O_APPEND; break;
+		case 's': perm |= 2; flags |= UV_FS_O_SYNC; break;
+		case 't': perm |= 2; flags |= UV_FS_O_TRUNC; break;
+		case 'n': flags |= UV_FS_O_CREAT; break;
+		case 'N': flags |= UV_FS_O_CREAT|UV_FS_O_EXCL; break;
+#ifdef O_CLOEXEC
+		case 'x': flags |= O_CLOEXEC; break;
+#endif
+		default: return luaL_error(L, "unknown mode char (got '%c')", *mode);
+	}
+	switch (perm) {
+		case 1: flags |= UV_FS_O_RDONLY; break;
+		case 2: flags |= UV_FS_O_WRONLY; break;
+		case 3: flags |= UV_FS_O_RDWR; break;
+	}
+	if (flags&UV_FS_O_CREAT) perm = checkperm(L, 3);
+	else perm = 0;
+	lua_settop(L, 0);
+	lua_newuserdatauv(L, sizeof(uv_file), 1);  /* raise memory errors */
+	lua_pushvalue(L, lua_upvalueindex(1));  /* push scheduler */
+	lua_setiuservalue(L, -2, 1);
+	err = uv_fs_open(loop, filereq, path, flags, perm, on_fileopen);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
+}
+static int system_openfile (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);
+	return lcuT_resetreqopk(L, sched, k_setupfile, returnopenfile, NULL);
+}
+
+#define checkfile(L)	((uv_file *)luaL_checkudata(L, 1, LCU_FILECLS))
+
+static lcu_Scheduler *tosched (lua_State *L) {
+	lcu_Scheduler *sched;
+	lua_getiuservalue(L, 1, 1);
+	sched = (lcu_Scheduler *)lua_touserdata(L, -1);
+	lua_pop(L, 1);
+	return sched;
+}
+
+static uv_file *openedfile (lua_State *L) {
+	uv_file *file = checkfile(L);
+	luaL_argcheck(L, *file >= 0, 1, "closed file");
+	return file;
+}
+
+static int closefile (lua_State *L, uv_file *file) {
+	uv_fs_t closereq;
+	int err = uv_fs_close(lcu_toloop(tosched(L)), &closereq, *file, NULL);
+	if (err >= 0) *file = -1;
+	return err;
+}
+
+/* __gc(file) */
+static int file_gc (lua_State *L) {
+	uv_file *file = checkfile(L);
+	if (*file >= 0) closefile(L, file);
+	return 0;
+}
+
+/* true = file:close() */
+static int file_close (lua_State *L) {
+	uv_file *file = openedfile(L);
+	int err = closefile(L, file);
+	return lcuL_pushresults(L, 0, err);
+}
+
+static void on_fileopdone (uv_fs_t *filereq) {
+	uv_loop_t *loop = filereq->loop;
+	uv_req_t *request = (uv_req_t *)filereq;
+	lua_State *thread = lcuU_endreqop(loop, request);
+	ssize_t result = filereq->result;
+	uv_fs_req_cleanup(filereq);
+	if (thread) {
+		int nret;
+		if (result < 0) {
+			nret = lcuL_pusherrres(thread, result);
+		} else {
+			lua_pushinteger(thread, result);
+			nret = 1;
+		}
+		lcuU_resumereqop(loop, request, nret);
+	}
+}
+
+/* bytes [, err] = file:read(buffer [, i [, j [, offset [, mode]]]]) */
+static int callread (lua_State *L,
+                     uv_loop_t* loop,
+                     uv_fs_t* filereq,
+                     uv_file file,
+                     uv_fs_cb callback) {
+	uv_buf_t buf;  /* args from 2 to 4 (data, i, j) */
+	int64_t offset = (int64_t)luaL_optinteger(L, 5, -1);
+	lcu_getoutputbuf(L, 2, &buf);
+	return uv_fs_read(loop, filereq, file, &buf, 1, offset, callback);
+}
+static int k_setupreadfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	uv_file *file = (uv_file *)lua_touserdata(L, 1);
+	int err = callread(L, loop, filereq, *file, on_fileopdone);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
+}
+static int file_read (lua_State *L) {
+	uv_file file = *openedfile(L);
+	lcu_Scheduler *sched = tosched(L);
+	if (lcuL_checknoyieldmode(L, 6)) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		int err = callread(L, loop, &filereq, file, NULL);
+		if (err < 0) return lcuL_pusherrres(L, err);
+		lua_pushinteger(L, filereq.result);
+		return 1;
+	}
+	return lcuT_resetreqopk(L, sched, k_setupreadfile, NULL, NULL);
+}
+
+/* bytes [, err] = file:write(data [, i [, j [, offset [, mode]]]]) */
+static int callwrite (lua_State *L,
+                      uv_loop_t* loop,
+                      uv_fs_t* filereq,
+                      uv_file file,
+                      uv_fs_cb callback) {
+	uv_buf_t buf;  /* args from 2 to 4 (data, i, j) */
+	int64_t offset = (int64_t)luaL_optinteger(L, 5, -1);
+	lcu_getinputbuf(L, 2, &buf);
+	return uv_fs_write(loop, filereq, file, &buf, 1, offset, callback);
+}
+static int k_setupwritefile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	uv_file *file = (uv_file *)lua_touserdata(L, 1);
+	int err = callwrite(L, loop, filereq, *file, on_fileopdone);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
+}
+static int file_write (lua_State *L) {
+	uv_file file = *openedfile(L);
+	lcu_Scheduler *sched = tosched(L);
+	if (lcuL_checknoyieldmode(L, 6)) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		int err = callwrite(L, loop, &filereq, file, NULL);
+		if (err < 0) return lcuL_pusherrres(L, err);
+		lua_pushinteger(L, filereq.result);
+		return 1;
+	}
+	return lcuT_resetreqopk(L, sched, k_setupwritefile, NULL, NULL);
+}
+
+/* ... = file:info(mode) */
+static int returnfobjinfo (lua_State *L) {
+	uv_fs_t *filereq = (uv_fs_t *)lua_touserdata(L, -1);
+	lua_pop(L, 1);
+	if (filereq->result >= 0) {
+		const char *mode = (const char *)lua_touserdata(L, 3);
+		for (; *mode; mode++) pushfilestat(L, *mode, filereq);
+		uv_fs_req_cleanup(filereq);
+		return lua_gettop(L)-3;
+	} else {
+		ssize_t result = filereq->result;
+		uv_fs_req_cleanup(filereq);
+		return lcu_error(L, result);
+	}
+}
+static int k_setupfobjinfo (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	uv_file *file = (uv_file *)lua_touserdata(L, 1);
+	int err = uv_fs_fstat(loop, filereq, *file, on_fileinfo);
+	if (err < 0) return lcu_error(L, err);
+	return -1;  /* yield on success */
+}
+static int file_info (lua_State *L) {
+	uv_file file = *openedfile(L);
+	lcu_Scheduler *sched = tosched(L);
+	int bits = INFO_NOYIELD|INFO_STAT;
+	const char *mode = checkinfomode(L, 2, &bits);
+	if (bits&INFO_NOYIELD) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		int err = uv_fs_fstat(loop, &filereq, file, NULL);
+		if (err < 0) return lcu_error(L, err);
+		for (; *mode; mode++) pushfilestat(L, *mode, &filereq);
+		return lua_gettop(L)-2;
+	}
+	lua_pushlightuserdata(L, (void *)mode);
+	return lcuT_resetreqopk(L, sched, k_setupfobjinfo, returnfobjinfo, NULL);
 }
 
 
@@ -737,11 +804,12 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{"close", file_close},
 		{"read", file_read},
 		{"write", file_write},
+		{"info", file_info},
 		{NULL, NULL}
 	};
 	static const luaL_Reg modf[] = {
-		{"file", system_file},
-		{"pathinfo", system_pathinfo},
+		{"fileinfo", system_fileinfo},
+		{"openfile", system_openfile},
 		{NULL, NULL}
 	};
 	static const struct { const char *name; int value; } bits[] = {
@@ -776,7 +844,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
 	lua_pop(L, 1);  /* pop metatable */
 
-	lua_pushliteral(L, "filemode");
+	lua_pushliteral(L, "filebits");
 	lua_createtable(L, 0, 12);
 	for (i = 0; bits[i].name; i++) {
 		lua_pushstring(L, bits[i].name);

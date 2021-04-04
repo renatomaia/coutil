@@ -1,13 +1,13 @@
 local system = require "coutil.system"
 
-newtest "open" -----------------------------------------------------------------
+newtest "openfile" -----------------------------------------------------------------
 
 local validpath = "/dev/null"
 local validmodes = "rwanNrstwx"
 
 do case "non existent file"
 	spawn(function ()
-		asserterr("no such file or directory", system.file("./non/existent/file/path"))
+		asserterr("no such file or directory", system.openfile("./non/existent/file/path"))
 	end)
 	system.run()
 
@@ -19,7 +19,7 @@ do case "invalid modes"
 		for i = 1, 255 do
 			local char = string.char(i)
 			if not string.find(validmodes, char, 1, true) then
-				asserterr("unknown mode char", pcall(system.file, validpath, char))
+				asserterr("unknown mode char", pcall(system.openfile, validpath, char))
 			end
 		end
 	end)
@@ -30,9 +30,9 @@ end
 
 do case "ignore invalid permission"
 	spawn(function ()
-		assert(system.file(validpath, "w", "invalid")):close()
-		assert(system.file(validpath, "w", "rw", "invalid")):close()
-		assert(system.file(validpath, "w", "rw", "rw", "invalid")):close()
+		assert(system.openfile(validpath, "w", "invalid")):close()
+		assert(system.openfile(validpath, "w", "rw", "invalid")):close()
+		assert(system.openfile(validpath, "w", "rw", "rw", "invalid")):close()
 	end)
 	system.run()
 
@@ -41,10 +41,11 @@ end
 
 do case "invalid permission"
 	spawn(function ()
+		local valid = "UGSrwxRWX421"
 		for i = 1, 255 do
 			local char = string.char(i)
-			if char ~= "r" and char ~= "w" and char ~= "x" then
-				asserterr("unknown perm char", pcall(system.file, "./non-existent.txt", "N", char))
+			if not valid:find(char, 1, true) then
+				asserterr("unknown perm char", pcall(system.openfile, "./non-existent.txt", "N", char))
 			end
 		end
 	end)
