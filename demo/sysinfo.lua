@@ -42,7 +42,7 @@ Process
   Signals received            : %20d
   Voluntary context switches  : %20d
   Involuntary context switches: %20d
-]], system.info("kVvhnTbft1lLUugH$e#^MrRmd=cspPwio><SxX")))
+]], system.procinfo("kVvhnTbft1lLUugH$e#^MrRmd=cspPwio><SxX")))
 
 print("CPU")
 print("  # |    Speed     |    User     |    Nice     |   System    |    Idle     |     IRQ     | Name")
