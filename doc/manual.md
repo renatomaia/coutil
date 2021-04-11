@@ -76,7 +76,7 @@ Index
 	- [`system.getenv`](#systemgetenv-name)
 	- [`system.getpriority`](#systemgetpriority-pid)
 	- [`system.halt`](#systemhalt-)
-	- [`system.info`](#systeminfo-which)
+	- [`system.procinfo`](#systemprocinfo-which)
 	- [`system.isrunning`](#systemisrunning-)
 	- [`system.nameaddr`](#systemnameaddr-address--mode)
 	- [`system.nanosecs`](#systemnanosecs-)
@@ -1361,7 +1361,7 @@ this function returns `buffer`.
 
 **Note**: this function may not complete when the system is [low on entropy](http://docs.libuv.org/en/v1.x/misc.html#c.uv_random).
 
-### `system.info (which)`
+### `system.procinfo (which)`
 
 Returns values corresponding to system information according to the following characters present in string `which`:
 
