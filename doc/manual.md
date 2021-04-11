@@ -1174,7 +1174,7 @@ this function returns a new stream socket for the accepted connection.
 
 ### `system.filebits`
 
-Table with the following fields containing numbers with the bit values for a [file mode] (_imode_ mode).
+Table with the following fields containing numbers with the bit values for a [file mode](https://man7.org/linux/man-pages/man7/inode.7.html).
 
 - `type`: Bit mask for the type of the file .
 - `socket`: Socket file type.
@@ -1216,11 +1216,12 @@ according to the following characters in string `mode`:
 | `t` | integer <!-- f_files --> | **Total** _inodes_ in the file system of the file. |
 
 Additionally,
-this function supports the same options of [`file:info`](#fileinfo-mode).
+`mode` can also include the characters supported by [`file:info`](#fileinfo-mode) to return values about the file in `path`.
 Moreover,
 `mode` can also be prefixed with `l` to indicate that,
 if `path` refers a symbolic link,
-all options from [`file:info`](#fileinfo-mode) shall be about the symbolic link file instead of the link's target file.
+the values corresponding to characters supported by [`file:info`](#fileinfo-mode) shall be about the symbolic link file instead of the link's target file.
+The value of the other options are not affected.
 Similar to `~`,
 `l` does not produce a value to be returned.
 
@@ -1287,7 +1288,7 @@ according to the following characters in string `mode`:
 | `M` | integer <!-- st_mode --> | [_Bit flags_](#systemfilebits) of the file (_imode_ **mode**). |
 | `_` | integer <!-- st_flags --> | User **defined** flags for the file. |
 | `#` | integer <!-- st_ino --> | ID of the file in the file system (_inode_ **number**). |
-| `d` | integer <!-- st_dev --> | _ID_ of the **device** containing the file. |
+| `d` | integer <!-- st_dev --> | ID of the **device** _containing_ the file. |
 | `D` | integer <!-- st_rdev --> | ID of the **device** _represented_ by the file, or `0` is not applicable. |
 | `*` | integer <!-- st_nlink --> | _Number_ of **hard links** to the file. |
 | `B` | integer <!-- st_size --> | Total size of the file (**bytes**). |
@@ -1308,9 +1309,9 @@ Therefore it blocks the entire thread until its completion.
 Unlike other characters,
 `~` does not produce a value to be returned.
 
-**Note**: all time values are seconds relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time).
+**Note**: all time values returned are seconds relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time).
 
-### `file:write (data [, i [, j [, offset]]])`
+### `file:write (data [, i [, j [, offset [, mode]]]])`
 
 [Await function](#await-function) that awaits until it writes to file `file` the substring of `data` that starts at `i` and continues until `j`,
 following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
@@ -1322,10 +1323,13 @@ the file offset is not changed by this call.
 In the other case,
 the current file offset is used and updated.
 
+`mode` is a string,
+which might contain character `~` with the same semantics as in [`file:info`](#fileinfo-mode).
+
 In case of success,
 this function returns the number of bytes written to `file`.
 
-### `file:read (buffer [, i [, j [, offset]]])`
+### `file:read (buffer [, i [, j [, offset [, mode]]]])`
 
 [Await function](#await-function) that awaits until it reads from file `file` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
 following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
@@ -1337,14 +1341,20 @@ the file offset is not changed by this call.
 In the other case,
 the current file offset is used and updated.
 
+`mode` is a string,
+which might contain character `~` with the same semantics as in [`file:info`](#fileinfo-mode).
+
 In case of success,
 this function returns the number of bytes copied to `buffer`.
 
-### `system.random (buffer [, i [, j]])`
+### `system.random (buffer [, i [, j [, mode]]])`
 
 [Await function](#await-function) that awaits until it fills [memory](https://github.com/renatomaia/lua-memory) `buffer` with [cryptographically strong random bytes](https://en.wikipedia.org/wiki/Cryptographically_secure_pseudorandom_number_generator),
 from position `i` until `j`,
 following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+
+`mode` is a string,
+which might contain character `~` with the same semantics as in [`file:info`](#fileinfo-mode).
 
 In case of success,
 this function returns `buffer`.
@@ -1434,15 +1444,14 @@ as described below:
 The _control variable_ is the index of the network interface address,
 not the interface index.
 The values of the other _loop variables_ are given by the following characters in string `which`:
-
-- `n`: the name of the network interface.
-- `i`: `true` if the network interface address is internal, or `false` otherwise.
-- `d`: the domain of the network interface address (`"ipv4"` or `"ipv6"`).
-- `l`: the length of the subnet mask of the network interface address.
-- `m`: the binary representation of the subnet mask of the network interface address.
-- `t`: the text representation of the network interface address.
-- `b`: the binary representation of the network interface address.
-- `T`: the text representation of the physical address (MAC) of the network interface.
-- `B`: the binary representation physical address (MAC) of the network interface.
+	- `n`: the name of the network interface.
+	- `i`: `true` if the network interface address is internal, or `false` otherwise.
+	- `d`: the domain of the network interface address (`"ipv4"` or `"ipv6"`).
+	- `l`: the length of the subnet mask of the network interface address.
+	- `m`: the binary representation of the subnet mask of the network interface address.
+	- `t`: the text representation of the network interface address.
+	- `b`: the binary representation of the network interface address.
+	- `T`: the text representation of the physical address (MAC) of the network interface.
+	- `B`: the binary representation physical address (MAC) of the network interface.
 
 **Note**: This _iterator_ have the same characteristics of the one returned by [`system.cpuinfo`](#systemcpuinfo-which).
