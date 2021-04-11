@@ -558,7 +558,10 @@ LCUI_FUNC int lcuT_resetobjopk (lua_State *L,
 		lua_pushvalue(L, 1);
 		savevalue(L, (void *)handle);
 		err = start(handle);
-		if (err < 0) return lcuL_pusherrres(L, err);
+		if (err < 0) {
+			freevalue(L, (void *)handle);
+			return lcuL_pusherrres(L, err);
+		}
 		obj->stop = stop;
 		sched->nactive++;
 	}
