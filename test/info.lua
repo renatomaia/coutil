@@ -9,22 +9,22 @@ do case "errors"
 		local char = string.char(i)
 		if not string.find(options, char, 1, "plain search") then
 			asserterr("unknown mode char (got '"..char.."')",
-			          pcall(system.info, char))
+			          pcall(system.procinfo, char))
 		end
 	end
 
 	asserterr("unknown mode char (got '\255')",
-	          pcall(system.info, options.."\255"))
+	          pcall(system.procinfo, options.."\255"))
 
 	done()
 end
 
 do case "single value"
 	for c in string.gmatch(options , ".") do
-		local ltype = type(system.info(c))
+		local ltype = type(system.procinfo(c))
 		assert(ltype == "number" or ltype == "string")
 
-		local v1, v2, v3 = system.info(c..c..c)
+		local v1, v2, v3 = system.procinfo(c..c..c)
 
 		assert(type(v1) == ltype)
 		assert(v2 == v1)
@@ -35,7 +35,7 @@ do case "single value"
 end
 
 do case "all values"
-	local packed = table.pack(system.info(options))
+	local packed = table.pack(system.procinfo(options))
 	assert(#packed == #options)
 	for i = 1, #options do
 		local ltype = type(packed[i])
