@@ -549,7 +549,7 @@ do newtest "signal" ------------------------------------------------------------
 			return system.awaitsig(self.signals[cfgid])
 		end,
 		trigger = function (self, cfgid)
-			system.emitsig(system.info("#"), self.signals[cfgid])
+			system.emitsig(system.procinfo("#"), self.signals[cfgid])
 		end,
 		check = function (self, cfgid, signal)
 			assert(signal == self.signals[cfgid])

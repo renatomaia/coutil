@@ -43,7 +43,7 @@ local newaddr = system.address
 local newsocket = system.socket
 local nameaddr = system.nameaddr
 local resolveaddr = system.findaddr
-local sysinfo = system.info
+local procinfo = system.procinfo
 
 local defaultsize = 8192
 
@@ -577,7 +577,7 @@ local dns = {} do
 	end
 
 	function dns.gethostname()
-		return sysinfo("n")
+		return procinfo("n")
 	end
 end
 

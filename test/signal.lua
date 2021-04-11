@@ -3,7 +3,7 @@ local system = require "coutil.system"
 newtest "awaitsig" -------------------------------------------------------------
 
 local function sendsignal(signal)
-	system.emitsig(system.info("#"), signal)
+	system.emitsig(system.procinfo("#"), signal)
 end
 
 do case "error messages"

@@ -58,7 +58,7 @@ do case "change value"
 	local path = system.getdir()
 	assert(type(path) == "string")
 
-	local homedir = system.info("H")
+	local homedir = system.procinfo("H")
 	assert(system.setdir(homedir) == true)
 
 	assert(system.getdir() == homedir)
@@ -828,7 +828,7 @@ do case "error messages"
 end
 
 do case "own priority"
-	local pid = system.info("#")
+	local pid = system.procinfo("#")
 	local name, value = system.getpriority(pid)
 	assert(type(name) == "string")
 	assert(type(value) == "number")

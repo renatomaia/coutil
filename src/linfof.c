@@ -70,135 +70,135 @@ static int system_cpuinfo (lua_State *L) {
 }
 
 
-/* ... = system.info(what) */
+/* ... = system.procinfo(what) */
 
-typedef struct SystemInfo {
+typedef struct CurrProcInfo {
 	int flags;
 	double loadavg[3];
 	uv_rusage_t rusage;
 	uv_passwd_t *passwd;
 	uv_utsname_t utsname;
-} SystemInfo;
+} CurrProcInfo;
 
 #define LOADAVG	0x01
 #define RUSAGE	0x02
 #define UTSNAME	0x04
 #define PASSWD	0x08
 
-#define SYSUSERINFOCLS	LCU_PREFIX"uv_passwd_t"
+#define USERINFOCLS	LCU_PREFIX"uv_passwd_t"
 
-#define initsysinf(S) {(S)->flags = 0;}
+#define initprocinf(S) {(S)->flags = 0;}
 
-static int sysuserinfo_gc (lua_State *L) {
-	uv_passwd_t *passwd = (uv_passwd_t *)luaL_checkudata(L, 1, SYSUSERINFOCLS);
+static int userinfo_gc (lua_State *L) {
+	uv_passwd_t *passwd = (uv_passwd_t *)luaL_checkudata(L, 1, USERINFOCLS);
 	uv_os_free_passwd(passwd);
 	return 0;
 }
 
-static double *sysload (lua_State *L, SystemInfo *sysinf) {
-	if (!(sysinf->flags&LOADAVG)) {
-		uv_loadavg(sysinf->loadavg);
-		sysinf->flags |= LOADAVG;
+static double *sysload (lua_State *L, CurrProcInfo *procinf) {
+	if (!(procinf->flags&LOADAVG)) {
+		uv_loadavg(procinf->loadavg);
+		procinf->flags |= LOADAVG;
 	}
-	return sysinf->loadavg;
+	return procinf->loadavg;
 }
 
-static uv_rusage_t *sysusage (lua_State *L, SystemInfo *sysinf) {
-	if (!(sysinf->flags&RUSAGE)) {
-		int err = uv_getrusage(&sysinf->rusage);
+static uv_rusage_t *sysusage (lua_State *L, CurrProcInfo *procinf) {
+	if (!(procinf->flags&RUSAGE)) {
+		int err = uv_getrusage(&procinf->rusage);
 		if (err) lcu_error(L, err);
-		sysinf->flags |= RUSAGE;
+		procinf->flags |= RUSAGE;
 	}
-	return &sysinf->rusage;
+	return &procinf->rusage;
 }
 
-static uv_utsname_t *sysname (lua_State *L, SystemInfo *sysinf) {
-	if (!(sysinf->flags&UTSNAME)) {
-		int err = uv_os_uname(&sysinf->utsname);
+static uv_utsname_t *sysname (lua_State *L, CurrProcInfo *procinf) {
+	if (!(procinf->flags&UTSNAME)) {
+		int err = uv_os_uname(&procinf->utsname);
 		if (err) lcu_error(L, err);
-		sysinf->flags |= UTSNAME;
+		procinf->flags |= UTSNAME;
 	}
-	return &sysinf->utsname;
+	return &procinf->utsname;
 }
 
-static uv_passwd_t *sysuser (lua_State *L, SystemInfo *sysinf) {
-	if (!(sysinf->flags&PASSWD)) {
+static uv_passwd_t *sysuser (lua_State *L, CurrProcInfo *procinf) {
+	if (!(procinf->flags&PASSWD)) {
 		int err;
-		sysinf->passwd = (uv_passwd_t *)lua_newuserdatauv(L, sizeof(uv_passwd_t), 0);
-		err = uv_os_get_passwd(sysinf->passwd);
+		procinf->passwd = (uv_passwd_t *)lua_newuserdatauv(L, sizeof(uv_passwd_t), 0);
+		err = uv_os_get_passwd(procinf->passwd);
 		if (err) lcu_error(L, err);
-		luaL_setmetatable(L, SYSUSERINFOCLS);
+		luaL_setmetatable(L, USERINFOCLS);
 		lua_replace(L, 2);
-		sysinf->flags |= PASSWD;
+		procinf->flags |= PASSWD;
 	}
-	return sysinf->passwd;
+	return procinf->passwd;
 }
 
 typedef int (*GetPathFunc) (char *buffer, size_t *len);
 
-static int system_info (lua_State *L) {
-	SystemInfo sysinf;
+static int system_procinfo (lua_State *L) {
+	CurrProcInfo procinf;
 	size_t sz;
 	const char *mode = luaL_checklstring(L, 1, &sz);
-	initsysinf(&sysinf);
+	initprocinf(&procinf);
 	lua_settop(L, 2);  /* leave space for 'uv_passwd_t' userdata. */
 	luaL_argcheck(L, sz < (size_t)INT_MAX, 1, "too many options");
 	luaL_checkstack(L, (int)sz, "too many values to return");
 	for (; *mode; mode++) switch (*mode) {
-		case '#': lua_pushinteger(L, (lua_Integer)uv_os_getpid()); break;
-		case '$': lua_pushstring(L, sysuser(L, &sysinf)->shell); break;
-		case '^': lua_pushinteger(L, (lua_Integer)uv_os_getppid()); break;
-		case '=': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_isrss*1024); break;
-		case '<': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_msgrcv); break;
-		case '>': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_msgsnd); break;
-		case '1': lua_pushnumber(L, (lua_Number)sysload(L, &sysinf)[0]); break;
-		case 'b': lua_pushinteger(L, (lua_Integer)uv_get_total_memory()); break;
-		case 'c': lua_pushnumber(L, lcu_time2sec(sysusage(L, &sysinf)->ru_utime)); break;
-		case 'd': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_idrss*1024); break;
 		case 'e': lcu_pushstrout(L, uv_exepath); break;
-		case 'f': lua_pushinteger(L, (lua_Integer)uv_get_free_memory()); break;
-		case 'g': lua_pushinteger(L, (lua_Integer)sysuser(L, &sysinf)->gid); break;
-		case 'h': lua_pushstring(L, sysname(L, &sysinf)->machine); break;
-		case 'H': lua_pushstring(L, sysuser(L, &sysinf)->homedir); break;
-		case 'i': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_inblock); break;
-		case 'k': lua_pushstring(L, sysname(L, &sysinf)->sysname); break;
-		case 'l': lua_pushnumber(L, (lua_Number)sysload(L, &sysinf)[1]); break;
-		case 'L': lua_pushnumber(L, (lua_Number)sysload(L, &sysinf)[2]); break;
-		case 'm': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_ixrss*1024); break;
-		case 'M': lua_pushinteger(L, (lua_Integer)uv_get_constrained_memory()); break;
 		case 'n': lcu_pushstrout(L, uv_os_gethostname); break;
-		case 'o': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_oublock); break;
-		case 'P': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_majflt); break;
-		case 'p': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_minflt); break;
-		case 'r': {
-			size_t val;
-			uv_resident_set_memory(&val);
-			lua_pushinteger(L, (lua_Integer)val);
-		} break;
-		case 'R': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_maxrss*1024); break;
-		case 's': lua_pushnumber(L, lcu_time2sec(sysusage(L, &sysinf)->ru_stime)); break;
-		case 'S': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_nsignals); break;
-		case 'u': lua_pushinteger(L, (lua_Integer)sysuser(L, &sysinf)->uid); break;
-		case 'U': lua_pushstring(L, sysuser(L, &sysinf)->username); break;
+		case 'T': lcu_pushstrout(L, uv_os_tmpdir); break;
+		case 'h': lua_pushstring(L, sysname(L, &procinf)->machine); break;
+		case 'k': lua_pushstring(L, sysname(L, &procinf)->sysname); break;
+		case 'v': lua_pushstring(L, sysname(L, &procinf)->release); break;
+		case 'V': lua_pushstring(L, sysname(L, &procinf)->version); break;
+		case '$': lua_pushstring(L, sysuser(L, &procinf)->shell); break;
+		case 'H': lua_pushstring(L, sysuser(L, &procinf)->homedir); break;
+		case 'U': lua_pushstring(L, sysuser(L, &procinf)->username); break;
+		case 'g': lua_pushinteger(L, (lua_Integer)sysuser(L, &procinf)->gid); break;
+		case 'u': lua_pushinteger(L, (lua_Integer)sysuser(L, &procinf)->uid); break;
+		case '=': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_isrss*1024); break;
+		case 'd': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_idrss*1024); break;
+		case 'm': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_ixrss*1024); break;
+		case 'R': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_maxrss*1024); break;
+		case '<': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_msgrcv); break;
+		case '>': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_msgsnd); break;
+		case 'i': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_inblock); break;
+		case 'o': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_oublock); break;
+		case 'p': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_minflt); break;
+		case 'P': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_majflt); break;
+		case 'S': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_nsignals); break;
+		case 'w': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_nswap); break;
+		case 'x': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_nvcsw); break;
+		case 'X': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_nivcsw); break;
+		case 'c': lua_pushnumber(L, lcu_time2sec(sysusage(L, &procinf)->ru_utime)); break;
+		case 's': lua_pushnumber(L, lcu_time2sec(sysusage(L, &procinf)->ru_stime)); break;
+		case '1': lua_pushnumber(L, (lua_Number)sysload(L, &procinf)[0]); break;
+		case 'l': lua_pushnumber(L, (lua_Number)sysload(L, &procinf)[1]); break;
+		case 'L': lua_pushnumber(L, (lua_Number)sysload(L, &procinf)[2]); break;
 		case 't': {
 			double val;
 			uv_uptime(&val);
 			lua_pushnumber(L, (lua_Number)val);
 		} break;
-		case 'T': lcu_pushstrout(L, uv_os_tmpdir); break;
-		case 'v': lua_pushstring(L, sysname(L, &sysinf)->release); break;
-		case 'V': lua_pushstring(L, sysname(L, &sysinf)->version); break;
-		case 'w': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_nswap); break;
-		case 'x': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_nvcsw); break;
-		case 'X': lua_pushinteger(L, (lua_Integer)sysusage(L, &sysinf)->ru_nivcsw); break;
+		case '#': lua_pushinteger(L, (lua_Integer)uv_os_getpid()); break;
+		case '^': lua_pushinteger(L, (lua_Integer)uv_os_getppid()); break;
+		case 'b': lua_pushinteger(L, (lua_Integer)uv_get_total_memory()); break;
+		case 'f': lua_pushinteger(L, (lua_Integer)uv_get_free_memory()); break;
+		case 'M': lua_pushinteger(L, (lua_Integer)uv_get_constrained_memory()); break;
+		case 'r': {
+			size_t val;
+			uv_resident_set_memory(&val);
+			lua_pushinteger(L, (lua_Integer)val);
+		} break;
 		default: return luaL_error(L, "unknown mode char (got '%c')", *mode);
 	}
 	return lua_gettop(L)-2;
 }
 
 
-static const luaL_Reg sysuserinfomt[] = {
-	{"__gc", sysuserinfo_gc},
+static const luaL_Reg userinfomt[] = {
+	{"__gc", userinfo_gc},
 	{NULL, NULL}
 };
 static const luaL_Reg cpuinfomt[] = {
@@ -210,13 +210,13 @@ static const luaL_Reg cpuinfomt[] = {
 };
 static const luaL_Reg modulef[] = {
 	{"cpuinfo", system_cpuinfo},
-	{"info", system_info},
+	{"procinfo", system_procinfo},
 	{NULL, NULL}
 };
 
 LCUI_FUNC void lcuM_addinfof (lua_State *L) {
-	luaL_newmetatable(L, SYSUSERINFOCLS);
-	luaL_setfuncs(L, sysuserinfomt, 0);
+	luaL_newmetatable(L, USERINFOCLS);
+	luaL_setfuncs(L, userinfomt, 0);
 	lua_pop(L, 1);  /* pop metatable */
 
 	luaL_newmetatable(L, LCU_CPUINFOLISTCLS);
