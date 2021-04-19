@@ -82,7 +82,11 @@ typedef struct lcu_Object {
 
 LCUI_FUNC lcu_Object *lcuT_createobj (lua_State *L, size_t sz, const char *cls);
 
+#define lcuT_newobject(L,T,C)	(T *)lcuT_createobj(L,sizeof(T),C)
+
 LCUI_FUNC int lcu_closeobj (lua_State *L, int idx);
+
+LCUI_FUNC lcu_Object *lcu_openedobj (lua_State *L, int arg, const char *class);
 
 LCUI_FUNC int lcuT_resetobjopk (lua_State *L,
                                 lcu_Object *obj,
@@ -91,6 +95,42 @@ LCUI_FUNC int lcuT_resetobjopk (lua_State *L,
                                 lua_CFunction step);
 
 LCUI_FUNC void lcuU_resumeobjop (uv_handle_t *handle, int narg);
+
+
+
+typedef struct lcu_ObjectRequest {
+	lua_CFunction results;
+	lua_CFunction cancel;
+	uv_req_t request;
+} lcu_ObjectRequest;
+
+#define lcu_toobjrequest(O)	(&(O)->request)
+
+#define lcu_toobjreq(H) ({ const char *p = (const char *)H; \
+                           (lcu_ObjectRequest *)(p-offsetof(lcu_ObjectRequest, H)); })
+
+LCUI_FUNC lcu_ObjectRequest *lcuT_createobjreq (lua_State *L, size_t sz);
+
+#define lcuT_newobjreq(L,T)	(T *)lcuT_createobjreq(L,sizeof(T))
+
+LCUI_FUNC int lcu_closeobjreq (lua_State *L, int idx);
+
+LCUI_FUNC lcu_ObjectRequest *lcu_openedobjreq (lua_State *L, int arg, const char *class);
+
+LCUI_FUNC int lcuT_resetobjreqopk (lua_State *L,
+                                   lcu_Scheduler *sched,
+                                   lcu_ObjectRequest *objreq,
+                                   lcu_RequestSetup setup,
+                                   lua_CFunction results,
+                                   lua_CFunction cancel);
+
+LCUI_FUNC lua_State *lcuU_endobjreqop (uv_loop_t *loop, uv_req_t *request);
+
+LCUI_FUNC void lcuU_resumeobjreqop (uv_loop_t *loop, uv_req_t *request, int narg);
+
+
+
+/* auxiliary functions */
 
 LCUI_FUNC int lcuL_checknoyieldmode (lua_State *L, int arg);
 

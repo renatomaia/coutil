@@ -903,6 +903,7 @@ function teststream(create, addresses)
 			assert(stream:receive(buffer) == size)
 			assert(not memory.diff(buffer, string.rep("a", size)))
 			coroutine.resume(thread)
+			gc()
 		end)
 
 		local complete = false
@@ -911,6 +912,7 @@ function teststream(create, addresses)
 			coroutine.yield()
 			asserterr("already in use", pcall(stream.receive, stream))
 			coroutine.yield()
+			thread = nil
 			assert(stream:receive(buffer) == size)
 			assert(not memory.diff(buffer, string.rep("b", size)))
 			assert(stream:close())
@@ -930,7 +932,6 @@ function teststream(create, addresses)
 		assert(complete == false)
 		assert(system.run() == false)
 		assert(complete == true)
-		thread = nil
 
 		done()
 	end

@@ -5,11 +5,10 @@
 #include <lmemlib.h>
 
 
-#define FLAG_CLOSED	0x01
-
 typedef struct lcu_SysCoro {
-	int flags;
-	lua_State *thread;
+	lua_CFunction results;
+	lua_CFunction cancel;
+	uv_work_t work;
 	lua_State *coroutine;
 } lcu_SysCoro;
 
@@ -25,10 +24,7 @@ static int doloaded (lua_State *L, lua_State *NL, int status) {
 		lua_close(NL);
 		return 2;  /* return nil plus error message */
 	} else {
-		lcu_SysCoro *sysco =
-			(lcu_SysCoro *)lua_newuserdatauv(L, sizeof(lcu_SysCoro), 1);
-		sysco->flags = 0;
-		sysco->thread = NULL;
+		lcu_SysCoro *sysco = lcuT_newobjreq(L, lcu_SysCoro);
 		sysco->coroutine = NL;
 		luaL_setmetatable(L, LCU_SYSCOROCLS);
 		return 1;
@@ -56,46 +52,43 @@ static int coroutine_loadfile (lua_State *L) {
 }
 
 
-static void freecoroutine (lcu_SysCoro *sysco) {
-	lcu_assert(sysco->coroutine);
-	lua_close(sysco->coroutine);
-	sysco->coroutine = NULL;
-}
-
-static int closesysco (lua_State *L) {
-	lcu_SysCoro *sysco = tosysco(L);
-	if (lcuL_maskflag(sysco, FLAG_CLOSED)) return 0;
-	if (sysco->thread == NULL) freecoroutine(sysco);
-	lcuL_setflag(sysco, FLAG_CLOSED);
-	return 1;
-}
-
-
-/* getmetatable(coroutine).__{gc,close}(coroutine) */
+/* getmetatable(co).__{gc,close}(co) */
 static int coroutine_gc(lua_State *L) {
-	closesysco(L);
+	lcu_SysCoro *sysco = tosysco(L);
+	if (sysco->work.type == UV_WORK) luaL_error(L, "cannot close a running coroutine");
+	lcu_assert(sysco->work.data == NULL);
+	if (sysco->coroutine) {
+		lua_close(sysco->coroutine);
+		sysco->coroutine = NULL;
+	}
 	return 0;
 }
 
 
-/* succ = object:close() */
+/* succ = coroutine.close(co) */
 static int coroutine_close(lua_State *L) {
-	int closed = closesysco(L);
-	lua_pushboolean(L, closed);
+	coroutine_gc(L);
+	lua_pushboolean(L, 1);
 	return 1;
 }
 
 
-/* status = coroutine:status() */
+static int suspended (lua_State *co) {
+	switch (lua_status(co)) {
+		case LUA_OK: return lua_gettop(co);
+		case LUA_YIELD: return 1;
+		default: return 0;
+	}
+}
+
+
+/* status = coroutine.status(co) */
 static int coroutine_status(lua_State *L) {
 	lcu_SysCoro *sysco = tosysco(L);
-	if (lcuL_maskflag(sysco, FLAG_CLOSED)) lua_pushliteral(L, "dead");
-	else if (sysco->thread) lua_pushliteral(L, "running");
+	if (sysco->work.type == UV_WORK) lua_pushliteral(L, "running");
 	else {
 		lua_State *co = sysco->coroutine;
-		if (lua_status(co) == LUA_YIELD) lua_pushliteral(L, "suspended");
-		else if (lua_status(co) != LUA_OK) lua_pushliteral(L, "dead");
-		else if (lua_gettop(co)) lua_pushliteral(L, "normal");
+		if (co && suspended(co)) lua_pushliteral(L, "suspended");
 		else lua_pushliteral(L, "dead");
 	}
 	return 1;
@@ -106,8 +99,8 @@ static int coroutine_status(lua_State *L) {
 static int returnvalues (lua_State *L) {
 	return lua_gettop(L)-1;  /* return all except the coroutine (arg #1) */
 }
-static void uv_onworking(uv_work_t* req) {
-	lcu_SysCoro *sysco = (lcu_SysCoro *)req->data;
+static void uv_onworking(uv_work_t* request) {
+	lcu_SysCoro *sysco = (lcu_SysCoro *)lcu_toobjreq(request);
 	lua_State *co = sysco->coroutine;
 	int narg = lua_gettop(co);
 	int status;
@@ -117,21 +110,13 @@ static void uv_onworking(uv_work_t* req) {
 	lua_pushinteger(co, narg);
 	lua_pushinteger(co, status);
 }
-static void freecanceled(lua_State *L, lcu_SysCoro *sysco) {
-	if (lcuL_maskflag(sysco, FLAG_CLOSED)) freecoroutine(sysco);  /* while saved and not GC */
-	lua_pushnil(L);
-	lcu_setopvalue(L);
-}
 static void uv_onworked(uv_work_t* work, int status) {
 	uv_loop_t *loop = work->loop;
 	uv_req_t *request = (uv_req_t *)work;
-	lcu_SysCoro *sysco = (lcu_SysCoro *)request->data;
+	lcu_SysCoro *sysco = (lcu_SysCoro *)lcu_toobjreq(request);
 	lua_State *co = sysco->coroutine;
-	lua_State *thread = sysco->thread;
-	request->data = thread;  /* restore 'lua_State' on conclusion */
-	sysco->thread = NULL;
-	/* if not executed, remove arguments (LUA_OK when function is on stack) */
-	if (lcuU_endreqop(loop, request)) {
+	lua_State *thread = lcuU_endobjreqop(loop, request);
+	if (thread) {
 		int nret;
 		if (status == UV_ECANCELED) {
 			lua_settop(co, lua_status(co) == LUA_OK);
@@ -158,55 +143,49 @@ static void uv_onworked(uv_work_t* work, int status) {
 				nret = 2;
 			}
 		}
-		freecanceled(thread, sysco);  /* while in stack and not GC */
-		lcuU_resumereqop(loop, request, nret);
+		lcuU_resumeobjreqop(loop, request, nret);
 	} else {
-		if (status == UV_ECANCELED) lua_settop(co, lua_status(co) == LUA_OK);
-		else lua_settop(co, 0);
-		freecanceled(thread, sysco);
+		/* if not executed, remove arguments (LUA_OK when function is on stack) */
+		lua_settop(co, status == UV_ECANCELED && lua_status(co) == LUA_OK);
 	}
 }
 static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_work_t *work = (uv_work_t *)request;
-	lcu_SysCoro *sysco = tosysco(L);
+	lcu_SysCoro *sysco = (lcu_SysCoro *)lua_touserdata(L, 1);
 	lua_State *co = sysco->coroutine;
 	int narg = lua_gettop(L)-1;
 	int err;
-	lcu_assert(request->data == L);
-	if (sysco->thread) {
-		lua_pushboolean(L, 0);
-		lua_pushliteral(L, "cannot resume running coroutine");
-		return 2;
-	}
-	if (lcuL_maskflag(sysco, FLAG_CLOSED) ||
-	    (lua_status(co) == LUA_OK && lua_gettop(co) == 0) ) {
-		lua_pushboolean(L, 0);
-		lua_pushliteral(L, "cannot resume dead coroutine");
-		return 2;
-	}
 	if (lcuL_movefrom(co, L, narg, "argument") != LUA_OK) {
 		const char *msg = lua_tostring(co, -1);
 		lua_pushboolean(L, 0);
-		lua_pushfstring(L, msg);
+		lua_pushstring(L, msg);
 		lua_pop(co, 1);
 		return 2;
 	}
-	request->data = sysco;  /* CAUTION: Only moment when 'data' is not a */
-	                        /*          'lua_State'. Only while it is running */
 	err = uv_queue_work(loop, work, uv_onworking, uv_onworked);
 	if (err < 0) {
-		request->data = L;  /* restore 'lua_State' on failure */
 		lua_pop(co, narg);  /* restore coroutine stack */
 		return lcuL_pusherrres(L, err);
 	}
-	sysco->thread = L;
-	lua_pushvalue(L, 1);
-	lcu_setopvalue(L);
 	return -1;  /* yield on success */
 }
 static int system_resume (lua_State *L) {
-	lcu_Scheduler *sched = lcu_getsched(L);
-	return lcuT_resetreqopk(L, sched, k_setupwork, returnvalues, NULL);
+	lcu_SysCoro *sysco = tosysco(L);
+	if (sysco->work.type == UV_WORK) {
+		lua_pushboolean(L, 0);
+		lua_pushstring(L, "cannot resume running coroutine");
+		return 2;
+	}
+	if (sysco->coroutine == NULL || !suspended(sysco->coroutine)) {
+		lua_pushboolean(L, 0);
+		lua_pushstring(L, "cannot resume dead coroutine");
+		return 2;
+	}
+	return lcuT_resetobjreqopk(L, lcu_getsched(L),
+	                              (lcu_ObjectRequest *)sysco,
+	                              k_setupwork,
+	                              returnvalues,
+	                              NULL);
 }
 
 

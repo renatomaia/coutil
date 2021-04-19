@@ -10,7 +10,7 @@ Summary
 7. [Promises](#promises)
 8. [Channels](#channels)
 9. [Thread Pools](#thread-pools)
-10. [Preemptive Coroutines](#preemptive-coroutines)
+10. [State Coroutines](#state-coroutines)
 11. [System Features](#system-features)
 
 Index
@@ -21,11 +21,11 @@ Index
 	- [`channel.create`](#channelcreate-name)
 	- [`channel.getnames`](#channelgetnames-names)
 	- [`channel.sync`](#channelsync-ch-endpoint-)
-- [`coutil.coroutine`](#preemptive-coroutines)
-	- [`coroutine.close`](#coroutineclose-preemptco)
+- [`coutil.coroutine`](#state-coroutines)
+	- [`coroutine.close`](#coroutineclose-stateco)
 	- [`coroutine.load`](#coroutineload-chunk--chunkname--mode)
 	- [`coroutine.loadfile`](#coroutineloadfile-filepath--mode)
-	- [`coroutine.status`](#coroutinestatus-preemptco)
+	- [`coroutine.status`](#coroutinestatus-stateco)
 - [`coutil.event`](#events)
 	- [`event.await`](#eventawait-e)
 	- [`event.awaitall`](#eventawaitall-e1-)
@@ -88,7 +88,7 @@ Index
 		- [`file:write`](#filewrite-data--i--j--offset)
 	- [`system.packenv`](#systempackenv-vars)
 	- [`system.random`](#systemrandom-buffer--i--j)
-	- [`system.resume`](#systemresume-preemptco-)
+	- [`system.resume`](#systemresume-stateco-)
 	- [`system.run`](#systemrun-mode)
 	- [`system.setdir`](#systemsetdir-path)
 	- [`system.setenv`](#systemsetenv-name-value)
@@ -526,25 +526,28 @@ Moreover, a _thread pool_ that is not closed will prevent the current Lua state 
 Returns `true` if this call closes `pool`,
 or `false` if `pool` was already closed.
 
-Preemptive Coroutines
----------------------
+State Coroutines
+----------------
 
-Module `coutil.coroutine` provides functions for manipulation of _preemptive coroutines_,
-which execute a chunk in an [independent state](#independent-state) in a separate system thread (see [`system.resume`](#systemresume-preemptco-)).
+Module `coutil.coroutine` is similar to module [`coroutine`](http://www.lua.org/manual/5.4/manual.html#6.2),
+but for _state coroutines_.
+Standard _thread coroutines_ execute a function in a [Lua thread](http://www.lua.org/manual/5.4/manual.html#lua_newthread).
+On the other hand,
+_state coroutines_ execute a [chunk](http://www.lua.org/manual/5.4/manual.html#3.3.2) in an [independent state](#independent-state) (see [`system.resume`](#systemresume-stateco-)).
 
-This library also sets a metatable for the _preemtive coroutines_,
+This library also sets a metatable for the _state coroutines_,
 where the `__index` field points to the table with all its functions.
 Therefore, you can use the library functions in object-oriented style.
-For instance, `coroutine.resume(co, ...)` can be written as `co:resume(...)`, where `co` is a _preemtive coroutine_.
+For instance, `coroutine.resume(co, ...)` can be written as `co:resume(...)`, where `co` is a _state coroutine_.
 
-### `coroutine.close (preemptco)`
+### `coroutine.close (stateco)`
 
 Similar to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
 but for  [_prepemtive coroutines_](#coroutineload-chunk--chunkname--mode).
 
 ### `coroutine.load (chunk [, chunkname [, mode]])`
 
-Returns a _preemptive coroutine_ with the code given by the arguments `chunk`, `chunkname`, `mode`,
+Returns a _state coroutine_ with the code given by the arguments `chunk`, `chunkname`, `mode`,
 which are the same arguments of [`load`](http://www.lua.org/manual/5.4/manual.html#pdf-load).
 
 ### `coroutine.loadfile ([filepath [, mode]])`
@@ -552,7 +555,7 @@ which are the same arguments of [`load`](http://www.lua.org/manual/5.4/manual.ht
 Similar to [`coroutine.load`](#coroutineload-chunk--chunkname--mode), but gets the chunk from a file.
 The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.4/manual.html#pdf-loadfile).
 
-### `coroutine.status (preemptco)`
+### `coroutine.status (stateco)`
 
 Similar to [`coroutine.status`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
 but for [_prepemtive coroutines_](#coroutineload-chunk--chunkname--mode).
@@ -814,27 +817,25 @@ For signals not listed there,
 the string `"signal"` is returned instead.
 Use the platform-dependent number to differentiate such signals.
 
-### `system.resume (preemptco, ...)`
+### `system.resume (stateco, ...)`
 
 [Await function](#await-function) that is like [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
-but executes the [_preemptive coroutine_](#coroutineload-chunk--chunkname--mode) `preemptco` on a separate system thread,
+but executes the [_state coroutine_](#coroutineload-chunk--chunkname--mode) `stateco` on a separate system thread,
 and awaits for its completion or [suspension](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
-Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values can be passed as arguments or returned from `preemptco`.
+Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values can be passed as arguments or returned from `stateco`.
 
 If the coroutine executing this [await function](#await-function) is explicitly resumed,
-the execution of `preemptco` continues in the separate thread,
+the execution of `stateco` continues in the separate thread,
 and it will not be able to be resumed again until it [suspends](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
-In such case the results of the execution of `preemptco` are discarded.
-Finally,
-the explicitly resumed coroutine may not complete await functions until `preemptco` yields or terminates.
+In such case the results of the execution of `stateco` are discarded.
 
-_Preemptive coroutines_ are executed using a limited set of threads that are also used by the underlying system.
+_State coroutines_ are executed using a limited set of threads that are also used by the underlying system.
 The number of threads is given by environment variable [`UV_THREADPOOL_SIZE`](http://docs.libuv.org/en/v1.x/threadpool.html).
 
 ### `system.awaitch (ch, endpoint, ...)`
 
 [Await function](#await-function) that awaits on an _endpoint_ of channel `ch` for a similar call on the opposite _endpoint_,
-either from another coroutine, [_task_](#threadsdostring-pool-chunk--chunkname--mode-) or [_preemptive coroutine_](#coroutineload-chunk--chunkname--mode).
+either from another coroutine, [_task_](#threadsdostring-pool-chunk--chunkname--mode-) or [_state coroutine_](#coroutineload-chunk--chunkname--mode).
 
 `endpoint` is either string `"in"` or `"out"`,
 each identifying an opposite _endpoint_.
@@ -849,7 +850,7 @@ Returns `true` followed by the extra arguments `...` from the matching call.
 Otherwise, return `false` followed by an error message related to obtaining the arguments from the matching call.
 In any case,
 if this call does not raise errors,
-it resumed the coroutine, [_task_](#threadsdostring-pool-chunk--chunkname--mode-) or [_preemptive coroutine_](#coroutineload-chunk--chunkname--mode) of the matching call.
+it resumed the coroutine, [_task_](#threadsdostring-pool-chunk--chunkname--mode-) or [_state coroutine_](#coroutineload-chunk--chunkname--mode) of the matching call.
 
 ### `system.address (type [, data [, port [, mode]]])`
 
