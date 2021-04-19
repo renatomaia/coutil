@@ -240,7 +240,7 @@ static int startedopk (lua_State *L,
 	}
 	if (nret < 0) {  /* shall yield, and wait for callback */
 		if (lcuL_maskflag(op, FLAG_REQUEST|FLAG_THRSAVED) == FLAG_REQUEST) {
-			savethread(L, (void *)torequest(op));
+			savethread(L, (void *)torequest(op));  // TODO: memory error here makes 'lcu_Operation' be GC.
 			lcuL_setflag(op, FLAG_THRSAVED|FLAG_PENDING);
 		}
 		else lcuL_setflag(op, FLAG_PENDING);
@@ -248,7 +248,7 @@ static int startedopk (lua_State *L,
 		lcu_log(op, L, "suspended operation");
 		return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), k_endop);
 	}
-	else cancelop(op);
+	cancelop(op);
 	return nret;
 }
 
@@ -509,8 +509,6 @@ static void stopobjop (lua_State *L, lcu_Object *obj) {
 	if (obj->stop) err = obj->stop(handle);
 	lcu_assert(handle->data == NULL);
 	pushsaved(L, handle);  /* restore saved object being stopped */
-	lua_pushnil(L);
-	lua_setiuservalue(L, -2, UPV_THREAD);  /* allow thread to be collected */
 	if (err < 0) {
 		lcu_closeobj(L, -1);
 		lcuL_warnerr(L, "object:stop: ", err);
@@ -540,6 +538,8 @@ static int k_endobjopk (lua_State *L, int status, lua_KContext kctx) {
 	uv_handle_t *handle = lcu_toobjhdl(obj);
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(handle->data != NULL);
+	lua_pushnil(L);
+	lua_setiuservalue(L, 1, UPV_THREAD);  /* allow thread to be collected */
 	handle->data = NULL;
 	if (!haltedop(L, handle->loop)) {
 		int nret = obj->step(L);
@@ -643,6 +643,7 @@ LCUI_FUNC int lcuT_resetobjreqopk (lua_State *L,
 		return nret;
 	}
 	lcu_assert(request->type != UV_UNKNOWN_REQ);
+	lcu_assert(request->type != UV_REQ_TYPE_MAX);
 	sched->nactive++;
 	objreq->results = results;
 	objreq->cancel = cancel;

@@ -441,43 +441,45 @@ do case "resume different coroutines"
 end
 
 do case "resume transfer"
-	local stage
 	local thread
+
+	local a
 	spawn(function ()
 		local co = preemptco.load[[
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
 			return "bye"
 		]]
-		stage = 0
+		a = 1
 		local res, extra = system.resume(co)
 		assert(res == true)
 		assert(extra == "hello")
 		assert(co:status() == "suspended")
-		stage = 2
 		coroutine.resume(thread, co)
-		stage = 4
+		a = 2
 	end)
-	assert(stage == 0)
+	assert(a == 1)
 
 	spawn(function ()
 		thread = coroutine.running()
-		stage = 1
+		b = 1
 		local co = coroutine.yield()
-		stage = 3
+		thread = nil
+		b = 2
 		local res, extra = system.resume(co)
 		assert(res == true)
 		assert(extra == "bye")
 		assert(co:status() == "dead")
-		stage = 5
+		b = 3
 	end)
-	assert(stage == 1)
+	assert(b == 1)
 
 	assert(system.run("step") == true)
-	assert(stage == 4)
+	assert(a == 2)
+	assert(b == 2)
+	gc()
 	assert(system.run() == false)
-	assert(stage == 5)
-	thread = nil
+	assert(b == 3)
 
 	done()
 end
@@ -573,6 +575,7 @@ do case "cancel and resume by other"
 		thread = coroutine.running()
 		stage = 1
 		local co = coroutine.yield()
+		thread = nil
 		asserterr("cannot resume running coroutine", system.resume(co))
 		stage = 2
 		repeat
@@ -595,7 +598,6 @@ do case "cancel and resume by other"
 	assert(system.run() == false)
 	assert(stage == 3)
 
-	thread = nil
 
 	done()
 end
