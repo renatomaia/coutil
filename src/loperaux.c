@@ -1,6 +1,8 @@
 #include "lmodaux.h"
 #include "loperaux.h"
 
+#include <string.h>
+
 
 #define FLAG_REQUEST  0x01
 #define FLAG_THRSAVED  0x02
@@ -214,7 +216,7 @@ static int k_endop (lua_State *L, int status, lua_KContext kctx) {
 	int narg = (int)kctx;
 	lcu_Scheduler *sched = (lcu_Scheduler *)lua_touserdata(L, narg);
 	lcu_assert(status == LUA_YIELD);
-	lua_remove(L, narg--);
+	lua_remove(L, narg--);  /* remove 'sched' */
 	lcuL_clearflag(op, FLAG_PENDING);
 	if (haltedop(L, sched)) {
 		lcu_log(op, L, "resumed coroutine");
@@ -238,7 +240,7 @@ static int startedopk (lua_State *L,
 	}
 	if (nret < 0) {  /* shall yield, and wait for callback */
 		if (lcuL_maskflag(op, FLAG_REQUEST|FLAG_THRSAVED) == FLAG_REQUEST) {
-			savethread(L, (void *)torequest(op));
+			savethread(L, (void *)torequest(op));  // TODO: memory error here makes 'lcu_Operation' be GC.
 			lcuL_setflag(op, FLAG_THRSAVED|FLAG_PENDING);
 		}
 		else lcuL_setflag(op, FLAG_PENDING);
@@ -246,7 +248,7 @@ static int startedopk (lua_State *L,
 		lcu_log(op, L, "suspended operation");
 		return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), k_endop);
 	}
-	else cancelop(op);
+	cancelop(op);
 	return nret;
 }
 
@@ -447,12 +449,12 @@ LCUI_FUNC void lcuU_resumethrop (uv_handle_t *handle, int narg) {
  * object operation
  */
 
-#define UPV_SCHEDULER	1
-#define UPV_THREAD	2
+#define UPV_THREAD	1
+#define UPV_SCHEDULER	2
 
 LCUI_FUNC lcu_Object *lcuT_createobj (lua_State *L, size_t sz, const char *cls) {
 	lcu_Object *object = (lcu_Object *)lua_newuserdatauv(L, sz, 2);
-	lcu_assert(sz >= sizeof(lcu_ObjectAction));
+	lcu_assert(sz >= sizeof(lcu_Object));
 	object->flags = LCU_OBJCLOSEDFLAG;
 	object->stop = NULL;
 	object->step = NULL;
@@ -494,15 +496,19 @@ LCUI_FUNC int lcu_closeobj (lua_State *L, int idx) {
 	return 0;
 }
 
+LCUI_FUNC lcu_Object *lcu_openedobj (lua_State *L, int arg, const char *class) {
+	lcu_Object *object = (lcu_Object *)luaL_checkudata(L, arg, class);
+	luaL_argcheck(L, !lcuL_maskflag(object, LCU_OBJCLOSEDFLAG), arg, "closed object");
+	return object;
+}
+
 static void stopobjop (lua_State *L, lcu_Object *obj) {
 	uv_handle_t *handle = lcu_toobjhdl(obj);
 	lcu_Scheduler *sched = lcu_tosched(handle->loop);
 	int err = 0;
-	if (obj->stop) obj->stop(handle);
+	if (obj->stop) err = obj->stop(handle);
 	lcu_assert(handle->data == NULL);
 	pushsaved(L, handle);  /* restore saved object being stopped */
-	lua_pushnil(L);
-	lua_setiuservalue(L, -2, UPV_THREAD);  /* allow thread to be collected */
 	if (err < 0) {
 		lcu_closeobj(L, -1);
 		lcuL_warnerr(L, "object:stop: ", err);
@@ -532,6 +538,8 @@ static int k_endobjopk (lua_State *L, int status, lua_KContext kctx) {
 	uv_handle_t *handle = lcu_toobjhdl(obj);
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(handle->data != NULL);
+	lua_pushnil(L);
+	lua_setiuservalue(L, 1, UPV_THREAD);  /* allow thread to be collected */
 	handle->data = NULL;
 	if (!haltedop(L, handle->loop)) {
 		int nret = obj->step(L);
@@ -577,6 +585,110 @@ LCUI_FUNC void lcuU_resumeobjop (uv_handle_t *handle, int narg) {
 	if (handle->data == NULL) stopobjop(L, lcu_tohdlobj(handle));
 	lcuU_checksuspend(loop);
 }
+
+
+/*
+ * request object operation
+ */
+
+LCUI_FUNC lcu_ObjectRequest *lcuT_createobjreq (lua_State *L, size_t sz) {
+	lcu_ObjectRequest *objreq = (lcu_ObjectRequest *)lua_newuserdatauv(L, sz, 1);
+	lcu_assert(sz >= sizeof(lcu_ObjectRequest));
+	objreq->request.type = UV_UNKNOWN_REQ;
+	objreq->request.data = NULL;
+	return objreq;
+}
+
+static int k_endobjreqopk (lua_State *L, int status, lua_KContext kctx) {
+	int narg = (int)kctx;
+	lcu_Scheduler *sched = (lcu_Scheduler *)lua_touserdata(L, narg);
+	lcu_ObjectRequest *objreq = (lcu_ObjectRequest *)lua_touserdata(L, 1);
+	uv_req_t *request = lcu_toobjrequest(objreq);
+	lcu_assert(status == LUA_YIELD);
+	lcu_assert(request->data != NULL);
+	lua_remove(L, narg--);  /* remove 'sched' */
+	lua_pushnil(L);
+	lua_setiuservalue(L, 1, UPV_THREAD);  /* allow thread to be collected */
+	request->data = NULL;
+	if (haltedop(L, sched)) {
+		lcu_log(request, L, "resumed coroutine");
+		if (objreq->cancel == NULL || objreq->cancel(L)) uv_cancel(request);
+	} else {
+		lcu_log(request, L, "resumed operation");
+		if (objreq->results) return objreq->results(L);
+	}
+	return lua_gettop(L)-narg;
+}
+
+LCUI_FUNC int lcuT_resetobjreqopk (lua_State *L,
+                                   lcu_Scheduler *sched,
+                                   lcu_ObjectRequest *objreq,
+                                   lcu_RequestSetup setup,
+                                   lua_CFunction results,
+                                   lua_CFunction cancel) {
+	uv_req_t *request = lcu_toobjrequest(objreq);
+	uv_loop_t *loop = lcu_toloop(sched);
+	int nret;
+	luaL_argcheck(L, request->data == NULL, 1, "already in use");
+	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
+	if (request->type == UV_UNKNOWN_REQ) {
+		lua_pushvalue(L, 1);
+		savevalue(L, (void *)request);
+		request->type = UV_REQ_TYPE_MAX;
+	}
+	nret = setup(L, request, loop);
+	if (nret >= 0) {
+		freevalue(L, (void *)request);
+		request->type = UV_UNKNOWN_REQ;
+		return nret;
+	}
+	lcu_assert(request->type != UV_UNKNOWN_REQ);
+	lcu_assert(request->type != UV_REQ_TYPE_MAX);
+	sched->nactive++;
+	objreq->results = results;
+	objreq->cancel = cancel;
+	lua_pushthread(L);
+	lua_setiuservalue(L, 1, UPV_THREAD);
+	request->data = (void *)L;
+	lua_pushlightuserdata(L, (void *)sched);
+	lcu_log(request, L, "suspended operation");
+	return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), k_endobjreqopk);
+}
+
+static void endobjreqop (lua_State *L, lcu_ObjectRequest *objreq) {
+	uv_req_t *request = lcu_toobjrequest(objreq);
+	lcu_assert(request->type == UV_REQ_TYPE_MAX);
+	lcu_assert(request->data == NULL);
+	freevalue(L, (void *)request);
+	request->type = UV_UNKNOWN_REQ;
+}
+
+LCUI_FUNC lua_State *lcuU_endobjreqop (uv_loop_t *loop, uv_req_t *request) {
+	lua_State *L = (lua_State *)loop->data;
+	lua_State *thread = (lua_State *)request->data;
+	lcu_ObjectRequest *objreq = lcu_toobjreq(request);
+	lcu_Scheduler *sched = lcu_tosched(loop);
+	lcu_assert(request->type != UV_UNKNOWN_REQ);
+	lcu_assert(request->type != UV_REQ_TYPE_MAX);
+	request->type = UV_REQ_TYPE_MAX;
+	sched->nactive--;
+	if (thread) return thread;
+	endobjreqop(L, objreq);
+	lcuU_checksuspend(loop);
+	return NULL;
+}
+
+LCUI_FUNC void lcuU_resumeobjreqop (uv_loop_t *loop, uv_req_t *request, int narg) {
+	lua_State *L = (lua_State *)loop->data;
+	lua_State *thread = (lua_State *)request->data;
+	resumethread(thread, L, narg, loop);
+	if (request->type == UV_REQ_TYPE_MAX) endobjreqop(L, lcu_toobjreq(request));
+	lcuU_checksuspend(loop);
+}
+
+/*
+ * auxiliary functions
+ */
 
 LCUI_FUNC int lcuL_checknoyieldmode (lua_State *L, int arg) {
 	const char *mode = luaL_optstring(L, arg, "");
