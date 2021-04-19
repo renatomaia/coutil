@@ -119,9 +119,9 @@ local function testOpBeforeCancelOp(op) -- O2,C5,Y2,(O10,R6,)+F1
 
 	oncallbacks(function ()
 		while a < 1 do system.suspend() end
-		coroutine.resume(co) -- O10
+		assert(coroutine.resume(co)) -- O10
 		assert(a == 2)
-		coroutine.resume(co, nil, "canceled") -- R6
+		assert(coroutine.resume(co, nil, "canceled")) -- R6
 		assert(a == true)
 		op:trigger(2) -- ...C5
 	end)
@@ -154,7 +154,7 @@ local function testOpBeforeReqOp(op) -- O2,C5,Y2,O10,F2,C1,Y1
 
 	oncallbacks(function ()
 		while a < 1 do system.suspend() end
-		coroutine.resume(co) -- O10
+		assert(coroutine.resume(co)) -- O10
 		assert(a == 2)
 	end)
 
@@ -186,7 +186,7 @@ local function testOpBeforeThrOp(op) -- O2,C5,Y2,O10,F3,C5,Y2,F1
 
 	oncallbacks(function ()
 		while a < 1 do system.suspend() end
-		coroutine.resume(co) -- O10
+		assert(coroutine.resume(co)) -- O10
 		assert(a == 2)
 	end)
 
@@ -335,7 +335,7 @@ local function testOpResumed(op) -- O2,R4,F1
 
 	op:trigger(1)
 
-	coroutine.resume(garbage.co, nil, "canceled") -- R1|R4
+	assert(coroutine.resume(garbage.co, nil, "canceled")) -- R1|R4
 	assert(a == true)
 
 	gc()
@@ -362,11 +362,11 @@ local function testOpResumedTwice(op) -- O2,R4,(O10,R6,)+F1
 
 	op:trigger(1)
 
-	coroutine.resume(garbage.co, nil, "canceled") -- (R1,O5|R4,O10)
+	assert(coroutine.resume(garbage.co, nil, "canceled")) -- (R1,O5|R4,O10)
 	assert(a == 1)
 
 	oncallbacks(function () -- (C5,O6)?
-		coroutine.resume(garbage.co, nil, "canceled") -- R2|R6
+		assert(coroutine.resume(garbage.co, nil, "canceled")) -- R2|R6
 		assert(a == true)
 		op:trigger(2)
 	end)
@@ -395,7 +395,7 @@ local function testOpResumedAndReqOp(op) -- O2,R4,O10,F2,C1,Y1
 
 	op:trigger(1)
 
-	coroutine.resume(garbage.co, nil, "canceled") -- R1|R4
+	assert(coroutine.resume(garbage.co, nil, "canceled")) -- R1|R4
 	assert(a == 1)
 
 	gc()
@@ -422,7 +422,7 @@ local function testOpResumedAndThrOp(op) -- O2,R4,O10,F3,C5,Y2,F1
 
 	op:trigger(1)
 
-	coroutine.resume(garbage.co, nil, "canceled") -- R1|R4
+	assert(coroutine.resume(garbage.co, nil, "canceled")) -- R1|R4
 	assert(a == 1)
 
 	gc()
@@ -630,6 +630,7 @@ do newtest "coroutine" ---------------------------------------------------------
 		coroutines = { preemptco.load(chunk), preemptco.load(chunk) },
 		paths = { os.tmpname(), os.tmpname() },
 		await = function (self, cfgid)
+			assert(io.open(self.paths[cfgid], "w")):close()
 			return system.resume(self.coroutines[cfgid], cfgid, self.paths[cfgid])
 		end,
 		trigger = function (self, cfgid)
