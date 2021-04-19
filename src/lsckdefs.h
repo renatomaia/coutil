@@ -38,7 +38,4 @@ typedef struct lcu_TermSocket {
 #define LCU_SOCKTRANFFLAG 0x02  /* used for local|share sockets */
 
 
-#define lcuT_newobject(L,T,C)	(T *)lcuT_createobj(L,sizeof(T),C)
-
-
 #endif
