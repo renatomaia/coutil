@@ -1288,6 +1288,8 @@ according to the following characters in string `mode`:
 | `?` | string <!-- st_mode --> | **Type** of the file. |
 | `M` | integer <!-- st_mode --> | [_Bit flags_](#systemfilebits) of the file (_imode_ **mode**). |
 | `_` | integer <!-- st_flags --> | User **defined** flags for the file. |
+| `u` | integer <!-- st_uid --> | Owner **user** _identifier_ (uid). |
+| `g` | integer <!-- st_gid --> | Owner user **group** identifier (gid). |
 | `#` | integer <!-- st_ino --> | ID of the file in the file system (_inode_ **number**). |
 | `d` | integer <!-- st_dev --> | ID of the **device** _containing_ the file. |
 | `D` | integer <!-- st_rdev --> | ID of the **device** _represented_ by the file, or `0` is not applicable. |

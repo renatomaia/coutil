@@ -465,7 +465,7 @@ static const char *checkinfomode (lua_State *L, int arg, int *bits) {
 	for (i = 0; mode[i]; i++) {
 		int sel = toinfosrc(L, mode[i], mask);
 		if (sel&mask) *bits |= sel;
-		else luaL_error(L, "unknown mode char (got '%c')", mode);
+		else luaL_error(L, "unknown mode char (got '%c')", mode[i]);
 	}
 	lua_settop(L, arg);
 	luaL_checkstack(L, i+5, "too many values");  /* 5 extra slots */
@@ -508,10 +508,11 @@ static void getinfosrc (lua_State *L,
 /* ... = system.fileinfo (path, which) */
 static int yieldfileinfo (lua_State *L);
 static int returnfileinfo (lua_State *L) {
+	int bits = lua_tointeger(L, 3);
 	uv_fs_t *filereq = (uv_fs_t *)lua_touserdata(L, -1);
 	lua_pop(L, 1);
-	if (filereq->result >= 0) {
-		int bits = lua_tointeger(L, 3);
+	if ( filereq->result >= 0 ||
+	     (bits&(INFO_READLINK<<INFO_BITCOUNT) && filereq->result == UV_EINVAL) ) {
 		const char *mode = (const char *)lua_touserdata(L, 4);
 		pushfileinfo(L, 4, bits, mode, filereq);
 		uv_fs_req_cleanup(filereq);

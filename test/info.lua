@@ -1,8 +1,8 @@
 local system = require "coutil.system"
 
-local options = "#$^=<>1bcdefghHiklLmMnopPrRsStTuUvVwxX"
-
 newtest("info")
+
+local options = "#$^=<>1bcdefghHiklLmMnopPrRsStTuUvVwxX"
 
 do case "errors"
 	for i = 1, 255 do
@@ -12,6 +12,9 @@ do case "errors"
 			          pcall(system.procinfo, char))
 		end
 	end
+
+	asserterr("unknown mode char (got '\255')",
+	          pcall(system.procinfo, options.."\255"))
 
 	done()
 end
@@ -32,9 +35,6 @@ do case "single value"
 end
 
 do case "all values"
-	asserterr("unknown mode char (got '\255')",
-	          pcall(system.procinfo, options.."\255"))
-
 	local packed = table.pack(system.procinfo(options))
 	assert(#packed == #options)
 	for i = 1, #options do
@@ -61,6 +61,9 @@ do case "errors"
 				          pcall(cpuinfo, char, cpuidx-1))
 			end
 		end
+
+		asserterr("unknown mode char (got '\255')",
+		          pcall(cpuinfo, options.."\255", cpuidx-1))
 	end
 
 	done()
@@ -127,6 +130,9 @@ do case "errors"
 			          pcall(netinfo, char, 0))
 		end
 	end
+
+	asserterr("unknown mode char (got '\255')",
+	          pcall(netinfo, options.."\255", 0))
 
 	assert(netinfo("indt", -2) == nil)
 	assert(netinfo("indt", -1) == nil)
@@ -197,6 +203,72 @@ do case "close"
 	do local tobeclosed<close> = netinfo end
 	asserterr("closed", pcall(netinfo, "t", 0))
 	asserterr("closed", pcall(function () return #netinfo end))
+
+	done()
+end
+
+newtest("fileinfo")
+
+local typemap = {
+	boolean = "UGSrwxRWX421",
+	number = "Md#*ugDBib_vamscNITFAtf",
+	string = "?@p",
+	["nil"] = "=",
+}
+local options = {}
+for _, chars in pairs(typemap) do
+	table.insert(options, chars)
+end
+options = table.concat(options)
+local path = "info.lua"
+
+do case "errors"
+	for i = 1, 255 do
+		local char = string.char(i)
+		if not string.find("~l"..options, char, 1, "plain search") then
+			asserterr("unknown mode char (got '"..char.."')",
+			          pcall(system.fileinfo, path, char))
+		end
+	end
+
+	asserterr("unknown mode char (got '\255')",
+	          pcall(system.fileinfo, path, options.."\255"))
+
+	asserterr("unable to yield", pcall(system.fileinfo, path, options))
+
+	done()
+end
+
+do case "single value"
+	for c in string.gmatch(options , ".") do
+		local ltype = type(system.fileinfo(path, "~"..c))
+		assert(string.find(typemap[ltype], c, 1, "plain"))
+
+		local v1, v2, v3 = system.fileinfo(path, "~"..c..c..c)
+
+		assert(type(v1) == ltype)
+		assert(v2 == v1)
+		assert(v3 == v1)
+	end
+
+	done()
+end
+
+do case "all values"
+	local vararg = require "vararg"
+	local packed
+	spawn(function ()
+		packed = vararg.pack(system.fileinfo(path, options))
+	end)
+
+	assert(packed == nil)
+	assert(system.run() == false)
+
+	assert(packed("#") == #options)
+	for i = 1, #options do
+		local ltype = type(packed(i))
+		assert(string.find(typemap[ltype], options:sub(i, i), 1, "plain"))
+	end
 
 	done()
 end
