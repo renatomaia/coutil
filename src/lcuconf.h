@@ -83,6 +83,7 @@
 #define LCU_TPOOLGCCLS	LCU_PREFIX"lcu_ThreadPool *"
 #define LCU_CPUINFOLISTCLS	LCU_PREFIX"cpustats"
 #define LCU_NETINFOLISTCLS	LCU_PREFIX"netifaces"
+#define LCU_DIRECTORYLISTCLS	LCU_PREFIX"dirlist"
 
 
 #endif
