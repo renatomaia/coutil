@@ -645,6 +645,7 @@ static int k_setuplistdir (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int system_listdir (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);
 	const char *path = luaL_checkstring(L, 1);
 	int noyield = lcuL_checknoyieldmode(L, 2);
 	DirectoryList *dirlist;
@@ -652,10 +653,10 @@ static int system_listdir (lua_State *L) {
 	dirlist = lcuT_newobjreq(L, DirectoryList);
 	luaL_setmetatable(L, LCU_DIRECTORYLISTCLS);
 	if (noyield) {
-		int err = uv_fs_scandir(NULL, &dirlist->filereq, path, 0, NULL);
+		uv_loop_t *loop = lcu_toloop(sched);
+		int err = uv_fs_scandir(loop, &dirlist->filereq, path, 0, NULL);
 		return lcuL_pushresults(L, 1, err);
 	} else {
-		lcu_Scheduler *sched = lcu_getsched(L);
 		return lcuT_resetobjreqopk(L, sched, (lcu_ObjectRequest *)dirlist,
 		                              k_setuplistdir, returnlistdir, NULL);
 	}
@@ -668,8 +669,8 @@ static int system_listdir (lua_State *L) {
 
 /* succ [, errmsg] = system.openfile (path [, mode [, perm]]) */
 static int returnopenfile (lua_State *L) {
-	uv_file *file = (uv_file *)lua_touserdata(L, 1);
-	ssize_t result = (ssize_t)lua_tointeger(L, 2);
+	uv_file *file = (uv_file *)lua_touserdata(L, 2);
+	ssize_t result = (ssize_t)lua_tointeger(L, 3);
 	lua_pop(L, 1);
 	if (result < 0) return lcuL_pusherrres(L, result);
 	*file = result;
@@ -689,11 +690,22 @@ static void on_fileopen (uv_fs_t *filereq) {
 }
 static int k_setupfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
+	const char *path = lua_tostring(L, 1);
+	int flags = (int)lua_tointeger(L, 3);
+	int perm = (int)lua_tointeger(L, 4);
+	int err = uv_fs_open(loop, filereq, path, flags, perm, on_fileopen);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	lua_pop(L, 2);  /* discard 'flags' and 'perm' */
+	return -1;  /* yield on success */
+}
+static int system_openfile (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);
 	const char *path = luaL_checkstring(L, 1);
 	const char *mode = luaL_optstring(L, 2, "r");
 	int flags = 0;
 	int perm = 0;
-	int err;
+	int noyield = 0;
+	for (; *mode == LCU_NOYIELDMODE; mode++) noyield = 1;
 	for (; *mode; mode++) switch (*mode) {
 		case 'r': perm |= 1; break;
 		case 'w': perm |= 2; break;
@@ -705,6 +717,7 @@ static int k_setupfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 #ifdef O_CLOEXEC
 		case 'x': flags |= O_CLOEXEC; break;
 #endif
+		case LCU_NOYIELDMODE: return luaL_error(L, "'%c' must be in the begin of 'mode'", *mode);
 		default: return luaL_error(L, "unknown mode char (got '%c')", *mode);
 	}
 	switch (perm) {
@@ -714,17 +727,23 @@ static int k_setupfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	}
 	if (flags&UV_FS_O_CREAT) perm = checkperm(L, 3);
 	else perm = 0;
-	lua_settop(L, 0);
+	lua_settop(L, 1);
 	lua_newuserdatauv(L, sizeof(uv_file), 1);  /* raise memory errors */
 	lua_pushvalue(L, lua_upvalueindex(1));  /* push scheduler */
-	lua_setiuservalue(L, -2, 1);
-	err = uv_fs_open(loop, filereq, path, flags, perm, on_fileopen);
-	if (err < 0) return lcuL_pusherrres(L, err);
-	return -1;  /* yield on success */
-}
-static int system_openfile (lua_State *L) {
-	lcu_Scheduler *sched = lcu_getsched(L);
-	return lcuT_resetreqopk(L, sched, k_setupfile, returnopenfile, NULL);
+	lua_setiuservalue(L, 2, 1);
+	if (noyield) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		int err = uv_fs_open(loop, &filereq, path, flags, perm, NULL);
+		if (err < 0) return lcuL_pusherrres(L, err);
+		lua_pushinteger(L, filereq.result);
+		uv_fs_req_cleanup(&filereq);
+		return returnopenfile(L);
+	} else {
+		lua_pushinteger(L, flags);
+		lua_pushinteger(L, perm);
+		return lcuT_resetreqopk(L, sched, k_setupfile, returnopenfile, NULL);
+	}
 }
 
 #define checkfile(L)	((uv_file *)luaL_checkudata(L, 1, LCU_FILECLS))

@@ -18,7 +18,7 @@ do case "invalid modes"
 	spawn(function ()
 		for i = 1, 255 do
 			local char = string.char(i)
-			if not string.find(validmodes, char, 1, true) then
+			if not string.find("~"..validmodes, char, 1, true) then
 				asserterr("unknown mode char", pcall(system.openfile, validpath, char))
 			end
 		end
@@ -63,11 +63,7 @@ local common = {
 }
 local values = {}
 local path = "info.lua"
-local file
-spawn(function ()
-	file = assert(system.openfile(path))
-end)
-assert(system.run() == false)
+local file = assert(system.openfile(path, "~"))
 
 for _, spec in ipairs{
 	{
