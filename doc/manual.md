@@ -1256,6 +1256,9 @@ it is truncated to length 0 (implies `w`).
 - `w`: allows writing operations.
 - `x`: file is not inheritable to child processes.
 
+`mode` might also be prefixed with character `~`,
+following the same semantics as in [`file:info`](#fileinfo-mode).
+
 When either `n` or `N` are present in `mode`,
 `perm` must be either a number with the [file bits](#systemfilebits),
 or a string with characters defining the bits to be set for the file to be created,
