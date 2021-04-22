@@ -36,7 +36,7 @@ static void pushfiletype (lua_State *L, uint64_t type) {
 	switch (type) {
 		case S_IFSOCK: lua_pushliteral(L, "socket"); break;
 		case S_IFLNK: lua_pushliteral(L, "link"); break;
-		case S_IFREG: lua_pushliteral(L, "regular"); break;
+		case S_IFREG: lua_pushliteral(L, "file"); break;
 		case S_IFBLK: lua_pushliteral(L, "block"); break;
 		case S_IFDIR: lua_pushliteral(L, "directory"); break;
 		case S_IFCHR: lua_pushliteral(L, "character"); break;
@@ -585,16 +585,16 @@ typedef struct DirectoryList {
 
 static DirectoryList *openeddirinfo (lua_State *L) {
 	DirectoryList *dirlist = checkdirinfo(L);
-	luaL_argcheck(L, dirlist->filereq.type != UV_UNKNOWN_REQ, 1, "closed");
+	luaL_argcheck(L, dirlist->filereq.result >= 0, 1, "closed");
 	return dirlist;
 }
 
 /* getmetatable(dirinfo).__{gc,close}(dirinfo) */
 static int dirinfo_gc (lua_State *L) {
 	DirectoryList *dirlist = checkdirinfo(L);
-	if (dirlist->filereq.type != UV_UNKNOWN_REQ) {
+	if (dirlist->filereq.result >= 0) {
 		uv_fs_req_cleanup(&dirlist->filereq);
-		dirlist->filereq.type = UV_UNKNOWN_REQ;
+		dirlist->filereq.result = -1;
 	}
 	return 0;
 }
@@ -606,14 +606,14 @@ static int dirinfo_call (lua_State *L) {
 	int err = uv_fs_scandir_next(&dirlist->filereq, &entry);
 	if (err < 0) {
 		uv_fs_req_cleanup(&dirlist->filereq);
-		dirlist->filereq.type = UV_UNKNOWN_REQ;
+		dirlist->filereq.result = -1;
 		return 0;
 	}
 	lua_pushstring(L, entry.name);
 	switch (entry.type) {
 		case UV_DIRENT_SOCKET: lua_pushliteral(L, "socket"); break;
 		case UV_DIRENT_LINK: lua_pushliteral(L, "link"); break;
-		case UV_DIRENT_FILE: lua_pushliteral(L, "regular"); break;
+		case UV_DIRENT_FILE: lua_pushliteral(L, "file"); break;
 		case UV_DIRENT_BLOCK: lua_pushliteral(L, "block"); break;
 		case UV_DIRENT_DIR: lua_pushliteral(L, "directory"); break;
 		case UV_DIRENT_CHAR: lua_pushliteral(L, "character"); break;
@@ -625,7 +625,12 @@ static int dirinfo_call (lua_State *L) {
 
 /* iterator, state, varinit, closing = system.listdir (path [, mode]) */
 static int returnlistdir (lua_State *L) {
-	return 1;
+	DirectoryList *dirlist = (DirectoryList *)lua_touserdata(L, 1);
+	int err = dirlist->filereq.result;
+	if (err < 0) return lcu_error(L, err);
+	lua_settop(L, 3);  /* return 2 'nil' as iterator state and control var. */
+	lua_pushvalue(L, 1); /* return 'listdir' as the closing value. */
+	return 4;
 }
 static void uv_onlistdir (uv_fs_t *filereq) {
 	uv_loop_t *loop = filereq->loop;
@@ -634,14 +639,15 @@ static void uv_onlistdir (uv_fs_t *filereq) {
 	if (thread) lcuU_resumeobjreqop(loop, request, 0);
 	else {
 		uv_fs_req_cleanup(filereq);
-		filereq->type = UV_UNKNOWN_REQ;
+		filereq->result = -1;
 	}
 }
 static int k_setuplistdir (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
-	const char *path = lua_tostring(L, 1);
+	const char *path = lua_tostring(L, 2);
 	int err = uv_fs_scandir(loop, filereq, path, 0, uv_onlistdir);
-	if (err < 0) return lcuL_pusherrres(L, err);
+	if (err < 0) return lcu_error(L, err);
+	lua_pop(L, 1);  /* discard 'path' */
 	return -1;  /* yield on success */
 }
 static int system_listdir (lua_State *L) {
@@ -652,10 +658,13 @@ static int system_listdir (lua_State *L) {
 	lua_settop(L, 1);
 	dirlist = lcuT_newobjreq(L, DirectoryList);
 	luaL_setmetatable(L, LCU_DIRECTORYLISTCLS);
+	lua_insert(L, 1);
 	if (noyield) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		int err = uv_fs_scandir(loop, &dirlist->filereq, path, 0, NULL);
-		return lcuL_pushresults(L, 1, err);
+		if (err < 0) return lcu_error(L, err);
+		lua_pop(L, 1);
+		return returnlistdir(L);
 	} else {
 		return lcuT_resetobjreqopk(L, sched, (lcu_ObjectRequest *)dirlist,
 		                              k_setuplistdir, returnlistdir, NULL);
@@ -934,7 +943,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{ "type", S_IFMT },
 		{ "socket", S_IFSOCK },
 		{ "link", S_IFLNK },
-		{ "regular", S_IFREG },
+		{ "file", S_IFREG },
 		{ "block", S_IFBLK },
 		{ "directory", S_IFDIR },
 		{ "character", S_IFCHR },

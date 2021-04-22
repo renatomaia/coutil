@@ -3,6 +3,68 @@ local system = require "coutil.system"
 
 local buffer = memory.create(20)
 
+newtest "listdir" --------------------------------------------------------------
+
+do case "errors"
+
+	for i = 1, 255 do
+		local char = string.char(i)
+		if char ~= "~" then
+			asserterr("unknown mode char", pcall(system.listdir, "..", char))
+		end
+	end
+
+	local path = ".."
+	local iterator, state, init, closing
+	spawn(function ()
+		asserterr("not a directory", pcall(system.listdir, "file.lua", "~"))
+	end)
+	system.run()
+
+	asserterr("not a directory", pcall(system.listdir, "file.lua", "~"))
+
+	done()
+end
+
+do case "list contents"
+
+	local path = ".."
+	local iterator, state, init, closing
+	spawn(function ()
+		iterator, state, init, closing = system.listdir(path)
+	end)
+	system.run()
+
+	local function newexpected()
+		return {
+			[".git"] = "directory",
+			demo = "directory",
+			doc = "directory",
+			LICENSE = "file",
+			lua = "directory",
+			["README.md"] = "file",
+			src = "directory",
+			test = "directory",
+		}
+	end
+
+	local expected = newexpected()
+	for name, ftype in iterator, state, init, closing do
+		assert(expected[name] == ftype)
+		expected[name] = nil
+	end
+	assert(next(expected) == nil)
+
+	local expected = newexpected()
+	for name, ftype in system.listdir(path, "~") do
+		assert(expected[name] == ftype)
+		expected[name] = nil
+	end
+	assert(next(expected) == nil)
+
+	done()
+end
+
 newtest "openfile" -------------------------------------------------------------
 
 local validpath = "/dev/null"

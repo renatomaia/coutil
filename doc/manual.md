@@ -531,8 +531,7 @@ State Coroutines
 
 Module `coutil.coroutine` is similar to module [`coroutine`](http://www.lua.org/manual/5.4/manual.html#6.2),
 but for _state coroutines_.
-Standard _thread coroutines_ execute a function in a [Lua thread](http://www.lua.org/manual/5.4/manual.html#lua_newthread).
-On the other hand,
+Unlike standard _thread coroutines_ that execute a function in a [Lua thread](http://www.lua.org/manual/5.4/manual.html#lua_newthread),
 _state coroutines_ execute a [chunk](http://www.lua.org/manual/5.4/manual.html#3.3.2) in an [independent state](#independent-state) (see [`system.resume`](#systemresume-stateco-)).
 
 This library also sets a metatable for the _state coroutines_,
@@ -1180,7 +1179,7 @@ Table with the following fields containing numbers with the bit values for a [fi
 - `type`: Bit mask for the type of the file .
 - `socket`: Socket file type.
 - `link`: Symbolic link file type.
-- `regular`: Regular file type.
+- `file`: Regular file type.
 - `block`: Block device file type.
 - `directory`: Directory file type.
 - `character`: Character device file type.
@@ -1225,6 +1224,18 @@ the values corresponding to characters supported by [`file:info`](#fileinfo-mode
 The value of the other options are not affected.
 Similar to `~`,
 `l` does not produce a value to be returned.
+
+### `system.listdir (path [, mode])`
+
+Returns an [iterator](http://www.lua.org/manual/5.4/manual.html#3.3.5) that lists the file entries inside the directory in path given by string `path`.
+The _control variable_ is the name of the file entry,
+and an additional _loop variable_ is a string with the type of the file entry.
+
+`mode` is a string,
+which might contain character `~` with the same semantics as in [`file:info`](#fileinfo-mode).
+
+This function never fails.
+It raises errors instead.
 
 ### `system.openfile (path [, mode [, perm]])`
 
@@ -1414,7 +1425,7 @@ Returns values corresponding to system information according to the following ch
 
 ### `system.cpuinfo (which)`
 
-Returns an [interator](http://www.lua.org/manual/5.4/manual.html#3.3.5) that produces information about each individual CPU of the system in each iteration.
+Returns an [iterator](http://www.lua.org/manual/5.4/manual.html#3.3.5) that produces information about each individual CPU of the system in each iteration.
 The _control variable_ is the index of the CPU.
 The values of the other _loop variables_ are given by the following characters in string `which`:
 
@@ -1446,7 +1457,7 @@ as described below:
 
 - `"name"`: the name of the network interface corresponding to the interface index `which`.
 - `"id"`: a string with the identifier suitable for use in an IPv6 scoped address corresponding to the interface index `which`.
-- `"all"`: an [interator](http://www.lua.org/manual/5.4/manual.html#3.3.5) that produces information about the addresses of the network interfaces of the system.
+- `"all"`: an [iterator](http://www.lua.org/manual/5.4/manual.html#3.3.5) that produces information about the addresses of the network interfaces of the system.
 The _control variable_ is the index of the network interface address,
 not the interface index.
 The values of the other _loop variables_ are given by the following characters in string `which`:
