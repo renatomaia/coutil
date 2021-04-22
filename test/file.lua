@@ -1,4 +1,7 @@
+local memory = require "memory"
 local system = require "coutil.system"
+
+local buffer = memory.create(20)
 
 newtest "openfile" -------------------------------------------------------------
 
@@ -50,6 +53,92 @@ do case "invalid permission"
 		end
 	end)
 	system.run()
+
+	done()
+end
+
+newtest "file:read" ------------------------------------------------------------
+
+do case "errors"
+
+	local file = assert(system.openfile("../LICENSE", "~w"))
+	for i = 1, 255 do
+		local char = string.char(i)
+		if char ~= "~" then
+			asserterr("unknown mode char", pcall(file.read, file, buffer, nil, nil, nil, char))
+		end
+	end
+
+	asserterr("bad file descriptor", file:read(buffer, nil, nil, nil, "~"))
+
+	file:close()
+
+	assert(not buffer:diff(string.rep("\0", #buffer)))
+
+	done()
+end
+
+do case "read contents"
+
+	local file
+	spawn(function ()
+		file = assert(system.openfile("../LICENSE"))
+		assert(file:read(buffer) == #buffer)
+		assert(not buffer:diff("Copyright (C) 2017  "))
+		assert(file:read(buffer, 11, 20, 57) == 10)
+		assert(not buffer:diff("Copyright Permission"))
+	end)
+	system.run()
+
+	assert(file:read(buffer, 1, 12, nil, "~") == 12)
+	assert(not buffer:diff("Renato Maia rmission"))
+	assert(file:read(buffer, 13, 20, 10, "~") == 8)
+	assert(not buffer:diff("Renato Maia (C) 2017"))
+
+	file:close()
+
+	done()
+end
+
+newtest "file:write" -----------------------------------------------------------
+
+do case "errors"
+
+	local file = assert(system.openfile("../LICENSE", "~r"))
+	for i = 1, 255 do
+		local char = string.char(i)
+		if char ~= "~" then
+			asserterr("unknown mode char", pcall(file.write, file, "foo bar", nil, nil, nil, char))
+		end
+	end
+
+	asserterr("bad file descriptor", file:write("foo bar", nil, nil, nil, "~"))
+
+	file:close()
+
+	done()
+end
+
+do case "write contents"
+
+	local path = "DELETEME.txt"
+	local file
+	spawn(function ()
+		file = assert(system.openfile(path, "wN", system.filebits.ruser))
+		assert(file:write("Hello, World!") == 13)
+		assert(file:write("Good Bye World! Later.", 6, 15, 20) == 10)
+	end)
+	system.run()
+
+	assert(file:write(" Well. ", 1, -1, nil, "~") == 7)
+	assert(file:write(" Gone.", 1, -1, 30, "~") == 6)
+
+	file:close()
+
+	file = assert(io.open(path))
+	assert(file:read("a") == "Hello, World! Well. Bye World! Gone.")
+	file:close()
+	os.remove(path)
 
 	done()
 end

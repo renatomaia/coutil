@@ -8,8 +8,8 @@
 
 
 static int checkperm (lua_State *L, int arg) {
-	const char *mode = lua_tostring(L, arg);
-	if (mode) {
+	if (lua_type(L, arg) == LUA_TSTRING) {
+		const char *mode = lua_tostring(L, arg);
 		int perm = 0;
 		for (; *mode; mode++) switch (*mode) {
 			case 'U': perm |= S_ISUID; break;
