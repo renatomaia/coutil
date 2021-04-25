@@ -51,7 +51,7 @@
 
 #include <assert.h>
 #define lcu_assert assert
-//#define lcu_assert(X) (printf("%s:%d: %s = %s\n", __FILE__, __LINE__, __func__, (X) ? "true" : "false"), assert(X))
+//#define lcu_assert(X) (printf("%s:%d: %s\n", __FILE__, __LINE__, __func__), assert(X))
 //#define lcu_log(O,L,M) printf("[%p,%p]%s:%d:%s(%s)\n",L,O,__FILE__,__LINE__,__func__,M)
 //#define lcuL_printlua(L) lcuL_printstack(L,__FILE__,__LINE__,__func__)
 
@@ -77,10 +77,9 @@
 #define LCU_PIPEPASSIVECLS	LCU_PREFIX"pipepassive"
 #define LCU_TERMSOCKETCLS	LCU_PREFIX"terminal"
 #define LCU_FILECLS	LCU_PREFIX"file"
-#define LCU_SYSCOROCLS	LCU_PREFIX"syscoro"
+#define LCU_STATECOROCLS	LCU_PREFIX"coroutine"
 #define LCU_CHANNELCLS	LCU_PREFIX"channel"
 #define LCU_THREADSCLS	LCU_PREFIX"threads"
-#define LCU_TPOOLGCCLS	LCU_PREFIX"lcu_ThreadPool *"
 #define LCU_CPUINFOLISTCLS	LCU_PREFIX"cpustats"
 #define LCU_NETINFOLISTCLS	LCU_PREFIX"netifaces"
 #define LCU_DIRECTORYLISTCLS	LCU_PREFIX"dirlist"

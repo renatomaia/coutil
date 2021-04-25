@@ -76,18 +76,19 @@ Index
 	- [`system.getenv`](#systemgetenv-name)
 	- [`system.getpriority`](#systemgetpriority-pid)
 	- [`system.halt`](#systemhalt-)
-	- [`system.procinfo`](#systemprocinfo-which)
 	- [`system.isrunning`](#systemisrunning-)
+	- [`system.listdir`](#systemlistdir-path--mode)
 	- [`system.nameaddr`](#systemnameaddr-address--mode)
 	- [`system.nanosecs`](#systemnanosecs-)
 	- [`system.netinfo`](#systemnetinfo-option-which)
 	- [`system.openfile`](#systemopenfile-path--mode--perm)
 		- [`file:close`](#fileclose-)
 		- [`file:info`](#fileinfo-mode)
-		- [`file:read`](#fileread-buffer--i--j--offset)
-		- [`file:write`](#filewrite-data--i--j--offset)
+		- [`file:read`](#fileread-buffer--i--j--offset--mode)
+		- [`file:write`](#filewrite-data--i--j--offset--mode)
 	- [`system.packenv`](#systempackenv-vars)
-	- [`system.random`](#systemrandom-buffer--i--j)
+	- [`system.procinfo`](#systemprocinfo-which)
+	- [`system.random`](#systemrandom-buffer--i--j--mode)
 	- [`system.resume`](#systemresume-stateco-)
 	- [`system.run`](#systemrun-mode)
 	- [`system.setdir`](#systemsetdir-path)
@@ -542,7 +543,7 @@ For instance, `coroutine.resume(co, ...)` can be written as `co:resume(...)`, wh
 ### `coroutine.close (stateco)`
 
 Similar to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
-but for  [_prepemtive coroutines_](#coroutineload-chunk--chunkname--mode).
+but for  [_state coroutines_](#coroutineload-chunk--chunkname--mode).
 
 ### `coroutine.load (chunk [, chunkname [, mode]])`
 
@@ -557,7 +558,9 @@ The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.
 ### `coroutine.status (stateco)`
 
 Similar to [`coroutine.status`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
-but for [_prepemtive coroutines_](#coroutineload-chunk--chunkname--mode).
+but for [_state coroutines_](#coroutineload-chunk--chunkname--mode).
+In particular,
+it never returns `"normal"`.
 
 System Features
 ---------------
