@@ -4,9 +4,9 @@ Terminology in Code
 Operations
 ----------
 
-CoUtil categorizes UV asynchronous operations into the following categories:
+UV asynchronous operations are classified into the following categories:
 
-### Request Operations (`reqop`)
+### Request Operations (`req`)
 
 - Requires a UV request ([`uv_req_t`](http://docs.libuv.org/en/v1.x/request.html)).
 - Requires an initialized `uv_loop_t` structure.
@@ -18,7 +18,7 @@ CoUtil categorizes UV asynchronous operations into the following categories:
 | `uv_<request>_cb` | callback pointer type, which is called when the operation terminates and the request is free. |
 | `uv_<request>(uv_loop_t*, uv_<request>_t*, <arguments>, uv_<request>_cb);` | starts the operation on UV event loop `loop` with the provided arguments, and registering the callback. |
 
-### Thread Operations (`throp`)
+### Handle Operations (`hdl`)
 
 - Requires a UV handle ([`uv_handle_t`](http://docs.libuv.org/en/v1.x/handle.html)),
 but not associated with a system object (_e.g._ file descriptor).
@@ -34,15 +34,6 @@ which registers an additional callback to be called when the UV handle is freed.
 | `uv_<handler>_init(uv_loop_t*, uv_<handler>_t*);` | associates the handler with UV event loop `loop`. |
 | `uv_<handler>_start(uv_<handler>_t*, <arguments>, uv_<handler>_cb);` | starts the operation with the provided arguments, and registering the callback. |
 | `uv_<handler>_stop(uv_<handler>_t*);` | stops the operation, so the callback is not called until started again. |
-
-### Object Operations (`objop`)
-
-Same as [Thread Operations](#thread-operations-throp),
-but when the handle is associated with a system object (_e.g._ file descriptor).
-In particular,
-such handles cannot be replicated by multiple coroutines.
-Therefore,
-the operation on such system object can only be performed by one coroutine at time.
 
 Identifiers
 -----------
@@ -88,7 +79,7 @@ Source Files
 | `lchaux.{c,h}` | internal | inter-thread channel basic support |
 | `lchdefs.h` | internal | inter-thread channel structures |
 | `lcommunf.c` | Lua functions | socket functions of [`coutil.system`](manual.md#system-features) |
-| `lcoroutm.c` | Lua module | [`coutil.coroutine`](manual.md#preemptive-coroutines) and [`system.resume`](manual.md#systemresume-preemptco-) |
+| `lcoroutm.c` | Lua module | [`coutil.coroutine`](manual.md#preemptive-coroutines) and [`system.resume`](manual.md#systemresume-stateco-) |
 | `lcuconf.h` | configuration | general implementation configurations |
 | `lfilef.c` | Lua functions | file system functions of [`coutil.system`](manual.md#system-features) |
 | `linfof.c` | Lua functions | informational functions of [`coutil.system`](manual.md#system-features) |
@@ -105,8 +96,8 @@ Source Files
 Implementation Templates
 ========================
 
-Request Operation
------------------
+Coroutine Request Operation (`coreq`)
+-------------------------------------
 
 ```c
 LCUI_FUNC void lcuM_addmyawaitf (lua_State *L) {
@@ -119,7 +110,7 @@ LCUI_FUNC void lcuM_addmyawaitf (lua_State *L) {
 
 static int lua_myawait (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);  /* requires 'LCU_MODUPVS' upvalues */
-	return lcuT_resetreqopk(L, sched, k_setupfunc, onreturn, cancancel);
+	return lcuT_resetcoreqk(L, sched, k_setupfunc, onreturn, cancancel);
 }
 
 static int k_setupfunc (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
@@ -144,10 +135,10 @@ static int cancancel (lua_State *L) {
 static void uv_onmyevent (uv_myevent_t *myrequest, /* myevent details */) {
 	uv_loop_t *loop = myrequest->loop;
 	uv_req_t *request = (uv_req_t *)myrequest;
-	lua_State *thread = lcuU_endreqop(loop, request);
+	lua_State *thread = lcuU_endcoreq(loop, request);
 	if (thread) {
 		/* push values to yield to 'thread', for 'onreturn' to process */
-		lcuU_resumereqop(loop, request, /* number of pushed values */);
+		lcuU_resumecoreq(loop, request, /* number of pushed values */);
 	} else {
 		/* request wasn't canceled, we can do the clean up now */
 	}
@@ -161,8 +152,8 @@ static int onreturn (lua_State *L) {
 }
 ```
 
-Thread Operation
-----------------
+Coroutine Handle Operation (`cohdl`)
+------------------------------------
 
 ```c
 LCUI_FUNC void lcuM_addmyawaitf (lua_State *L) {
@@ -175,7 +166,7 @@ LCUI_FUNC void lcuM_addmyawaitf (lua_State *L) {
 
 static int lua_myawait (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);  /* requires 'LCU_MODUPVS' upvalues */
-	return lcuT_resetthropk(L, UV_MYEVENT, sched, k_setupfunc, onreturn, cancancel);
+	return lcuT_resetcohdlk(L, UV_MYEVENT, sched, k_setupfunc, onreturn, cancancel);
 }
 
 static int k_setupfunc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
@@ -183,7 +174,7 @@ static int k_setupfunc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	/* check argments and obtain desired configs for myevent */
 	/* leave on the stack values required to produce the results */
 	int err = 0;
-	if (loop) err = lcuT_armthrop(L, uv_myevent_init(loop, myevent));
+	if (loop) err = lcuT_armcohdl(L, uv_myevent_init(loop, myevent));
 	else if (/* myevent is misconfigured? */) err = uv_myevent_stop(myevent);
 	else return -1;  /* yield on success */
 	if (err >= 0) err = uv_myevent_start(myevent, uv_onmyevent, /* configs */);
@@ -202,10 +193,10 @@ static int cancancel (lua_State *L) {
 }
 
 static void uv_onmyevent (uv_myevent_t *handle, /* myevent details */) {
-	if (lcuU_endthrop(handle)) {
+	if (lcuU_endcohdl(handle)) {
 		lua_State *thread = (lua_State *)handle->data;
 		/* push values to yield to 'thread', for 'onreturn' to process */
-		lcuU_resumethrop((uv_handle_t *)handle, /* number of pushed values */);
+		lcuU_resumecohdl((uv_handle_t *)handle, /* number of pushed values */);
 	} else {
 		/* 'cancancel' returned 0, and we can do the clean up now */
 	}
@@ -219,8 +210,8 @@ static int onreturn (lua_State *L) {
 }
 ```
 
-Object Operation
-----------------
+Userdata Handle Operation (`udhdl`)
+-----------------------------------
 
 ```c
 #define MYOBJECT_CLASS	LCU_PREFIX"MyObject"
@@ -246,40 +237,44 @@ LCUI_FUNC void lcuM_addmyawaitf (lua_State *L) {
 }
 
 typedef struct MyObject {
-	/* same fields from 'lcu_Object' */
+	/* same fields from 'lcu_UdataHandle' */
 	int flags;
-	lcu_ObjectAction stop;
+	lcu_HandleAction stop;
 	lua_CFunction step;
-	uv_myobject_t handle;  /* is 'uv_handle_t' in 'lcu_Object' */
+	uv_myobject_t handle;  /* is 'uv_handle_t' in 'lcu_UdataHandle' */
 	/* any extra fields */
 } MyObject;
 
 static int lua_myobject (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);  /* requires 'LCU_MODUPVS' upvalues */
-	MyObject *myobj = lcuT_newobject(L, MyObject, MYOBJECT_CLASS);
+	MyObject *myobj = lcuT_newudhdl(L, MyObject, MYOBJECT_CLASS);
 	/* check argments and obtain desired configs for 'myobj' */
-	int err = uv_myobject_init(loop, lcu_toobjhdl(myobj), /* configs */);
+	int err = uv_myobject_init(loop, lcu_ud2hdl(myobj), /* configs */);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	/* initialize any extra fields */
 	return 1;
 }
 
-static int myobj_gc (lua_State *L) {
-	luaL_checkudata(L, 1, MYOBJECT_CLASS);
-	lcu_closeobj(L, 1);
-	return 0;
-}
-
 static int myobj_close (lua_State *L) {
-	luaL_checkudata(L, 1, MYOBJECT_CLASS);
-	lua_pushboolean(L, lcu_closeobj(L, 1));
+	MyObject *myobj = (MyObject *)luaL_checkudata(L, 1, MYOBJECT_CLASS);
+	luaL_argcheck(L, !lcuL_maskflag(udhdl, LCU_HANDLECLOSEDFLAG), 1, "closed object");
+	lcu_closeudhdl(L, 1);
+	/* free any extra fields that can be released before 'uv_myobject_t' is closed */
+	lua_pushboolean(L, 1);
 	return 1;
 }
 
+static int myobj_gc (lua_State *L) {
+	luaL_checkudata(L, 1, MYOBJECT_CLASS);
+	lcu_closeudhdl(L, 1);
+	/* free any remaining extra fields */
+	return 0;
+}
+
 static int myobj_await (lua_State *L) {
-	lcu_Object *object = (lcu_Object *)luaL_checkudata(L, 1, MYOBJECT_CLASS);
-	luaL_argcheck(L, !lcuL_maskflag(object, LCU_OBJCLOSEDFLAG), 1, "closed object");
-	return lcuT_resetobjopk(L, object, startmyawait, stopmyawait, onreturn);
+	lcu_UdataHandle *udhdl = (lcu_UdataHandle *)luaL_checkudata(L, 1, MYOBJECT_CLASS);
+	luaL_argcheck(L, !lcuL_maskflag(udhdl, LCU_HANDLECLOSEDFLAG), 1, "closed object");
+	return lcuT_resetudhdlk(L, udhdl, startmyawait, stopmyawait, onreturn);
 }
 
 static int startmyawait (uv_handle_t *handle) {
@@ -295,7 +290,7 @@ static void uv_onmyevent (uv_myobject_t *myobjhdl, /* myevent details */) {
 	lua_State *thread = (lua_State *)handle->data;
 	lcu_assert(thread);
 	/* push values to yield to 'k_onreturn' */
-	lcuU_resumeobjop(handle, /* number of pushed values */);
+	lcuU_resumeudhdl(handle, /* number of pushed values */);
 }
 
 static int onreturn (lua_State *L) {
@@ -305,11 +300,121 @@ static int onreturn (lua_State *L) {
 }
 ```
 
+Userdata Request Operation (`udreq`)
+------------------------------------
+
+```c
+#define MYOBJECT_CLASS	LCU_PREFIX"MyObject"
+
+LCUI_FUNC void lcuM_addmyawaitf (lua_State *L) {
+	static const luaL_Reg metf[] = {
+		{"__gc", myobj_gc},
+		{"__close", myobj_gc},
+		{"close", myobj_close},
+		{NULL, NULL}
+	};
+	static const luaL_Reg upvf[] = {
+		{"awaitmyobj", lua_awaitmyobj},
+		{NULL, NULL}
+	};
+	static const luaL_Reg modf[] = {
+		{"myobject", lua_myobject},
+		{NULL, NULL}
+	};
+	/* create object metatable */
+	luaL_newmetatable(L, MYOBJECT_CLASS);
+	lcuL_setfuncs(L, metf, 0);
+	lua_pop(L, 1);
+	/* add object await function to 'coutil.system' */
+	lcuM_setfuncs(L, upvf, LCU_MODUPVS);
+	/* add object creation function to 'coutil.system' */
+	lcuM_setfuncs(L, modf, 0);
+}
+
+typedef struct MyObject {
+	/* same fields from 'lcu_UdataRequest' */
+	lua_CFunction results;
+	lua_CFunction cancel;
+	uv_myevent_t myevent;  /* is 'uv_req_t' in 'lcu_UdataRequest' */
+	/* any extra fields */
+} MyObject;
+
+static int lua_myobject (lua_State *L) {
+	MyObject *myobj = lcuT_newudreq(L, MyObject);
+	/* initialize any extra fields */
+	luaL_setmetatable(L, MYOBJECT_CLASS);
+	return 1;
+}
+
+static int myobj_close (lua_State *L) {
+	MyObject *myobj = (MyObject *)luaL_checkudata(L, 1, MYOBJECT_CLASS);
+	luaL_argcheck(L, myobj->myevent.type == UV_MYEVENT, 1, "pending request");
+	myobj_gc(L);
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+static int myobj_gc (lua_State *L) {
+	MyObject *myobj = (MyObject *)luaL_checkudata(L, 1, MYOBJECT_CLASS);
+	if (myobj->myevent.type == UV_MYEVENT) /* mark 'myobj' as pending to be freed */
+	else /* free any extra fields */
+	return 0;
+}
+
+static int lua_awaitmyobj (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);  /* requires 'LCU_MODUPVS' upvalues */
+	MyObject *myobj = (MyObject *)luaL_checkudata(L, 1, MYOBJECT_CLASS);
+	luaL_argcheck(L, myobj->myevent.data == NULL, 1, "already in use");
+	luaL_argcheck(L, myobj->myevent.type == UV_MYEVENT, 1, "still pending");
+	return lcuT_resetudreqk(L, sched, (lcu_UdataRequest *)myobj, k_setupfunc, onreturn, cancancel);
+}
+
+static int k_setupfunc (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	MyObject *myobj = (MyObject *)lua_touserdata(L, 1);
+	/* check argments and obtain desired configs for myevent */
+	/* leave on the stack values required to produce the results */
+	int err = uv_myevent(loop, &myobj->myevent, uv_onmyevent, /* configs */);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
+}
+
+/* optional, if is 'NULL' behaves as 'return 1' */
+static int cancancel (lua_State *L) {
+	/* we know the thread is not awaiting for this myevent anymore */
+	/* inpect any global state that might need clean up */
+	if (/* we still need 'uv_onmyevent' to be called for some clean up */)
+		return 0;
+	else
+		return 1;
+}
+
+static void uv_onmyevent (uv_myevent_t *myevent, /* myevent details */) {
+	uv_loop_t *loop = myevent->loop;
+	uv_req_t *request = (uv_req_t *)myevent;
+	lua_State *thread = lcuU_endudreq(loop, request);
+	if (thread) {
+		/* push values to yield to 'thread', for 'onreturn' to process */
+		lcuU_resumeudreq(loop, request, /* number of pushed values */);
+	} else {
+		/* request wasn't canceled, we can do the clean up now */
+	}
+	if (/* 'myobj' was marked as pending to be freed */)
+		/* free any extra fields */
+}
+
+/* optional, if is 'NULL' behaves as 'return lua_gettop(L)' */
+static int onreturn (lua_State *L) {
+	/* use values left on the stack by 'k_setupfunc' and the ones yielded */
+	/* by 'uv_onmyevent' to produce the values to be returned */
+	return /* number of values to return from the top of the stack */;
+}
+```
+
 Data Structure States
 =====================
 
-Operation
----------
+Coroutine Operation
+-------------------
 
 ![Operation States](opstates.svg)
 
@@ -320,22 +425,22 @@ Operation
 | Completed          Request Op. | R | S |   |   |               |                         |
 | Canceled           Request Op. | R | S |   | ? |               | `uv_<request>_cb`       |
 | Reseting           Request Op. | R | S | P | ? | `k_resetopk`  | `uv_<request>_cb`       |
-| Awaiting           Thread Op.  |   |   | P |   | `k_endop`     | `uv_<handle>_cb`        |
-| Completed          Thread Op.  |   |   |   |   |               | `uv_<handle>_cb`        |
-| Canceled           Thread Op.  |   |   |   | C |               | `uv_<handle>_cb`        |
-| Reseting  Canceled Thread Op.  |   |   | P | C | `k_resetopk`  | `uv_<handle>_cb`        |
-| Closing            Thread Op.  |   |   |   |   |               | `closedhdl:uv_close_cb` |
-| Reseting  Closed   Thread Op.  |   |   | P |   | `k_resetopk`  | `closedhdl:uv_close_cb` |
+| Awaiting           Handle Op.  |   |   | P |   | `k_endop`     | `uv_<handle>_cb`        |
+| Completed          Handle Op.  |   |   |   |   |               | `uv_<handle>_cb`        |
+| Canceled           Handle Op.  |   |   |   | C |               | `uv_<handle>_cb`        |
+| Reseting  Canceled Handle Op.  |   |   | P | C | `k_resetopk`  | `uv_<handle>_cb`        |
+| Closing            Handle Op.  |   |   |   |   |               | `closedhdl:uv_close_cb` |
+| Reseting  Closed   Handle Op.  |   |   | P |   | `k_resetopk`  | `closedhdl:uv_close_cb` |
 _______________________
 - R: `FLAG_REQUEST` is set in coroutines's `Operation.flags`.
 - S: `FLAG_THRSAVED` is set in coroutines's `Operation.flags`.
 - P: `FLAG_PENDING` is set in coroutines's `Operation.flags`.
 - C: `FLAG_NOCANCEL` is set in coroutines's `Operation.flags`.
 
-Object
-------
+Userdata Handle
+---------------
 
-![Object States](objstates.svg)
+![Handle States](hdlstates.svg)
 
 | Name      | S | P | C | lua_KFunction | Callback Pending        |
 |:--------- |:-:|:-:|:-:|:------------- |:----------------------- |
@@ -345,9 +450,26 @@ Object
 | Awaiting  | S | P |   | `k_endobjopk` | `uv_<handle>_cb`        |
 | Completed | S |   |   |               |                         |
 _______________________
-- S: (started) `stop` and `step` fields are not `NULL` in `lcu_Object`.
-- P: (pending) `handle.data` is not `NULL` in `lcu_Object`.
-- C: (closed) `LCU_OBJCLOSEDFLAG` is set in `lcu_Object.flags`.
+- S: (started) `stop` and `step` fields are not `NULL` in `lcu_UdataHandle`.
+- P: (pending) `handle.data` is not `NULL` in `lcu_UdataHandle`.
+- C: (closed) `LCU_HANDLECLOSEDFLAG` is set in `lcu_UdataHandle.flags`.
+
+Userdata Request
+----------------
+
+![Request States](reqstates.svg)
+
+| Name      | F | S | P | lua_KFunction   | Callback Pending        |
+|:--------- |:-:|:-:|:-:|:--------------- |:----------------------- |
+| Freed     | F |   |   |                 |                         |
+| Awaiting  |   |   | P | `k_endudreq`    | `uv_<request>_cb`       |
+| Completed |   | S |   |                 |                         |
+| Canceled  |   |   |   |                 | `uv_<request>_cb`       |
+| Reseting  |   |   | P | `k_resetudreqk` | `uv_<request>_cb`       |
+_______________________
+- F: (freed) `request.type` is `UV_UNKNOWN_REQ` in `lcu_UdataRequest`.
+- S: (saved) `request.type` is `UV_REQ_TYPE_MAX` in `lcu_UdataRequest`.
+- P: (pending) `request.data` is not `NULL` in `lcu_UdataRequest`.
 
 Transitions
 -----------
@@ -355,110 +477,131 @@ Transitions
 ### [C]allback
 
 1. `uv_<request>_cb`
-	- `lcuU_endreqop`
-	- `lcuU_resumereqop...`
+	- `lcuU_endcoreq`
+	- `lcuU_resumecoreq...`
 		- `k_endop`
 2. `uv_<request>_cb`
-	- `lcuU_endreqop`
+	- `lcuU_endcoreq`
 3. `uv_<request>_cb`
-	- `lcuU_endreqop`
-	- `lcuU_resumereqop...`
+	- `lcuU_endcoreq`
+	- `lcuU_resumecoreq...`
 		- `k_resetopk`
 			- `uv_<request>`
 			- `startedopk`
 4. `uv_<request>_cb`
-	- `lcuU_endreqop`
-	- `lcuU_resumereqop...`
+	- `lcuU_endcoreq`
+	- `lcuU_resumecoreq...`
 		- `k_resetopk`
 			- `uv_<handle>_init`
-			- `lcuT_armthrop`
+			- `lcuT_armcohdl`
 			- `uv_<handle>_start`
 			- `startedopk`
 5. `uv_<handle>_cb`
-	- `lcuU_endthrop`
-	- `lcuU_resumethrop...`
+	- `lcuU_endcohdl`
+	- `lcuU_resumecohdl...`
 		- `k_endop`
 6. `uv_<handle>_cb`
-	- `lcuU_endthrop`
+	- `lcuU_endcohdl`
 		- `cancelop`
 			- `uv_close`
 7. `uv_<handle>_cb`
-	- `lcuU_endthrop`
+	- `lcuU_endcohdl`
 	- `cancelop`
 		- `uv_close`
 8. `uv_<handle>_cb`
-	- `lcuU_resumeobjop...`
+	- `lcuU_resumeudhdl...`
 		- `k_endobjopk`
+9. `uv_<request>_cb`
+	- `lcuU_endudreq`
+	- `lcuU_resumeudreq...`
+		- `k_endudreq`
+10. `uv_<request>_cb`
+	- `lcuU_endudreq`
+11. `uv_<request>_cb`
+	- `lcuU_endudreq`
+	- `lcuU_resumeudreq...`
+		- `k_resetudreqk`
+			- `uv_<request>`
+			- `startedudreqk`
 
 ### [F]reed
 
 1. `closedhdl`
 2. `closedhdl`
-	- `lcuU_resumereqop...`
+	- `lcuU_resumecoreq...`
 		- `k_resetopk`
 			- `uv_<request>`
 			- `startedopk`
 3. `closedhdl`
-	- `lcuU_resumereqop...`
+	- `lcuU_resumecoreq...`
 		- `k_resetopk`
 			- `uv_<handle>_init`
-			- `lcuT_armthrop`
+			- `lcuT_armcohdl`
 			- `uv_<handle>_start`
 			- `startedopk`
-4. `closedobj`
+4. `closedudhdl`
 
 ### [G]arbage
 
-1. `lcu_closeobj`
+1. `lcu_closeudhdl`
 	- `uv_close`
-2. `lcu_closeobj`
+2. `lcu_closeudhdl`
 	- `uv_close`
-3. `lcu_closeobj`
+3. `lcu_closeudhdl`
 	- `uv_close`
 
 ### [O]peration
 
-1. `lcuT_resetreqopk`
+1. `lcuT_resetcoreqk`
 	- `uv_<request>`
 	- `startedopk`
-2. `lcuT_resetthropk`
+2. `lcuT_resetcohdlk`
 	- `uv_<handle>_init`
-	- `lcuT_armthrop`
+	- `lcuT_armcohdl`
 	- `uv_<handle>_start`
 	- `startedopk`
-3. `lcuT_resetreqopk`
+3. `lcuT_resetcoreqk`
 	- `uv_<request>`
 	- `startedopk`
-	- `...lcuU_resumereqop`
-4. `lcuT_resetthropk`
+	- `...lcuU_resumecoreq`
+4. `lcuT_resetcohdlk`
 	- `uv_<handle>_init`
-	- `lcuT_armthrop`
+	- `lcuT_armcohdl`
 	- `uv_<handle>_start`
 	- `startedopk`
-	- `...lcuU_resumereqop`
-5. `lcuT_resetreqopk|lcuT_resetthropk`
+	- `...lcuU_resumecoreq`
+5. `lcuT_resetcoreqk|lcuT_resetcohdlk`
 	- `yieldresetk`
-6. `lcuT_resetthropk` (`checkreset() == SAMEOP`)
+6. `lcuT_resetcohdlk` (`checkreset() == SAMEOP`)
 	- `uv_<handle>_stop`?
 	- `uv_<handle>_start`?
 	- `startedopk`
-	- `...lcuU_resumethrop`
-7. `lcuT_resetreqopk|lcuT_resetthropk`
+	- `...lcuU_resumecohdl`
+7. `lcuT_resetcoreqk|lcuT_resetcohdlk`
 	- `checkreset` (`== WAITOP`)
 		- `uv_close`
 	- `yieldresetk`
-	- `...lcuU_resumethrop`
-8. `lcuT_resetthropk` (`checkreset() == SAMEOP`)
+	- `...lcuU_resumecohdl`
+8. `lcuT_resetcohdlk` (`checkreset() == SAMEOP`)
 	- `uv_<handle>_stop`?
 	- `uv_<handle>_start`?
 	- `startedopk`
-9. `lcuT_resetreqopk|lcuT_resetthropk`
+9. `lcuT_resetcoreqk|lcuT_resetcohdlk`
 	- `yieldresetk`
-10. `lcuT_resetreqopk|lcuT_resetthropk`
+10. `lcuT_resetcoreqk|lcuT_resetcohdlk`
 	- `yieldresetk`
-11. `lcuT_resetobjopk`
+11. `lcuT_resetudhdlk`
 	- `uv_<handle>_start`
-12. `lcuT_resetobjopk`
+12. `lcuT_resetudhdlk`
+13. `lcuT_resetudreqk`
+	- `uv_<request>`
+	- `startedudreqk`
+14. `lcuT_resetudreqk`
+	- `uv_<request>`
+	- `startedudreqk`
+	- `...lcuU_resumeudreq`
+15. `lcuT_resetudreqk`
+	- `lua_yieldk`
 
 ### [R]esumed
 
@@ -475,16 +618,21 @@ Transitions
 7. `k_endobjopk`
 	- `stopobjop`
 		- `uv_<handle>_stop`
+8. `k_endudreq`
+	- `cancelop`?
+		- `uv_cancel`
+9. `k_resetudreqk`
 
 ### [Y]ields
 
-1. `...lcuU_resumereqop`
-2. `...lcuU_resumethrop`
+1. `...lcuU_resumecoreq`
+2. `...lcuU_resumecohdl`
 	- `cancelop`
 		- `uv_close`
-3. `...lcuU_resumeobjop`
+3. `...lcuU_resumeudhdl`
 	- `stopobjop`
 		- `uv_<handle>_stop`
+4. `...lcuU_resumeudreq`
 
 References to Values
 ====================

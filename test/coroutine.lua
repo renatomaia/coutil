@@ -1,5 +1,5 @@
 local system = require "coutil.system"
-local preemptco = require "coutil.coroutine"
+local stateco = require "coutil.coroutine"
 
 newtest "coroutine" ------------------------------------------------------------
 
@@ -7,28 +7,28 @@ do case "compilation errors"
 	for v in ipairs(types) do
 		local ltype = type(v)
 		if ltype ~= "string" and ltype ~= "number" then
-			asserterr("string or memory expected", pcall(preemptco.load, v))
-			asserterr("string expected", pcall(preemptco.load, "", v))
-			asserterr("string expected", pcall(preemptco.load, "", "", v))
+			asserterr("string or memory expected", pcall(stateco.load, v))
+			asserterr("string expected", pcall(stateco.load, "", v))
+			asserterr("string expected", pcall(stateco.load, "", "", v))
 		end
 	end
 
 	local bytecodes = string.dump(function () a = a+1 end)
 	asserterr("attempt to load a binary chunk (mode is 't')",
-	          preemptco.load(bytecodes, nil, "t"))
+	          stateco.load(bytecodes, nil, "t"))
 	asserterr("attempt to load a text chunk (mode is 'b')",
-	          preemptco.load("a = a+1", "bytecodes", "b"))
-	asserterr("syntax error", preemptco.load("invalid chunk"))
+	          stateco.load("a = a+1", "bytecodes", "b"))
+	asserterr("syntax error", stateco.load("invalid chunk"))
 
 	done()
 end
 
 do case "runtime errors"
-	local co = preemptco.load[[ return 1, 2, 3 ]]
+	local co = stateco.load[[ return 1, 2, 3 ]]
 	asserterr("unable to yield", pcall(system.resume, co))
 	assert(co:status() == "suspended")
 
-	local co = preemptco.load([[
+	local co = stateco.load([[
 		require "_G"
 		error "Oops!"
 	]], "@bytecodes")
@@ -47,7 +47,7 @@ do case "runtime errors"
 	spawn(function ()
 		asserterr("cannot resume running coroutine", system.resume(co))
 		b = 1
-		local res, errval = system.resume(preemptco.load[[
+		local res, errval = system.resume(stateco.load[[
 			require "_G"
 			error(true)
 		]])
@@ -66,7 +66,7 @@ end
 do case "type errors"
 	local stage = 0
 	spawn(function ()
-		local co = preemptco.load(string.dump(function ()
+		local co = stateco.load(string.dump(function ()
 			require "_G"
 			error{}
 		end))
@@ -82,10 +82,10 @@ do case "type errors"
 		stage = 1
 		asserterr("unable to transfer error (got table)", system.resume(co))
 		assert(co:status() == "dead")
-		co = preemptco.load[[ return 1, {2}, 3 ]]
+		co = stateco.load[[ return 1, {2}, 3 ]]
 		asserterr("unable to transfer return value #2 (got table)", system.resume(co))
 		assert(co:status() == "dead")
-		co = preemptco.load[[ return 1, 2, 3, require ]]
+		co = stateco.load[[ return 1, 2, 3, require ]]
 		asserterr("unable to transfer return value #4 (got function)", system.resume(co))
 		assert(co:status() == "dead")
 		stage = 2
@@ -103,7 +103,7 @@ do case "preemptive execution"
 	os.remove(path)
 
 	assert(not io.open(path))
-	local co = assert(preemptco.load(string.format([[
+	local co = assert(stateco.load(string.format([[
 		local io = require "io"
 		local os = require "os"
 		local path = %q
@@ -154,7 +154,7 @@ do case "preemptive execution"
 end
 
 do case "transfer values"
-	local co = preemptco.load[[
+	local co = stateco.load[[
 		require "_G"
 		local coroutine = require "coroutine"
 
@@ -213,7 +213,7 @@ end
 do case "resume closed"
 	local stage
 	spawn(function ()
-		local co = preemptco.load[[
+		local co = stateco.load[[
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
 		]]
@@ -237,7 +237,7 @@ end
 do case "collect suspended"
 	local stage
 	spawn(function ()
-		garbage.co = preemptco.load[[
+		garbage.co = stateco.load[[
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
 		]]
@@ -259,7 +259,7 @@ do case "collect canceled"
 	local stage
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		garbage.co = preemptco.load[[
+		garbage.co = stateco.load[[
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
 		]]
@@ -268,7 +268,7 @@ do case "collect canceled"
 		assert(ok == nil)
 		assert(res == "cancel")
 		stage = 1
-		assert(preemptco.status(garbage.co) == "running")
+		assert(stateco.status(garbage.co) == "running")
 	end)
 
 	assert(stage == 0)
@@ -287,7 +287,7 @@ do case "running unreferenced"
 	local stage
 	spawn(function ()
 		stage = 0
-		local ok, res = system.resume(preemptco.load[[
+		local ok, res = system.resume(stateco.load[[
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
 		]])
@@ -307,7 +307,7 @@ end
 
 do case "close running"
 	local stage
-	local co = preemptco.load[[
+	local co = stateco.load[[
 		local coroutine = require "coroutine"
 		coroutine.yield("hello")
 	]]
@@ -317,13 +317,13 @@ do case "close running"
 		local ok, res = system.resume(co)
 		assert(ok == true)
 		assert(res == "hello")
-		assert(preemptco.close(co) == true)
+		assert(stateco.close(co) == true)
 		asserterr("cannot resume dead coroutine", system.resume(co))
 		stage = 1
 	end)
 
 	assert(co:status() == "running")
-	asserterr("cannot close a running coroutine", pcall(preemptco.close, co))
+	asserterr("cannot close a running coroutine", pcall(stateco.close, co))
 
 	assert(stage == 0)
 	assert(system.run() == false)
@@ -335,7 +335,7 @@ end
 do case "yield values"
 	local stage = 0
 	local a,b,c = spawn(function ()
-		local co = preemptco.load[[
+		local co = stateco.load[[
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
 		]]
@@ -358,7 +358,7 @@ end
 do case "scheduled yield"
 	local stage = 0
 	spawn(function ()
-		local co = preemptco.load[[
+		local co = stateco.load[[
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
 		]]
@@ -376,7 +376,7 @@ do case "scheduled yield"
 end
 
 do case "resume same coroutine"
-	local co = preemptco.load[[
+	local co = stateco.load[[
 		local coroutine = require "coroutine"
 		coroutine.yield("hello")
 	]]
@@ -404,11 +404,11 @@ do case "resume same coroutine"
 end
 
 do case "resume different coroutines"
-	local co1 = preemptco.load[[
+	local co1 = stateco.load[[
 		local coroutine = require "coroutine"
 		coroutine.yield("hello once")
 	]]
-	local co2 = preemptco.load[[
+	local co2 = stateco.load[[
 		local coroutine = require "coroutine"
 		coroutine.yield("hello twice")
 	]]
@@ -445,7 +445,7 @@ do case "resume transfer"
 
 	local a
 	spawn(function ()
-		local co = preemptco.load[[
+		local co = stateco.load[[
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
 			return "bye"
@@ -488,7 +488,7 @@ do case "cancel resume"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		local co = preemptco.load[[
+		local co = stateco.load[[
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
 		]]
@@ -514,7 +514,7 @@ do case "cancel and resume again"
 	local stage = 0
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		local co = preemptco.load[[
+		local co = stateco.load[[
 			require "_G"
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
@@ -555,7 +555,7 @@ do case "cancel and resume by other"
 
 	spawn(function ()
 		garbage.coro = coroutine.running()
-		local co = preemptco.load[[
+		local co = stateco.load[[
 			require "_G"
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
@@ -606,7 +606,7 @@ do case "ignore errors"
 
 	local stage = 0
 	pspawn(function ()
-		assert(system.resume(preemptco.load[[
+		assert(system.resume(stateco.load[[
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
 		]]))
@@ -626,7 +626,7 @@ do case "ignore errors after cancel"
 	local stage = 0
 	pspawn(function ()
 		garbage.coro = coroutine.running()
-		assert(system.resume(preemptco.load[[
+		assert(system.resume(stateco.load[[
 			local coroutine = require "coroutine"
 			coroutine.yield("hello")
 		]]))
@@ -652,7 +652,7 @@ do case "chunk from file"
 		return "bye"
 	]]
 	file:close()
-	local co = preemptco.loadfile(path)
+	local co = stateco.loadfile(path)
 	os.remove(path)
 
 	local stage
@@ -687,7 +687,7 @@ do case "inherit preload"
 		package.preload["coutil.system"] =
 			assert(package.searchers[4]("coutil.system"))
 
-		local co = preemptco.load[[
+		local co = stateco.load[[
 			local package = require "package"
 			package.path = ""
 			package.cpath = ""

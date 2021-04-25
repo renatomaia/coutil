@@ -526,10 +526,10 @@ static int returnfileinfo (lua_State *L) {
 static void on_fileinfo (uv_fs_t *filereq) {
 	uv_loop_t *loop = filereq->loop;
 	uv_req_t *request = (uv_req_t *)filereq;
-	lua_State *thread = lcuU_endreqop(loop, request);
+	lua_State *thread = lcuU_endcoreq(loop, request);
 	if (thread) {
 		lua_pushlightuserdata(thread, filereq);
-		lcuU_resumereqop(loop, request, 1);
+		lcuU_resumecoreq(loop, request, 1);
 	}
 	else uv_fs_req_cleanup(filereq);
 }
@@ -546,7 +546,7 @@ static int yieldfileinfo (lua_State *L) {
 	int bits = lua_tointeger(L, 3);
 	if (bits&INFO_SRCMASK) {
 		lcu_Scheduler *sched = lcu_getsched(L);
-		return lcuT_resetreqopk(L, sched, k_setupfileinfo, returnfileinfo, NULL);
+		return lcuT_resetcoreqk(L, sched, k_setupfileinfo, returnfileinfo, NULL);
 	}
 	return lua_gettop(L)-4;
 }
@@ -635,8 +635,8 @@ static int returnlistdir (lua_State *L) {
 static void uv_onlistdir (uv_fs_t *filereq) {
 	uv_loop_t *loop = filereq->loop;
 	uv_req_t *request = (uv_req_t *)filereq;
-	lua_State *thread = lcuU_endobjreqop(loop, request);
-	if (thread) lcuU_resumeobjreqop(loop, request, 0);
+	lua_State *thread = lcuU_endudreq(loop, request);
+	if (thread) lcuU_resumeudreq(loop, request, 0);
 	else {
 		uv_fs_req_cleanup(filereq);
 		filereq->result = -1;
@@ -656,7 +656,7 @@ static int system_listdir (lua_State *L) {
 	int noyield = lcuL_checknoyieldmode(L, 2);
 	DirectoryList *dirlist;
 	lua_settop(L, 1);
-	dirlist = lcuT_newobjreq(L, DirectoryList);
+	dirlist = lcuT_newudreq(L, DirectoryList);
 	luaL_setmetatable(L, LCU_DIRECTORYLISTCLS);
 	lua_insert(L, 1);
 	if (noyield) {
@@ -666,7 +666,7 @@ static int system_listdir (lua_State *L) {
 		lua_pop(L, 1);
 		return returnlistdir(L);
 	} else {
-		return lcuT_resetobjreqopk(L, sched, (lcu_ObjectRequest *)dirlist,
+		return lcuT_resetudreqk(L, sched, (lcu_UdataRequest *)dirlist,
 		                              k_setuplistdir, returnlistdir, NULL);
 	}
 }
@@ -689,12 +689,12 @@ static int returnopenfile (lua_State *L) {
 static void on_fileopen (uv_fs_t *filereq) {
 	uv_loop_t *loop = filereq->loop;
 	uv_req_t *request = (uv_req_t *)filereq;
-	lua_State *thread = lcuU_endreqop(loop, request);
+	lua_State *thread = lcuU_endcoreq(loop, request);
 	ssize_t result = filereq->result;
 	uv_fs_req_cleanup(filereq);
 	if (thread) {
 		lua_pushinteger(thread, result);
-		lcuU_resumereqop(loop, request, 1);
+		lcuU_resumecoreq(loop, request, 1);
 	}
 }
 static int k_setupfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
@@ -751,7 +751,7 @@ static int system_openfile (lua_State *L) {
 	} else {
 		lua_pushinteger(L, flags);
 		lua_pushinteger(L, perm);
-		return lcuT_resetreqopk(L, sched, k_setupfile, returnopenfile, NULL);
+		return lcuT_resetcoreqk(L, sched, k_setupfile, returnopenfile, NULL);
 	}
 }
 
@@ -795,7 +795,7 @@ static int file_close (lua_State *L) {
 static void on_fileopdone (uv_fs_t *filereq) {
 	uv_loop_t *loop = filereq->loop;
 	uv_req_t *request = (uv_req_t *)filereq;
-	lua_State *thread = lcuU_endreqop(loop, request);
+	lua_State *thread = lcuU_endcoreq(loop, request);
 	ssize_t result = filereq->result;
 	uv_fs_req_cleanup(filereq);
 	if (thread) {
@@ -806,7 +806,7 @@ static void on_fileopdone (uv_fs_t *filereq) {
 			lua_pushinteger(thread, result);
 			nret = 1;
 		}
-		lcuU_resumereqop(loop, request, nret);
+		lcuU_resumecoreq(loop, request, nret);
 	}
 }
 
@@ -839,7 +839,7 @@ static int file_read (lua_State *L) {
 		lua_pushinteger(L, filereq.result);
 		return 1;
 	}
-	return lcuT_resetreqopk(L, sched, k_setupreadfile, NULL, NULL);
+	return lcuT_resetcoreqk(L, sched, k_setupreadfile, NULL, NULL);
 }
 
 /* bytes [, err] = file:write(data [, i [, j [, offset [, mode]]]]) */
@@ -871,7 +871,7 @@ static int file_write (lua_State *L) {
 		lua_pushinteger(L, filereq.result);
 		return 1;
 	}
-	return lcuT_resetreqopk(L, sched, k_setupwritefile, NULL, NULL);
+	return lcuT_resetcoreqk(L, sched, k_setupwritefile, NULL, NULL);
 }
 
 /* ... = file:info(mode) */
@@ -910,7 +910,7 @@ static int file_info (lua_State *L) {
 		return lua_gettop(L)-2;
 	}
 	lua_pushlightuserdata(L, (void *)mode);
-	return lcuT_resetreqopk(L, sched, k_setupfobjinfo, returnfobjinfo, NULL);
+	return lcuT_resetcoreqk(L, sched, k_setupfobjinfo, returnfobjinfo, NULL);
 }
 
 
