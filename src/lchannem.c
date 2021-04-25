@@ -121,7 +121,7 @@ static void uv_onsynced (uv_async_t *async) {
 		channeltask->wakes--;
 		uv_mutex_unlock(&channeltask->mutex);
 	}
-	if (lcuU_endthrop(handle)) lcuU_resumethrop(handle, 0);
+	if (lcuU_endcohdl(handle)) lcuU_resumecohdl(handle, 0);
 	else {
 		LuaChannel *canceled;
 		lcu_pushopvalue(thread);
@@ -157,7 +157,7 @@ static lua_State *armsynced (lua_State *L, void *data) {
 		return NULL;
 	}
 	if (args->loop != NULL) {
-		err = lcuT_armthrop(L, uv_async_init(args->loop, args->async, uv_onsynced));
+		err = lcuT_armcohdl(L, uv_async_init(args->loop, args->async, uv_onsynced));
 		if (err < 0) {
 			lua_settop(L, 0);
 			lcuL_pusherrres(L, err);
@@ -184,7 +184,7 @@ static int k_setupsynced (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 
 static int system_awaitch (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
-	return lcuT_resetthropk(L, UV_ASYNC, sched, k_setupsynced,
+	return lcuT_resetcohdlk(L, UV_ASYNC, sched, k_setupsynced,
 	                                            returnsynced,
 	                                            cancelsynced);
 }
