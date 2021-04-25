@@ -67,6 +67,8 @@ do case "block main thread"
 	local before = system.nanosecs()
 	system.block(.1)
 	assert(system.nanosecs()-before > 1e8)
+
+	done()
 end
 
 do case "block other coroutines"
