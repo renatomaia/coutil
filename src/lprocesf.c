@@ -92,13 +92,13 @@ static int returnsignal (lua_State *L) {
 static void uv_onsignal (uv_signal_t *handle, int signum) {
 	lua_State *thread = (lua_State *)handle->data;
 	lua_pushinteger(thread, signum);
-	lcuU_resumethrop((uv_handle_t *)handle, 1);
+	lcuU_resumecohdl((uv_handle_t *)handle, 1);
 }
 static int k_setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_signal_t *signal = (uv_signal_t *)handle;
 	int signum = checksignal(L, 1, 1);
 	int err = 0;
-	if (loop) err = lcuT_armthrop(L, uv_signal_init(loop, signal));
+	if (loop) err = lcuT_armcohdl(L, uv_signal_init(loop, signal));
 	else if (signal->signum != signum) err = uv_signal_stop(signal);
 	else return -1;  /* yield on success */
 	if (err >= 0) err = uv_signal_start(signal, uv_onsignal, signum);
@@ -107,7 +107,7 @@ static int k_setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 }
 static int system_awaitsig (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
-	return lcuT_resetthropk(L, UV_SIGNAL, sched, k_setupsignal, returnsignal, NULL);
+	return lcuT_resetcohdlk(L, UV_SIGNAL, sched, k_setupsignal, returnsignal, NULL);
 }
 
 
@@ -346,9 +346,9 @@ static void getstreamfield (lua_State *L,
 			case 'i': socktranf = 1; break;
 			default: luaL_error(L, "unknown '%s' mode char (got '%c')", field, *mode);
 		}
-		pipe = lcuT_newobject(L, lcu_PipeSocket, LCU_PIPEACTIVECLS);
-		stream->data.stream = (uv_stream_t *)lcu_toobjhdl(pipe);
-		err = uv_pipe_init(loop, lcu_toobjhdl(pipe), socktranf);
+		pipe = lcuT_newudhdl(L, lcu_PipeSocket, LCU_PIPEACTIVECLS);
+		stream->data.stream = (uv_stream_t *)lcu_ud2hdl(pipe);
+		err = uv_pipe_init(loop, lcu_ud2hdl(pipe), socktranf);
 		if (err) lcu_error(L, err);
 		pipe->flags = socktranf ? LCU_SOCKTRANFFLAG : 0;
 		lua_setfield(L, 1, field);
@@ -364,8 +364,8 @@ static void getstreamfield (lua_State *L,
 				stream->flags = UV_INHERIT_FD;
 			} else if (ismetatable(L, LCU_TCPACTIVECLS) ||
 			           ismetatable(L, LCU_PIPEACTIVECLS)) {
-				lcu_Object *obj = (lcu_Object *)lua_touserdata(L, -2);
-				stream->data.stream = (uv_stream_t *)lcu_toobjhdl(obj);
+				lcu_UdataHandle *obj = (lcu_UdataHandle *)lua_touserdata(L, -2);
+				stream->data.stream = (uv_stream_t *)lcu_ud2hdl(obj);
 				stream->flags = UV_INHERIT_STREAM;
 			}
 			lua_pop(L, 1); /* remove value's metatable */
@@ -458,7 +458,7 @@ static void uv_procexited (uv_process_t *process, int64_t exitval, int signum) {
 		lua_pushliteral(thread, "exit");
 		lua_pushinteger(thread, exitval);
 	}
-	lcuU_resumethrop((uv_handle_t *)process, 2);
+	lcuU_resumecohdl((uv_handle_t *)process, 2);
 }
 static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_process_t *process = (uv_process_t *)handle;
@@ -468,7 +468,6 @@ static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	int err, tabarg;
 
 	lcu_assert(loop);  /* must be an uninitialized handler */
-	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
 
 	procopts.exit_cb = uv_procexited;
 	procopts.args = args;
@@ -476,7 +475,7 @@ static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	tabarg = getprocopts(L, loop, &procopts);
 
 	err = uv_spawn(loop, process, &procopts);
-	lcuT_armthrop(L, 0);  /* 'uv_spawn' always arms the operation */
+	lcuT_armcohdl(L, 0);  /* 'uv_spawn' always arms the operation */
 	if (err < 0) return lcuL_pusherrres(L, err);
 	if (tabarg) {
 		lua_pushinteger(L, uv_process_get_pid(process));
@@ -486,7 +485,7 @@ static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 }
 static int system_execute (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
-	return lcuT_resetthropk(L, -1, sched, k_setupproc, NULL, NULL);
+	return lcuT_resetcohdlk(L, -1, sched, k_setupproc, NULL, NULL);
 }
 
 

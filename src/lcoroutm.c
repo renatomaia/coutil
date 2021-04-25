@@ -5,14 +5,14 @@
 #include <lmemlib.h>
 
 
-typedef struct lcu_SysCoro {
+typedef struct StateCoro {
 	lua_CFunction results;
 	lua_CFunction cancel;
 	uv_work_t work;
-	lua_State *coroutine;
-} lcu_SysCoro;
+	lua_State *L;
+} StateCoro;
 
-#define tosysco(L) ((lcu_SysCoro *)luaL_checkudata(L,1,LCU_SYSCOROCLS))
+#define tostateco(L) ((StateCoro *)luaL_checkudata(L,1,LCU_STATECOROCLS))
 
 
 static int doloaded (lua_State *L, lua_State *NL, int status) {
@@ -24,9 +24,9 @@ static int doloaded (lua_State *L, lua_State *NL, int status) {
 		lua_close(NL);
 		return 2;  /* return nil plus error message */
 	} else {
-		lcu_SysCoro *sysco = lcuT_newobjreq(L, lcu_SysCoro);
-		sysco->coroutine = NL;
-		luaL_setmetatable(L, LCU_SYSCOROCLS);
+		StateCoro *stateco = lcuT_newudreq(L, StateCoro);
+		stateco->L = NL;
+		luaL_setmetatable(L, LCU_STATECOROCLS);
 		return 1;
 	}
 }
@@ -52,21 +52,32 @@ static int coroutine_loadfile (lua_State *L) {
 }
 
 
+static void freestate(StateCoro *stateco) {
+	if (stateco->L) {
+		lua_close(stateco->L);
+		stateco->L = NULL;
+	}
+}
+
+static int freepending(lua_State *L) {
+	return 1;  /* same as 'stateco->cancel == NULL' */
+}
+
+
 /* getmetatable(co).__{gc,close}(co) */
 static int coroutine_gc(lua_State *L) {
-	lcu_SysCoro *sysco = tosysco(L);
-	if (sysco->work.type == UV_WORK) luaL_error(L, "cannot close a running coroutine");
-	lcu_assert(sysco->work.data == NULL);
-	if (sysco->coroutine) {
-		lua_close(sysco->coroutine);
-		sysco->coroutine = NULL;
-	}
+	StateCoro *stateco = tostateco(L);
+	if (stateco->work.type == UV_WORK) stateco->cancel = freepending;  /* lua_close */
+	else freestate(stateco);
 	return 0;
 }
 
 
 /* succ = coroutine.close(co) */
 static int coroutine_close(lua_State *L) {
+	StateCoro *stateco = tostateco(L);
+	if (stateco->work.type == UV_WORK)
+		luaL_error(L, "cannot close a running coroutine");
 	coroutine_gc(L);
 	lua_pushboolean(L, 1);
 	return 1;
@@ -84,10 +95,10 @@ static int suspended (lua_State *co) {
 
 /* status = coroutine.status(co) */
 static int coroutine_status(lua_State *L) {
-	lcu_SysCoro *sysco = tosysco(L);
-	if (sysco->work.type == UV_WORK) lua_pushliteral(L, "running");
+	StateCoro *stateco = tostateco(L);
+	if (stateco->work.type == UV_WORK) lua_pushliteral(L, "running");
 	else {
-		lua_State *co = sysco->coroutine;
+		lua_State *co = stateco->L;
 		if (co && suspended(co)) lua_pushliteral(L, "suspended");
 		else lua_pushliteral(L, "dead");
 	}
@@ -100,8 +111,8 @@ static int returnvalues (lua_State *L) {
 	return lua_gettop(L)-1;  /* return all except the coroutine (arg #1) */
 }
 static void uv_onworking(uv_work_t* request) {
-	lcu_SysCoro *sysco = (lcu_SysCoro *)lcu_toobjreq(request);
-	lua_State *co = sysco->coroutine;
+	StateCoro *stateco = (StateCoro *)lcu_req2ud(request);
+	lua_State *co = stateco->L;
 	int narg = lua_gettop(co);
 	int status;
 	if (lua_status(co) == LUA_OK) --narg;  /* function on stack */
@@ -113,9 +124,9 @@ static void uv_onworking(uv_work_t* request) {
 static void uv_onworked(uv_work_t* work, int status) {
 	uv_loop_t *loop = work->loop;
 	uv_req_t *request = (uv_req_t *)work;
-	lcu_SysCoro *sysco = (lcu_SysCoro *)lcu_toobjreq(request);
-	lua_State *co = sysco->coroutine;
-	lua_State *thread = lcuU_endobjreqop(loop, request);
+	StateCoro *stateco = (StateCoro *)lcu_req2ud(request);
+	lua_State *co = stateco->L;
+	lua_State *thread = lcuU_endudreq(loop, request);
 	if (thread) {
 		int nret;
 		if (status == UV_ECANCELED) {
@@ -143,16 +154,19 @@ static void uv_onworked(uv_work_t* work, int status) {
 				nret = 2;
 			}
 		}
-		lcuU_resumeobjreqop(loop, request, nret);
+		lcuU_resumeudreq(loop, request, nret);
 	} else {
 		/* if not executed, remove arguments (LUA_OK when function is on stack) */
 		lua_settop(co, status == UV_ECANCELED && lua_status(co) == LUA_OK);
 	}
+	if (stateco->cancel == freepending) {
+		freestate(stateco);
+		stateco->cancel = NULL;
+	}
 }
 static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
-	uv_work_t *work = (uv_work_t *)request;
-	lcu_SysCoro *sysco = (lcu_SysCoro *)lua_touserdata(L, 1);
-	lua_State *co = sysco->coroutine;
+	StateCoro *stateco = (StateCoro *)lua_touserdata(L, 1);
+	lua_State *co = stateco->L;
 	int narg = lua_gettop(L)-1;
 	int err;
 	if (lcuL_movefrom(co, L, narg, "argument") != LUA_OK) {
@@ -162,7 +176,7 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		lua_pop(co, 1);
 		return 2;
 	}
-	err = uv_queue_work(loop, work, uv_onworking, uv_onworked);
+	err = uv_queue_work(loop, &stateco->work, uv_onworking, uv_onworked);
 	if (err < 0) {
 		lua_pop(co, narg);  /* restore coroutine stack */
 		return lcuL_pusherrres(L, err);
@@ -170,22 +184,22 @@ static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	return -1;  /* yield on success */
 }
 static int system_resume (lua_State *L) {
-	lcu_SysCoro *sysco = tosysco(L);
-	if (sysco->work.type == UV_WORK) {
+	StateCoro *stateco = tostateco(L);
+	if (stateco->work.type == UV_WORK) {
 		lua_pushboolean(L, 0);
 		lua_pushstring(L, "cannot resume running coroutine");
 		return 2;
 	}
-	if (sysco->coroutine == NULL || !suspended(sysco->coroutine)) {
+	if (stateco->L == NULL || !suspended(stateco->L)) {
 		lua_pushboolean(L, 0);
 		lua_pushstring(L, "cannot resume dead coroutine");
 		return 2;
 	}
-	return lcuT_resetobjreqopk(L, lcu_getsched(L),
-	                              (lcu_ObjectRequest *)sysco,
-	                              k_setupwork,
-	                              returnvalues,
-	                              NULL);
+	return lcuT_resetudreqk(L, lcu_getsched(L),
+	                           (lcu_UdataRequest *)stateco,
+	                           k_setupwork,
+	                           returnvalues,
+	                           NULL);
 }
 
 
@@ -213,7 +227,7 @@ LCUMOD_API int luaopen_coutil_coroutine (lua_State *L) {
 	};
 	lcuCS_tochannelmap(L);  /* map shall be GC after 'syscoro' on Lua close */
 	luaL_newlib(L, modf);
-	luaL_newmetatable(L, LCU_SYSCOROCLS);
+	luaL_newmetatable(L, LCU_STATECOROCLS);
 	luaL_setfuncs(L, meta, 0);  /* add metamethods to metatable */
 	lua_pushvalue(L, -2);  /* push library */
 	lua_setfield(L, -2, "__index");  /* metatable.__index = library */

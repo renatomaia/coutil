@@ -1,7 +1,7 @@
 local system = require "coutil.system"
 local threads = require "coutil.threads"
 local channel = require "coutil.channel"
-local preemptco = require "coutil.coroutine"
+local stateco = require "coutil.coroutine"
 
 local waitscript = os.tmpname()
 do
@@ -518,15 +518,15 @@ do case "inherit preload"
 	done()
 end
 
-do case "system coroutine"
+do case "state coroutine"
 	spawn(function ()
-		local syscoro = preemptco.load[[
+		local co = stateco.load[[
 			local _G = require "_G"
 			local threads = require "coutil.threads"
 			assert(threads.create() == nil)
 			return true
 		]]
-		local ok, res = system.resume(syscoro)
+		local ok, res = system.resume(co)
 		assert(ok == true and res == true)
 	end)
 
@@ -954,12 +954,12 @@ do case "queueing on endpoints"
 		function (t, ...)
 			assert(t:dostring(channelchunk, "@chunk", "t", ...))
 		end,
-		-- system coroutine
+		-- state coroutine
 		function (_, ...)
 			spawn(function (...)
-				local sysco = assert(preemptco.load(channelchunk, "@chunk", "t"))
-				assert(system.resume(sysco, ...))
-				assert(sysco:close(...))
+				local co = assert(stateco.load(channelchunk, "@chunk", "t"))
+				assert(system.resume(co, ...))
+				assert(co:close(...))
 			end, ...)
 		end,
 		-- coroutine
@@ -1075,12 +1075,12 @@ do case "transfer values"
 			local chunk = makechannelchunk(args, rets)
 			assert(t:dostring(chunk, "@chunk", "t", ...))
 		end,
-		-- system coroutine
+		-- state coroutine
 		function (_, args, rets, ...)
 			spawn(function (...)
 				local chunk = makechannelchunk(args, rets)
-				local sysco = assert(preemptco.load(chunk, "@chunk", "t"))
-				assert(system.resume(sysco, ...))
+				local co = assert(stateco.load(chunk, "@chunk", "t"))
+				assert(system.resume(co, ...))
 			end, ...)
 		end,
 		-- coroutine
@@ -1159,12 +1159,12 @@ do case "transfer errors"
 			local chunk = makechannelchunk(args, errmsg)
 			assert(t:dostring(chunk, "@chunk", "t", ...))
 		end,
-		-- system coroutine
+		-- state coroutine
 		function (_, args, errmsg, ...)
 			local chunk = makechannelchunk(args, errmsg)
 			spawn(function (...)
-				local sysco = assert(preemptco.load(chunk, "@chunk", "t"))
-				assert(system.resume(sysco, ...))
+				local co = assert(stateco.load(chunk, "@chunk", "t"))
+				assert(system.resume(co, ...))
 			end, ...)
 		end,
 		-- coroutine
@@ -1238,12 +1238,12 @@ do case "invalid endpoint"
 			local chunk = makechannelchunk(arg, errmsg)
 			assert(t:dostring(chunk, "@chunk", "t", ...))
 		end,
-		-- system coroutine
+		-- state coroutine
 		function (_, arg, errmsg, ...)
 			local chunk = makechannelchunk(arg, errmsg)
 			spawn(function (...)
-				local sysco = assert(preemptco.load(chunk))
-				assert(system.resume(sysco, ...))
+				local co = assert(stateco.load(chunk))
+				assert(system.resume(co, ...))
 			end, ...)
 		end,
 		-- coroutine
@@ -1344,7 +1344,7 @@ do case "resume listed channels"
 		sendsignal(path)
 	]]
 	local channelchunk = utilschunk..[[
-		local name, path = ...
+		local path = ...
 		local _ENV = require "_G"
 		local system = require "coutil.system"
 		local channel = require "coutil.channel"
@@ -1357,7 +1357,7 @@ do case "resume listed channels"
 	local chunks = {
 		function (t, ...)
 			local chunk = utilschunk..[[
-				local name, path = ...
+				local path = ...
 				local _ENV = require "_G"
 				local coroutine = require("coroutine")
 				local name = tostring(coroutine.running())
@@ -1374,13 +1374,13 @@ do case "resume listed channels"
 		end,
 		function (_, ...)
 			spawn(function (...)
-				local sysco = assert(preemptco.load(channelchunk, "@chunk", "t"))
-				assert(system.resume(sysco, ...))
+				local co = assert(stateco.load(channelchunk, "@chunk", "t"))
+				assert(system.resume(co, ...))
 			end, ...)
 		end,
-		function (_, name, path)
-			local main = assert(load("local system, channel, name, path = ... "..body))
-			spawn(main, system, channel, name, path)
+		function (_, ...)
+			local main = assert(load("local system, channel, path = ... "..body))
+			spawn(main, system, channel, ...)
 		end,
 	}
 
@@ -1393,7 +1393,7 @@ do case "resume listed channels"
 
 			assert(next(channel.getnames()) == nil)
 
-			chunk(t, name, path)
+			chunk(t, path)
 			waitsignal(path, system.suspend)
 			local names = channel.getnames()
 			local name, value = next(names)
@@ -1476,9 +1476,9 @@ do case "collect running sysco waiting channel"
 	dostring(utilschunk..[=[
 		local system = require "coutil.system"
 		local channel = require "coutil.channel"
-		local preemptco = require "coutil.coroutine"
+		local stateco = require "coutil.coroutine"
 		spawn(function ()
-			local sysco = assert(preemptco.load(utilschunk..[[
+			local co = assert(stateco.load(utilschunk..[[
 				local coroutine = require "coroutine"
 				local system = require "coutil.system"
 				local channel = require "coutil.channel"
@@ -1487,7 +1487,7 @@ do case "collect running sysco waiting channel"
 				end)
 				system.run()
 			]]))
-			assert(system.resume(sysco))
+			assert(system.resume(co))
 		end)
 		local ch = channel.create("channel")
 		repeat until ch:sync()

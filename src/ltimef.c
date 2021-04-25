@@ -44,25 +44,25 @@ static int returntrue (lua_State *L) {
 	return 1;
 }
 static void uv_onidle (uv_idle_t *handle) {
-	lcuU_resumethrop((uv_handle_t *)handle, 0);
+	lcuU_resumecohdl((uv_handle_t *)handle, 0);
 }
 static int k_setupidle (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	if (loop) {
 		uv_idle_t *idle = (uv_idle_t *)handle;
-		int err = lcuT_armthrop(L, uv_idle_init(loop, idle));
+		int err = lcuT_armcohdl(L, uv_idle_init(loop, idle));
 		if (err >= 0) err = uv_idle_start(idle, uv_onidle);
 		if (err < 0) return lcuL_pusherrres(L, err);
 	}
 	return -1;  /* yield on success */
 }
 static void uv_ontimer (uv_timer_t *handle) {
-	lcuU_resumethrop((uv_handle_t *)handle, 0);
+	lcuU_resumecohdl((uv_handle_t *)handle, 0);
 }
 static int k_setuptimer (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	uv_timer_t *timer = (uv_timer_t *)handle;
 	uint64_t msecs = (uint64_t)(lua_tonumber(L, 1)*1e3);
 	int err;
-	if (loop) err = lcuT_armthrop(L, uv_timer_init(loop, timer));
+	if (loop) err = lcuT_armcohdl(L, uv_timer_init(loop, timer));
 	else if (uv_timer_get_repeat(timer) != msecs) err = uv_timer_stop(timer);
 	else return -1;  /* yield on success */
 	if (err >= 0) err = uv_timer_start(timer, uv_ontimer, msecs, msecs);
@@ -73,9 +73,9 @@ static int system_suspend (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
 	lua_Number delay = luaL_optnumber(L, 1, 0);
 	if (delay > 0) {
-		return lcuT_resetthropk(L, UV_TIMER, sched, k_setuptimer, returntrue, NULL);
+		return lcuT_resetcohdlk(L, UV_TIMER, sched, k_setuptimer, returntrue, NULL);
 	} else {
-		return lcuT_resetthropk(L, UV_IDLE, sched, k_setupidle, returntrue, NULL);
+		return lcuT_resetcohdlk(L, UV_IDLE, sched, k_setupidle, returntrue, NULL);
 	}
 }
 

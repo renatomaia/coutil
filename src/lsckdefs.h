@@ -7,28 +7,28 @@
 
 typedef struct lcu_UdpSocket {
 	int flags;
-	lcu_ObjectAction stop;
+	lcu_HandleAction stop;
 	lua_CFunction step;
 	uv_udp_t handle;
 } lcu_UdpSocket;
 
 typedef struct lcu_TcpSocket {
 	int flags;
-	lcu_ObjectAction stop;
+	lcu_HandleAction stop;
 	lua_CFunction step;
 	uv_tcp_t handle;
 } lcu_TcpSocket;
 
 typedef struct lcu_PipeSocket {
 	int flags;
-	lcu_ObjectAction stop;
+	lcu_HandleAction stop;
 	lua_CFunction step;
 	uv_pipe_t handle;
 } lcu_PipeSocket;
 
 typedef struct lcu_TermSocket {
 	int flags;
-	lcu_ObjectAction stop;
+	lcu_HandleAction stop;
 	lua_CFunction step;
 	uv_tty_t handle;
 } lcu_TermSocket;

@@ -1,7 +1,7 @@
 local memory = require "memory"
 local system = require "coutil.system"
 local channel = require "coutil.channel"
-local preemptco = require "coutil.coroutine"
+local stateco = require "coutil.coroutine"
 
 local case, done, casesuffix = case, done do
 	local currentop
@@ -34,7 +34,7 @@ local oncallbacks do
 	end
 end
 
-local pco = preemptco.load([[
+local sco = stateco.load([[
 local coroutine = require "coroutine"
 repeat until coroutine.yield()
 ]])
@@ -145,7 +145,7 @@ local function testOpBeforeReqOp(op) -- O2,C5,Y2,O10,F2,C1,Y1
 		a = 1
 		coroutine.yield() -- Y2
 		a = 2
-		system.resume(pco) -- O10
+		system.resume(sco) -- O10
 		a = true
 	end)
 	assert(a == 0)
@@ -278,7 +278,7 @@ local function testOpAndReqOp(op) -- O2,C5,O7,F2,C1,Y1
 		a = 0
 		op:await(1) -- O2
 		a = 1
-		assert(system.resume(pco)) -- O7
+		assert(system.resume(sco)) -- O7
 		a = true
 	end) -- Y1
 	assert(a == 0)
@@ -388,7 +388,7 @@ local function testOpResumedAndReqOp(op) -- O2,R4,O10,F2,C1,Y1
 		a = 0
 		op:await(1, "fail") -- O1|O2
 		a = 1
-		system.resume(pco) -- O5|O10
+		system.resume(sco) -- O5|O10
 		a = true
 	end)
 	assert(a == 0)
@@ -627,7 +627,7 @@ do newtest "coroutine" ---------------------------------------------------------
 		until coroutine.yield(token) ~= cfgid
 	]]
 	testOp(newTestOpCase{
-		coroutines = { preemptco.load(chunk), preemptco.load(chunk) },
+		coroutines = { stateco.load(chunk), stateco.load(chunk) },
 		paths = { os.tmpname(), os.tmpname() },
 		await = function (self, cfgid)
 			assert(io.open(self.paths[cfgid], "w")):close()

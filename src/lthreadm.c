@@ -7,6 +7,7 @@
 
 
 
+#define TPOOLGCCLS	LCU_PREFIX"lcu_ThreadPool *"
 
 static lcu_ThreadPool *tothreads (lua_State *L, int idx) {
 	lcu_ThreadPool **ref = (lcu_ThreadPool **)luaL_checkudata(L, idx, LCU_THREADSCLS);
@@ -16,7 +17,7 @@ static lcu_ThreadPool *tothreads (lua_State *L, int idx) {
 
 /* getmetatable(tpoolgc).__gc(pool) */
 static int tpoolgc_gc (lua_State *L) {
-	lcu_ThreadPool **ref = (lcu_ThreadPool **)luaL_checkudata(L, 1, LCU_TPOOLGCCLS);
+	lcu_ThreadPool **ref = (lcu_ThreadPool **)luaL_checkudata(L, 1, TPOOLGCCLS);
 	lcuTP_closetpool(*ref);
 	return 0;
 }
@@ -150,7 +151,7 @@ static int threads_create (lua_State *L) {
 				return lcuL_pusherrres(L, err);
 			}
 		}
-		luaL_setmetatable(L, LCU_TPOOLGCCLS);
+		luaL_setmetatable(L, TPOOLGCCLS);
 		lua_pushlightuserdata(L, pool);
 		lua_insert(L, -2);
 		lua_settable(L, LUA_REGISTRYINDEX);
@@ -191,7 +192,7 @@ LCUMOD_API int luaopen_coutil_threads (lua_State *L) {
 	};
 	lcuCS_tochannelmap(L);  /* map shall be GC after 'threads' on Lua close */
 	luaL_newlib(L, modulef);
-	luaL_newmetatable(L, LCU_TPOOLGCCLS)  /* metatable for tpool sentinel */;
+	luaL_newmetatable(L, TPOOLGCCLS)  /* metatable for tpool sentinel */;
 	luaL_setfuncs(L, poolrefmt, 0);  /* add metamethods to metatable */
 	lua_pop(L, 1);  /* pop metatable */
 	luaL_newmetatable(L, LCU_THREADSCLS);  /* metatable for thread pools */

@@ -35,98 +35,94 @@ LCUI_FUNC int lcu_pushopvalue (lua_State *L);
 
 typedef int (*lcu_RequestSetup) (lua_State *L, uv_req_t *r, uv_loop_t *l);
 
-LCUI_FUNC int lcuT_resetreqopk (lua_State *L,
+LCUI_FUNC int lcuT_resetcoreqk (lua_State *L,
                                 lcu_Scheduler *sched,
                                 lcu_RequestSetup setup,
                                 lua_CFunction results,
                                 lua_CFunction cancel);
 
-LCUI_FUNC lua_State *lcuU_endreqop (uv_loop_t *loop, uv_req_t *request);
+LCUI_FUNC lua_State *lcuU_endcoreq (uv_loop_t *loop, uv_req_t *request);
 
-LCUI_FUNC void lcuU_resumereqop (uv_loop_t *loop, uv_req_t *request, int narg);
+LCUI_FUNC void lcuU_resumecoreq (uv_loop_t *loop, uv_req_t *request, int narg);
 
 /* thread operations */
 
 typedef int (*lcu_HandleSetup) (lua_State *L, uv_handle_t *h, uv_loop_t *l);
 
-LCUI_FUNC int lcuT_resetthropk (lua_State *L,
+LCUI_FUNC int lcuT_resetcohdlk (lua_State *L,
                                 uv_handle_type type,
                                 lcu_Scheduler *sched,
                                 lcu_HandleSetup setup,
                                 lua_CFunction results,
                                 lua_CFunction cancel);
 
-LCUI_FUNC int lcuT_armthrop (lua_State *L, int err);
+LCUI_FUNC int lcuT_armcohdl (lua_State *L, int err);
 
-LCUI_FUNC int lcuU_endthrop (uv_handle_t *handle);
+LCUI_FUNC int lcuU_endcohdl (uv_handle_t *handle);
 
-LCUI_FUNC void lcuU_resumethrop (uv_handle_t *handle, int narg);
+LCUI_FUNC void lcuU_resumecohdl (uv_handle_t *handle, int narg);
 
 /* object operations */
 
-#define LCU_OBJCLOSEDFLAG	0x01
+#define LCU_HANDLECLOSEDFLAG	0x01
 
-typedef int (*lcu_ObjectAction) (uv_handle_t *h);
+typedef int (*lcu_HandleAction) (uv_handle_t *h);
 
-typedef struct lcu_Object {
+typedef struct lcu_UdataHandle {
 	int flags;
-	lcu_ObjectAction stop;
+	lcu_HandleAction stop;
 	lua_CFunction step;
 	uv_handle_t handle;
-} lcu_Object;
+} lcu_UdataHandle;
 
-#define lcu_toobjhdl(O)	(&(O)->handle)
+#define lcu_ud2hdl(O)	(&(O)->handle)
 
-#define lcu_tohdlobj(H) ({ const char *p = (const char *)H; \
-                           (lcu_Object *)(p-offsetof(lcu_Object, H)); })
+#define lcu_hdl2ud(H) ({ const char *p = (const char *)H; \
+                           (lcu_UdataHandle *)(p-offsetof(lcu_UdataHandle, H)); })
 
-LCUI_FUNC lcu_Object *lcuT_createobj (lua_State *L, size_t sz, const char *cls);
+LCUI_FUNC lcu_UdataHandle *lcuT_createudhdl (lua_State *L, size_t sz, const char *cls);
 
-#define lcuT_newobject(L,T,C)	(T *)lcuT_createobj(L,sizeof(T),C)
+#define lcuT_newudhdl(L,T,C)	(T *)lcuT_createudhdl(L,sizeof(T),C)
 
-LCUI_FUNC int lcu_closeobj (lua_State *L, int idx);
+LCUI_FUNC int lcu_closeudhdl (lua_State *L, int idx);
 
-LCUI_FUNC lcu_Object *lcu_openedobj (lua_State *L, int arg, const char *class);
+LCUI_FUNC lcu_UdataHandle *lcu_openedudhdl (lua_State *L, int arg, const char *class);
 
-LCUI_FUNC int lcuT_resetobjopk (lua_State *L,
-                                lcu_Object *obj,
-                                lcu_ObjectAction start,
-                                lcu_ObjectAction stop,
+LCUI_FUNC int lcuT_resetudhdlk (lua_State *L,
+                                lcu_UdataHandle *obj,
+                                lcu_HandleAction start,
+                                lcu_HandleAction stop,
                                 lua_CFunction step);
 
-LCUI_FUNC void lcuU_resumeobjop (uv_handle_t *handle, int narg);
+LCUI_FUNC void lcuU_resumeudhdl (uv_handle_t *handle, int narg);
 
 
 
-typedef struct lcu_ObjectRequest {
+typedef struct lcu_UdataRequest {
 	lua_CFunction results;
 	lua_CFunction cancel;
 	uv_req_t request;
-} lcu_ObjectRequest;
+} lcu_UdataRequest;
 
-#define lcu_toobjrequest(O)	(&(O)->request)
+#define lcu_ud2req(O)	(&(O)->request)
 
-#define lcu_toobjreq(H) ({ const char *p = (const char *)H; \
-                           (lcu_ObjectRequest *)(p-offsetof(lcu_ObjectRequest, H)); })
+#define lcu_req2ud(H) ({ const char *p = (const char *)H; \
+                           (lcu_UdataRequest *)(p-offsetof(lcu_UdataRequest, H)); })
 
-LCUI_FUNC lcu_ObjectRequest *lcuT_createobjreq (lua_State *L, size_t sz);
+LCUI_FUNC lcu_UdataRequest *lcuT_createudreq (lua_State *L, size_t sz);
 
-#define lcuT_newobjreq(L,T)	(T *)lcuT_createobjreq(L,sizeof(T))
+#define lcuT_newudreq(L,T)	(T *)lcuT_createudreq(L,sizeof(T))
 
-LCUI_FUNC int lcu_closeobjreq (lua_State *L, int idx);
+LCUI_FUNC int lcuT_resetudreqk (lua_State *L,
+                                lcu_Scheduler *sched,
+                                lcu_UdataRequest *objreq,
+                                lcu_RequestSetup setup,
+                                lua_CFunction results,
+                                lua_CFunction cancel);
 
-LCUI_FUNC lcu_ObjectRequest *lcu_openedobjreq (lua_State *L, int arg, const char *class);
+LCUI_FUNC lua_State *lcuU_endudreq (uv_loop_t *loop, uv_req_t *request);
 
-LCUI_FUNC int lcuT_resetobjreqopk (lua_State *L,
-                                   lcu_Scheduler *sched,
-                                   lcu_ObjectRequest *objreq,
-                                   lcu_RequestSetup setup,
-                                   lua_CFunction results,
-                                   lua_CFunction cancel);
-
-LCUI_FUNC lua_State *lcuU_endobjreqop (uv_loop_t *loop, uv_req_t *request);
-
-LCUI_FUNC void lcuU_resumeobjreqop (uv_loop_t *loop, uv_req_t *request, int narg);
+LCUI_FUNC void lcuU_resumeudreq (uv_loop_t *loop, uv_req_t *request, int narg);
 
 
 
