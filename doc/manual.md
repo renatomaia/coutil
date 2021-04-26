@@ -1,131 +1,45 @@
 Summary
 =======
 
-1. [Await Function](#await-function)
-2. [Independent State](#independent-state)
-3. [Coroutine Finalizers](#coroutine-finalizers)
-4. [Events](#events)
-5. [Queued Events](#queued-events)
-6. [Mutex](#mutex)
-7. [Promises](#promises)
-8. [Channels](#channels)
-9. [Thread Pools](#thread-pools)
-10. [State Coroutines](#state-coroutines)
-11. [System Features](#system-features)
+- [Basic Concepts](#basic-concepts)
+	- [Await Function](#await-function)
+	- [Blocking Mode](#blocking-mode)
+	- [Independent State](#independent-state)
+	- [Transferable Values](#transferable-values)
+	- [Object-Oriented Style](#objectoriented-style)
+- [Multithreading](#multithreading)
+	- [Coroutine Finalizers](#coroutine-finalizers)
+	- [State Coroutines](#state-coroutines)
+	- [Thread Pools](#thread-pools)
+- [Synchronization](#synchronization)
+	- [Channels](#channels)
+	- [Events](#events)
+	- [Queued Events](#queued-events)
+	- [Mutex](#mutex)
+	- [Promises](#promises)
+- [System Features](#system-features)
+	- [Event Processing](#event-processing)
+	- [Thread Synchronization](#thread-synchronization)
+	- [Time Measure](#time-measure)
+	- [System Processes](#system-processes)
+	- [Network & IPC](#network--ipc)
+	- [File System](#file-system)
+	- [System Information](#system-information)
+- [Index](#index)
 
-Index
-=====
+---
 
-- [`coutil.channel`](#channels)
-	- [`channel.close`](#channelclose-ch)
-	- [`channel.create`](#channelcreate-name)
-	- [`channel.getnames`](#channelgetnames-names)
-	- [`channel.sync`](#channelsync-ch-endpoint-)
-- [`coutil.coroutine`](#state-coroutines)
-	- [`coroutine.close`](#coroutineclose-stateco)
-	- [`coroutine.load`](#coroutineload-chunk--chunkname--mode)
-	- [`coroutine.loadfile`](#coroutineloadfile-filepath--mode)
-	- [`coroutine.status`](#coroutinestatus-stateco)
-- [`coutil.event`](#events)
-	- [`event.await`](#eventawait-e)
-	- [`event.awaitall`](#eventawaitall-e1-)
-	- [`event.awaitany`](#eventawaitany-e1-)
-	- [`event.emitall`](#eventemitall-e-)
-	- [`event.emitone`](#eventemitone-e-)
-	- [`event.pending`](#eventpending-e)
-- [`coutil.mutex`](#mutex)
-	- [`mutex.islocked`](#mutexislocked-e)
-	- [`mutex.lock`](#mutexlock-e)
-	- [`mutex.ownlock`](#mutexownlock-e)
-	- [`mutex.unlock`](#mutexunlock-e)
-- [`coutil.promise`](#promises)
-	- [`promise.awaitall`](#promiseawaitall-p-)
-	- [`promise.awaitany`](#promiseawaitany-p-)
-	- [`promise.create`](#promisecreate-)
-	- [`promise.onlypending`](#promiseonlypending-p-)
-	- [`promise.pickready`](#promisepickready-p-)
-- [`coutil.queued`](#queued-events)
-	- [`queued.await`](#queuedawait-e)
-	- [`queued.awaitall`](#queuedawaitall-e1-)
-	- [`queued.awaitany`](#queuedawaitany-e1-)
-	- [`queued.emitall`](#queuedemitall-e-)
-	- [`queued.emitone`](#queuedemitone-e-)
-	- [`queued.isqueued`](#queuedisqueued-e)
-	- [`queued.pending`](#queuedpending-e)
-- [`coutil.spawn`](#coroutine-finalizers)
-	- [`spawn.catch`](#spawncatch-h-f-)
-	- [`spawn.trap`](#spawntrap-h-f-)
-- [`coutil.system`](#system-features)
-	- [`system.address`](#systemaddress-type--data--port--mode)
-	- [`system.awaitch`](#systemawaitch-ch-endpoint-)
-	- [`system.awaitsig`](#systemawaitsig-signal)
-	- [`system.block`](#systemblock-seconds)
-	- [`system.cpuinfo`](#systemcpuinfo-which)
-	- [`system.emitsig`](#systememitsig-pid-signal)
-	- [`system.execute`](#systemexecute-cmd-)
-	- [`system.filebits`](#systemfilebits)
-	- [`system.fileinfo`](#systemfileinfo-path-mode)
-	- [`system.findaddr`](#systemfindaddr-name--service--mode)
-		- [`addresses:close`](#addressesclose-)
-		- [`addresses:getaddress`](#addressesgetaddress-address)
-		- [`addresses:getdomain`](#addressesgetdomain-)
-		- [`addresses:getsocktype`](#addressesgetsocktype-)
-		- [`addresses:next`](#addressesnext-)
-		- [`addresses:reset`](#addressesreset-)
-	- [`system.getdir`](#systemgetdir-)
-	- [`system.getenv`](#systemgetenv-name)
-	- [`system.getpriority`](#systemgetpriority-pid)
-	- [`system.halt`](#systemhalt-)
-	- [`system.isrunning`](#systemisrunning-)
-	- [`system.listdir`](#systemlistdir-path--mode)
-	- [`system.nameaddr`](#systemnameaddr-address--mode)
-	- [`system.nanosecs`](#systemnanosecs-)
-	- [`system.netinfo`](#systemnetinfo-option-which)
-	- [`system.openfile`](#systemopenfile-path--mode--perm)
-		- [`file:close`](#fileclose-)
-		- [`file:info`](#fileinfo-mode)
-		- [`file:read`](#fileread-buffer--i--j--offset--mode)
-		- [`file:write`](#filewrite-data--i--j--offset--mode)
-	- [`system.packenv`](#systempackenv-vars)
-	- [`system.procinfo`](#systemprocinfo-which)
-	- [`system.random`](#systemrandom-buffer--i--j--mode)
-	- [`system.resume`](#systemresume-stateco-)
-	- [`system.run`](#systemrun-mode)
-	- [`system.setdir`](#systemsetdir-path)
-	- [`system.setenv`](#systemsetenv-name-value)
-	- [`system.setpriority`](#systemsetpriority-pid-value)
-	- [`system.socket`](#systemsocket-type-domain)
-		- [`socket:accept`](#socketaccept-)
-		- [`socket:bind`](#socketbind-address)
-		- [`socket:close`](#socketclose-)
-		- [`socket:connect`](#socketconnect-address)
-		- [`socket:getaddress`](#socketgetaddress-site--address)
-		- [`socket:getdomain`](#socketgetdomain-)
-		- [`socket:listen`](#socketlisten-backlog)
-		- [`socket:receive`](#socketreceive-buffer--i--j--address)
-		- [`socket:send`](#socketsend-data--i--j--address)
-		- [`socket:setoption`](#socketsetoption-name-value-)
-		- [`socket:shutdown`](#socketshutdown-)
-	- [`system.suspend`](#systemsuspend-seconds)
-	- [`system.time`](#systemtime-mode)
-	- [`system.unpackenv`](#systemunpackenv-env--tab)
-- [`coutil.threads`](#thread-pools)
-	- [`threads.close`](#threadsclose-pool)
-	- [`threads.count`](#threadscount-pool-options)
-	- [`threads.create`](#threadscreate-size)
-	- [`threads.dofile`](#threadsdofile-pool-filepath--mode-)
-	- [`threads.dostring`](#threadsdostring-pool-chunk--chunkname--mode-)
-	- [`threads.resize`](#threadsresize-pool-size--create)
+Basic Concepts
+==============
 
-Contents
-========
+This section describes some basic concepts pertaining the modules API described in the following sections.
 
 Await Function
 --------------
 
 An _await function_ [suspends](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) the execution of the calling coroutine
 (yields no value),
-and also implies that the coroutine will be resumed on some specific condition.
+but also registers the coroutine to be resumed implicitly on some specific condition.
 
 Coroutines executing an _await function_ can be resumed explicitly by [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume).
 In such case,
@@ -133,16 +47,24 @@ the _await function_ returns the values provided to the resume.
 Otherwise,
 the _await function_ returns as described in the following sections.
 In any case,
-the coroutine will not be implicitly resumed after the _await function_ returns.
+the coroutine is not registered to be implicitly resumed after the _await function_ returns.
+
+Blocking Mode
+-------------
+
+Some [await functions](#await-function) accept an argument with character `~` to avoid the function to yield.
+In such case,
+the function works like ordinary functions blocking the entire Lua state execution until its completion,
+thus preventing any other coroutine to execute.
 
 Independent State
 -----------------
 
-Code chunks that run on a separate system thread are loaded into an [independent state](http://www.lua.org/manual/5.4/manual.html#lua_newstate) with only the [`package`](http://www.lua.org/manual/5.4/manual.html#6.3) library loaded.
-This independent state inherits any [preloaded modules](http://www.lua.org/manual/5.4/manual.html#pdf-package.preload) from the caller of the function that creates the independent state.
+Code chunks that run on a separate system thread are loaded into a independent [Lua state](http://www.lua.org/manual/5.4/manual.html#lua_newstate) with only the [`package`](http://www.lua.org/manual/5.4/manual.html#6.3) library loaded.
+This _independent state_ inherits any [preloaded modules](http://www.lua.org/manual/5.4/manual.html#pdf-package.preload) from the caller of the function that creates it.
 Moreover,
 all other [standard libraries](http://www.lua.org/manual/5.4/manual.html#6) are also provided as preloaded modules.
-Therefore function [`require`](http://www.lua.org/manual/5.4/manual.html#pdf-require) can be called in the independent state to load all other standard libraries.
+Therefore function [`require`](http://www.lua.org/manual/5.4/manual.html#pdf-require) can be called in the _independent state_ to load all other standard libraries.
 In particular, [basic functions](http://www.lua.org/manual/5.4/manual.html#6.1) can be loaded using `require "_G"`.
 
 Just bare in mind that requiring the preloaded modules for the standard libraries does not set their corresponding global tables.
@@ -165,10 +87,29 @@ for _, module in ipairs{
 end
 ```
 
-**Note**: These independent states run in a separate thread,
+**Note**: These _independent states_ run in a separate thread,
 but share the same [memory allocation](http://www.lua.org/manual/5.4/manual.html#lua_Alloc) and [panic function](http://www.lua.org/manual/5.4/manual.html#lua_atpanic) of the caller.
 Therefore, it is required that thread-safe implementations are used,
 such as the ones used in the [standard standalone interpreter](http://www.lua.org/manual/5.4/manual.html#7).
+
+Transferable Values
+-------------------
+
+Values that are transfered between [independent states](#independent-state) are copied or recreated in the target state.
+Only _nil_, _boolean_, _number_, _string_ and _light userdata_ values are allowed as _transferable values_.
+_Strings_ in particular are replicated in every state they are transfered to.
+
+Object-Oriented Style
+---------------------
+
+Some modules that create objects also set a metatable for these objects,
+where the `__index` field points to the table with all the functions of the module.
+Therefore, you can use these library functions in object-oriented style.
+
+Multithreading
+==============
+
+This section describes modules for creation of threads of execution of Lua code.
 
 Coroutine Finalizers
 --------------------
@@ -194,6 +135,171 @@ In the latter case,
 `h` is executed in the calling context of the raised error,
 just like a error message handler in `xpcall`.
 Returns the new coroutine.
+
+State Coroutines
+----------------
+
+Module `coutil.coroutine` is similar to module [`coroutine`](http://www.lua.org/manual/5.4/manual.html#6.2),
+but for _state coroutines_.
+In contrast to standard _thread coroutines_ that execute a function in a [Lua thread](http://www.lua.org/manual/5.4/manual.html#lua_newthread),
+_state coroutines_ execute a [chunk](http://www.lua.org/manual/5.4/manual.html#3.3.2) in an [independent state](#independent-state) (see [`system.resume`](#systemresume-co-)).
+
+You can access these library functions on _state coroutines_ in [object-oriented style](#objectoriented-style).
+For instance, `coroutine.status(co, ...)` can be written as `co:status()`, where `co` is a _state coroutine_.
+
+### `coroutine.close (co)`
+
+Similar to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
+but for  [_state coroutines_](#coroutineload-chunk--chunkname--mode).
+
+### `coroutine.load (chunk [, chunkname [, mode]])`
+
+Returns a _state coroutine_ with the code given by the arguments `chunk`, `chunkname`, `mode`,
+which are the same arguments of [`load`](http://www.lua.org/manual/5.4/manual.html#pdf-load).
+
+### `coroutine.loadfile ([filepath [, mode]])`
+
+Similar to [`coroutine.load`](#coroutineload-chunk--chunkname--mode), but gets the chunk from a file.
+The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.4/manual.html#pdf-loadfile).
+
+### `coroutine.status (co)`
+
+Similar to [`coroutine.status`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
+but for [_state coroutines_](#coroutineload-chunk--chunkname--mode).
+In particular,
+it never returns `"normal"`.
+
+Thread Pools
+------------
+
+Module `coutil.threads` provides functions for manipulation of [_thread pools_](#threadscreate-size) that execute code chunks loaded as [_tasks_](#threadsdostring-pool-chunk--chunkname--mode-) using a set of distinct system threads.
+
+You can access these library functions on _thread pools_ in [object-oriented style](#objectoriented-style).
+For instance, `threads.dostring(pool, ...)` can be written as `pool:dostring(...)`, where `pool` is a _thread pool_.
+
+### `threads.create ([size])`
+
+Returns a new _thread pool_ with `size` system threads to execute its [_tasks_](#threadsdostring-pool-chunk--chunkname--mode-).
+
+If `size` is omitted,
+returns a new reference to the _thread pool_ where the calling code is executing,
+or `nil` if it is not executing in a _thread pool_ (_e.g._, the main process thread).
+
+### `threads.resize (pool, size [, create])`
+
+Defines that [_thread pool_](#threadscreate-size) `pool` shall keep `size` system threads to execute its [_tasks_](#threadsdostring-pool-chunk--chunkname--mode-).
+
+If `size` is smaller than the current number of threads,
+the exceeding threads are destroyed at the rate they are released from the _tasks_ currently executing in `pool`.
+Otherwise, new threads are created on demand until the defined value is reached.
+Unless `create` evaluates to `true`,
+in which case new threads are created immediatelly to reach the defined value.
+
+### `threads.count (pool, options)`
+
+Returns numbers corresponding to the ammount of components in [_thread pool_](#threadscreate-size) `pool` according to the following characters present in string `options`:
+
+- `n`: the total number of [_tasks_](#threadsdostring-pool-chunk--chunkname--mode-).
+- `r`: the number of _tasks_ currently executing.
+- `p`: the number of _tasks_ pending to be executed.
+- `s`: the number of _tasks_ suspended on a [channel](#channelcreate-name).
+- `e`: the expected number of system threads.
+- `a`: the actual number of system threads.
+
+### `threads.dostring (pool, chunk [, chunkname [, mode, ...]])`
+
+Loads a chunk in an [independent state](#independent-state) as a new _task_ to be executed by the system threads from [_thread pool_](#threadscreate-size) `pool`.
+It starts as soon as a system thread is available.
+
+Arguments `chunk`, `chunkname`, `mode` are the same of [`load`](http://www.lua.org/manual/5.4/manual.html#pdf-load).
+Arguments `...` are [transferable values](#transferable-values) passed to the loaded chunk.
+
+Whenever the loaded `chunk` [yields](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) it reschedules itself as pending to be resumed,
+and releases its running system thread.
+
+Execution errors in the loaded `chunk` terminate the _task_,
+and gerenate a [warning](http://www.lua.org/manual/5.4/manual.html#pdf-warn).
+
+Returns `true` if `chunk` is loaded successfully.
+
+**Note**: The loaded `chunk` can [yield](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) a string with a channel name followed by an endpoint name and the other arguments of [`system.awaitch`](#systemawaitch-ch-endpoint-) to suspend the _task_ awaiting on a channel without the need to load other modules.
+In such case,
+[coroutine.yield](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) returns just like [`system.awaitch`](#systemawaitch-ch-endpoint-).
+
+### `threads.dofile (pool, filepath [, mode, ...])`
+
+Similar to [`threads:dostring`](#threadsdostring-pool-chunk--chunkname--mode-), but gets the chunk from a file.
+The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.4/manual.html#pdf-loadfile).
+
+### `threads.close (pool)`
+
+When this function is called from a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) of [_thread pool_](#threadscreate-size) `pool`
+(_i.e._ using a reference obtained by calling [`system.threads()`](#threadscreate-size) with no arguments),
+it has no effect other than prevent further use of `pool`.
+
+Otherwise, it waits until there are either no more _tasks_ or no more system threads,
+and closes `pool` releasing all of its underlying resources.
+
+Note that when `pool` is garbage collected before this function is called,
+it will retain minimum resources until the termination of the Lua state it was created.
+To avoid accumulative resource consumption by creation of multiple _thread pools_,
+call this function on every _thread pool_.
+
+Moreover, a _thread pool_ that is not closed will prevent the current Lua state to terminate (_i.e._ `lua_close` to return) until it has either no more tasks or no more system threads.
+
+Returns `true` if this call closes `pool`,
+or `false` if `pool` was already closed.
+
+Synchronization
+===============
+
+This section describes modules for synchronization and communication between distinct threads of execution of Lua code.
+
+Channels
+--------
+
+Module `coutil.channel` provides functions for manipulation of _channels_ to be used to synchronize and transfer values to [independent states](#independent-state).
+
+_Channels_ can be used for standard coroutines.
+However consider using [events](#events) when using only standard thread coroutines.
+
+You can access these library functions on _channels_ in [object-oriented style](#objectoriented-style).
+For instance, `channel.sync(ch, ...)` can be written as `ch:sync(...)`, where `ch` is a _channel_.
+
+### `channel.close (ch)`
+
+Closes channel `ch`.
+Note that channels are automatically closed when they are garbage collected,
+but that takes an unpredictable amount of time to happen. 
+
+In case of success,
+this function returns `true`.
+Otherwise it returns `false` plus an error message.
+
+### `channel.create (name)`
+
+Returns a new _channel_ with name `name`.
+
+Channels with the same name share the same two opposite [_endpoints_](#systemawaitch-ch-endpoint-).
+
+### `channel.getnames ([names])`
+
+Returns a table mapping each name of existing channels to `true`.
+
+If table `names` is provided,
+it checks only the names stored as string keys in `names`,
+and returns `names` with each of its string keys set to either `true`,
+if there is a channel with that name,
+or `nil` otherwise.
+In other words,
+any non existent channel name as a key in `names` is removed from it.
+
+### `channel.sync (ch, endpoint, ...)`
+
+Similar to [`system.awaitch`](#systemawaitch-ch-endpoint-),
+but does not await for a matching call.
+In such case,
+it returns `false` followed by message "empty".
 
 Events
 ------
@@ -398,179 +504,20 @@ Returns all promises `p, ...` that are unfulfilled.
 Returns the first promise `p, ...` that is fulfilled,
 or no value if none of promises `p, ...` is fulfilled.
 
-Channels
---------
-
-Module `coutil.channel` provides functions for manipulation of _channels_ to be used to synchronize and copy values between [independent-states](#independent-state).
-
-This library also sets a metatable for the _channels_,
-where the `__index` field points to the table with all its functions.
-Therefore, you can use the library functions in object-oriented style.
-For instance, `channel.sync(ch, ...)` can be written as `ch:sync(...)`, where `ch` is a _channel_.
-
-### `channel.close (ch)`
-
-Closes channel `ch`.
-Note that channels are automatically closed when they are garbage collected,
-but that takes an unpredictable amount of time to happen. 
-
-In case of success,
-this function returns `true`.
-Otherwise it returns `false` plus an error message.
-
-### `channel.create (name)`
-
-Returns a new _channel_ with name `name`.
-
-Channels with the same name share the same two opposite [_endpoints_](#systemawaitch-ch-endpoint-).
-
-### `channel.getnames ([names])`
-
-Returns a table mapping each name of existing channels to `true`.
-
-If table `names` is provided,
-it checks only the names stored as string keys in `names`,
-and returns `names` with each of its string keys set to either `true`,
-if there is a channel with that name,
-or `nil` otherwise.
-In other words,
-any non existent channel name as a key in `names` is removed from it.
-
-### `channel.sync (ch, endpoint, ...)`
-
-Similar to [`system.awaitch`](#systemawaitch-ch-endpoint-),
-but does not await for a matching call.
-In such case,
-it returns `false` followed by message "empty".
-
-Thread Pools
-------------
-
-Module `coutil.threads` provides functions for manipulation of _thread pools_ that execute code chunks loaded as _tasks_ using a set of distinct system threads.
-
-This library also sets a metatable for the _thread pools_,
-where the `__index` field points to the table with all its functions.
-Therefore, you can use the library functions in object-oriented style.
-For instance, `threads.dostring(pool, ...)` can be written as `pool:dostring(...)`, where `pool` is a _thread pool_.
-
-### `threads.create ([size])`
-
-Returns a new _thread pool_ with `size` system threads to execute its [_tasks_](#threadsdostring-pool-chunk--chunkname--mode-).
-
-If `size` is omitted,
-returns a new reference to the _thread pool_ where the calling code is executing,
-or `nil` if it is not executing in a _thread pool_ (_e.g._, the main process thread).
-
-### `threads.resize (pool, size [, create])`
-
-Defines that [_thread pool_](#threadscreate-size) `pool` shall keep `size` system threads to execute its [_tasks_](#threadsdostring-pool-chunk--chunkname--mode-).
-
-If `size` is smaller than the current number of threads,
-the exceeding threads are destroyed at the rate they are released from the _tasks_ currently executing in `pool`.
-Otherwise, new threads are created on demand until the defined value is reached.
-Unless `create` evaluates to `true`,
-in which case new threads are created immediatelly to reach the defined value.
-
-### `threads.count (pool, options)`
-
-Returns numbers corresponding to the ammount of components in [_thread pool_](#threadscreate-size) `pool` according to the following characters present in string `options`:
-
-- `n`: the total number of [_tasks_](#threadsdostring-pool-chunk--chunkname--mode-).
-- `r`: the number of _tasks_ currently executing.
-- `p`: the number of _tasks_ pending to be executed.
-- `s`: the number of _tasks_ suspended on a [channel](#channelcreate-name).
-- `e`: the expected number of system threads.
-- `a`: the actual number of system threads.
-
-### `threads.dostring (pool, chunk [, chunkname [, mode, ...]])`
-
-Loads a chunk in an [independent state](#independent-state) as a new _task_ to be executed by the system threads from [_thread pool_](#threadscreate-size) `pool`.
-It starts as soon as a system thread is available.
-
-Arguments `chunk`, `chunkname`, `mode` are the same of [`load`](http://www.lua.org/manual/5.4/manual.html#pdf-load).
-Arguments `...` are passed to the loaded chunk,
-but only _nil_, _boolean_, _number_, _string_ and _light userdata_ values are allowed as such arguments.
-
-Whenever the loaded `chunk` [yields](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) it reschedules itself as pending to be resumed,
-and releases its running system thread.
-
-Execution errors in the loaded `chunk` terminate the _task_,
-and gerenate a [warning](http://www.lua.org/manual/5.4/manual.html#pdf-warn).
-
-Returns `true` if `chunk` is loaded successfully.
-
-**Note**: A _task_ can [yield](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) a string with a channel name followed by an endpoint name and the other arguments of [`system.awaitch`](#systemawaitch-ch-endpoint-) to be suspended awaiting on a channel without the need to load other modules.
-In such case,
-[coroutine.yield](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) returns just like [`system.awaitch`](#systemawaitch-ch-endpoint-).
-
-### `threads.dofile (pool, filepath [, mode, ...])`
-
-Similar to [`threads:dostring`](#threadsdostring-pool-chunk--chunkname--mode-), but gets the chunk from a file.
-The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.4/manual.html#pdf-loadfile).
-
-### `threads.close (pool)`
-
-When this function is called from a _task_ of [_thread pool_](#threadscreate-size) `pool`
-(_i.e._ using a reference obtained by calling [`system.threads()`](#threadscreate-size) with no arguments),
-it has no effect other than prevent further use of `pool`.
-
-Otherwise, it waits until there are either no more _tasks_ or no more system threads,
-and closes `pool` releasing all of its underlying resources.
-
-Note that when `pool` is garbage collected before this function is called,
-it will retain minimum resources until the termination of the Lua state it was created.
-To avoid accumulative resource consumption by creation of multiple _thread pools_,
-call this function on every _thread pool_.
-
-Moreover, a _thread pool_ that is not closed will prevent the current Lua state to terminate (_i.e._ `lua_close` to return) until it has either no more tasks or no more system threads.
-
-Returns `true` if this call closes `pool`,
-or `false` if `pool` was already closed.
-
-State Coroutines
-----------------
-
-Module `coutil.coroutine` is similar to module [`coroutine`](http://www.lua.org/manual/5.4/manual.html#6.2),
-but for _state coroutines_.
-Unlike standard _thread coroutines_ that execute a function in a [Lua thread](http://www.lua.org/manual/5.4/manual.html#lua_newthread),
-_state coroutines_ execute a [chunk](http://www.lua.org/manual/5.4/manual.html#3.3.2) in an [independent state](#independent-state) (see [`system.resume`](#systemresume-stateco-)).
-
-This library also sets a metatable for the _state coroutines_,
-where the `__index` field points to the table with all its functions.
-Therefore, you can use the library functions in object-oriented style.
-For instance, `coroutine.resume(co, ...)` can be written as `co:resume(...)`, where `co` is a _state coroutine_.
-
-### `coroutine.close (stateco)`
-
-Similar to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
-but for  [_state coroutines_](#coroutineload-chunk--chunkname--mode).
-
-### `coroutine.load (chunk [, chunkname [, mode]])`
-
-Returns a _state coroutine_ with the code given by the arguments `chunk`, `chunkname`, `mode`,
-which are the same arguments of [`load`](http://www.lua.org/manual/5.4/manual.html#pdf-load).
-
-### `coroutine.loadfile ([filepath [, mode]])`
-
-Similar to [`coroutine.load`](#coroutineload-chunk--chunkname--mode), but gets the chunk from a file.
-The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.org/manual/5.4/manual.html#pdf-loadfile).
-
-### `coroutine.status (stateco)`
-
-Similar to [`coroutine.status`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
-but for [_state coroutines_](#coroutineload-chunk--chunkname--mode).
-In particular,
-it never returns `"normal"`.
-
 System Features
----------------
+===============
 
 Module `coutil.system` provides functions that expose system functionalities,
-including [await functions]("#await") to await on system conditions.
+including [await functions]("#await-function") to await on system conditions.
 
 Unless otherwise stated,
-all there functions return `false` plus an error message on failure,
+all these functions return `false` plus an error message on failure,
 and some truly value on success.
+
+Event Processing
+----------------
+
+This section describes functions of `coutil.system` related to the processing of system events and resumption of coroutines executing [await functions]("#await-function") waiting for such events.
 
 ### `system.run ([mode])`
 
@@ -588,7 +535,7 @@ or waits to resume at least one coroutine that becomes ready.
 Returns `true` if there are remaining awaiting coroutines,
 or `false` otherwise.
 
-**Note**: when called with mode `"loop"` from the main thread of a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) and there are only [`system.awaitch`](#systemawaitch-ch-endpoint-) calls pending, the task is suspended until one of the pending calls are resolved.
+**Note**: when called with mode `"loop"` from the main thread of a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) and there are only [`system.awaitch`](#systemawaitch-ch-endpoint-) calls pending, the task is suspended until one of the pending calls is resolved.
 
 ### `system.isrunning ()`
 
@@ -598,6 +545,53 @@ or `false` otherwise.
 ### `system.halt ()`
 
 Causes [`system.run`](#systemrun-mode) to return prematurely after this function returns.
+
+Thread Synchronization
+----------------------
+
+This section describes functions of `coutil.system` for thread synchronization and communication using [channels](#channelcreate-name) and [state coroutines](#coroutineload-chunk--chunkname--mode).
+
+### `system.awaitch (ch, endpoint, ...)`
+
+[Await function](#await-function) that awaits on an _endpoint_ of [channel](#channelcreate-name) `ch` for a similar call on the opposite _endpoint_,
+either from another coroutine, [_state coroutine_](#coroutineload-chunk--chunkname--mode) or [_task_](#threadsdostring-pool-chunk--chunkname--mode-).
+
+`endpoint` is either string `"in"` or `"out"`,
+each identifying an opposite _endpoint_.
+Therefore, the call `system.awaitch(ch1, "in")` will await for a call like `system.awaitch(ch2, "out")` on another channel with the same name.
+
+Alternativelly,
+if `endpoint` is either `nil` or `"any"`,
+the call will await for a call on either _endpoints_.
+For instance, the call `system.awaitch(ch1, "any")` will match either a call `system.awaitch(ch2, "in")` or `system.awaitch(ch2, "out")`,
+or even `system.awaitch(ch2, "any")` as a matter of fact.
+
+Returns `true` followed by the extra [transferable](#transferable-values) arguments `...` from the matching call.
+Otherwise, return `false` followed by an error message related to transfering the arguments from the matching call.
+In any case,
+if this call does not raise errors,
+it resumed the coroutine, [_state coroutine_](#coroutineload-chunk--chunkname--mode) or [_task_](#threadsdostring-pool-chunk--chunkname--mode-) of the matching call.
+
+### `system.resume (co, ...)`
+
+[Await function](#await-function) that is like [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
+but for [_state coroutines_](#coroutineload-chunk--chunkname--mode).
+It executes _state coroutine_ `co` on a separate system thread,
+and awaits for its completion or [suspension](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
+Moreover, only [transferable values](#transferable-values) can be passed as arguments or returned from `co`.
+
+If the coroutine executing this [await function](#await-function) is explicitly resumed,
+the execution of `co` continues in the separate thread,
+and it will not be able to be resumed again until it [suspends](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
+In such case the results of the execution of `co` are discarded.
+
+_State coroutines_ are executed using a limited set of threads that are also used by the underlying system.
+The number of threads is given by environment variable [`UV_THREADPOOL_SIZE`](http://docs.libuv.org/en/v1.x/threadpool.html).
+
+Time Measure
+------------
+
+This section describes functions of `coutil.system` to obtain a measure of time or wait for a particular period of time.
 
 ### `system.time ([mode])`
 
@@ -625,7 +619,7 @@ and is not subject to clock drift.
 ### `system.block (seconds)`
 
 Blocks the entire current execution (system thread) for `seconds` seconds,
-preventing any other coroutine to execute.
+preventing any other _standard thread coroutine_ to execute.
 
 ### `system.suspend ([seconds])`
 
@@ -638,6 +632,12 @@ it is assumed as zero,
 so the calling coroutine will be resumed as soon as possible.
 
 Returns `true` in case of success.
+
+System Processes
+----------------
+
+This section describes functions of `coutil.system` for manipulation of the current process (_i.e._ signals, priority, current directory, and environment variables) and other processes,
+as well as creating new processes by executing programs.
 
 ### `system.emitsig (pid, signal)`
 
@@ -819,40 +819,10 @@ For signals not listed there,
 the string `"signal"` is returned instead.
 Use the platform-dependent number to differentiate such signals.
 
-### `system.resume (stateco, ...)`
+Network & IPC
+-------------
 
-[Await function](#await-function) that is like [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
-but executes the [_state coroutine_](#coroutineload-chunk--chunkname--mode) `stateco` on a separate system thread,
-and awaits for its completion or [suspension](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
-Moreover, only _nil_, _boolean_, _number_, _string_ and _light userdata_ values can be passed as arguments or returned from `stateco`.
-
-If the coroutine executing this [await function](#await-function) is explicitly resumed,
-the execution of `stateco` continues in the separate thread,
-and it will not be able to be resumed again until it [suspends](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
-In such case the results of the execution of `stateco` are discarded.
-
-_State coroutines_ are executed using a limited set of threads that are also used by the underlying system.
-The number of threads is given by environment variable [`UV_THREADPOOL_SIZE`](http://docs.libuv.org/en/v1.x/threadpool.html).
-
-### `system.awaitch (ch, endpoint, ...)`
-
-[Await function](#await-function) that awaits on an _endpoint_ of channel `ch` for a similar call on the opposite _endpoint_,
-either from another coroutine, [_task_](#threadsdostring-pool-chunk--chunkname--mode-) or [_state coroutine_](#coroutineload-chunk--chunkname--mode).
-
-`endpoint` is either string `"in"` or `"out"`,
-each identifying an opposite _endpoint_.
-Therefore, the call `channel:await("in")` will await for a call like `channel:await("out")` on another channel with the same name.
-
-Alternativelly,
-if `endpoint` is either `nil` or `"any"`,
-the call will await for a call on either _endpoints_.
-For instance, the call `channel:await("any")` will match either a call `channel:await("in")` or `channel:await("out")`.
-
-Returns `true` followed by the extra arguments `...` from the matching call.
-Otherwise, return `false` followed by an error message related to obtaining the arguments from the matching call.
-In any case,
-if this call does not raise errors,
-it resumed the coroutine, [_task_](#threadsdostring-pool-chunk--chunkname--mode-) or [_state coroutine_](#coroutineload-chunk--chunkname--mode) of the matching call.
+This section describes functions of `coutil.system` for creation of network sockets and other [IPC](https://en.wikipedia.org/wiki/Inter-process_communication) mechanisms.
 
 ### `system.address (type [, data [, port [, mode]]])`
 
@@ -1175,6 +1145,11 @@ This operation is only available for passive sockets.
 In case of success,
 this function returns a new stream socket for the accepted connection.
 
+File System
+-----------
+
+This section describes functions of `coutil.system` to access the file system.
+
 ### `system.filebits`
 
 Table with the following fields containing numbers with the bit values for a [file mode](https://man7.org/linux/man-pages/man7/inode.7.html).
@@ -1219,7 +1194,7 @@ according to the following characters in string `mode`:
 | `t` | integer <!-- f_files --> | **Total** _inodes_ in the file system of the file. |
 
 Additionally,
-`mode` can also include the characters supported by [`file:info`](#fileinfo-mode) to return values about the file in `path`.
+`mode` can also include the characters supported by [`file:info`](#fileinfo-mode) with the same semantics.
 Moreover,
 `mode` can also be prefixed with `l` to indicate that,
 if `path` refers a symbolic link,
@@ -1235,7 +1210,7 @@ The _control variable_ is the name of the file entry,
 and an additional _loop variable_ is a string with the type of the file entry.
 
 `mode` is a string,
-which might contain character `~` with the same semantics as in [`file:info`](#fileinfo-mode).
+which might contain character `~` to execute it in [blocking mode](#blocking-mode).
 
 This function never fails.
 It raises errors instead.
@@ -1259,8 +1234,7 @@ it is truncated to length 0 (implies `w`).
 - `w`: allows writing operations.
 - `x`: file is not inheritable to child processes.
 
-`mode` might also be prefixed with character `~`,
-following the same semantics as in [`file:info`](#fileinfo-mode).
+`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
 
 When either `n` or `N` are present in `mode`,
 `perm` must be either a number with the [file bits](#systemfilebits),
@@ -1323,9 +1297,7 @@ according to the following characters in string `mode`:
 `mode` can also contain any of the characters valid for argument `perm` of [`system.openfile`](#systemopenfile-path--mode--perm).
 For these characters a boolean is returned indicating whether such bit is set.
 
-Moreover,
-`mode` can be prefixed with `~` to avoid this function to yield.
-Therefore it blocks the entire thread until its completion.
+`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
 Unlike other characters,
 `~` does not produce a value to be returned.
 
@@ -1344,7 +1316,7 @@ In the other case,
 the current file offset is used and updated.
 
 `mode` is a string,
-which might contain character `~` with the same semantics as in [`file:info`](#fileinfo-mode).
+which might contain character `~` to execute it in [blocking mode](#blocking-mode).
 
 In case of success,
 this function returns the number of bytes written to `file`.
@@ -1362,28 +1334,20 @@ In the other case,
 the current file offset is used and updated.
 
 `mode` is a string,
-which might contain character `~` with the same semantics as in [`file:info`](#fileinfo-mode).
+which might contain character `~` to execute it in [blocking mode](#blocking-mode).
 
 In case of success,
 this function returns the number of bytes copied to `buffer`.
 
-### `system.random (buffer [, i [, j [, mode]]])`
+System Information
+------------------
 
-[Await function](#await-function) that awaits until it fills [memory](https://github.com/renatomaia/lua-memory) `buffer` with [cryptographically strong random bytes](https://en.wikipedia.org/wiki/Cryptographically_secure_pseudorandom_number_generator),
-from position `i` until `j`,
-following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
-
-`mode` is a string,
-which might contain character `~` with the same semantics as in [`file:info`](#fileinfo-mode).
-
-In case of success,
-this function returns `buffer`.
-
-**Note**: this function may not complete when the system is [low on entropy](http://docs.libuv.org/en/v1.x/misc.html#c.uv_random).
+This section describes functions of `coutil.system` for obtaining information provided or maintained by the underlying operating system.
 
 ### `system.procinfo (which)`
 
-Returns values corresponding to system information according to the following characters present in string `which`:
+Returns values corresponding to information about the current process and the system where it is running.
+The following characters present in string `which` define the values to be returned:
 
 - `#`: current process identifier (**pid**).
 - `$`: current user **shell** path.
@@ -1475,3 +1439,121 @@ The values of the other _loop variables_ are given by the following characters i
 	- `B`: the binary representation physical address (MAC) of the network interface.
 
 **Note**: This _iterator_ have the same characteristics of the one returned by [`system.cpuinfo`](#systemcpuinfo-which).
+
+### `system.random (buffer [, i [, j [, mode]]])`
+
+[Await function](#await-function) that awaits until it fills [memory](https://github.com/renatomaia/lua-memory) `buffer` with [cryptographically strong random bytes](https://en.wikipedia.org/wiki/Cryptographically_secure_pseudorandom_number_generator),
+from position `i` until `j`,
+following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+
+`mode` is a string,
+which might contain character `~` to execute it in [blocking mode](#blocking-mode).
+
+In case of success,
+this function returns `buffer`.
+
+**Note**: this function may not complete when the system is [low on entropy](http://docs.libuv.org/en/v1.x/misc.html#c.uv_random).
+
+Index
+=====
+
+- [`coutil.channel`](#channels)
+	- [`channel.close`](#channelclose-ch)
+	- [`channel.create`](#channelcreate-name)
+	- [`channel.getnames`](#channelgetnames-names)
+	- [`channel.sync`](#channelsync-ch-endpoint-)
+- [`coutil.coroutine`](#state-coroutines)
+	- [`coroutine.close`](#coroutineclose-co)
+	- [`coroutine.load`](#coroutineload-chunk--chunkname--mode)
+	- [`coroutine.loadfile`](#coroutineloadfile-filepath--mode)
+	- [`coroutine.status`](#coroutinestatus-co)
+- [`coutil.event`](#events)
+	- [`event.await`](#eventawait-e)
+	- [`event.awaitall`](#eventawaitall-e1-)
+	- [`event.awaitany`](#eventawaitany-e1-)
+	- [`event.emitall`](#eventemitall-e-)
+	- [`event.emitone`](#eventemitone-e-)
+	- [`event.pending`](#eventpending-e)
+- [`coutil.mutex`](#mutex)
+	- [`mutex.islocked`](#mutexislocked-e)
+	- [`mutex.lock`](#mutexlock-e)
+	- [`mutex.ownlock`](#mutexownlock-e)
+	- [`mutex.unlock`](#mutexunlock-e)
+- [`coutil.promise`](#promises)
+	- [`promise.awaitall`](#promiseawaitall-p-)
+	- [`promise.awaitany`](#promiseawaitany-p-)
+	- [`promise.create`](#promisecreate-)
+	- [`promise.onlypending`](#promiseonlypending-p-)
+	- [`promise.pickready`](#promisepickready-p-)
+- [`coutil.queued`](#queued-events)
+	- [`queued.await`](#queuedawait-e)
+	- [`queued.awaitall`](#queuedawaitall-e1-)
+	- [`queued.awaitany`](#queuedawaitany-e1-)
+	- [`queued.emitall`](#queuedemitall-e-)
+	- [`queued.emitone`](#queuedemitone-e-)
+	- [`queued.isqueued`](#queuedisqueued-e)
+	- [`queued.pending`](#queuedpending-e)
+- [`coutil.spawn`](#coroutine-finalizers)
+	- [`spawn.catch`](#spawncatch-h-f-)
+	- [`spawn.trap`](#spawntrap-h-f-)
+- [`coutil.system`](#system-features)
+	- [`system.address`](#systemaddress-type--data--port--mode)
+	- [`system.awaitch`](#systemawaitch-ch-endpoint-)
+	- [`system.awaitsig`](#systemawaitsig-signal)
+	- [`system.block`](#systemblock-seconds)
+	- [`system.cpuinfo`](#systemcpuinfo-which)
+	- [`system.emitsig`](#systememitsig-pid-signal)
+	- [`system.execute`](#systemexecute-cmd-)
+	- [`system.filebits`](#systemfilebits)
+	- [`system.fileinfo`](#systemfileinfo-path-mode)
+	- [`system.findaddr`](#systemfindaddr-name--service--mode)
+		- [`addresses:close`](#addressesclose-)
+		- [`addresses:getaddress`](#addressesgetaddress-address)
+		- [`addresses:getdomain`](#addressesgetdomain-)
+		- [`addresses:getsocktype`](#addressesgetsocktype-)
+		- [`addresses:next`](#addressesnext-)
+		- [`addresses:reset`](#addressesreset-)
+	- [`system.getdir`](#systemgetdir-)
+	- [`system.getenv`](#systemgetenv-name)
+	- [`system.getpriority`](#systemgetpriority-pid)
+	- [`system.halt`](#systemhalt-)
+	- [`system.isrunning`](#systemisrunning-)
+	- [`system.listdir`](#systemlistdir-path--mode)
+	- [`system.nameaddr`](#systemnameaddr-address--mode)
+	- [`system.nanosecs`](#systemnanosecs-)
+	- [`system.netinfo`](#systemnetinfo-option-which)
+	- [`system.openfile`](#systemopenfile-path--mode--perm)
+		- [`file:close`](#fileclose-)
+		- [`file:info`](#fileinfo-mode)
+		- [`file:read`](#fileread-buffer--i--j--offset--mode)
+		- [`file:write`](#filewrite-data--i--j--offset--mode)
+	- [`system.packenv`](#systempackenv-vars)
+	- [`system.procinfo`](#systemprocinfo-which)
+	- [`system.random`](#systemrandom-buffer--i--j--mode)
+	- [`system.resume`](#systemresume-co-)
+	- [`system.run`](#systemrun-mode)
+	- [`system.setdir`](#systemsetdir-path)
+	- [`system.setenv`](#systemsetenv-name-value)
+	- [`system.setpriority`](#systemsetpriority-pid-value)
+	- [`system.socket`](#systemsocket-type-domain)
+		- [`socket:accept`](#socketaccept-)
+		- [`socket:bind`](#socketbind-address)
+		- [`socket:close`](#socketclose-)
+		- [`socket:connect`](#socketconnect-address)
+		- [`socket:getaddress`](#socketgetaddress-site--address)
+		- [`socket:getdomain`](#socketgetdomain-)
+		- [`socket:listen`](#socketlisten-backlog)
+		- [`socket:receive`](#socketreceive-buffer--i--j--address)
+		- [`socket:send`](#socketsend-data--i--j--address)
+		- [`socket:setoption`](#socketsetoption-name-value-)
+		- [`socket:shutdown`](#socketshutdown-)
+	- [`system.suspend`](#systemsuspend-seconds)
+	- [`system.time`](#systemtime-mode)
+	- [`system.unpackenv`](#systemunpackenv-env--tab)
+- [`coutil.threads`](#thread-pools)
+	- [`threads.close`](#threadsclose-pool)
+	- [`threads.count`](#threadscount-pool-options)
+	- [`threads.create`](#threadscreate-size)
+	- [`threads.dofile`](#threadsdofile-pool-filepath--mode-)
+	- [`threads.dostring`](#threadsdostring-pool-chunk--chunkname--mode-)
+	- [`threads.resize`](#threadsresize-pool-size--create)
