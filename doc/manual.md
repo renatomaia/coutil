@@ -1,30 +1,31 @@
 Summary
 =======
 
-1. [Basic Concepts](#basic-concepts)
-	1. [Await Function](#await-function)
-	1. [Independent State](#independent-state)
-	1. [Transferable Values](#transferable-values)
-	1. [Object-Oriented Style](#object-oriented-style)
-1. [Multithreading](#multithreading)
-	1. [Coroutine Finalizers](#coroutine-finalizers)
-	1. [State Coroutines](#state-coroutines)
-	1. [Thread Pools](#thread-pools)
-1. [Synchronization](#synchronization)
-	1. [Channels](#channels)
-	1. [Events](#events)
-	1. [Queued Events](#queued-events)
-	1. [Mutex](#mutex)
-	1. [Promises](#promises)
-1. [System Features](#system-features)
-	1. [Event Processing](#event-processing)
-	1. [Thread Synchronization](#thread-synchronization)
-	1. [Time Measure](#time-measure)
-	1. [System Processes](#system-processes)
-	1. [Network & IPC](#network-ipc)
-	1. [File System](#file-system)
-	1. [System Information](#system-information)
-1. [Index](#index)
+- [Basic Concepts](#basic-concepts)
+	- [Await Function](#await-function)
+	- [Blocking Mode](#blocking-mode)
+	- [Independent State](#independent-state)
+	- [Transferable Values](#transferable-values)
+	- [Object-Oriented Style](#objectoriented-style)
+- [Multithreading](#multithreading)
+	- [Coroutine Finalizers](#coroutine-finalizers)
+	- [State Coroutines](#state-coroutines)
+	- [Thread Pools](#thread-pools)
+- [Synchronization](#synchronization)
+	- [Channels](#channels)
+	- [Events](#events)
+	- [Queued Events](#queued-events)
+	- [Mutex](#mutex)
+	- [Promises](#promises)
+- [System Features](#system-features)
+	- [Event Processing](#event-processing)
+	- [Thread Synchronization](#thread-synchronization)
+	- [Time Measure](#time-measure)
+	- [System Processes](#system-processes)
+	- [Network & IPC](#network--ipc)
+	- [File System](#file-system)
+	- [System Information](#system-information)
+- [Index](#index)
 
 ---
 
@@ -47,6 +48,14 @@ Otherwise,
 the _await function_ returns as described in the following sections.
 In any case,
 the coroutine is not registered to be implicitly resumed after the _await function_ returns.
+
+Blocking Mode
+-------------
+
+Some [await functions](#await-function) accept an argument with character `~` to avoid the function to yield.
+In such case,
+the function works like ordinary functions blocking the entire Lua state execution until its completion,
+thus preventing any other coroutine to execute.
 
 Independent State
 -----------------
@@ -95,7 +104,7 @@ Object-Oriented Style
 
 Some modules that create objects also set a metatable for these objects,
 where the `__index` field points to the table with all the functions of the module.
-Therefore, you can use the library functions in object-oriented style.
+Therefore, you can use these library functions in object-oriented style.
 
 Multithreading
 ==============
@@ -135,7 +144,7 @@ but for _state coroutines_.
 In contrast to standard _thread coroutines_ that execute a function in a [Lua thread](http://www.lua.org/manual/5.4/manual.html#lua_newthread),
 _state coroutines_ execute a [chunk](http://www.lua.org/manual/5.4/manual.html#3.3.2) in an [independent state](#independent-state) (see [`system.resume`](#systemresume-co-)).
 
-You can access these library functions on _state coroutines_ in [object-oriented style](#object-oriented-style).
+You can access these library functions on _state coroutines_ in [object-oriented style](#objectoriented-style).
 For instance, `coroutine.status(co, ...)` can be written as `co:status()`, where `co` is a _state coroutine_.
 
 ### `coroutine.close (co)`
@@ -165,7 +174,7 @@ Thread Pools
 
 Module `coutil.threads` provides functions for manipulation of [_thread pools_](#threadscreate-size) that execute code chunks loaded as [_tasks_](#threadsdostring-pool-chunk--chunkname--mode-) using a set of distinct system threads.
 
-You can access these library functions on _thread pools_ in [object-oriented style](#object-oriented-style).
+You can access these library functions on _thread pools_ in [object-oriented style](#objectoriented-style).
 For instance, `threads.dostring(pool, ...)` can be written as `pool:dostring(...)`, where `pool` is a _thread pool_.
 
 ### `threads.create ([size])`
@@ -254,7 +263,7 @@ Module `coutil.channel` provides functions for manipulation of _channels_ to be 
 _Channels_ can be used for standard coroutines.
 However consider using [events](#events) when using only standard thread coroutines.
 
-You can access these library functions on _channels_ in [object-oriented style](#object-oriented-style).
+You can access these library functions on _channels_ in [object-oriented style](#objectoriented-style).
 For instance, `channel.sync(ch, ...)` can be written as `ch:sync(...)`, where `ch` is a _channel_.
 
 ### `channel.close (ch)`
@@ -1185,7 +1194,7 @@ according to the following characters in string `mode`:
 | `t` | integer <!-- f_files --> | **Total** _inodes_ in the file system of the file. |
 
 Additionally,
-`mode` can also include the characters supported by [`file:info`](#fileinfo-mode) to return values about the file in `path`.
+`mode` can also include the characters supported by [`file:info`](#fileinfo-mode) with the same semantics.
 Moreover,
 `mode` can also be prefixed with `l` to indicate that,
 if `path` refers a symbolic link,
@@ -1201,7 +1210,7 @@ The _control variable_ is the name of the file entry,
 and an additional _loop variable_ is a string with the type of the file entry.
 
 `mode` is a string,
-which might contain character `~` with the same semantics as in [`file:info`](#fileinfo-mode).
+which might contain character `~` to execute it in [blocking mode](#blocking-mode).
 
 This function never fails.
 It raises errors instead.
@@ -1225,8 +1234,7 @@ it is truncated to length 0 (implies `w`).
 - `w`: allows writing operations.
 - `x`: file is not inheritable to child processes.
 
-`mode` might also be prefixed with character `~`,
-following the same semantics as in [`file:info`](#fileinfo-mode).
+`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
 
 When either `n` or `N` are present in `mode`,
 `perm` must be either a number with the [file bits](#systemfilebits),
@@ -1289,9 +1297,7 @@ according to the following characters in string `mode`:
 `mode` can also contain any of the characters valid for argument `perm` of [`system.openfile`](#systemopenfile-path--mode--perm).
 For these characters a boolean is returned indicating whether such bit is set.
 
-Moreover,
-`mode` can be prefixed with `~` to avoid this function to yield.
-Therefore it blocks the entire thread until its completion.
+`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
 Unlike other characters,
 `~` does not produce a value to be returned.
 
@@ -1310,7 +1316,7 @@ In the other case,
 the current file offset is used and updated.
 
 `mode` is a string,
-which might contain character `~` with the same semantics as in [`file:info`](#fileinfo-mode).
+which might contain character `~` to execute it in [blocking mode](#blocking-mode).
 
 In case of success,
 this function returns the number of bytes written to `file`.
@@ -1328,7 +1334,7 @@ In the other case,
 the current file offset is used and updated.
 
 `mode` is a string,
-which might contain character `~` with the same semantics as in [`file:info`](#fileinfo-mode).
+which might contain character `~` to execute it in [blocking mode](#blocking-mode).
 
 In case of success,
 this function returns the number of bytes copied to `buffer`.
@@ -1441,7 +1447,7 @@ from position `i` until `j`,
 following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
 
 `mode` is a string,
-which might contain character `~` with the same semantics as in [`file:info`](#fileinfo-mode).
+which might contain character `~` to execute it in [blocking mode](#blocking-mode).
 
 In case of success,
 this function returns `buffer`.
