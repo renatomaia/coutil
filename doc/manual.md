@@ -1301,6 +1301,24 @@ Unlike other characters,
 
 **Note**: all time values returned are seconds relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time).
 
+### `file:touch ([mode, times...])`
+
+Changes the access and modification times of `file`.
+String `mode` contains a sequence of characters indicating how each provided time value `times...` shall used in `file`.
+
+- `a`: as the access time.
+- `m`: as the modification time.
+- `b`: as both access and modification times.
+
+Whenever a time value is not provided for either the access or modification time,
+the current time set in the system is used.
+
+`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
+Unlike other characters,
+`~` does not consume a time value from `times...`.
+
+**Note**: all time values are seconds relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time) with sub-second precision.
+
 ### `file:write (data [, i [, j [, offset [, mode]]]])`
 
 [Await function](#await-function) that awaits until it writes to file `file` the substring of `data` that starts at `i` and continues until `j`,

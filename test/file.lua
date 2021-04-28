@@ -313,4 +313,108 @@ for _, spec in ipairs{
 
 end
 
+--------------------------------------------------------------------------------
+
+local common = {
+	boolean = "UGSrwxRWX421",
+	number = "Md#*ugDBib_vamsc",
+	string = "?",
+}
+local values = {}
+local path = "info.lua"
+local file = assert(system.openfile(path, "~"))
+
+for _, spec in ipairs{
+	-- {
+	-- 	name = "fileinfo",
+	-- 	func = system.fileinfo,
+	-- 	arg = path,
+	-- 	extra = {
+	-- 		number = "NITFAtf",
+	-- 		string = "@p",
+	-- 		["nil"] = "=",
+	-- 	},
+	-- },
+	{
+		name = "file:touch",
+		func = file.touch,
+		arg = file,
+		get = function (file) return file:info("~am") end,
+	},
+} do
+
+	newtest(spec.name)
+
+	local options = "amb"
+
+	local access, modify = spec.get(spec.arg)
+
+	do case "errors"
+		for i = 1, 255 do
+			local char = string.char(i)
+			if not string.find("~"..options, char, 1, "plain search") then
+				asserterr("unknown mode char (got '"..char.."')",
+				          pcall(spec.func, spec.arg, char, 0))
+			end
+		end
+
+		asserterr("unknown mode char (got '\255')",
+		          pcall(spec.func, spec.arg, options.."\255", 0, 0, 0, 0))
+
+		asserterr("unable to yield", pcall(spec.func, spec.arg, options, 0, 0, 0))
+
+		local newaccess, newmodify = spec.get(spec.arg)
+		assert(newaccess == access)
+		assert(newmodify == modify)
+
+		done()
+	end
+
+	do case "change times"
+		local function testchange(mode)
+			assert(spec.func(spec.arg, mode) == true)
+
+			local access1, modify1 = spec.get(spec.arg)
+			assert(access1 > access)
+			assert(modify1 > modify)
+			system.suspend(.05, mode)
+
+			assert(spec.func(spec.arg, mode.."a", access) == true)
+
+			local access2, modify2 = spec.get(spec.arg)
+			assert(access2 == access)
+			assert(modify2 > modify1)
+			system.suspend(.05, mode)
+
+			assert(spec.func(spec.arg, mode.."m", modify) == true)
+
+			local access3, modify3 = spec.get(spec.arg)
+			assert(access3 > access2)
+			assert(modify3 == modify)
+			system.suspend(.05, mode)
+
+			assert(spec.func(spec.arg, mode.."b", access1) == true)
+
+			local access4, modify4 = spec.get(spec.arg)
+			assert(access4 == access1)
+			assert(modify4 == access1)
+			system.suspend(.05, mode)
+
+			assert(spec.func(spec.arg, mode.."am", access, modify) == true)
+
+			local access5, modify5 = spec.get(spec.arg)
+			assert(access5 == access)
+			assert(modify5 == modify)
+		end
+
+		testchange("~")
+
+		spawn(testchange, "")
+		assert(system.run() == false)
+
+		done()
+	end
+
+end
+
 file:close()

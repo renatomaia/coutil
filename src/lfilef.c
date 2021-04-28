@@ -913,6 +913,62 @@ static int file_info (lua_State *L) {
 	return lcuT_resetcoreqk(L, sched, k_setupfobjinfo, returnfobjinfo, NULL);
 }
 
+/* trye = file:touch ([mode, times...]) */
+static int returnfobjtouch (lua_State *L) {
+	int top = lua_gettop(L);
+	if (top > 4) return top-3;
+	lua_pushboolean(L, 1);
+	return 1;
+}
+static int k_setupfobjtouch (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	uv_file *file = (uv_file *)lua_touserdata(L, 1);
+	lua_Number atime = lua_tonumber(L, 2);
+	lua_Number mtime = lua_tonumber(L, 3);
+	int err = uv_fs_futime(loop, filereq, *file, (double)atime, (double)mtime, on_fileopdone);
+	if (err < 0) return lcu_error(L, err);
+	return -1;  /* yield on success */
+}
+static int file_touch (lua_State *L) {
+	uv_file file = *openedfile(L);
+	lcu_Scheduler *sched = tosched(L);
+	const char *mode = luaL_optstring(L, 2, "");
+	lua_Number atime = -1, mtime = -1;
+	int i, noyield = 0;
+	for (; *mode == LCU_NOYIELDMODE; mode++) noyield = 1;
+	for (i = 0; mode[i]; i++) {
+		lua_Number time = luaL_checknumber(L, 3+i);
+		luaL_argcheck(L, time >= 0, 3+i, "invalid time");
+		switch (mode[i]) {
+			case 'a': atime = time; break;
+			case 'm': mtime = time; break;
+			case 'b': atime = mtime = time; break;
+			case LCU_NOYIELDMODE:
+				return luaL_error(L, "'%c' must be in the begin of 'mode'", mode[i]);
+			default:
+				return luaL_error(L, "bad argument #%d, unknown mode char (got '%c')", 3+i, mode[i]);
+		}
+	}
+	if (atime == -1 || mtime == -1) {
+		uv_timeval64_t timeval;
+		int err = uv_gettimeofday(&timeval);
+		if (err < 0) return lcuL_pusherrres(L, err);
+		lua_Number time = lcu_time2sec(timeval);
+		if (atime == -1) atime = time;
+		if (mtime == -1) mtime = time;
+	}
+	if (noyield) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		int err = uv_fs_futime(loop, &filereq, file, (double)atime, (double)mtime, NULL);
+		return lcuL_pushresults(L, 0, err);
+	}
+	lua_settop(L, 1);
+	lua_pushnumber(L, atime);
+	lua_pushnumber(L, mtime);
+	return lcuT_resetcoreqk(L, sched, k_setupfobjtouch, returnfobjtouch, NULL);
+}
+
 
 LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 	static const luaL_Reg dirinfomt[] = {
@@ -931,6 +987,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{"read", file_read},
 		{"write", file_write},
 		{"info", file_info},
+		{"touch", file_touch},
 		{NULL, NULL}
 	};
 	static const luaL_Reg modf[] = {
