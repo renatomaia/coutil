@@ -30,14 +30,6 @@ static int system_time (lua_State *L) {
 	return 1;
 }
 
-/* system.block(delay) */
-static int system_block (lua_State *L) {
-	lua_Number delay = luaL_checknumber(L, 1)*1e3;
-	luaL_argcheck(L, 0 <= delay && delay <= UINT_MAX, 1, "out of range");
-	uv_sleep((unsigned int)delay);
-	return 0;
-}
-
 /* succ [, errmsg] = system.suspend([delay]) */
 static int returntrue (lua_State *L) {
 	lua_pushboolean(L, 1);
@@ -72,11 +64,19 @@ static int k_setuptimer (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 static int system_suspend (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
 	lua_Number delay = luaL_optnumber(L, 1, 0);
-	if (delay > 0) {
+	if (lcuL_checknoyieldmode(L, 2)) {
+		if (delay > 0) {
+			delay *= 1e3;
+			luaL_argcheck(L, delay <= UINT_MAX, 1, "out of range");
+			uv_sleep((unsigned int)delay);
+		}
+	} else if (delay > 0) {
+		luaL_argcheck(L, delay*1e3 <= 0xffffffffffffffff, 1, "out of range");
 		return lcuT_resetcohdlk(L, UV_TIMER, sched, k_setuptimer, returntrue, NULL);
 	} else {
 		return lcuT_resetcohdlk(L, UV_IDLE, sched, k_setupidle, returntrue, NULL);
 	}
+	return returntrue(L);
 }
 
 
@@ -87,7 +87,6 @@ LCUI_FUNC void lcuM_addtimef (lua_State *L) {
 	};
 	static const luaL_Reg modf[] = {
 		{"time", system_time},
-		{"block", system_block},
 		{"suspend", system_suspend},
 		{NULL, NULL}
 	};

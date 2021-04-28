@@ -319,7 +319,7 @@ Equivalent to [`event.awaitany`](#eventawaitany-e1-)`(e)`.
 [Await function](#await-function) that awaits an event on every one of values `e1, ...`.
 Any `nil` in `e1, ...` is ignored.
 Any repeated values in `e1, ...` are treated as a single one.
-If `e1, ...` are not provided or are all `nil`, this function has no effect.
+If `e1, ...` are not provided or are all `nil`, this function returns immediately.
 
 Returns `true` after events are emitted on all values `e1, ...`,
 or if `e1, ...` are not provided or are all `nil`.
@@ -598,7 +598,7 @@ This section describes functions of `coutil.system` to obtain a measure of time 
 Returns a timestamp as a number of seconds with precision of milliseconds according to the value of `mode`,
 as described below:
 
-- `"cached"` (default): the last calculated timestamp used to evaluate [time-related events](#systemsuspend-seconds).
+- `"cached"` (default): the last calculated timestamp used to evaluate [time-related events](#systemsuspend-seconds--mode).
 It increases monotonically from some arbitrary point in time,
 and is not subject to clock drift.
 - `"updated"`: updates the cached timestamp to reflect the current time,
@@ -616,12 +616,7 @@ Returns a timestamp in nanoseconds that represents the current time of the syste
 It increases monotonically from some arbitrary point in time,
 and is not subject to clock drift.
 
-### `system.block (seconds)`
-
-Blocks the entire current execution (system thread) for `seconds` seconds,
-preventing any other _standard thread coroutine_ to execute.
-
-### `system.suspend ([seconds])`
+### `system.suspend ([seconds [, mode]])`
 
 [Await function](#await-function) that awaits `seconds` since timestamp provided by [`system.time("cached")`](#systemtime-mode).
 
@@ -630,6 +625,9 @@ is `nil`,
 or negative,
 it is assumed as zero,
 so the calling coroutine will be resumed as soon as possible.
+
+`mode` is a string,
+which might contain character `~` to execute it in [blocking mode](#blocking-mode).
 
 Returns `true` in case of success.
 
@@ -1500,7 +1498,6 @@ Index
 	- [`system.address`](#systemaddress-type--data--port--mode)
 	- [`system.awaitch`](#systemawaitch-ch-endpoint-)
 	- [`system.awaitsig`](#systemawaitsig-signal)
-	- [`system.block`](#systemblock-seconds)
 	- [`system.cpuinfo`](#systemcpuinfo-which)
 	- [`system.emitsig`](#systememitsig-pid-signal)
 	- [`system.execute`](#systemexecute-cmd-)
@@ -1547,7 +1544,7 @@ Index
 		- [`socket:send`](#socketsend-data--i--j--address)
 		- [`socket:setoption`](#socketsetoption-name-value-)
 		- [`socket:shutdown`](#socketshutdown-)
-	- [`system.suspend`](#systemsuspend-seconds)
+	- [`system.suspend`](#systemsuspend-seconds--mode)
 	- [`system.time`](#systemtime-mode)
 	- [`system.unpackenv`](#systemunpackenv-env--tab)
 - [`coutil.threads`](#thread-pools)

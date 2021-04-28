@@ -53,20 +53,26 @@ do case "nanosecs"
 	done()
 end
 
-newtest "block" --------------------------------------------------------------
+newtest "suspend" --------------------------------------------------------------
 
 do case "error messages"
-	asserterr("number expected", pcall(system.block, false))
-	asserterr("out of range", pcall(system.block, -1))
-	asserterr("out of range", pcall(system.block, math.maxinteger))
+	asserterr("number expected", pcall(system.suspend, false))
+	asserterr("unable to yield", pcall(system.suspend))
+	asserterr("out of range", pcall(system.suspend, math.maxinteger, "~"))
+	asserterr("out of range", pcall(system.suspend, 0x1p64/999.9))
 
 	done()
 end
 
 do case "block main thread"
 	local before = system.nanosecs()
-	system.block(.1)
+	system.suspend(.1, "~")
 	assert(system.nanosecs()-before > 1e8)
+
+	system.suspend(0, "~")
+	system.suspend(-1, "~")
+	system.suspend(nil, "~")
+	assert(system.nanosecs()-before < 1e9)
 
 	done()
 end
@@ -79,7 +85,7 @@ do case "block other coroutines"
 		system.suspend(0)
 		assert(b == 1)
 		a = 1
-		system.block(.1)
+		system.suspend(.1, "~")
 		a = 2
 	end)
 	assert(a == 0)
@@ -107,15 +113,6 @@ do case "block other coroutines"
 	done()
 end
 
-newtest "suspend" --------------------------------------------------------------
-
-do case "error messages"
-	asserterr("number expected", pcall(system.suspend, false))
-	asserterr("unable to yield", pcall(system.suspend))
-
-	done()
-end
-
 local args = { nil, -1, 0, 0.1 }
 
 do case "yield values"
@@ -123,7 +120,7 @@ do case "yield values"
 		local delay = args[i]
 		local stage = 0
 		local a,b,c = spawn(function ()
-			local res, extra = system.suspend(delay, "testing", 1, 2, 3)
+			local res, extra = system.suspend(delay, nil, "testing", 1, 2, 3)
 			assert(res == true)
 			assert(extra == nil)
 			stage = 1
