@@ -213,7 +213,7 @@ local common = {
 	string = "?",
 }
 local values = {}
-local path = "info.lua"
+local path = "file.lua"
 local file = assert(system.openfile(path, "~"))
 
 for _, spec in ipairs{
@@ -226,6 +226,7 @@ for _, spec in ipairs{
 			string = "@p",
 			["nil"] = "=",
 		},
+		prefix = "l",
 	},
 	{
 		name = "file:info",
@@ -254,7 +255,10 @@ for _, spec in ipairs{
 	do case "errors"
 		for i = 1, 255 do
 			local char = string.char(i)
-			if not string.find("~l"..options, char, 1, "plain search") then
+			if spec.prefix and string.find(spec.prefix, char, 1, "plain search") then
+				asserterr("'"..char.."' must be in the begin of 'mode'",
+				          pcall(spec.func, spec.arg, options..spec.prefix))
+			elseif not string.find("~"..options, char, 1, "plain search") then
 				asserterr("unknown mode char (got '"..char.."')",
 				          pcall(spec.func, spec.arg, char))
 			end
@@ -307,6 +311,101 @@ for _, spec in ipairs{
 				assert(previous == value)
 			end
 		end
+
+		done()
+	end
+
+end
+
+--------------------------------------------------------------------------------
+
+local function timeequals(a, b)
+	return math.abs(a-b) <= 1e-6
+end
+
+for _, spec in ipairs{
+	{
+		name = "touchfile",
+		func = system.touchfile,
+		arg = path,
+		get = function (path) return system.fileinfo(path, "~am") end,
+		prefix = "l",
+	},
+	{
+		name = "file:touch",
+		func = file.touch,
+		arg = file,
+		get = function (file) return file:info("~am") end,
+	},
+} do
+
+	newtest(spec.name)
+
+	local options = "amb"
+
+	local access, modify = spec.get(spec.arg)
+
+	do case "errors"
+		for i = 1, 255 do
+			local char = string.char(i)
+			if spec.prefix and string.find(spec.prefix, char, 1, "plain search") then
+				asserterr("'"..char.."' must be in the begin of 'mode'",
+				          pcall(spec.func, spec.arg, options..spec.prefix, 0, 0, 0, 0))
+			elseif not string.find("~"..options, char, 1, "plain search") then
+				asserterr("unknown mode char (got '"..char.."')",
+				          pcall(spec.func, spec.arg, char, 0))
+			end
+		end
+
+		asserterr("unknown mode char (got '\255')",
+		          pcall(spec.func, spec.arg, options.."\255", 0, 0, 0, 0))
+
+		asserterr("unable to yield", pcall(spec.func, spec.arg, options, 0, 0, 0))
+
+		local newaccess, newmodify = spec.get(spec.arg)
+		assert(newaccess == access)
+		assert(newmodify == modify)
+
+		done()
+	end
+
+	do case "change times"
+		local function testchange(mode)
+			assert(spec.func(spec.arg, mode) == true)
+
+			local access1, modify1 = spec.get(spec.arg)
+			assert(access1 > access)
+			assert(modify1 > modify)
+
+			assert(spec.func(spec.arg, mode.."a", access) == true)
+
+			local access2, modify2 = spec.get(spec.arg)
+			assert(timeequals(access2, access))
+			assert(modify2 > modify1)
+
+			assert(spec.func(spec.arg, mode.."m", modify) == true)
+
+			local access3, modify3 = spec.get(spec.arg)
+			assert(access3 > access2)
+			assert(timeequals(modify3, modify))
+
+			assert(spec.func(spec.arg, mode.."b", access1) == true)
+
+			local access4, modify4 = spec.get(spec.arg)
+			assert(timeequals(access4, access1))
+			assert(timeequals(modify4, access1))
+
+			assert(spec.func(spec.arg, mode.."am", access, modify) == true)
+
+			local access5, modify5 = spec.get(spec.arg)
+			assert(timeequals(access5, access))
+			assert(timeequals(modify5, modify))
+		end
+
+		testchange("~")
+
+		spawn(testchange, "")
+		assert(system.run() == false)
 
 		done()
 	end
