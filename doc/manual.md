@@ -1213,6 +1213,16 @@ which might contain character `~` to execute it in [blocking mode](#blocking-mod
 This function never fails.
 It raises errors instead.
 
+### `system.touchfile (path [, mode, times...])`
+
+Similar to [`file:touch`](#filetouch-mode-times),
+but for file in path given by string `path`.
+The other arguments are the same of [`file:touch`](#filetouch-mode-times).
+
+`mode` can also be prefixed with `l` to indicate that,
+if `path` refers a symbolic link,
+the time values are changed for the symbolic link file instead of the link's target file.
+
 ### `system.openfile (path [, mode [, perm]])`
 
 Opens file from the path indicated by string `path`.
@@ -1300,6 +1310,24 @@ Unlike other characters,
 `~` does not produce a value to be returned.
 
 **Note**: all time values returned are seconds relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time).
+
+### `file:touch ([mode, times...])`
+
+Changes the access and modification times of `file`.
+String `mode` contains a sequence of characters indicating how each provided time value `times...` shall be used in `file`.
+
+- `a`: as the access time.
+- `m`: as the modification time.
+- `b`: as both access and modification times.
+
+Whenever a time value is not provided for either the access or modification time,
+the current time set in the system is used.
+
+`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
+Unlike other characters,
+`~` does not consume a time value from `times...`.
+
+**Note**: all time values are seconds relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time) with sub-second precision.
 
 ### `file:write (data [, i [, j [, offset [, mode]]]])`
 
@@ -1523,6 +1551,7 @@ Index
 		- [`file:close`](#fileclose-)
 		- [`file:info`](#fileinfo-mode)
 		- [`file:read`](#fileread-buffer--i--j--offset--mode)
+		- [`file:touch`](#filetouch-mode-times)
 		- [`file:write`](#filewrite-data--i--j--offset--mode)
 	- [`system.packenv`](#systempackenv-vars)
 	- [`system.procinfo`](#systemprocinfo-which)
@@ -1546,6 +1575,7 @@ Index
 		- [`socket:shutdown`](#socketshutdown-)
 	- [`system.suspend`](#systemsuspend-seconds--mode)
 	- [`system.time`](#systemtime-mode)
+	- [`system.touchfile`](#systemtouchfile-path--mode-times)
 	- [`system.unpackenv`](#systemunpackenv-env--tab)
 - [`coutil.threads`](#thread-pools)
 	- [`threads.close`](#threadsclose-pool)
