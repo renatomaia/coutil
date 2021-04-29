@@ -334,6 +334,24 @@ static int pushfilestat (lua_State *L, char mode, uv_fs_t *filereq) {
 	return 1;
 }
 
+static void on_fileopdone (uv_fs_t *filereq) {
+	uv_loop_t *loop = filereq->loop;
+	uv_req_t *request = (uv_req_t *)filereq;
+	lua_State *thread = lcuU_endcoreq(loop, request);
+	ssize_t result = filereq->result;
+	uv_fs_req_cleanup(filereq);
+	if (thread) {
+		int nret;
+		if (result < 0) {
+			nret = lcuL_pusherrres(thread, result);
+		} else {
+			lua_pushinteger(thread, result);
+			nret = 1;
+		}
+		lcuU_resumecoreq(loop, request, nret);
+	}
+}
+
 
 /*
  * File Info
@@ -443,25 +461,33 @@ static int toinfosrc (lua_State *L, const char mode, int mask) {
 		case '=': return INFO_READLINK;
 		/* options */
 		case 'l': if (!(mask&INFO_LSTAT)) break;
-		case LCU_NOYIELDMODE: if (!(mask&INFO_NOYIELD)) break;
+		case LCU_NOYIELDMODE:
 			return luaL_error(L, "'%c' must be in the begin of 'mode'", mode);
 	}
 	return 0;
 }
 
-static const char *checkinfomode (lua_State *L, int arg, int *bits) {
+static const char *checkprefixflags (lua_State *L, int arg, int *bits) {
 	const char *mode = luaL_checkstring(L, arg);
-	int i, mask = *bits;
+	int mask = *bits;
 	*bits = 0;
-	for (; *mode; mode++) {
-		switch (*mode) {
-			case 'l': i = INFO_LSTAT; break;
-			case LCU_NOYIELDMODE: i = INFO_NOYIELD; break;
-			default: i = 0;
-		}
-		if (i&mask) *bits |= i;
-		else if (i == 0) break;
+	for (; *mode; mode++) switch (*mode) {
+		case LCU_NOYIELDMODE:
+			*bits |= INFO_NOYIELD;
+			break;
+		case 'l':
+			if (!(mask&INFO_LSTAT)) return mode;
+			*bits |= INFO_LSTAT;
+			break;
+		default:
+			return mode;
 	}
+	return mode;
+}
+
+static const char *checkinfomode (lua_State *L, int arg, int *bits) {
+	int i, mask = *bits;
+	const char *mode = checkprefixflags(L, arg, bits);
 	for (i = 0; mode[i]; i++) {
 		int sel = toinfosrc(L, mode[i], mask);
 		if (sel&mask) *bits |= sel;
@@ -551,7 +577,7 @@ static int yieldfileinfo (lua_State *L) {
 	return lua_gettop(L)-4;
 }
 static int system_fileinfo (lua_State *L) {
-	int bits = INFO_BITMASK;  /* accept all options */
+	int bits = INFO_LSTAT|INFO_SRCMASK;  /* accept all sources */
 	const char *path = luaL_checkstring(L, 1);
 	const char *mode = checkinfomode(L, 2, &bits);
 	if (bits&INFO_NOYIELD) {
@@ -568,6 +594,78 @@ static int system_fileinfo (lua_State *L) {
 	lua_pushinteger(L, bits);
 	lua_pushlightuserdata(L, (void *)mode);
 	return yieldfileinfo(L);
+}
+
+
+static void checktouchargs (lua_State *L,
+                            int arg,
+                            int *bits,
+                            lua_Number *atime,
+                            lua_Number *mtime) {
+	int i, mask = *bits;
+	const char *mode = checkprefixflags(L, arg, bits);
+	*atime = -1;
+	*mtime = -1;
+	for (i = 0; mode[i]; i++) {
+		lua_Number time = luaL_checknumber(L, 3+i);
+		luaL_argcheck(L, time >= 0, 3+i, "invalid time");
+		switch (mode[i]) {
+			case 'a': *atime = time; break;
+			case 'm': *mtime = time; break;
+			case 'b': *atime = *mtime = time; break;
+			case 'l': if (!(mask&INFO_LSTAT)) goto badchar;
+			case LCU_NOYIELDMODE:
+				luaL_error(L, "'%c' must be in the begin of 'mode'", mode[i]);
+			default: badchar:
+				luaL_error(L, "bad argument #%d, unknown mode char (got '%c')", 3+i, mode[i]);
+		}
+	}
+	if (*atime == -1 || *mtime == -1) {
+		uv_timeval64_t timeval;
+		int err = uv_gettimeofday(&timeval);
+		if (err < 0) lcu_error(L, err);
+		lua_Number time = lcu_time2sec(timeval);
+		if (*atime == -1) *atime = time;
+		if (*mtime == -1) *mtime = time;
+	}
+}
+
+/* true = system.touchfile (path [, mode, times...]) */
+#define callutime(B,L,R,P,A,M,C)	( (B&INFO_LSTAT) ? uv_fs_lutime(L,R,P,A,M,C) \
+                                	                 : uv_fs_utime(L,R,P,A,M,C) )
+static int returnfiletouch (lua_State *L) {
+	int top = lua_gettop(L);
+	if (top > 5) return top-4;
+	lua_pushboolean(L, 1);
+	return 1;
+}
+static int k_setupfiletouch (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	const char *path = lua_tostring(L, 1);
+	int bits = (int)lua_tointeger(L, 2);
+	lua_Number atime = lua_tonumber(L, 3);
+	lua_Number mtime = lua_tonumber(L, 4);
+	int err = callutime(bits, loop, filereq, path, (double)atime, (double)mtime, on_fileopdone);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
+}
+static int system_touchfile (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);
+	const char *path = luaL_checkstring(L, 1);
+	int bits = 0;
+	lua_Number atime, mtime;
+	checktouchargs(L, 2, &bits, &atime, &mtime);
+	if (bits&INFO_NOYIELD) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		int err = callutime(bits, loop, &filereq, path, (double)atime, (double)mtime, NULL);
+		return lcuL_pushresults(L, 0, err);
+	}
+	lua_settop(L, 1);
+	lua_pushinteger(L, bits);
+	lua_pushnumber(L, atime);
+	lua_pushnumber(L, mtime);
+	return lcuT_resetcoreqk(L, sched, k_setupfiletouch, returnfiletouch, NULL);
 }
 
 
@@ -792,24 +890,6 @@ static int file_close (lua_State *L) {
 	return lcuL_pushresults(L, 0, err);
 }
 
-static void on_fileopdone (uv_fs_t *filereq) {
-	uv_loop_t *loop = filereq->loop;
-	uv_req_t *request = (uv_req_t *)filereq;
-	lua_State *thread = lcuU_endcoreq(loop, request);
-	ssize_t result = filereq->result;
-	uv_fs_req_cleanup(filereq);
-	if (thread) {
-		int nret;
-		if (result < 0) {
-			nret = lcuL_pusherrres(thread, result);
-		} else {
-			lua_pushinteger(thread, result);
-			nret = 1;
-		}
-		lcuU_resumecoreq(loop, request, nret);
-	}
-}
-
 /* bytes [, err] = file:read(buffer [, i [, j [, offset [, mode]]]]) */
 static int callread (lua_State *L,
                      uv_loop_t* loop,
@@ -899,7 +979,7 @@ static int k_setupfobjinfo (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 static int file_info (lua_State *L) {
 	uv_file file = *openedfile(L);
 	lcu_Scheduler *sched = tosched(L);
-	int bits = INFO_NOYIELD|INFO_STAT;
+	int bits = INFO_STAT;  /* no extra option */
 	const char *mode = checkinfomode(L, 2, &bits);
 	if (bits&INFO_NOYIELD) {
 		uv_loop_t *loop = lcu_toloop(sched);
@@ -913,7 +993,7 @@ static int file_info (lua_State *L) {
 	return lcuT_resetcoreqk(L, sched, k_setupfobjinfo, returnfobjinfo, NULL);
 }
 
-/* trye = file:touch ([mode, times...]) */
+/* true = file:touch ([mode, times...]) */
 static int returnfobjtouch (lua_State *L) {
 	int top = lua_gettop(L);
 	if (top > 4) return top-3;
@@ -926,38 +1006,16 @@ static int k_setupfobjtouch (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lua_Number atime = lua_tonumber(L, 2);
 	lua_Number mtime = lua_tonumber(L, 3);
 	int err = uv_fs_futime(loop, filereq, *file, (double)atime, (double)mtime, on_fileopdone);
-	if (err < 0) return lcu_error(L, err);
+	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
 static int file_touch (lua_State *L) {
 	uv_file file = *openedfile(L);
 	lcu_Scheduler *sched = tosched(L);
-	const char *mode = luaL_optstring(L, 2, "");
-	lua_Number atime = -1, mtime = -1;
-	int i, noyield = 0;
-	for (; *mode == LCU_NOYIELDMODE; mode++) noyield = 1;
-	for (i = 0; mode[i]; i++) {
-		lua_Number time = luaL_checknumber(L, 3+i);
-		luaL_argcheck(L, time >= 0, 3+i, "invalid time");
-		switch (mode[i]) {
-			case 'a': atime = time; break;
-			case 'm': mtime = time; break;
-			case 'b': atime = mtime = time; break;
-			case LCU_NOYIELDMODE:
-				return luaL_error(L, "'%c' must be in the begin of 'mode'", mode[i]);
-			default:
-				return luaL_error(L, "bad argument #%d, unknown mode char (got '%c')", 3+i, mode[i]);
-		}
-	}
-	if (atime == -1 || mtime == -1) {
-		uv_timeval64_t timeval;
-		int err = uv_gettimeofday(&timeval);
-		if (err < 0) return lcuL_pusherrres(L, err);
-		lua_Number time = lcu_time2sec(timeval);
-		if (atime == -1) atime = time;
-		if (mtime == -1) mtime = time;
-	}
-	if (noyield) {
+	int bits = 0;
+	lua_Number atime, mtime;
+	checktouchargs(L, 2, &bits, &atime, &mtime);
+	if (bits&INFO_NOYIELD) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
 		int err = uv_fs_futime(loop, &filereq, file, (double)atime, (double)mtime, NULL);
@@ -994,6 +1052,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{"fileinfo", system_fileinfo},
 		{"listdir", system_listdir},
 		{"openfile", system_openfile},
+		{"touchfile", system_touchfile},
 		{NULL, NULL}
 	};
 	static const struct { const char *name; int value; } bits[] = {
