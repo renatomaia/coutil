@@ -598,7 +598,7 @@ This section describes functions of `coutil.system` to obtain a measure of time 
 Returns a timestamp as a number of seconds with precision of milliseconds according to the value of `mode`,
 as described below:
 
-- `"cached"` (default): the last calculated timestamp used to evaluate [time-related events](#systemsuspend-seconds).
+- `"cached"` (default): the last calculated timestamp used to evaluate [time-related events](#systemsuspend-seconds--mode).
 It increases monotonically from some arbitrary point in time,
 and is not subject to clock drift.
 - `"updated"`: updates the cached timestamp to reflect the current time,
@@ -1562,7 +1562,7 @@ Index
 		- [`socket:send`](#socketsend-data--i--j--address)
 		- [`socket:setoption`](#socketsetoption-name-value-)
 		- [`socket:shutdown`](#socketshutdown-)
-	- [`system.suspend`](#systemsuspend-seconds)
+	- [`system.suspend`](#systemsuspend-seconds--mode)
 	- [`system.time`](#systemtime-mode)
 	- [`system.unpackenv`](#systemunpackenv-env--tab)
 - [`coutil.threads`](#thread-pools)
