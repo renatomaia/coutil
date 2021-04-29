@@ -213,7 +213,7 @@ local common = {
 	string = "?",
 }
 local values = {}
-local path = "info.lua"
+local path = "file.lua"
 local file = assert(system.openfile(path, "~"))
 
 for _, spec in ipairs{
@@ -315,14 +315,9 @@ end
 
 --------------------------------------------------------------------------------
 
-local common = {
-	boolean = "UGSrwxRWX421",
-	number = "Md#*ugDBib_vamsc",
-	string = "?",
-}
-local values = {}
-local path = "info.lua"
-local file = assert(system.openfile(path, "~"))
+local function timeequals(a, b)
+	return math.abs(a-b) <= 1e-6
+end
 
 for _, spec in ipairs{
 	-- {
@@ -377,34 +372,30 @@ for _, spec in ipairs{
 			local access1, modify1 = spec.get(spec.arg)
 			assert(access1 > access)
 			assert(modify1 > modify)
-			system.suspend(.05, mode)
 
 			assert(spec.func(spec.arg, mode.."a", access) == true)
 
 			local access2, modify2 = spec.get(spec.arg)
-			assert(access2 == access)
+			assert(timeequals(access2, access))
 			assert(modify2 > modify1)
-			system.suspend(.05, mode)
 
 			assert(spec.func(spec.arg, mode.."m", modify) == true)
 
 			local access3, modify3 = spec.get(spec.arg)
 			assert(access3 > access2)
-			assert(modify3 == modify)
-			system.suspend(.05, mode)
+			assert(timeequals(modify3, modify))
 
 			assert(spec.func(spec.arg, mode.."b", access1) == true)
 
 			local access4, modify4 = spec.get(spec.arg)
-			assert(access4 == access1)
-			assert(modify4 == access1)
-			system.suspend(.05, mode)
+			assert(timeequals(access4, access1))
+			assert(timeequals(modify4, access1))
 
 			assert(spec.func(spec.arg, mode.."am", access, modify) == true)
 
 			local access5, modify5 = spec.get(spec.arg)
-			assert(access5 == access)
-			assert(modify5 == modify)
+			assert(timeequals(access5, access))
+			assert(timeequals(modify5, modify))
 		end
 
 		testchange("~")
