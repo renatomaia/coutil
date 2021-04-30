@@ -1324,7 +1324,7 @@ Unlike other characters,
 ### `file:touch ([mode, times...])`
 
 Changes the access and modification times of `file`.
-String `mode` contains a sequence of characters indicating how each provided time value `times...` shall used in `file`.
+String `mode` contains a sequence of characters indicating how each provided time value `times...` shall be used in `file`.
 
 - `a`: as the access time.
 - `m`: as the modification time.
