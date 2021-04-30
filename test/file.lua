@@ -329,6 +329,7 @@ for _, spec in ipairs{
 		func = system.touchfile,
 		arg = path,
 		get = function (path) return system.fileinfo(path, "~am") end,
+		prefix = "l",
 	},
 	{
 		name = "file:touch",
@@ -347,7 +348,10 @@ for _, spec in ipairs{
 	do case "errors"
 		for i = 1, 255 do
 			local char = string.char(i)
-			if not string.find("~"..options, char, 1, "plain search") then
+			if spec.prefix and string.find(spec.prefix, char, 1, "plain search") then
+				asserterr("'"..char.."' must be in the begin of 'mode'",
+				          pcall(spec.func, spec.arg, options..spec.prefix, 0, 0, 0, 0))
+			elseif not string.find("~"..options, char, 1, "plain search") then
 				asserterr("unknown mode char (got '"..char.."')",
 				          pcall(spec.func, spec.arg, char, 0))
 			end

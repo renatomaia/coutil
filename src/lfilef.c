@@ -352,6 +352,13 @@ static void on_fileopdone (uv_fs_t *filereq) {
 	}
 }
 
+static int returntrueover1 (lua_State *L) {
+	int top = lua_gettop(L);
+	if (top > 2) return top-1;
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
 
 /*
  * File Info
@@ -467,8 +474,7 @@ static int toinfosrc (lua_State *L, const char mode, int mask) {
 	return 0;
 }
 
-static const char *checkprefixflags (lua_State *L, int arg, int *bits) {
-	const char *mode = luaL_checkstring(L, arg);
+static const char *checkprefixflags (lua_State *L, const char *mode, int *bits) {
 	int mask = *bits;
 	*bits = 0;
 	for (; *mode; mode++) switch (*mode) {
@@ -487,7 +493,8 @@ static const char *checkprefixflags (lua_State *L, int arg, int *bits) {
 
 static const char *checkinfomode (lua_State *L, int arg, int *bits) {
 	int i, mask = *bits;
-	const char *mode = checkprefixflags(L, arg, bits);
+	const char *mode = luaL_checkstring(L, arg);
+	mode = checkprefixflags(L, mode, bits);
 	for (i = 0; mode[i]; i++) {
 		int sel = toinfosrc(L, mode[i], mask);
 		if (sel&mask) *bits |= sel;
@@ -603,7 +610,8 @@ static void checktouchargs (lua_State *L,
                             lua_Number *atime,
                             lua_Number *mtime) {
 	int i, mask = *bits;
-	const char *mode = checkprefixflags(L, arg, bits);
+	const char *mode = luaL_checkstring(L, arg);
+	mode = checkprefixflags(L, mode, bits);
 	*atime = -1;
 	*mtime = -1;
 	for (i = 0; mode[i]; i++) {
@@ -633,12 +641,6 @@ static void checktouchargs (lua_State *L,
 /* true = system.touchfile (path [, mode, times...]) */
 #define callutime(B,L,R,P,A,M,C)	( (B&INFO_LSTAT) ? uv_fs_lutime(L,R,P,A,M,C) \
                                 	                 : uv_fs_utime(L,R,P,A,M,C) )
-static int returnfiletouch (lua_State *L) {
-	int top = lua_gettop(L);
-	if (top > 5) return top-4;
-	lua_pushboolean(L, 1);
-	return 1;
-}
 static int k_setupfiletouch (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *path = lua_tostring(L, 1);
@@ -647,12 +649,13 @@ static int k_setupfiletouch (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lua_Number mtime = lua_tonumber(L, 4);
 	int err = callutime(bits, loop, filereq, path, (double)atime, (double)mtime, on_fileopdone);
 	if (err < 0) return lcuL_pusherrres(L, err);
+	lua_settop(L, 1);
 	return -1;  /* yield on success */
 }
 static int system_touchfile (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
 	const char *path = luaL_checkstring(L, 1);
-	int bits = 0;
+	int bits = INFO_LSTAT;
 	lua_Number atime, mtime;
 	checktouchargs(L, 2, &bits, &atime, &mtime);
 	if (bits&INFO_NOYIELD) {
@@ -665,7 +668,7 @@ static int system_touchfile (lua_State *L) {
 	lua_pushinteger(L, bits);
 	lua_pushnumber(L, atime);
 	lua_pushnumber(L, mtime);
-	return lcuT_resetcoreqk(L, sched, k_setupfiletouch, returnfiletouch, NULL);
+	return lcuT_resetcoreqk(L, sched, k_setupfiletouch, returntrueover1, NULL);
 }
 
 
@@ -994,12 +997,6 @@ static int file_info (lua_State *L) {
 }
 
 /* true = file:touch ([mode, times...]) */
-static int returnfobjtouch (lua_State *L) {
-	int top = lua_gettop(L);
-	if (top > 4) return top-3;
-	lua_pushboolean(L, 1);
-	return 1;
-}
 static int k_setupfobjtouch (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	uv_file *file = (uv_file *)lua_touserdata(L, 1);
@@ -1007,6 +1004,7 @@ static int k_setupfobjtouch (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lua_Number mtime = lua_tonumber(L, 3);
 	int err = uv_fs_futime(loop, filereq, *file, (double)atime, (double)mtime, on_fileopdone);
 	if (err < 0) return lcuL_pusherrres(L, err);
+	lua_settop(L, 1);
 	return -1;  /* yield on success */
 }
 static int file_touch (lua_State *L) {
@@ -1024,7 +1022,7 @@ static int file_touch (lua_State *L) {
 	lua_settop(L, 1);
 	lua_pushnumber(L, atime);
 	lua_pushnumber(L, mtime);
-	return lcuT_resetcoreqk(L, sched, k_setupfobjtouch, returnfobjtouch, NULL);
+	return lcuT_resetcoreqk(L, sched, k_setupfobjtouch, returntrueover1, NULL);
 }
 
 
