@@ -708,6 +708,32 @@ static int system_ownfile (lua_State *L) {
 }
 
 
+/* true = system.grantfile (path, perm [, mode]) */
+static int k_setupfilegrant (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	const char *path = lua_tostring(L, 1);
+	int perm = (int)lua_tointeger(L, 2);
+	int err = uv_fs_chmod(loop, filereq, path, perm, on_fileopdone);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	lua_settop(L, 1);
+	return -1;  /* yield on success */
+}
+static int system_grantfile (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);
+	const char *path = luaL_checkstring(L, 1);
+	int perm = checkperm(L, 2);
+	if (lcuL_checknoyieldmode(L, 3)) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		int err = uv_fs_chmod(loop, &filereq, path, perm, NULL);
+		return lcuL_pushresults(L, 0, err);
+	}
+	lua_settop(L, 1);
+	lua_pushinteger(L, perm);
+	return lcuT_resetcoreqk(L, sched, k_setupfilegrant, returntrueover1, NULL);
+}
+
+
 /*
  * Directories
  */
@@ -1086,6 +1112,31 @@ static int file_own (lua_State *L) {
 	return lcuT_resetcoreqk(L, sched, k_setupfobjown, returntrueover1, NULL);
 }
 
+/* true = file:grant (perm [, mode]) */
+static int k_setupfobjgrant (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	uv_file *file = (uv_file *)lua_touserdata(L, 1);
+	int perm = (int)lua_tointeger(L, 2);
+	int err = uv_fs_fchmod(loop, filereq, *file, perm, on_fileopdone);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	lua_settop(L, 1);
+	return -1;  /* yield on success */
+}
+static int file_grant (lua_State *L) {
+	lcu_Scheduler *sched = tosched(L);
+	uv_file file = *openedfile(L);
+	int perm = checkperm(L, 2);
+	if (lcuL_checknoyieldmode(L, 3)) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		int err = uv_fs_fchmod(loop, &filereq, file, perm, NULL);
+		return lcuL_pushresults(L, 0, err);
+	}
+	lua_settop(L, 1);
+	lua_pushinteger(L, perm);
+	return lcuT_resetcoreqk(L, sched, k_setupfobjgrant, returntrueover1, NULL);
+}
+
 
 LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 	static const luaL_Reg dirinfomt[] = {
@@ -1106,6 +1157,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{"info", file_info},
 		{"touch", file_touch},
 		{"own", file_own},
+		{"grant", file_grant},
 		{NULL, NULL}
 	};
 	static const luaL_Reg modf[] = {
@@ -1114,6 +1166,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{"openfile", system_openfile},
 		{"touchfile", system_touchfile},
 		{"ownfile", system_ownfile},
+		{"grantfile", system_grantfile},
 		{NULL, NULL}
 	};
 	static const struct { const char *name; int value; } bits[] = {
