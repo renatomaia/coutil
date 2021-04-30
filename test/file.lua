@@ -2,6 +2,7 @@ local memory = require "memory"
 local system = require "coutil.system"
 
 local buffer = memory.create(20)
+local permchar = "UGSrwxRWX421"
 
 newtest "listdir" --------------------------------------------------------------
 
@@ -106,10 +107,9 @@ end
 
 do case "invalid permission"
 	spawn(function ()
-		local valid = "UGSrwxRWX421"
 		for i = 1, 255 do
 			local char = string.char(i)
-			if not valid:find(char, 1, true) then
+			if not permchar:find(char, 1, true) then
 				asserterr("unknown perm char", pcall(system.openfile, "./non-existent.txt", "N", char))
 			end
 		end
@@ -478,6 +478,69 @@ for _, spec in ipairs{
 			else
 				asserterr("not permitted", res, errmsg)
 			end
+		end
+
+		testchange("~")
+
+		spawn(testchange, "")
+		assert(system.run() == false)
+
+		done()
+	end
+
+end
+
+--------------------------------------------------------------------------------
+
+for _, spec in ipairs{
+	{
+		name = "grantfile",
+		func = system.grantfile,
+		arg = path,
+		get = function (path) return system.fileinfo(path, "~M") & ~system.filebits.type end,
+	},
+	{
+		name = "file:grant",
+		func = file.grant,
+		arg = file,
+		get = function (file) return file:info("~M") & ~system.filebits.type end,
+	},
+} do
+
+	newtest(spec.name)
+
+	local filemode = spec.get(spec.arg)
+
+	do case "errors"
+		for i = 1, 255 do
+			local char = string.char(i)
+			if char ~= "~" then
+				asserterr("unknown mode char (got '"..char.."')",
+				          pcall(spec.func, spec.arg, 0, char))
+			end
+			if not permchar:find(char, 1, "plain search") then
+				asserterr("unknown perm char (got '"..char.."')",
+				          pcall(spec.func, spec.arg, char, "~"))
+			end
+		end
+
+		asserterr("number expected", pcall(spec.func, spec.arg))
+		asserterr("unable to yield", pcall(spec.func, spec.arg, 0))
+
+		local newfilemode = spec.get(spec.arg)
+		assert(newfilemode == filemode)
+
+		done()
+	end
+
+	do case "change permissions"
+		local function testchange(mode)
+			local newmode = system.filebits.ruser|system.filebits.wuser
+			assert(spec.func(spec.arg, newmode, mode))
+			assert(spec.get(spec.arg) == newmode)
+
+			assert(spec.func(spec.arg, filemode, mode) == true)
+			assert(spec.get(spec.arg) == filemode)
 		end
 
 		testchange("~")
