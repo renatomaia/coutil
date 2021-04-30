@@ -2,6 +2,7 @@ local memory = require "memory"
 local system = require "coutil.system"
 
 local buffer = memory.create(20)
+local permchar = "UGSrwxRWX421"
 
 newtest "listdir" --------------------------------------------------------------
 
@@ -106,10 +107,9 @@ end
 
 do case "invalid permission"
 	spawn(function ()
-		local valid = "UGSrwxRWX421"
 		for i = 1, 255 do
 			local char = string.char(i)
-			if not valid:find(char, 1, true) then
+			if not permchar:find(char, 1, true) then
 				asserterr("unknown perm char", pcall(system.openfile, "./non-existent.txt", "N", char))
 			end
 		end
@@ -517,6 +517,10 @@ for _, spec in ipairs{
 			if char ~= "~" then
 				asserterr("unknown mode char (got '"..char.."')",
 				          pcall(spec.func, spec.arg, 0, char))
+			end
+			if not permchar:find(char, 1, "plain search") then
+				asserterr("unknown perm char (got '"..char.."')",
+				          pcall(spec.func, spec.arg, char, "~"))
 			end
 		end
 
