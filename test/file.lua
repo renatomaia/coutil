@@ -432,8 +432,6 @@ for _, spec in ipairs{
 
 	newtest(spec.name)
 
-	local options = "amb"
-
 	local uid, gid = spec.get(spec.arg)
 
 	do case "errors"
