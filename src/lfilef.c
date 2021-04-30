@@ -672,6 +672,42 @@ static int system_touchfile (lua_State *L) {
 }
 
 
+/* true = system.ownfile (path, user, group [, mode]) */
+#define callchown(B,L,R,P,U,G,C)	( (B&INFO_LSTAT) ? uv_fs_lchown(L,R,P,U,G,C) \
+                                	                 : uv_fs_chown(L,R,P,U,G,C) )
+static int k_setupfileown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	const char *path = lua_tostring(L, 1);
+	uv_uid_t uid = (uv_uid_t)lua_tointeger(L, 2);
+	uv_gid_t gid = (uv_gid_t)lua_tointeger(L, 3);
+	int bits = (int)lua_tointeger(L, 4);
+	int err = callchown(bits, loop, filereq, path, uid, gid, on_fileopdone);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	lua_settop(L, 1);
+	return -1;  /* yield on success */
+}
+static int system_ownfile (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);
+	const char *path = luaL_checkstring(L, 1);
+	uv_uid_t uid = (uv_uid_t)luaL_checkinteger(L, 2);
+	uv_gid_t gid = (uv_gid_t)luaL_checkinteger(L, 3);
+	const char *mode = luaL_optstring(L, 4, "");
+	int bits = INFO_LSTAT;
+	mode = checkprefixflags(L, mode, &bits);
+	if (*mode)
+		luaL_error(L, "bad argument #%d, unknown mode char (got '%c')", 4, *mode);
+	if (bits&INFO_NOYIELD) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		int err = callchown(bits, loop, &filereq, path, uid, gid, NULL);
+		return lcuL_pushresults(L, 0, err);
+	}
+	lua_settop(L, 3);
+	lua_pushinteger(L, bits);
+	return lcuT_resetcoreqk(L, sched, k_setupfileown, returntrueover1, NULL);
+}
+
+
 /*
  * Directories
  */
@@ -1025,6 +1061,31 @@ static int file_touch (lua_State *L) {
 	return lcuT_resetcoreqk(L, sched, k_setupfobjtouch, returntrueover1, NULL);
 }
 
+/* true = file:own (user, group [, mode]) */
+static int k_setupfobjown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	uv_file *file = (uv_file *)lua_touserdata(L, 1);
+	uv_uid_t uid = (uv_uid_t)lua_tointeger(L, 2);
+	uv_gid_t gid = (uv_gid_t)lua_tointeger(L, 3);
+	int err = uv_fs_fchown(loop, filereq, *file, uid, gid, on_fileopdone);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	lua_settop(L, 1);
+	return -1;  /* yield on success */
+}
+static int file_own (lua_State *L) {
+	lcu_Scheduler *sched = tosched(L);
+	uv_file file = *openedfile(L);
+	uv_uid_t uid = (uv_uid_t)luaL_checkinteger(L, 2);
+	uv_gid_t gid = (uv_gid_t)luaL_checkinteger(L, 3);
+	if (lcuL_checknoyieldmode(L, 4)) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		int err = uv_fs_fchown(loop, &filereq, file, uid, gid, NULL);
+		return lcuL_pushresults(L, 0, err);
+	}
+	return lcuT_resetcoreqk(L, sched, k_setupfobjown, returntrueover1, NULL);
+}
+
 
 LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 	static const luaL_Reg dirinfomt[] = {
@@ -1044,6 +1105,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{"write", file_write},
 		{"info", file_info},
 		{"touch", file_touch},
+		{"own", file_own},
 		{NULL, NULL}
 	};
 	static const luaL_Reg modf[] = {
@@ -1051,6 +1113,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{"listdir", system_listdir},
 		{"openfile", system_openfile},
 		{"touchfile", system_touchfile},
+		{"ownfile", system_ownfile},
 		{NULL, NULL}
 	};
 	static const struct { const char *name; int value; } bits[] = {

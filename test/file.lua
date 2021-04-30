@@ -412,4 +412,82 @@ for _, spec in ipairs{
 
 end
 
+--------------------------------------------------------------------------------
+
+for _, spec in ipairs{
+	{
+		name = "ownfile",
+		func = system.ownfile,
+		arg = path,
+		get = function (path) return system.fileinfo(path, "~ug") end,
+		prefix = "l",
+	},
+	{
+		name = "file:own",
+		func = file.own,
+		arg = file,
+		get = function (file) return file:info("~ug") end,
+	},
+} do
+
+	newtest(spec.name)
+
+	local uid, gid = spec.get(spec.arg)
+
+	do case "errors"
+		for i = 1, 255 do
+			local char = string.char(i)
+			if char ~= "~" and (spec.prefix == nil or not string.find(spec.prefix, char, 1, "plain search")) then
+				asserterr("unknown mode char (got '"..char.."')",
+				          pcall(spec.func, spec.arg, uid, gid, char))
+			end
+		end
+
+		asserterr("number expected", pcall(spec.func, spec.arg))
+		asserterr("number expected", pcall(spec.func, spec.arg, uid))
+		asserterr("unable to yield", pcall(spec.func, spec.arg, uid, gid))
+
+		local newuid, newgid = spec.get(spec.arg)
+		assert(newuid == uid)
+		assert(newgid == gid)
+
+		done()
+	end
+
+	do case "change owner"
+		local function testchange(mode)
+			local res, errmsg = spec.func(spec.arg, 0, 0, mode)
+			if res then
+				assert(res == true)
+
+				local curruid, currgid = spec.get(spec.arg)
+				assert(curruid == 0)
+				assert(currgid == 0)
+
+				assert(spec.func(spec.arg, uid, -1, mode) == true)
+
+				local curruid, currgid = spec.get(spec.arg)
+				assert(curruid == uid)
+				assert(currgid == 0)
+
+				assert(spec.func(spec.arg, -1, gid, mode) == true)
+
+				local curruid, currgid = spec.get(spec.arg)
+				assert(curruid == uid)
+				assert(currgid == gid)
+			else
+				asserterr("not permitted", res, errmsg)
+			end
+		end
+
+		testchange("~")
+
+		spawn(testchange, "")
+		assert(system.run() == false)
+
+		done()
+	end
+
+end
+
 file:close()

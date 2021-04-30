@@ -1223,6 +1223,16 @@ The other arguments are the same of [`file:touch`](#filetouch-mode-times).
 if `path` refers a symbolic link,
 the time values are changed for the symbolic link file instead of the link's target file.
 
+### `system.ownfile (path, uid, gid [, mode])`
+
+Similar to [`file:own`](#fileown-uid-gid--mode),
+but for file in path given by string `path`.
+The other arguments are the same of [`file:own`](#fileown-uid-gid--mode).
+
+`mode` can also be prefixed with `l` to indicate that,
+if `path` refers a symbolic link,
+the ownership is changed for the symbolic link file instead of the link's target file.
+
 ### `system.openfile (path [, mode [, perm]])`
 
 Opens file from the path indicated by string `path`.
@@ -1328,6 +1338,16 @@ Unlike other characters,
 `~` does not consume a time value from `times...`.
 
 **Note**: all time values are seconds relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time) with sub-second precision.
+
+### `file:own (uid, gid [, mode])`
+
+Changes the onwer user ID of `file` to number `uid`,
+and the owner group ID of `file` to `gid`.
+If the `uid` or `gid` is specified as -1,
+then that ID is not changed.
+
+`mode` is a string,
+which might contain character `~` to execute it in [blocking mode](#blocking-mode).
 
 ### `file:write (data [, i [, j [, offset [, mode]]]])`
 
@@ -1550,9 +1570,11 @@ Index
 	- [`system.openfile`](#systemopenfile-path--mode--perm)
 		- [`file:close`](#fileclose-)
 		- [`file:info`](#fileinfo-mode)
+		- [`file:own`](#fileown-uid-gid--mode)
 		- [`file:read`](#fileread-buffer--i--j--offset--mode)
 		- [`file:touch`](#filetouch-mode-times)
 		- [`file:write`](#filewrite-data--i--j--offset--mode)
+	- [`system.ownfile`](#systemownfile-path-uid-gid--mode)
 	- [`system.packenv`](#systempackenv-vars)
 	- [`system.procinfo`](#systemprocinfo-which)
 	- [`system.random`](#systemrandom-buffer--i--j--mode)
