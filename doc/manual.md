@@ -1233,6 +1233,12 @@ The other arguments are the same of [`file:own`](#fileown-uid-gid--mode).
 if `path` refers a symbolic link,
 the ownership is changed for the symbolic link file instead of the link's target file.
 
+### `system.grantfile (path, perm [, mode])`
+
+Similar to [`file:grant`](#filegrant-perm--mode),
+but for file in path given by string `path`.
+The other arguments are the same of [`file:grant`](#filegrant-perm--mode).
+
 ### `system.openfile (path [, mode [, perm]])`
 
 Opens file from the path indicated by string `path`.
@@ -1255,22 +1261,8 @@ it is truncated to length 0 (implies `w`).
 `mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
 
 When either `n` or `N` are present in `mode`,
-`perm` must be either a number with the [file bits](#systemfilebits),
-or a string with characters defining the bits to be set for the file to be created,
-as listed below:
-
-- `U` Set-**user**-ID _bit_.
-- `G` Set-**group**-ID _bit_.
-- `S` **Sticky** bit.
-- `r` **Read** permission for the file's onwer _user_ ID.
-- `w` **Write** permission for the file's onwer _user_ ID.
-- `x` **Execute** permission for the file's onwer _user_ ID.
-- `R` **Read** permission for the file's owner _group_ ID.
-- `W` **Write** permission for the file's owner _group_ ID.
-- `X` **Execute** permission for the file's owner _group_ ID.
-- `4` **Read** permission for _others_.
-- `2` **Write** permission for _others_.
-- `1` **Execute** permission for _others_.
+`perm` be a number indicating the permissions of the file to be created.
+just like argument `perm` of [`file:grant`](#filegrant-perm--mode).
 
 **Note**: these file permissions are not enforced by the call that creates the file.
 They only affect future accesses.
@@ -1312,7 +1304,7 @@ according to the following characters in string `mode`:
 | `m` | number <!-- st_mtim --> | Time of last **modification** of the file. |
 | `c` | number <!-- st_birthtim --> | Time of file **creation**. |
 
-`mode` can also contain any of the characters valid for argument `perm` of [`system.openfile`](#systemopenfile-path--mode--perm).
+`mode` can also contain any of the characters valid for argument `perm` of - [`file:grant`](#filegrant-perm--mode).
 For these characters a boolean is returned indicating whether such bit is set.
 
 `mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
@@ -1345,6 +1337,29 @@ Changes the onwer user ID of `file` to number `uid`,
 and the owner group ID of `file` to `gid`.
 If the `uid` or `gid` is specified as -1,
 then that ID is not changed.
+
+`mode` is a string,
+which might contain character `~` to execute it in [blocking mode](#blocking-mode).
+
+### `file:grant (perm [, mode])`
+
+Changes the permission bits of `file`.
+`perm` must be either a number with the [file bits](#systemfilebits),
+or a string with characters defining the bits to be set for the file to be created,
+as listed below:
+
+- `U` Set-**user**-ID _bit_.
+- `G` Set-**group**-ID _bit_.
+- `S` **Sticky** bit.
+- `r` **Read** permission for the file's onwer _user_ ID.
+- `w` **Write** permission for the file's onwer _user_ ID.
+- `x` **Execute** permission for the file's onwer _user_ ID.
+- `R` **Read** permission for the file's owner _group_ ID.
+- `W` **Write** permission for the file's owner _group_ ID.
+- `X` **Execute** permission for the file's owner _group_ ID.
+- `4` **Read** permission for _others_.
+- `2` **Write** permission for _others_.
+- `1` **Execute** permission for _others_.
 
 `mode` is a string,
 which might contain character `~` to execute it in [blocking mode](#blocking-mode).
@@ -1561,6 +1576,7 @@ Index
 	- [`system.getdir`](#systemgetdir-)
 	- [`system.getenv`](#systemgetenv-name)
 	- [`system.getpriority`](#systemgetpriority-pid)
+	- [`system.grantfile`](#systemgrantfile-path-perm--mode)
 	- [`system.halt`](#systemhalt-)
 	- [`system.isrunning`](#systemisrunning-)
 	- [`system.listdir`](#systemlistdir-path--mode)
@@ -1569,6 +1585,7 @@ Index
 	- [`system.netinfo`](#systemnetinfo-option-which)
 	- [`system.openfile`](#systemopenfile-path--mode--perm)
 		- [`file:close`](#fileclose-)
+		- [`file:grant`](#filegrant-perm--mode)
 		- [`file:info`](#fileinfo-mode)
 		- [`file:own`](#fileown-uid-gid--mode)
 		- [`file:read`](#fileread-buffer--i--j--offset--mode)
