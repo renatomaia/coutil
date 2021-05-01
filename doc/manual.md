@@ -1205,7 +1205,7 @@ Similar to `~`,
 
 Creates a uniquely named temporary directory with the prefix given by string `prefix`.
 
-`mode` might contain any of the following characters to make it create a file instead of a directory.
+String `mode` might contain any of the following characters to make it create a file instead of a directory.
 These characters also define the sequence of values returned by the call in case of success.
 
 - `f`: returns the path to the **file** created.
@@ -1218,6 +1218,24 @@ this function returns the path to the created directory on success.
 
 By default,
 mode is the empty string.
+
+### `system.makelink (path, linkpath [, mode])`
+
+Creates a link on path `linkpath` refering the file on path given by string `path`.
+If linkpath exists,
+it is **not** overwritten.
+
+String `mode` might contain `s` to create a symbolic link,
+instead of a hard link.
+
+On Windows,
+`mode` can contain the following characters to control how the symbolic link will be created.
+(all imply `s`):
+
+- `d`: indicates that path points to a directory.
+- `j`: request that the symlink is created using junction points.
+
+`mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
 
 ### `system.listdir (path [, mode])`
 
@@ -1598,6 +1616,7 @@ Index
 	- [`system.halt`](#systemhalt-)
 	- [`system.isrunning`](#systemisrunning-)
 	- [`system.listdir`](#systemlistdir-path--mode)
+	- [`system.makelink`](#systemmakelink-path-linkpath--mode)
 	- [`system.maketemp`](#systemmaketemp-prefix--mode)
 	- [`system.nameaddr`](#systemnameaddr-address--mode)
 	- [`system.nanosecs`](#systemnanosecs-)
