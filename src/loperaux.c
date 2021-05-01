@@ -363,7 +363,7 @@ LCUI_FUNC lua_State *lcuU_endcoreq (uv_loop_t *loop, uv_req_t *request) {
 	Operation *op = (Operation *)request;
 	lcu_Scheduler *sched = lcu_tosched(loop);
 	sched->nactive--;
-	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST|FLAG_THRSAVED));
+	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST|FLAG_THRSAVED) == (FLAG_REQUEST|FLAG_THRSAVED));
 	request->type = UV_UNKNOWN_REQ;
 	if (lcuL_maskflag(op, FLAG_PENDING)) return (lua_State *)request->data;
 	lcuL_clearflag(op, FLAG_THRSAVED|FLAG_NOCANCEL);
@@ -376,7 +376,7 @@ LCUI_FUNC void lcuU_resumecoreq (uv_loop_t *loop, uv_req_t *request, int narg) {
 	lua_State *L = (lua_State *)loop->data;
 	lua_State *thread = (lua_State *)request->data;
 	Operation *op = (Operation *)request;
-	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST|FLAG_THRSAVED|FLAG_PENDING));
+	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST|FLAG_THRSAVED|FLAG_PENDING) == (FLAG_REQUEST|FLAG_THRSAVED|FLAG_PENDING));
 	resumethread(thread, L, narg, loop);
 	if (lcuL_maskflag(op, FLAG_REQUEST) && request->type == UV_UNKNOWN_REQ) {
 		lcuL_clearflag(op, FLAG_THRSAVED);
