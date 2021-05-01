@@ -332,6 +332,50 @@ do case "write contents"
 	done()
 end
 
+newtest "file:flush" -----------------------------------------------------------
+
+do case "errors"
+
+	local file = assert(system.openfile("../LICENSE", "~r"))
+	for i = 1, 255 do
+		local char = string.char(i)
+		if not string.find("~d", char, 1, "plain search") then
+			asserterr("unknown mode char", pcall(file.flush, file, char))
+		end
+	end
+
+	file:close()
+
+	done()
+end
+
+do case "flush contents"
+
+	local path = "DELETEME.txt"
+	local file = assert(system.openfile(path, "~wN", system.filebits.ruser))
+
+	function testcase(...)
+		for i = 1, select("#", ...) do
+			local mode = select(i, ...)
+			assert(file:write("mode="..mode.." ", nil, nil, nil, "~"))
+			assert(file:flush(mode) == true)
+		end
+	end
+	spawn(testcase, "", "d")
+	system.run()
+
+	testcase("~", "~d")
+
+	file:close()
+
+	file = assert(io.open(path))
+	assert(file:read("a") == "mode= mode=d mode=~ mode=~d ")
+	file:close()
+	os.remove(path)
+
+	done()
+end
+
 --------------------------------------------------------------------------------
 
 local common = {

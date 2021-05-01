@@ -1168,6 +1168,40 @@ static int file_write (lua_State *L) {
 	return lcuT_resetcoreqk(L, sched, k_setupwritefile, NULL, NULL);
 }
 
+/* true = file:flush ([mode]) */
+#define FLUSH_NOYIELD   0x01
+#define FLUSH_DATAONLY  0x02
+#define callfsync(D,L,R,F,C) (D) ? uv_fs_fdatasync(L,R,F,C) : uv_fs_fsync(L,R,F,C)
+static int k_setupfobjflush (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	uv_file file = *((uv_file *)lua_touserdata(L, 1));
+	int err = callfsync(lua_toboolean(L, 2), loop, filereq, file, on_fileopdone);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	lua_settop(L, 1);
+	return -1;  /* yield on success */
+}
+static int file_flush (lua_State *L) {
+	lcu_Scheduler *sched = tosched(L);
+	uv_file file = *openedfile(L);
+	const char *mode = luaL_optstring(L, 2, "");
+	int bits = 0;
+	for (; *mode; mode++) switch (*mode) {
+		case 'd': bits |= FLUSH_DATAONLY; break;
+		case LCU_NOYIELDMODE: bits |= FLUSH_NOYIELD; break;
+		default:
+			return luaL_error(L, "bad argument #%d, unknown mode char (got '%c')", 3, *mode);
+	}
+	if (bits&FLUSH_NOYIELD) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		int err = callfsync(bits&FLUSH_DATAONLY, loop, &filereq, file, NULL);
+		return lcuL_pushresults(L, 0, err);
+	}
+	lua_settop(L, 1);
+	lua_pushboolean(L, bits&FLUSH_DATAONLY);
+	return lcuT_resetcoreqk(L, sched, k_setupfobjflush, returntrueover1, NULL);
+}
+
 /* ... = file:info(mode) */
 static int returnfobjinfo (lua_State *L) {
 	uv_fs_t *filereq = (uv_fs_t *)lua_touserdata(L, -1);
@@ -1303,6 +1337,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{"close", file_close},
 		{"read", file_read},
 		{"write", file_write},
+		{"flush", file_flush},
 		{"info", file_info},
 		{"touch", file_touch},
 		{"own", file_own},

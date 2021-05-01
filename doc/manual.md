@@ -1400,6 +1400,24 @@ as listed below:
 `mode` is a string,
 which might contain character `~` to execute it in [blocking mode](#blocking-mode).
 
+### `file:read (buffer [, i [, j [, offset [, mode]]]])`
+
+[Await function](#await-function) that awaits until it reads from file `file` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
+following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+
+If `offset` is provided,
+the file is read from the `offset` provided from the begin of the file.
+In such case,
+the file offset is not changed by this call.
+In the other case,
+the current file offset is used and updated.
+
+`mode` is a string,
+which might contain character `~` to execute it in [blocking mode](#blocking-mode).
+
+In case of success,
+this function returns the number of bytes copied to `buffer`.
+
 ### `file:write (data [, i [, j [, offset [, mode]]]])`
 
 [Await function](#await-function) that awaits until it writes to file `file` the substring of `data` that starts at `i` and continues until `j`,
@@ -1418,23 +1436,14 @@ which might contain character `~` to execute it in [blocking mode](#blocking-mod
 In case of success,
 this function returns the number of bytes written to `file`.
 
-### `file:read (buffer [, i [, j [, offset [, mode]]]])`
+### `file:flush ([mode])`
 
-[Await function](#await-function) that awaits until it reads from file `file` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
-following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+Saves any written data to `file`.
 
-If `offset` is provided,
-the file is read from the `offset` provided from the begin of the file.
-In such case,
-the file offset is not changed by this call.
-In the other case,
-the current file offset is used and updated.
+If string `mode` contains `d`,
+it minimizes the disk activity by skipping metadata not necessary for proper data retrieval.
 
-`mode` is a string,
-which might contain character `~` to execute it in [blocking mode](#blocking-mode).
-
-In case of success,
-this function returns the number of bytes copied to `buffer`.
+`mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
 
 System Information
 ------------------
@@ -1623,6 +1632,7 @@ Index
 	- [`system.netinfo`](#systemnetinfo-option-which)
 	- [`system.openfile`](#systemopenfile-path--mode--perm)
 		- [`file:close`](#fileclose-)
+		- [`file:flush`](#fileflush-mode)
 		- [`file:grant`](#filegrant-perm--mode)
 		- [`file:info`](#fileinfo-mode)
 		- [`file:own`](#fileown-uid-gid--mode)
