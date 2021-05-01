@@ -332,6 +332,50 @@ do case "write contents"
 	done()
 end
 
+newtest "file:truncate" --------------------------------------------------------
+
+do case "errors"
+
+	local file = assert(system.openfile("../LICENSE", "~r"))
+	for i = 1, 255 do
+		local char = string.char(i)
+		if char ~= "~" then
+			asserterr("unknown mode char", pcall(file.truncate, file, 128, char))
+		end
+	end
+
+	asserterr("invalid argument", file:truncate(32, "~"))
+
+	file:close()
+
+	done()
+end
+
+do case "truncate contents"
+	local path = "DELETEME.txt"
+
+	local function testcase(mode)
+		local file = assert(system.openfile(path, mode.."wN", system.filebits.ruser))
+		for i = 1, 100 do
+			assert(file:write("0123456789", nil, nil, nil, mode))
+		end
+		assert(file:flush(mode))
+		assert(file:truncate(256, mode) == true)
+		assert(file:close())
+	end
+
+	spawn(testcase, "")
+	system.run()
+	assert(system.fileinfo(path, "~B") == 256)
+	os.remove(path)
+
+	testcase("~")
+	assert(system.fileinfo(path, "~B") == 256)
+	os.remove(path)
+
+	done()
+end
+
 newtest "file:flush" -----------------------------------------------------------
 
 do case "errors"
