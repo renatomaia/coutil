@@ -144,6 +144,55 @@ do
 	end
 end
 
+newtest "makelink" --------------------------------------------------------------
+
+do case "errors"
+
+	for i = 1, 255 do
+		local char = string.char(i)
+		if not string.find("~sdj", char, 1, true) then
+			asserterr("unknown mode char", pcall(system.makelink, "file.lua", "link.lua", char))
+		end
+	end
+
+	done()
+end
+
+do
+	local testcases = {}
+	function testcases.hardlink(mode)
+		assert(system.makelink("file.lua", "link.lua", mode) == true)
+		assert(system.fileinfo("link.lua", mode.."?") == "file")
+		assert(system.fileinfo("link.lua", mode.."=") == nil)
+		os.remove("link.lua")
+	end
+	function testcases.symbolic(mode)
+		assert(system.makelink("file.lua", "link.lua", "s"..mode) == true)
+		assert(system.fileinfo("link.lua", mode.."l?") == "link")
+		assert(system.fileinfo("link.lua", mode.."?") == "file")
+		assert(system.fileinfo("link.lua", mode.."=") == "file.lua")
+		os.remove("link.lua")
+	end
+	function testcases.directory(mode)
+		assert(system.makelink("benchmarks", "linkdir", "d"..mode) == true)
+		assert(system.fileinfo("linkdir", mode.."l?") == "link")
+		assert(system.fileinfo("linkdir", mode.."?") == "directory")
+		assert(system.fileinfo("linkdir", mode.."=") == "benchmarks")
+		os.remove("linkdir")
+	end
+
+	for casename, casefunc in pairs(testcases) do
+		case("create "..casename)
+
+		casefunc("~")
+
+		spawn(casefunc, "")
+		assert(system.run() == false)
+
+		done()
+	end
+end
+
 newtest "openfile" -------------------------------------------------------------
 
 local validpath = "/dev/null"
