@@ -614,8 +614,14 @@ for _, spec in ipairs{
 			end
 		end
 
-		asserterr("number expected", pcall(spec.func, spec.arg))
-		asserterr("number expected", pcall(spec.func, spec.arg, uid))
+		spawn(function ()
+			asserterr("number expected", pcall(spec.func, spec.arg))
+			asserterr("number expected", pcall(spec.func, spec.arg, uid))
+		end)
+		assert(system.run() == false)
+
+		asserterr("number expected", pcall(spec.func, spec.arg, nil, nil, "~"))
+		asserterr("number expected", pcall(spec.func, spec.arg, uid, nil, "~"))
 		asserterr("unable to yield", pcall(spec.func, spec.arg, uid, gid))
 
 		local newuid, newgid = spec.get(spec.arg)

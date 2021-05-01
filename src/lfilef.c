@@ -567,7 +567,7 @@ static void on_fileinfo (uv_fs_t *filereq) {
 }
 static int k_setupfileinfo (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
-	const char *path = lua_tostring(L, 1);
+	const char *path = luaL_checkstring(L, 1);
 	int bits = lua_tointeger(L, 3);
 	getinfosrc(L, &bits, loop, filereq, path, on_fileinfo);
 	lua_pushinteger(L, bits);
@@ -584,12 +584,12 @@ static int yieldfileinfo (lua_State *L) {
 }
 static int system_fileinfo (lua_State *L) {
 	int bits = INFO_LSTAT|INFO_SRCMASK;  /* accept all sources */
-	const char *path = luaL_checkstring(L, 1);
 	const char *mode = checkinfomode(L, 2, &bits);
 	if (bits&INFO_NOYIELD) {
 		lcu_Scheduler *sched = lcu_getsched(L);
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
+		const char *path = luaL_checkstring(L, 1);
 		while (bits&INFO_SRCMASK) {
 			getinfosrc(L, &bits, loop, &filereq, path, NULL);
 			pushfileinfo(L, 2, bits, mode, &filereq);
@@ -642,7 +642,7 @@ static void checktouchargs (lua_State *L,
                                 	                 : uv_fs_utime(L,R,P,A,M,C) )
 static int k_setupfiletouch (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
-	const char *path = lua_tostring(L, 1);
+	const char *path = luaL_checkstring(L, 1);
 	int bits = (int)lua_tointeger(L, 2);
 	lua_Number atime = lua_tonumber(L, 3);
 	lua_Number mtime = lua_tonumber(L, 4);
@@ -653,13 +653,13 @@ static int k_setupfiletouch (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 }
 static int system_touchfile (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
-	const char *path = luaL_checkstring(L, 1);
 	int bits = INFO_LSTAT;
 	lua_Number atime, mtime;
 	checktouchargs(L, 2, &bits, &atime, &mtime);
 	if (bits&INFO_NOYIELD) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
+		const char *path = luaL_checkstring(L, 1);
 		int err = callutime(bits, loop, &filereq, path, (double)atime, (double)mtime, NULL);
 		return lcuL_pushresults(L, 0, err);
 	}
@@ -676,9 +676,9 @@ static int system_touchfile (lua_State *L) {
                                 	                 : uv_fs_chown(L,R,P,U,G,C) )
 static int k_setupfileown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
-	const char *path = lua_tostring(L, 1);
-	uv_uid_t uid = (uv_uid_t)lua_tointeger(L, 2);
-	uv_gid_t gid = (uv_gid_t)lua_tointeger(L, 3);
+	const char *path = luaL_checkstring(L, 1);
+	uv_uid_t uid = (uv_uid_t)luaL_checkinteger(L, 2);
+	uv_gid_t gid = (uv_gid_t)luaL_checkinteger(L, 3);
 	int bits = (int)lua_tointeger(L, 4);
 	int err = callchown(bits, loop, filereq, path, uid, gid, on_fileopdone);
 	if (err < 0) return lcuL_pusherrres(L, err);
@@ -687,9 +687,6 @@ static int k_setupfileown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 }
 static int system_ownfile (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
-	const char *path = luaL_checkstring(L, 1);
-	uv_uid_t uid = (uv_uid_t)luaL_checkinteger(L, 2);
-	uv_gid_t gid = (uv_gid_t)luaL_checkinteger(L, 3);
 	const char *mode = luaL_optstring(L, 4, "");
 	int bits = INFO_LSTAT;
 	mode = checkprefixflags(L, mode, &bits);
@@ -698,6 +695,9 @@ static int system_ownfile (lua_State *L) {
 	if (bits&INFO_NOYIELD) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
+		const char *path = luaL_checkstring(L, 1);
+		uv_uid_t uid = (uv_uid_t)luaL_checkinteger(L, 2);
+		uv_gid_t gid = (uv_gid_t)luaL_checkinteger(L, 3);
 		int err = callchown(bits, loop, &filereq, path, uid, gid, NULL);
 		return lcuL_pushresults(L, 0, err);
 	}
@@ -710,7 +710,7 @@ static int system_ownfile (lua_State *L) {
 /* true = system.grantfile (path, perm [, mode]) */
 static int k_setupfilegrant (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
-	const char *path = lua_tostring(L, 1);
+	const char *path = luaL_checkstring(L, 1);
 	int perm = (int)lua_tointeger(L, 2);
 	int err = uv_fs_chmod(loop, filereq, path, perm, on_fileopdone);
 	if (err < 0) return lcuL_pusherrres(L, err);
@@ -719,11 +719,11 @@ static int k_setupfilegrant (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 }
 static int system_grantfile (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
-	const char *path = luaL_checkstring(L, 1);
 	int perm = checkperm(L, 2);
 	if (lcuL_checknoyieldmode(L, 3)) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
+		const char *path = luaL_checkstring(L, 1);
 		int err = uv_fs_chmod(loop, &filereq, path, perm, NULL);
 		return lcuL_pushresults(L, 0, err);
 	}
@@ -845,8 +845,8 @@ static int system_maketemp (lua_State *L) {
 #define callmklnk(S,L,R,P,N,F,C) (S) ? uv_fs_symlink(L,R,P,N,F,C) : uv_fs_link(L,R,P,N,C)
 static int k_setupmklnk (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
-	const char *path = lua_tostring(L, 1);
-	const char *link = lua_tostring(L, 2);
+	const char *path = luaL_checkstring(L, 1);
+	const char *link = luaL_checkstring(L, 2);
 	int flags = lua_tonumber(L, 3);
 	int err = callmklnk(lua_isinteger(L, 3), loop, filereq, path, link, flags, on_fileopdone);
 	if (err < 0) return lcuL_pusherrres(L, err);
@@ -855,8 +855,6 @@ static int k_setupmklnk (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 }
 static int system_makelink (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
-	const char *path = luaL_checkstring(L, 1);
-	const char *link = luaL_checkstring(L, 2);
 	const char *mode = luaL_optstring(L, 3, "");
 	int bits = 0, flags = 0;
 	for (; *mode; mode++) switch (*mode) {
@@ -874,6 +872,8 @@ static int system_makelink (lua_State *L) {
 	if (bits&MKLNK_NOYIELD) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
+		const char *path = luaL_checkstring(L, 1);
+		const char *link = luaL_checkstring(L, 2);
 		int err = callmklnk(bits&MKLNK_SYMBOLIC, loop, &filereq, path, link, flags, NULL);
 		return lcuL_pushresults(L, 0, err);
 	}
@@ -1011,7 +1011,7 @@ static void on_fileopen (uv_fs_t *filereq) {
 }
 static int k_setupfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
-	const char *path = lua_tostring(L, 1);
+	const char *path = luaL_checkstring(L, 1);
 	int flags = (int)lua_tointeger(L, 3);
 	int perm = (int)lua_tointeger(L, 4);
 	int err = uv_fs_open(loop, filereq, path, flags, perm, on_fileopen);
@@ -1021,7 +1021,6 @@ static int k_setupfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 }
 static int system_openfile (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
-	const char *path = luaL_checkstring(L, 1);
 	const char *mode = luaL_optstring(L, 2, "r");
 	int flags = 0;
 	int perm = 0;
@@ -1055,16 +1054,16 @@ static int system_openfile (lua_State *L) {
 	if (noyield) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
+		const char *path = luaL_checkstring(L, 1);
 		int err = uv_fs_open(loop, &filereq, path, flags, perm, NULL);
 		if (err < 0) return lcuL_pusherrres(L, err);
 		lua_pushinteger(L, filereq.result);
 		uv_fs_req_cleanup(&filereq);
 		return returnopenfile(L);
-	} else {
-		lua_pushinteger(L, flags);
-		lua_pushinteger(L, perm);
-		return lcuT_resetcoreqk(L, sched, k_setupfile, returnopenfile, NULL);
 	}
+	lua_pushinteger(L, flags);
+	lua_pushinteger(L, perm);
+	return lcuT_resetcoreqk(L, sched, k_setupfile, returnopenfile, NULL);
 }
 
 #define checkfile(L)	((uv_file *)luaL_checkudata(L, 1, LCU_FILECLS))
@@ -1117,17 +1116,17 @@ static int callread (lua_State *L,
 }
 static int k_setupreadfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
-	uv_file *file = (uv_file *)lua_touserdata(L, 1);
-	int err = callread(L, loop, filereq, *file, on_fileopdone);
+	uv_file file = *openedfile(L);
+	int err = callread(L, loop, filereq, file, on_fileopdone);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
 static int file_read (lua_State *L) {
-	uv_file file = *openedfile(L);
 	lcu_Scheduler *sched = tosched(L);
 	if (lcuL_checknoyieldmode(L, 6)) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
+		uv_file file = *openedfile(L);
 		int err = callread(L, loop, &filereq, file, NULL);
 		if (err < 0) return lcuL_pusherrres(L, err);
 		lua_pushinteger(L, filereq.result);
@@ -1149,17 +1148,17 @@ static int callwrite (lua_State *L,
 }
 static int k_setupwritefile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
-	uv_file *file = (uv_file *)lua_touserdata(L, 1);
-	int err = callwrite(L, loop, filereq, *file, on_fileopdone);
+	uv_file file = *openedfile(L);
+	int err = callwrite(L, loop, filereq, file, on_fileopdone);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
 static int file_write (lua_State *L) {
-	uv_file file = *openedfile(L);
 	lcu_Scheduler *sched = tosched(L);
 	if (lcuL_checknoyieldmode(L, 6)) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
+		uv_file file = *openedfile(L);
 		int err = callwrite(L, loop, &filereq, file, NULL);
 		if (err < 0) return lcuL_pusherrres(L, err);
 		lua_pushinteger(L, filereq.result);
@@ -1174,7 +1173,7 @@ static int file_write (lua_State *L) {
 #define callfsync(D,L,R,F,C) (D) ? uv_fs_fdatasync(L,R,F,C) : uv_fs_fsync(L,R,F,C)
 static int k_setupfobjflush (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
-	uv_file file = *((uv_file *)lua_touserdata(L, 1));
+	uv_file file = *openedfile(L);
 	int err = callfsync(lua_toboolean(L, 2), loop, filereq, file, on_fileopdone);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
@@ -1182,7 +1181,6 @@ static int k_setupfobjflush (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 }
 static int file_flush (lua_State *L) {
 	lcu_Scheduler *sched = tosched(L);
-	uv_file file = *openedfile(L);
 	const char *mode = luaL_optstring(L, 2, "");
 	int bits = 0;
 	for (; *mode; mode++) switch (*mode) {
@@ -1194,6 +1192,7 @@ static int file_flush (lua_State *L) {
 	if (bits&FLUSH_NOYIELD) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
+		uv_file file = *openedfile(L);
 		int err = callfsync(bits&FLUSH_DATAONLY, loop, &filereq, file, NULL);
 		return lcuL_pushresults(L, 0, err);
 	}
@@ -1211,27 +1210,25 @@ static int returnfobjinfo (lua_State *L) {
 		for (; *mode; mode++) pushfilestat(L, *mode, filereq);
 		uv_fs_req_cleanup(filereq);
 		return lua_gettop(L)-3;
-	} else {
-		ssize_t result = filereq->result;
-		uv_fs_req_cleanup(filereq);
-		return lcu_error(L, result);
 	}
+	uv_fs_req_cleanup(filereq);
+	return lcu_error(L, filereq->result);
 }
 static int k_setupfobjinfo (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
-	uv_file *file = (uv_file *)lua_touserdata(L, 1);
-	int err = uv_fs_fstat(loop, filereq, *file, on_fileinfo);
+	uv_file file = *openedfile(L);
+	int err = uv_fs_fstat(loop, filereq, file, on_fileinfo);
 	if (err < 0) return lcu_error(L, err);
 	return -1;  /* yield on success */
 }
 static int file_info (lua_State *L) {
-	uv_file file = *openedfile(L);
 	lcu_Scheduler *sched = tosched(L);
 	int bits = INFO_STAT;  /* no extra option */
 	const char *mode = checkinfomode(L, 2, &bits);
 	if (bits&INFO_NOYIELD) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
+		uv_file file = *openedfile(L);
 		int err = uv_fs_fstat(loop, &filereq, file, NULL);
 		if (err < 0) return lcu_error(L, err);
 		for (; *mode; mode++) pushfilestat(L, *mode, &filereq);
@@ -1244,16 +1241,15 @@ static int file_info (lua_State *L) {
 /* true = file:touch ([mode, times...]) */
 static int k_setupfobjtouch (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
-	uv_file *file = (uv_file *)lua_touserdata(L, 1);
+	uv_file file = *openedfile(L);
 	lua_Number atime = lua_tonumber(L, 2);
 	lua_Number mtime = lua_tonumber(L, 3);
-	int err = uv_fs_futime(loop, filereq, *file, (double)atime, (double)mtime, on_fileopdone);
+	int err = uv_fs_futime(loop, filereq, file, (double)atime, (double)mtime, on_fileopdone);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
 }
 static int file_touch (lua_State *L) {
-	uv_file file = *openedfile(L);
 	lcu_Scheduler *sched = tosched(L);
 	int bits = 0;
 	lua_Number atime, mtime;
@@ -1261,6 +1257,7 @@ static int file_touch (lua_State *L) {
 	if (bits&INFO_NOYIELD) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
+		uv_file file = *openedfile(L);
 		int err = uv_fs_futime(loop, &filereq, file, (double)atime, (double)mtime, NULL);
 		return lcuL_pushresults(L, 0, err);
 	}
@@ -1273,22 +1270,22 @@ static int file_touch (lua_State *L) {
 /* true = file:own (user, group [, mode]) */
 static int k_setupfobjown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
-	uv_file *file = (uv_file *)lua_touserdata(L, 1);
-	uv_uid_t uid = (uv_uid_t)lua_tointeger(L, 2);
-	uv_gid_t gid = (uv_gid_t)lua_tointeger(L, 3);
-	int err = uv_fs_fchown(loop, filereq, *file, uid, gid, on_fileopdone);
+	uv_file file = *openedfile(L);
+	uv_uid_t uid = (uv_uid_t)luaL_checkinteger(L, 2);
+	uv_gid_t gid = (uv_gid_t)luaL_checkinteger(L, 3);
+	int err = uv_fs_fchown(loop, filereq, file, uid, gid, on_fileopdone);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
 }
 static int file_own (lua_State *L) {
 	lcu_Scheduler *sched = tosched(L);
-	uv_file file = *openedfile(L);
-	uv_uid_t uid = (uv_uid_t)luaL_checkinteger(L, 2);
-	uv_gid_t gid = (uv_gid_t)luaL_checkinteger(L, 3);
 	if (lcuL_checknoyieldmode(L, 4)) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
+		uv_file file = *openedfile(L);
+		uv_uid_t uid = (uv_uid_t)luaL_checkinteger(L, 2);
+		uv_gid_t gid = (uv_gid_t)luaL_checkinteger(L, 3);
 		int err = uv_fs_fchown(loop, &filereq, file, uid, gid, NULL);
 		return lcuL_pushresults(L, 0, err);
 	}
@@ -1298,20 +1295,20 @@ static int file_own (lua_State *L) {
 /* true = file:grant (perm [, mode]) */
 static int k_setupfobjgrant (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
-	uv_file *file = (uv_file *)lua_touserdata(L, 1);
+	uv_file file = *openedfile(L);
 	int perm = (int)lua_tointeger(L, 2);
-	int err = uv_fs_fchmod(loop, filereq, *file, perm, on_fileopdone);
+	int err = uv_fs_fchmod(loop, filereq, file, perm, on_fileopdone);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
 }
 static int file_grant (lua_State *L) {
 	lcu_Scheduler *sched = tosched(L);
-	uv_file file = *openedfile(L);
 	int perm = checkperm(L, 2);
 	if (lcuL_checknoyieldmode(L, 3)) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
+		uv_file file = *openedfile(L);
 		int err = uv_fs_fchmod(loop, &filereq, file, perm, NULL);
 		return lcuL_pushresults(L, 0, err);
 	}
