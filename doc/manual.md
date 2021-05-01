@@ -1219,7 +1219,7 @@ this function returns the path to the created directory on success.
 By default,
 mode is the empty string.
 
-### `system.makelink (path, linkpath [, mode])`
+### `system.linkfile (path, linkpath [, mode])`
 
 Creates a link on path `linkpath` refering the file on path given by string `path`.
 If linkpath exists,
@@ -1649,9 +1649,9 @@ Index
 	- [`system.grantfile`](#systemgrantfile-path-perm--mode)
 	- [`system.halt`](#systemhalt-)
 	- [`system.isrunning`](#systemisrunning-)
+	- [`system.linkfile`](#systemlinkfile-path-linkpath--mode)
 	- [`system.listdir`](#systemlistdir-path--mode)
 	- [`system.makedir`](#systemmakedir-path-perm--mode)
-	- [`system.makelink`](#systemmakelink-path-linkpath--mode)
 	- [`system.maketemp`](#systemmaketemp-prefix--mode)
 	- [`system.nameaddr`](#systemnameaddr-address--mode)
 	- [`system.nanosecs`](#systemnanosecs-)
