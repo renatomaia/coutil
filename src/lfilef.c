@@ -888,6 +888,29 @@ static int system_makelink (lua_State *L) {
  * Directories
  */
 
+/* true = system.makedir (path, perm [, mode]) */
+static int k_setupmkdir (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	const char *path = luaL_checkstring(L, 1);
+	int perm = checkperm(L, 2);
+	int err = uv_fs_mkdir(loop, filereq, path, perm, on_fileopdone);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	lua_settop(L, 1);
+	return -1;  /* yield on success */
+}
+static int system_makedir (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);
+	if (lcuL_checknoyieldmode(L, 3)) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		const char *path = luaL_checkstring(L, 1);
+		int perm = checkperm(L, 2);
+		int err = uv_fs_mkdir(loop, &filereq, path, perm, NULL);
+		return lcuL_pushresults(L, 0, err);
+	}
+	return lcuT_resetcoreqk(L, sched, k_setupmkdir, returntrueover1, NULL);
+}
+
 typedef struct DirectoryList {
 	lua_CFunction results;
 	lua_CFunction cancel;
@@ -1368,6 +1391,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 	static const luaL_Reg modf[] = {
 		{"fileinfo", system_fileinfo},
 		{"listdir", system_listdir},
+		{"makedir", system_makedir},
 		{"maketemp", system_maketemp},
 		{"makelink", system_makelink},
 		{"openfile", system_openfile},
