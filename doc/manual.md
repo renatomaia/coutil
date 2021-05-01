@@ -1203,17 +1203,21 @@ Similar to `~`,
 
 ### `system.maketemp (prefix [, mode])`
 
-Creates a uniquely named temporary directory with the prefix given by string `prefix`,
-and returns the path of the created directory in case of success.
+Creates a uniquely named temporary directory with the prefix given by string `prefix`.
 
-String `mode` can contain the following characters to change its behavior as described below:
+`mode` might contain any of the following characters to make it create a file instead of a directory.
+These characters also define the sequence of values returned by the call in case of success.
 
-- `~`: executes it in [blocking mode](#blocking-mode).
-- `f`: creates a file instead of a directory,
-and returns the file path followed by the file opened for both reading and writing.
+- `f`: returns the path to the **file** created.
+- `o`: returns the created file already **opened**.
+
+If `mode` does not contain any of the above characters,
+this function returns the path to the created directory on success.
+
+`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
 
 By default,
-`mode` is the empty string.
+mode is the empty string.
 
 ### `system.listdir (path [, mode])`
 

@@ -741,6 +741,7 @@ static int system_grantfile (lua_State *L) {
 #define MKTMP_TEMPLATESZ  256
 #define MKTMP_NOYIELD     0x01
 #define MKTMP_CREATEFILE  0x02
+#define MKTMP_OPENFILE    0x06
 static int callmktmp (int mkfile,
                       uv_loop_t* loop,
                       uv_fs_t* filereq,
@@ -753,37 +754,55 @@ static int callmktmp (int mkfile,
 	return mkfile ? uv_fs_mkstemp(loop, filereq, template, callback)
 	              : uv_fs_mkdtemp(loop, filereq, template, callback);
 }
-static int pushmktmp (lua_State *L) {
-	uv_fs_t *filereq = (uv_fs_t *)lua_touserdata(L, 2);
-	if (filereq->result < 0) return lcu_error(L, filereq->result);
-	if (lua_isuserdata(L, 1)) {
-		uv_file *file = (uv_file *)lua_touserdata(L, 1);
-		*file = filereq->result;
-		lua_pushstring(L, filereq->path);
-		lua_pushvalue(L, 1);
-		luaL_setmetatable(L, LCU_FILECLS);
-		return 2;
+static int pcallmktmp (lua_State *L) {
+	const char *mode = (const char *)lua_touserdata(L, 2);
+	uv_fs_t *filereq = (uv_fs_t *)lua_touserdata(L, 4);
+	if (filereq->result < 0) return lcuL_pusherrres(L, filereq->result);
+	if (mode) for (; *mode; mode++) switch (*mode) {
+		case 'f': {
+			lua_pushstring(L, filereq->path);
+		} break;
+		case 'o': {
+			if (filereq->result >= 0) {
+				uv_file *file = (uv_file *)lua_newuserdatauv(L, sizeof(uv_file), 1);
+				lua_pushvalue(L, 3);
+				lua_setiuservalue(L, -2, 1);
+				*file = filereq->result;
+				luaL_setmetatable(L, LCU_FILECLS);
+				filereq->result = -(lua_gettop(L));
+			} else {
+				lua_pushvalue(L, -(filereq->result));
+			}
+		} break;
 	}
-	lua_pushstring(L, filereq->path);
-	return 1;
+	else lua_pushstring(L, filereq->path);
+	return lua_gettop(L)-4;
 }
 static int returnmktmp (lua_State *L) {
-	uv_fs_t *filereq = (uv_fs_t *)lua_touserdata(L, 3);
-	lcu_assert(lua_gettop(L) == 3);
+	int err, mkfile = lua_isuserdata(L, 3);
+	uv_fs_t *filereq = (uv_fs_t *)lua_touserdata(L, 5);
+	lcu_assert(lua_gettop(L) == 5);
 	if (filereq->result < 0) {
 		uv_fs_req_cleanup(filereq);
-		return lcu_error(L, filereq->result);
+		return lcuL_pusherrres(L, filereq->result);
 	}
-	lua_pushcfunction(L, pushmktmp);
+	lua_pushcfunction(L, pcallmktmp);
 	lua_replace(L, 1);
-	if (lua_pcall(L, 2, LUA_MULTRET, 0) != LUA_OK) return lua_error(L);
+	err = lua_pcall(L, 4, LUA_MULTRET, 0);
 	uv_fs_req_cleanup(filereq);
+	if (mkfile && filereq->result >= 0) {
+		uv_fs_t closereq;
+		int err = uv_fs_close(filereq->loop, &closereq, (uv_file)filereq->result, NULL);
+		if (err < 0) lcuL_warnerr(L, "system.maketemp", err);
+		uv_fs_req_cleanup(&closereq);
+	}
+	if (err != LUA_OK) return lua_error(L);
 	return lua_gettop(L);
 }
 static int k_setupmktmp (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *prefix = lua_tostring(L, 1);
-	int err = callmktmp(lua_isuserdata(L, 2), loop, filereq, prefix, on_fileinfo);
+	int err = callmktmp(lua_isuserdata(L, 3), loop, filereq, prefix, on_fileinfo);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
@@ -792,21 +811,23 @@ static int system_maketemp (lua_State *L) {
 	size_t len;
 	const char *prefix = luaL_checklstring(L, 1, &len);
 	const char *mode = luaL_optstring(L, 2, "");
-	int bits = 0;
+	int i, bits = 0;
 	luaL_argcheck(L, len < MKTMP_TEMPLATESZ-6, 1, "too long");
-	for (; *mode; mode++) switch (*mode) {
+	for (; *mode == LCU_NOYIELDMODE; mode++) bits = MKTMP_NOYIELD;
+	for (i = 0; mode[i]; i++) switch (mode[i]) {
 		case 'f': bits |= MKTMP_CREATEFILE; break;
-		case LCU_NOYIELDMODE: bits |= MKTMP_NOYIELD; break;
+		case 'o': bits |= MKTMP_OPENFILE; break;
+		case LCU_NOYIELDMODE:
+			return luaL_error(L, "'%c' must be in the begin of 'mode'", mode[i]);
 		default:
 			return luaL_error(L, "bad argument #%d, unknown mode char (got '%c')", 2, *mode);
 	}
-	lua_settop(L, 1);
-	if (bits&MKTMP_CREATEFILE) {
-		lua_newuserdatauv(L, sizeof(uv_file), 1);  /* raise memory errors */
-		lua_pushvalue(L, lua_upvalueindex(1));  /* push scheduler */
-		lua_setiuservalue(L, 2, 1);
-	}
+	lua_settop(L, 2);
+	if (bits&MKTMP_CREATEFILE) lua_pushlightuserdata(L, (void *)mode);
 	else lua_pushnil(L);
+	if (bits&MKTMP_OPENFILE) lua_pushvalue(L, lua_upvalueindex(1));
+	else lua_pushnil(L);
+	luaL_checkstack(L, i+5, "too many values to return");
 	if (bits&MKTMP_NOYIELD) {
 		uv_loop_t *loop = lcu_toloop(sched);
 		uv_fs_t filereq;
