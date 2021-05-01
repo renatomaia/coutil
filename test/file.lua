@@ -176,14 +176,14 @@ do
 	end
 end
 
-newtest "makelink" --------------------------------------------------------------
+newtest "linkfile" --------------------------------------------------------------
 
 do case "errors"
 
 	for i = 1, 255 do
 		local char = string.char(i)
 		if not string.find("~sdj", char, 1, true) then
-			asserterr("unknown mode char", pcall(system.makelink, "file.lua", "link.lua", char))
+			asserterr("unknown mode char", pcall(system.linkfile, "file.lua", "link.lua", char))
 		end
 	end
 
@@ -193,20 +193,20 @@ end
 do
 	local testcases = {}
 	function testcases.hardlink(mode)
-		assert(system.makelink("file.lua", "link.lua", mode) == true)
+		assert(system.linkfile("file.lua", "link.lua", mode) == true)
 		assert(system.fileinfo("link.lua", mode.."?") == "file")
 		assert(system.fileinfo("link.lua", mode.."=") == nil)
 		assert(system.removefile("link.lua", mode))
 	end
 	function testcases.symbolic(mode)
-		assert(system.makelink("file.lua", "link.lua", "s"..mode) == true)
+		assert(system.linkfile("file.lua", "link.lua", "s"..mode) == true)
 		assert(system.fileinfo("link.lua", mode.."l?") == "link")
 		assert(system.fileinfo("link.lua", mode.."?") == "file")
 		assert(system.fileinfo("link.lua", mode.."=") == "file.lua")
 		assert(system.removefile("link.lua", mode))
 	end
 	function testcases.directory(mode)
-		assert(system.makelink("benchmarks", "link.dir", "d"..mode) == true)
+		assert(system.linkfile("benchmarks", "link.dir", "d"..mode) == true)
 		assert(system.fileinfo("link.dir", mode.."l?") == "link")
 		assert(system.fileinfo("link.dir", mode.."?") == "directory")
 		assert(system.fileinfo("link.dir", mode.."=") == "benchmarks")
