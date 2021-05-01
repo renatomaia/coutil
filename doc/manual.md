@@ -1284,6 +1284,12 @@ Similar to [`file:grant`](#filegrant-perm--mode),
 but for file in path given by string `path`.
 The other arguments are the same of [`file:grant`](#filegrant-perm--mode).
 
+### `system.removefile (path [, mode])`
+
+Removes file on path given by string `path`,
+or empty directory if `mode` is a string with character `d`.
+`mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
+
 ### `system.openfile (path [, mode [, perm]])`
 
 Opens file from the path indicated by string `path`.
@@ -1664,6 +1670,7 @@ Index
 	- [`system.packenv`](#systempackenv-vars)
 	- [`system.procinfo`](#systemprocinfo-which)
 	- [`system.random`](#systemrandom-buffer--i--j--mode)
+	- [`system.removefile`](#systemremovefile-path--mode)
 	- [`system.resume`](#systemresume-co-)
 	- [`system.run`](#systemrun-mode)
 	- [`system.setdir`](#systemsetdir-path)
