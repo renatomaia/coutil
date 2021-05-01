@@ -839,6 +839,50 @@ static int system_maketemp (lua_State *L) {
 	return lcuT_resetcoreqk(L, sched, k_setupmktmp, returnmktmp, NULL);
 }
 
+/* true = system.makelink (path, link [, mode]) */
+#define MKLNK_NOYIELD   0x01
+#define MKLNK_SYMBOLIC  0x02
+#define callmklnk(S,L,R,P,N,F,C) (S) ? uv_fs_symlink(L,R,P,N,F,C) : uv_fs_link(L,R,P,N,C)
+static int k_setupmklnk (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	const char *path = lua_tostring(L, 1);
+	const char *link = lua_tostring(L, 2);
+	int flags = lua_tonumber(L, 3);
+	int err = callmklnk(lua_isinteger(L, 3), loop, filereq, path, link, flags, on_fileopdone);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	lua_settop(L, 1);
+	return -1;  /* yield on success */
+}
+static int system_makelink (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);
+	const char *path = luaL_checkstring(L, 1);
+	const char *link = luaL_checkstring(L, 2);
+	const char *mode = luaL_optstring(L, 3, "");
+	int bits = 0, flags = 0;
+	for (; *mode; mode++) switch (*mode) {
+#ifdef UV_FS_SYMLINK_DIR
+		case 'd': bits |= MKLNK_SYMBOLIC; flags |= UV_FS_SYMLINK_DIR; break;
+#endif
+#ifdef UV_FS_SYMLINK_JUNCTION
+		case 'j': bits |= MKLNK_SYMBOLIC; flags |= UV_FS_SYMLINK_JUNCTION; break;
+#endif
+		case 's': bits |= MKLNK_SYMBOLIC; break;
+		case LCU_NOYIELDMODE: bits |= MKLNK_NOYIELD; break;
+		default:
+			return luaL_error(L, "bad argument #%d, unknown mode char (got '%c')", 3, *mode);
+	}
+	if (bits&MKLNK_NOYIELD) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		int err = callmklnk(bits&MKLNK_SYMBOLIC, loop, &filereq, path, link, flags, NULL);
+		return lcuL_pushresults(L, 0, err);
+	}
+	lua_settop(L, 2);
+	if (bits&MKLNK_SYMBOLIC) lua_pushinteger(L, flags);
+	else lua_pushnil(L);
+	return lcuT_resetcoreqk(L, sched, k_setupmklnk, returntrueover1, NULL);
+}
+
 
 /*
  * Directories
@@ -1269,6 +1313,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{"fileinfo", system_fileinfo},
 		{"listdir", system_listdir},
 		{"maketemp", system_maketemp},
+		{"makelink", system_makelink},
 		{"openfile", system_openfile},
 		{"touchfile", system_touchfile},
 		{"ownfile", system_ownfile},
