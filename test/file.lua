@@ -66,6 +66,38 @@ do case "list contents"
 	done()
 end
 
+newtest "makedir" --------------------------------------------------------------
+
+do case "errors"
+	for i = 1, 255 do
+		local char = string.char(i)
+		if char ~= "~" then
+			asserterr("unknown mode char", pcall(system.makedir, "DELETEME", tonumber("700", 8), char))
+		end
+	end
+
+	asserterr("already exists", system.makedir("benchmarks", tonumber("700", 8), "~"))
+
+	done()
+end
+
+do case "create directory"
+	local path = "DELETEME.DIR"
+
+	local function testcase(mode)
+		assert(system.makedir(path, tonumber("750", 8), mode) == true)
+		assert(system.fileinfo(path, mode.."?") == "directory")
+		os.execute("rmdir "..path)
+	end
+
+	testcase("~")
+
+	spawn(testcase, "")
+	assert(system.run() == false)
+
+	done()
+end
+
 newtest "maketemp" --------------------------------------------------------------
 
 do case "errors"
