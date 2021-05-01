@@ -66,6 +66,84 @@ do case "list contents"
 	done()
 end
 
+newtest "maketemp" --------------------------------------------------------------
+
+do case "errors"
+
+	asserterr("'~' must be in the begin of 'mode'",
+	          pcall(system.maketemp, "abc", "f~o"))
+
+	for i = 1, 255 do
+		local char = string.char(i)
+		if not string.find("~fo", char, 1, true) then
+			asserterr("unknown mode char", pcall(system.maketemp, "lcutest_", char))
+		end
+	end
+
+	local toolong = string.rep("X", 250)
+	spawn(function ()
+		asserterr("too long", pcall(system.maketemp, toolong))
+	end)
+	system.run()
+
+	asserterr("too long", pcall(system.maketemp, toolong, "~"))
+
+	done()
+end
+
+do
+	local testcases = {}
+	function testcases.dir(mode)
+		local path, extra = system.maketemp("lcutest_", mode)
+		assert(string.match(path, "lcutest_......$"))
+		assert(extra == nil)
+		os.execute("rmdir "..path)
+	end
+	function testcases.file(mode)
+		local path, extra = system.maketemp("lcutest_", mode.."f")
+		assert(string.match(path, "lcutest_......$"))
+		assert(extra == nil)
+		assert(os.remove(path) == true)
+	end
+	function testcases.open(mode)
+		local file, extra = system.maketemp("lcutest_", mode.."o")
+		assert(file:close())
+		assert(extra == nil)
+		os.execute("rm lcutest_??????")
+	end
+	function testcases.fileopen(mode)
+		local path, file = system.maketemp("lcutest_", mode.."fo")
+		assert(string.match(path, "lcutest_......$"))
+		assert(file:close())
+		assert(os.remove(path) == true)
+	end
+	function testcases.openfile(mode)
+		local file, path = system.maketemp("lcutest_", mode.."of")
+		assert(string.match(path, "lcutest_......$"))
+		assert(file:close())
+		assert(os.remove(path) == true)
+	end
+	function testcases.manyrets(mode)
+		local p1, f1, f2, p2 = system.maketemp("lcutest_", mode.."foof")
+		assert(rawequal(p1, p2))
+		assert(rawequal(f1, f2))
+		assert(string.match(p1, "lcutest_......$"))
+		assert(f1:close())
+		assert(os.remove(p1) == true)
+	end
+
+	for casename, casefunc in pairs(testcases) do
+		case("create "..casename)
+
+		casefunc("~")
+
+		spawn(casefunc, "")
+		assert(system.run() == false)
+
+		done()
+	end
+end
+
 newtest "openfile" -------------------------------------------------------------
 
 local validpath = "/dev/null"
