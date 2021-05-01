@@ -87,7 +87,7 @@ do case "create directory"
 	local function testcase(mode)
 		assert(system.makedir(path, tonumber("750", 8), mode) == true)
 		assert(system.fileinfo(path, mode.."?") == "directory")
-		os.execute("rmdir "..path)
+		assert(system.removefile(path, mode.."d"))
 	end
 
 	testcase("~")
@@ -129,13 +129,13 @@ do
 		local path, extra = system.maketemp("lcutest_", mode)
 		assert(string.match(path, "lcutest_......$"))
 		assert(extra == nil)
-		os.execute("rmdir "..path)
+		assert(system.removefile(path, mode.."d"))
 	end
 	function testcases.file(mode)
 		local path, extra = system.maketemp("lcutest_", mode.."f")
 		assert(string.match(path, "lcutest_......$"))
 		assert(extra == nil)
-		assert(os.remove(path) == true)
+		assert(system.removefile(path, mode))
 	end
 	function testcases.open(mode)
 		local file, extra = system.maketemp("lcutest_", mode.."o")
@@ -147,13 +147,13 @@ do
 		local path, file = system.maketemp("lcutest_", mode.."fo")
 		assert(string.match(path, "lcutest_......$"))
 		assert(file:close())
-		assert(os.remove(path) == true)
+		assert(system.removefile(path, mode))
 	end
 	function testcases.openfile(mode)
 		local file, path = system.maketemp("lcutest_", mode.."of")
 		assert(string.match(path, "lcutest_......$"))
 		assert(file:close())
-		assert(os.remove(path) == true)
+		assert(system.removefile(path, mode))
 	end
 	function testcases.manyrets(mode)
 		local p1, f1, f2, p2 = system.maketemp("lcutest_", mode.."foof")
@@ -161,7 +161,7 @@ do
 		assert(rawequal(f1, f2))
 		assert(string.match(p1, "lcutest_......$"))
 		assert(f1:close())
-		assert(os.remove(p1) == true)
+		assert(system.removefile(p1, mode))
 	end
 
 	for casename, casefunc in pairs(testcases) do
@@ -196,21 +196,21 @@ do
 		assert(system.makelink("file.lua", "link.lua", mode) == true)
 		assert(system.fileinfo("link.lua", mode.."?") == "file")
 		assert(system.fileinfo("link.lua", mode.."=") == nil)
-		os.remove("link.lua")
+		assert(system.removefile("link.lua", mode))
 	end
 	function testcases.symbolic(mode)
 		assert(system.makelink("file.lua", "link.lua", "s"..mode) == true)
 		assert(system.fileinfo("link.lua", mode.."l?") == "link")
 		assert(system.fileinfo("link.lua", mode.."?") == "file")
 		assert(system.fileinfo("link.lua", mode.."=") == "file.lua")
-		os.remove("link.lua")
+		assert(system.removefile("link.lua", mode))
 	end
 	function testcases.directory(mode)
-		assert(system.makelink("benchmarks", "linkdir", "d"..mode) == true)
-		assert(system.fileinfo("linkdir", mode.."l?") == "link")
-		assert(system.fileinfo("linkdir", mode.."?") == "directory")
-		assert(system.fileinfo("linkdir", mode.."=") == "benchmarks")
-		os.remove("linkdir")
+		assert(system.makelink("benchmarks", "link.dir", "d"..mode) == true)
+		assert(system.fileinfo("link.dir", mode.."l?") == "link")
+		assert(system.fileinfo("link.dir", mode.."?") == "directory")
+		assert(system.fileinfo("link.dir", mode.."=") == "benchmarks")
+		assert(system.removefile("link.dir", mode))
 	end
 
 	for casename, casefunc in pairs(testcases) do
@@ -223,6 +223,49 @@ do
 
 		done()
 	end
+end
+
+
+newtest "removefile" -----------------------------------------------------------
+
+do case "errors"
+
+	for i = 1, 255 do
+		local char = string.char(i)
+		if not string.find("~d", char, 1, true) then
+			asserterr("unknown mode char", pcall(system.removefile, "file.lua", char))
+		end
+	end
+
+	local function testerr(mode)
+		asserterr("no such", system.removefile("MISSING.FILE", mode))
+		asserterr("no such", system.removefile("MISSING.DIR", "d"..mode))
+		asserterr("directory", system.removefile("benchmarks", mode))
+		asserterr("not empty", system.removefile("benchmarks", "d"..mode))
+	end
+
+	testerr("~")
+	spawn(testerr, "")
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "remove files"
+	local function testcase(mode)
+		assert(system.makedir("DELETEME.DIR", tonumber("700", 8), mode))
+		assert(system.fileinfo("DELETEME.DIR", mode.."?") == "directory")
+		assert(system.openfile("DELETEME.DIR/DELETEME.TXT", mode.."N", tonumber("600", 8)):close())
+		assert(system.fileinfo("DELETEME.DIR/DELETEME.TXT", mode.."?") == "file")
+		assert(system.removefile("DELETEME.DIR/DELETEME.TXT", mode) == true)
+		assert(system.removefile("DELETEME.DIR", "d"..mode) == true)
+	end
+
+	testcase("~")
+	spawn(testcase, "")
+	assert(system.run() == false)
+
+	done()
 end
 
 newtest "openfile" -------------------------------------------------------------
@@ -359,7 +402,7 @@ do case "write contents"
 	file = assert(io.open(path))
 	assert(file:read("a") == "Hello, World! Well. Bye World! Gone.")
 	file:close()
-	os.remove(path)
+	assert(system.removefile(path, "~"))
 
 	done()
 end
@@ -399,11 +442,11 @@ do case "truncate contents"
 	spawn(testcase, "")
 	system.run()
 	assert(system.fileinfo(path, "~B") == 256)
-	os.remove(path)
+	assert(system.removefile(path, "~"))
 
 	testcase("~")
 	assert(system.fileinfo(path, "~B") == 256)
-	os.remove(path)
+	assert(system.removefile(path, "~"))
 
 	done()
 end
@@ -447,7 +490,7 @@ do case "flush contents"
 	file = assert(io.open(path))
 	assert(file:read("a") == "mode= mode=d mode=~ mode=~d ")
 	file:close()
-	os.remove(path)
+	assert(system.removefile(path, "~"))
 
 	done()
 end

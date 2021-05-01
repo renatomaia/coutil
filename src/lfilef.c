@@ -733,6 +733,41 @@ static int system_grantfile (lua_State *L) {
 }
 
 
+/* true = system.removefile (path [, mode]) */
+#define RMFILE_NOYIELD    0x01
+#define RMFILE_DIRECTORY  0x02
+#define callrmfile(D,L,R,P,C)	((D) ? uv_fs_rmdir(L,R,P,C) : uv_fs_unlink(L,R,P,C))
+static int k_setuprmfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	const char *path = luaL_checkstring(L, 1);
+	int err = callrmfile(lua_toboolean(L, 2), loop, filereq, path, on_fileopdone);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	lua_settop(L, 1);
+	return -1;  /* yield on success */
+}
+static int system_removefile (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);
+	const char *mode = luaL_optstring(L, 2, "");
+	int bits = 0;
+	for (; *mode; mode++) switch (*mode) {
+		case 'd': bits |= RMFILE_DIRECTORY; break;
+		case LCU_NOYIELDMODE: bits |= RMFILE_NOYIELD; break;
+		default:
+			return luaL_error(L, "bad argument #%d, unknown mode char (got '%c')", 2, *mode);
+	}
+	if (bits&RMFILE_NOYIELD) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		const char *path = luaL_checkstring(L, 1);
+		int err = callrmfile(bits&RMFILE_DIRECTORY, loop, &filereq, path, NULL);
+		return lcuL_pushresults(L, 0, err);
+	}
+	lua_settop(L, 1);
+	lua_pushboolean(L, bits&RMFILE_DIRECTORY);
+	return lcuT_resetcoreqk(L, sched, k_setuprmfile, returntrueover1, NULL);
+}
+
+
 /*
  * Creation
  */
@@ -1398,6 +1433,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{"touchfile", system_touchfile},
 		{"ownfile", system_ownfile},
 		{"grantfile", system_grantfile},
+		{"removefile", system_removefile},
 		{NULL, NULL}
 	};
 	static const struct { const char *name; int value; } bits[] = {
