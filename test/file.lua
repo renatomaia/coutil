@@ -66,6 +66,59 @@ do case "list contents"
 	done()
 end
 
+newtest "maketemp" --------------------------------------------------------------
+
+do case "errors"
+
+	for i = 1, 255 do
+		local char = string.char(i)
+		if not string.find("~f", char, 1, true) then
+			asserterr("unknown mode char", pcall(system.maketemp, "lcutest_", char))
+		end
+	end
+
+	local toolong = string.rep("X", 250)
+	spawn(function ()
+		asserterr("too long", pcall(system.maketemp, toolong))
+	end)
+	system.run()
+
+	asserterr("too long", pcall(system.maketemp, toolong, "~"))
+
+	done()
+end
+
+do case "create directory"
+	local function testmkdir(mode)
+		local path = system.maketemp("lcutest_", mode)
+		assert(string.match(path, "lcutest_......$"))
+		os.execute("rmdir "..path)
+	end
+
+	spawn(testmkdir)
+	system.run()
+
+	testmkdir("~")
+
+	done()
+end
+
+do case "create file"
+	local function testmkdir(mode)
+		local path, file = system.maketemp("lcutest_", "f"..mode)
+		assert(string.match(path, "lcutest_......$"))
+		assert(file:close())
+		os.remove(path)
+	end
+
+	spawn(testmkdir, "")
+	system.run()
+
+	testmkdir("~")
+
+	done()
+end
+
 newtest "openfile" -------------------------------------------------------------
 
 local validpath = "/dev/null"

@@ -1201,6 +1201,20 @@ The value of the other options are not affected.
 Similar to `~`,
 `l` does not produce a value to be returned.
 
+### `system.maketemp (prefix [, mode])`
+
+Creates a uniquely named temporary directory with the prefix given by string `prefix`,
+and returns the path of the created directory in case of success.
+
+String `mode` can contain the following characters to change its behavior as described below:
+
+- `~`: executes it in [blocking mode](#blocking-mode).
+- `f`: creates a file instead of a directory,
+and returns the file path followed by the file opened for both reading and writing.
+
+By default,
+`mode` is the empty string.
+
 ### `system.listdir (path [, mode])`
 
 Returns an [iterator](http://www.lua.org/manual/5.4/manual.html#3.3.5) that lists the file entries inside the directory in path given by string `path`.
@@ -1261,7 +1275,7 @@ it is truncated to length 0 (implies `w`).
 `mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
 
 When either `n` or `N` are present in `mode`,
-`perm` be a number indicating the permissions of the file to be created.
+`perm` is a number indicating the permissions of the file to be created,
 just like argument `perm` of [`file:grant`](#filegrant-perm--mode).
 
 **Note**: these file permissions are not enforced by the call that creates the file.
@@ -1580,6 +1594,7 @@ Index
 	- [`system.halt`](#systemhalt-)
 	- [`system.isrunning`](#systemisrunning-)
 	- [`system.listdir`](#systemlistdir-path--mode)
+	- [`system.maketemp`](#systemmaketemp-prefix--mode)
 	- [`system.nameaddr`](#systemnameaddr-address--mode)
 	- [`system.nanosecs`](#systemnanosecs-)
 	- [`system.netinfo`](#systemnetinfo-option-which)
