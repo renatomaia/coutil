@@ -1237,6 +1237,15 @@ On Windows,
 
 `mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
 
+### `system.makedir (path, perm [, mode])`
+
+Creates a directory on path given by string `path`.
+`perm` indicates the permissions of the directory to be created,
+just like argument `perm` of [`file:grant`](#filegrant-perm--mode).
+
+`mode` is a string,
+which might contain character `~` to execute it in [blocking mode](#blocking-mode).
+
 ### `system.listdir (path [, mode])`
 
 Returns an [iterator](http://www.lua.org/manual/5.4/manual.html#3.3.5) that lists the file entries inside the directory in path given by string `path`.
@@ -1297,7 +1306,7 @@ it is truncated to length 0 (implies `w`).
 `mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
 
 When either `n` or `N` are present in `mode`,
-`perm` is a number indicating the permissions of the file to be created,
+`perm` indicates the permissions of the file to be created,
 just like argument `perm` of [`file:grant`](#filegrant-perm--mode).
 
 **Note**: these file permissions are not enforced by the call that creates the file.
@@ -1635,6 +1644,7 @@ Index
 	- [`system.halt`](#systemhalt-)
 	- [`system.isrunning`](#systemisrunning-)
 	- [`system.listdir`](#systemlistdir-path--mode)
+	- [`system.makedir`](#systemmakedir-path-perm--mode)
 	- [`system.makelink`](#systemmakelink-path-linkpath--mode)
 	- [`system.maketemp`](#systemmaketemp-prefix--mode)
 	- [`system.nameaddr`](#systemnameaddr-address--mode)
