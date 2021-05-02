@@ -1237,6 +1237,13 @@ On Windows,
 
 `mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
 
+### `system.movefile (path, destiny [, mode])`
+
+Moves file from `path` to `destiny`.
+
+`mode` is a string,
+which might contain character `~` to execute it in [blocking mode](#blocking-mode).
+
 ### `system.makedir (path, perm [, mode])`
 
 Creates a directory on path given by string `path`.
@@ -1653,6 +1660,7 @@ Index
 	- [`system.listdir`](#systemlistdir-path--mode)
 	- [`system.makedir`](#systemmakedir-path-perm--mode)
 	- [`system.maketemp`](#systemmaketemp-prefix--mode)
+	- [`system.movefile`](#systemmovefile-path-destiny--mode)
 	- [`system.nameaddr`](#systemnameaddr-address--mode)
 	- [`system.nanosecs`](#systemnanosecs-)
 	- [`system.netinfo`](#systemnetinfo-option-which)

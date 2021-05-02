@@ -225,6 +225,43 @@ do
 	end
 end
 
+newtest "movefile" --------------------------------------------------------------
+
+do case "errors"
+
+	for i = 1, 255 do
+		local char = string.char(i)
+		if char ~= "~" then
+			asserterr("unknown mode char", pcall(system.movefile, "file.lua", "moved.lua", char))
+		end
+	end
+
+	done()
+end
+
+do
+	local testcases = {}
+	function testcases.file(mode)
+		assert(system.movefile("../LICENSE", "license.txt", mode) == true)
+		assert(system.fileinfo("license.txt", mode.."B") == 1080)
+		assert(system.movefile("license.txt", "../LICENSE", mode) == true)
+	end
+	function testcases.directory(mode)
+		assert(system.movefile("benchmarks", "renamed.dir", mode) == true)
+		assert(system.fileinfo("renamed.dir", mode.."?") == "directory")
+		assert(system.movefile("renamed.dir", "benchmarks", mode) == true)
+	end
+
+	for casename, testcase in pairs(testcases) do
+		case("move "..casename)
+
+		spawn(testcase, "")
+		assert(system.run() == false)
+		testcase("~")
+
+		done()
+	end
+end
 
 newtest "removefile" -----------------------------------------------------------
 
