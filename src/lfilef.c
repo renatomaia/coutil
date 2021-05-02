@@ -1283,8 +1283,8 @@ static int file_write (lua_State *L) {
 	return lcuT_resetcoreqk(L, sched, k_setupwritefile, NULL, NULL);
 }
 
-/* true = file:truncate (length [, mode]) */
-static int k_setupftrunc (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+/* true = file:resize (length [, mode]) */
+static int k_setupfresize (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	uv_file file = *openedfile(L);
 	int64_t length = (int64_t)luaL_checkinteger(L, 2);
@@ -1293,7 +1293,7 @@ static int k_setupftrunc (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
 }
-static int file_truncate (lua_State *L) {
+static int file_resize (lua_State *L) {
 	lcu_Scheduler *sched = tosched(L);
 	if (lcuL_checknoyieldmode(L, 3)) {
 		uv_loop_t *loop = lcu_toloop(sched);
@@ -1303,7 +1303,7 @@ static int file_truncate (lua_State *L) {
 		int err = uv_fs_ftruncate(loop, &filereq, file, length, NULL);
 		return lcuL_pushresults(L, 0, err);
 	}
-	return lcuT_resetcoreqk(L, sched, k_setupftrunc, returntrueover1, NULL);
+	return lcuT_resetcoreqk(L, sched, k_setupfresize, returntrueover1, NULL);
 }
 
 /* true = file:flush ([mode]) */
@@ -1473,7 +1473,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{"close", file_close},
 		{"read", file_read},
 		{"write", file_write},
-		{"truncate", file_truncate},
+		{"resize", file_resize},
 		{"flush", file_flush},
 		{"info", file_info},
 		{"touch", file_touch},
