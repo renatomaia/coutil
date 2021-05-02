@@ -139,20 +139,20 @@ do
 	end
 	function testcases.open(mode)
 		local file, extra = system.maketemp("lcutest_", mode.."o")
-		assert(file:close())
+		assert(file:close(mode))
 		assert(extra == nil)
 		os.execute("rm lcutest_??????")
 	end
 	function testcases.fileopen(mode)
 		local path, file = system.maketemp("lcutest_", mode.."fo")
 		assert(string.match(path, "lcutest_......$"))
-		assert(file:close())
+		assert(file:close(mode))
 		assert(system.removefile(path, mode))
 	end
 	function testcases.openfile(mode)
 		local file, path = system.maketemp("lcutest_", mode.."of")
 		assert(string.match(path, "lcutest_......$"))
-		assert(file:close())
+		assert(file:close(mode))
 		assert(system.removefile(path, mode))
 	end
 	function testcases.manyrets(mode)
@@ -160,7 +160,7 @@ do
 		assert(rawequal(p1, p2))
 		assert(rawequal(f1, f2))
 		assert(string.match(p1, "lcutest_......$"))
-		assert(f1:close())
+		assert(f1:close(mode))
 		assert(system.removefile(p1, mode))
 	end
 
@@ -359,7 +359,7 @@ do case "remove files"
 	local function testcase(mode)
 		assert(system.makedir("DELETEME.DIR", tonumber("700", 8), mode))
 		assert(system.fileinfo("DELETEME.DIR", mode.."?") == "directory")
-		assert(system.openfile("DELETEME.DIR/DELETEME.TXT", mode.."N", tonumber("600", 8)):close())
+		assert(system.openfile("DELETEME.DIR/DELETEME.TXT", mode.."N", tonumber("600", 8)):close(mode))
 		assert(system.fileinfo("DELETEME.DIR/DELETEME.TXT", mode.."?") == "file")
 		assert(system.removefile("DELETEME.DIR/DELETEME.TXT", mode) == true)
 		assert(system.removefile("DELETEME.DIR", "d"..mode) == true)
@@ -402,9 +402,9 @@ end
 
 do case "ignore invalid permission"
 	spawn(function ()
-		assert(system.openfile(validpath, "w", "invalid")):close()
-		assert(system.openfile(validpath, "w", "rw", "invalid")):close()
-		assert(system.openfile(validpath, "w", "rw", "rw", "invalid")):close()
+		assert(system.openfile(validpath, "w", "invalid")):close("~")
+		assert(system.openfile(validpath, "w", "rw", "invalid")):close("~")
+		assert(system.openfile(validpath, "w", "rw", "rw", "invalid")):close("~")
 	end)
 	system.run()
 
@@ -439,7 +439,7 @@ do case "errors"
 
 	asserterr("bad file descriptor", file:read(buffer, nil, nil, nil, "~"))
 
-	file:close()
+	file:close("~")
 
 	assert(not buffer:diff(string.rep("\0", #buffer)))
 
@@ -463,7 +463,7 @@ do case "read contents"
 	assert(file:read(buffer, 13, 20, 10, "~") == 8)
 	assert(not buffer:diff("Renato Maia (C) 2017"))
 
-	file:close()
+	file:close("~")
 
 	done()
 end
@@ -482,7 +482,7 @@ do case "errors"
 
 	asserterr("bad file descriptor", file:write("foo bar", nil, nil, nil, "~"))
 
-	file:close()
+	file:close("~")
 
 	done()
 end
@@ -500,11 +500,11 @@ do case "from string"
 	assert(file:write(" Well. ", 1, -1, nil, "~") == 7)
 	assert(file:write(" Gone.", 1, -1, 30, "~") == 6)
 
-	file:close()
+	file:close("~")
 
 	file = assert(io.open(path))
 	assert(file:read("a") == "Hello, World! Well. Bye World! Gone.")
-	file:close()
+	file:close("~")
 	assert(system.removefile(path, "~"))
 
 	done()
@@ -521,8 +521,8 @@ do case "from file"
 
 	file = assert(io.open(path))
 	assert(file:read("a") == "Copyright Permission")
-	file:close()
-	srcf:close()
+	file:close("~")
+	srcf:close("~")
 	assert(system.removefile(path, "~"))
 
 	done()
@@ -542,7 +542,7 @@ do case "errors"
 
 	asserterr("invalid argument", file:resize(32, "~"))
 
-	file:close()
+	file:close("~")
 
 	done()
 end
@@ -557,7 +557,7 @@ do case "resize contents"
 		end
 		assert(file:flush(mode))
 		assert(file:resize(256, mode) == true)
-		assert(file:close())
+		assert(file:close(mode))
 	end
 
 	spawn(testcase, "")
@@ -584,7 +584,7 @@ do case "errors"
 		end
 	end
 
-	file:close()
+	file:close("~")
 
 	done()
 end
@@ -606,11 +606,62 @@ do case "flush contents"
 
 	testcase("~", "~d")
 
-	file:close()
+	file:close("~")
 
 	file = assert(io.open(path))
 	assert(file:read("a") == "mode= mode=d mode=~ mode=~d ")
-	file:close()
+	file:close("~")
+	assert(system.removefile(path, "~"))
+
+	done()
+end
+
+newtest "file:close" -----------------------------------------------------------
+
+do case "errors"
+
+	local file = assert(system.openfile("../LICENSE", "~r"))
+	for i = 1, 255 do
+		local char = string.char(i)
+		if char ~= "~" then
+			asserterr("unknown mode char", pcall(file.close, file, char))
+		end
+	end
+	file:close("~")
+
+	asserterr("closed", pcall(file.close, file, "~"))
+	spawn(function ()
+		asserterr("closed", pcall(file.close, file))
+
+		assert(system.openfile("../LICENSE"):close())
+	end)
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "flush contents"
+
+	local path = "DELETEME.txt"
+	local file = assert(system.openfile(path, "~wN", system.filebits.ruser))
+
+	function testcase(...)
+		for i = 1, select("#", ...) do
+			local mode = select(i, ...)
+			assert(file:write("mode="..mode.." ", nil, nil, nil, "~"))
+			assert(file:flush(mode) == true)
+		end
+	end
+	spawn(testcase, "", "d")
+	system.run()
+
+	testcase("~", "~d")
+
+	file:close("~")
+
+	file = assert(io.open(path))
+	assert(file:read("a") == "mode= mode=d mode=~ mode=~d ")
+	file:close("~")
 	assert(system.removefile(path, "~"))
 
 	done()
@@ -970,4 +1021,4 @@ for _, spec in ipairs{
 
 end
 
-file:close()
+file:close("~")
