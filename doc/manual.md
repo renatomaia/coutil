@@ -1465,6 +1465,13 @@ the file offset is not changed by this call.
 In the other case,
 the current file offset is used and updated.
 
+If `data` is a file opened for reading,
+it works as if the contents of the file were the string `data`.
+However,
+`i` and `j` are mandatory,
+and `offset` is ignored,
+thus the current offset of `file` is used and updated in this case.
+
 `mode` is a string,
 which might contain character `~` to execute it in [blocking mode](#blocking-mode).
 

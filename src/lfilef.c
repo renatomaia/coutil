@@ -1138,10 +1138,7 @@ static int k_setupfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 static int system_openfile (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
 	const char *mode = luaL_optstring(L, 2, "r");
-	int flags = 0;
-	int perm = 0;
-	int noyield = 0;
-	for (; *mode == LCU_NOYIELDMODE; mode++) noyield = 1;
+	int flags = 0, perm = 0, noyield = 0;
 	for (; *mode; mode++) switch (*mode) {
 		case 'r': perm |= 1; break;
 		case 'w': perm |= 2; break;
@@ -1153,7 +1150,7 @@ static int system_openfile (lua_State *L) {
 #ifdef O_CLOEXEC
 		case 'x': flags |= O_CLOEXEC; break;
 #endif
-		case LCU_NOYIELDMODE: return luaL_error(L, "'%c' must be in the begin of 'mode'", *mode);
+		case LCU_NOYIELDMODE: noyield = 1; break;
 		default: return luaL_error(L, "unknown mode char (got '%c')", *mode);
 	}
 	switch (perm) {
@@ -1257,10 +1254,18 @@ static int callwrite (lua_State *L,
                       uv_fs_t* filereq,
                       uv_file file,
                       uv_fs_cb callback) {
-	uv_buf_t buf;  /* args from 2 to 4 (data, i, j) */
-	int64_t offset = (int64_t)luaL_optinteger(L, 5, -1);
-	lcu_getinputbuf(L, 2, &buf);
-	return uv_fs_write(loop, filereq, file, &buf, 1, offset, callback);
+	uv_file *srcf = (uv_file *)luaL_testudata(L, 2, LCU_FILECLS);
+	if (srcf) {
+		int64_t offset = (int64_t)luaL_checkinteger(L, 3)-1;
+		int64_t length = (int64_t)luaL_checkinteger(L, 4)-offset;
+		luaL_argcheck(L, length > 0, 4, "invalid range");
+		return uv_fs_sendfile(loop, filereq, file, *srcf, offset, length, callback);
+	} else {
+		uv_buf_t buf;  /* args from 2 to 4 (data, i, j) */
+		int64_t offset = (int64_t)luaL_optinteger(L, 5, -1);
+		lcu_getinputbuf(L, 2, &buf);
+		return uv_fs_write(loop, filereq, file, &buf, 1, offset, callback);
+	}
 }
 static int k_setupwritefile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	uv_fs_t *filereq = (uv_fs_t *)request;

@@ -487,12 +487,11 @@ do case "errors"
 	done()
 end
 
-do case "write contents"
-
+do case "from string"
 	local path = "DELETEME.txt"
-	local file
+	local file = assert(system.openfile(path, "~wN", system.filebits.ruser))
+
 	spawn(function ()
-		file = assert(system.openfile(path, "wN", system.filebits.ruser))
 		assert(file:write("Hello, World!") == 13)
 		assert(file:write("Good Bye World! Later.", 6, 15, 20) == 10)
 	end)
@@ -506,6 +505,24 @@ do case "write contents"
 	file = assert(io.open(path))
 	assert(file:read("a") == "Hello, World! Well. Bye World! Gone.")
 	file:close()
+	assert(system.removefile(path, "~"))
+
+	done()
+end
+
+do case "from file"
+	local path = "DELETEME.txt"
+	local file = assert(system.openfile(path, "~wN", system.filebits.ruser))
+	local srcf = assert(system.openfile("../LICENSE", "~r"))
+
+	spawn(function () assert(file:write(srcf, 1, 10) == 10) end)
+	system.run()
+	assert(file:write(srcf, 58, 67, nil, "~") == 10)
+
+	file = assert(io.open(path))
+	assert(file:read("a") == "Copyright Permission")
+	file:close()
+	srcf:close()
 	assert(system.removefile(path, "~"))
 
 	done()
