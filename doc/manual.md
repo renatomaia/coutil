@@ -1237,6 +1237,19 @@ On Windows,
 
 `mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
 
+### `system.copyfile (path, destiny [, mode])`
+
+Copies file from `path` to `destiny`.
+
+`mode` can contain the following characters:
+
+- `n`: fails if already exists a file in `destiny`.
+- `c`: attempt to create a copy-on-write reflink.
+- `C`: forces a creation of a copy-on-write reflink,
+or fails otherwise.
+
+`mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
+
 ### `system.movefile (path, destiny [, mode])`
 
 Moves file from `path` to `destiny`.
@@ -1638,6 +1651,7 @@ Index
 	- [`system.address`](#systemaddress-type--data--port--mode)
 	- [`system.awaitch`](#systemawaitch-ch-endpoint-)
 	- [`system.awaitsig`](#systemawaitsig-signal)
+	- [`system.copyfile`](#systemcopyfile-path-destiny--mode)
 	- [`system.cpuinfo`](#systemcpuinfo-which)
 	- [`system.emitsig`](#systememitsig-pid-signal)
 	- [`system.execute`](#systemexecute-cmd-)
