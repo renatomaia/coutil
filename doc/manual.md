@@ -1471,11 +1471,12 @@ which might contain character `~` to execute it in [blocking mode](#blocking-mod
 In case of success,
 this function returns the number of bytes written to `file`.
 
-### `file:truncate (length [, mode])`
+### `file:resize (length [, mode])`
 
-[Await function](#await-function) that awaits until it truncates the file to `length` bytes.
+[Await function](#await-function) that awaits until it resizes `file` to `length` bytes.
 If the file previously was larger than this size, the extra data is lost.
-If the file previously was shorter, it is extended,
+If the file previously was shorter,
+it is extended,
 and the extended part reads as null bytes.
 
 `mode` is a string,
@@ -1685,8 +1686,8 @@ Index
 		- [`file:info`](#fileinfo-mode)
 		- [`file:own`](#fileown-uid-gid--mode)
 		- [`file:read`](#fileread-buffer--i--j--offset--mode)
+		- [`file:resize`](#fileresize-length--mode)
 		- [`file:touch`](#filetouch-mode-times)
-		- [`file:truncate`](#filetruncate-length--mode)
 		- [`file:write`](#filewrite-data--i--j--offset--mode)
 	- [`system.ownfile`](#systemownfile-path-uid-gid--mode)
 	- [`system.packenv`](#systempackenv-vars)

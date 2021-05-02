@@ -511,7 +511,7 @@ do case "write contents"
 	done()
 end
 
-newtest "file:truncate" --------------------------------------------------------
+newtest "file:resize" --------------------------------------------------------
 
 do case "errors"
 
@@ -519,18 +519,18 @@ do case "errors"
 	for i = 1, 255 do
 		local char = string.char(i)
 		if char ~= "~" then
-			asserterr("unknown mode char", pcall(file.truncate, file, 128, char))
+			asserterr("unknown mode char", pcall(file.resize, file, 128, char))
 		end
 	end
 
-	asserterr("invalid argument", file:truncate(32, "~"))
+	asserterr("invalid argument", file:resize(32, "~"))
 
 	file:close()
 
 	done()
 end
 
-do case "truncate contents"
+do case "resize contents"
 	local path = "DELETEME.txt"
 
 	local function testcase(mode)
@@ -539,7 +539,7 @@ do case "truncate contents"
 			assert(file:write("0123456789", nil, nil, nil, mode))
 		end
 		assert(file:flush(mode))
-		assert(file:truncate(256, mode) == true)
+		assert(file:resize(256, mode) == true)
 		assert(file:close())
 	end
 
