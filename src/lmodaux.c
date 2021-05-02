@@ -275,7 +275,6 @@ LCUI_FUNC int lcuL_pushfrom (lua_State *to,
                              lua_State *from,
                              int idx,
                              const char *msg) {
-	lcu_assert(lua_gettop(from) >= idx);
 	if (!lua_checkstack(to, 4)) return LUA_ERRMEM;
 	lua_pushcfunction(to, auxpushfrom);
 	lua_pushlightuserdata(to, from);
