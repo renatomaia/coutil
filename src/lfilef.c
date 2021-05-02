@@ -774,6 +774,30 @@ static int system_linkfile (lua_State *L) {
 }
 
 
+/* true = system.movefile (src, dst [, mode]) */
+static int k_setupmvfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	const char *src = luaL_checkstring(L, 1);
+	const char *dst = luaL_checkstring(L, 2);
+	int err = uv_fs_rename(loop, filereq, src, dst, on_fileopdone);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	lua_settop(L, 1);
+	return -1;  /* yield on success */
+}
+static int system_movefile (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);
+	if (lcuL_checknoyieldmode(L, 3)) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		const char *src = luaL_checkstring(L, 1);
+		const char *dst = luaL_checkstring(L, 2);
+		int err = uv_fs_rename(loop, &filereq, src, dst, NULL);
+		return lcuL_pushresults(L, 0, err);
+	}
+	return lcuT_resetcoreqk(L, sched, k_setupmvfile, returntrueover1, NULL);
+}
+
+
 /* true = system.removefile (path [, mode]) */
 #define RMFILE_NOYIELD    0x01
 #define RMFILE_DIRECTORY  0x02
@@ -1426,6 +1450,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{"makedir", system_makedir},
 		{"maketemp", system_maketemp},
 		{"linkfile", system_linkfile},
+		{"movefile", system_movefile},
 		{"openfile", system_openfile},
 		{"touchfile", system_touchfile},
 		{"ownfile", system_ownfile},
