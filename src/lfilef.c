@@ -798,6 +798,43 @@ static int system_movefile (lua_State *L) {
 }
 
 
+/* true = system.copyfile (src, dst [, mode]) */
+static int k_setupcpfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
+	const char *src = luaL_checkstring(L, 1);
+	const char *dst = luaL_checkstring(L, 2);
+	int flags = lua_tointeger(L, 3);
+	int err = uv_fs_copyfile(loop, filereq, src, dst, flags, on_fileopdone);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	lua_settop(L, 1);
+	return -1;  /* yield on success */
+}
+static int system_copyfile (lua_State *L) {
+	lcu_Scheduler *sched = lcu_getsched(L);
+	const char *mode = luaL_optstring(L, 3, "");
+	int noyield = 0, flags = 0;
+	for (; *mode; mode++) switch (*mode) {
+		case 'n': flags |= UV_FS_COPYFILE_EXCL; break;
+		case 'c': flags |= UV_FS_COPYFILE_FICLONE; break;
+		case 'C': flags |= UV_FS_COPYFILE_FICLONE_FORCE; break;
+		case LCU_NOYIELDMODE: noyield = 1; break;
+		default:
+			return luaL_error(L, "bad argument #%d, unknown mode char (got '%c')", 3, *mode);
+	}
+	if (noyield) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		const char *src = luaL_checkstring(L, 1);
+		const char *dst = luaL_checkstring(L, 2);
+		int err = uv_fs_copyfile(loop, &filereq, src, dst, flags, NULL);
+		return lcuL_pushresults(L, 0, err);
+	}
+	lua_settop(L, 2);
+	lua_pushinteger(L, flags);
+	return lcuT_resetcoreqk(L, sched, k_setupcpfile, returntrueover1, NULL);
+}
+
+
 /* true = system.removefile (path [, mode]) */
 #define RMFILE_NOYIELD    0x01
 #define RMFILE_DIRECTORY  0x02
@@ -1451,6 +1488,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{"maketemp", system_maketemp},
 		{"linkfile", system_linkfile},
 		{"movefile", system_movefile},
+		{"copyfile", system_copyfile},
 		{"openfile", system_openfile},
 		{"touchfile", system_touchfile},
 		{"ownfile", system_ownfile},

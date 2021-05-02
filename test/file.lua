@@ -187,6 +187,21 @@ do case "errors"
 		end
 	end
 
+	local function testerr(mode)
+		if not mode:find("s", 1, "plain search") then
+			asserterr("no such", system.linkfile("LICENSE", "link.lua", mode))
+		end
+		asserterr("already exists", system.linkfile("../LICENSE", "file.lua", mode))
+	end
+
+	testerr("~")
+	spawn(testerr, "")
+	assert(system.run() == false)
+
+	testerr("~s")
+	spawn(testerr, "s")
+	assert(system.run() == false)
+
 	done()
 end
 
@@ -196,7 +211,10 @@ do
 		assert(system.linkfile("file.lua", "link.lua", mode) == true)
 		assert(system.fileinfo("link.lua", mode.."?") == "file")
 		assert(system.fileinfo("link.lua", mode.."=") == nil)
+		assert(system.fileinfo("link.lua", mode.."*") == 2)
+		assert(system.fileinfo("file.lua", mode.."*") == 2)
 		assert(system.removefile("link.lua", mode))
+		assert(system.fileinfo("file.lua", mode.."*") == 1)
 	end
 	function testcases.symbolic(mode)
 		assert(system.linkfile("file.lua", "link.lua", "s"..mode) == true)
@@ -236,6 +254,15 @@ do case "errors"
 		end
 	end
 
+	local function testerr(mode)
+		asserterr("no such", system.movefile("LICENSE", "link.lua", mode))
+		asserterr("not a directory", system.movefile("benchmarks", "file.lua", mode))
+	end
+
+	testerr("~")
+	spawn(testerr, "")
+	assert(system.run() == false)
+
 	done()
 end
 
@@ -261,6 +288,46 @@ do
 
 		done()
 	end
+end
+
+newtest "copyfile" --------------------------------------------------------------
+
+do case "errors"
+
+	for i = 1, 255 do
+		local char = string.char(i)
+		if not string.find("~ncC", char, 1, "plain search") then
+			asserterr("unknown mode char", pcall(system.copyfile, "file.lua", "copied.lua", char))
+		end
+	end
+
+	local function testerr(mode)
+		asserterr("no such", system.copyfile("LICENSE", "copied.lua", mode))
+		asserterr("already exists", system.copyfile("../LICENSE", "file.lua", mode.."n"))
+		asserterr("directory", system.copyfile("benchmarks", "copied.dir", mode))
+	end
+
+	testerr("~")
+	spawn(testerr, "")
+	assert(system.run() == false)
+
+	done()
+end
+
+do case "copy contents"
+	local function testcase(mode)
+		assert(system.copyfile("../LICENSE", "copied.txt", mode) == true)
+		assert(system.fileinfo("copied.txt", mode.."B") == system.fileinfo("../LICENSE", mode.."B"))
+		assert(system.copyfile("file.lua", "copied.txt", mode) == true)
+		assert(system.fileinfo("copied.txt", mode.."B") == system.fileinfo("file.lua", mode.."B"))
+		assert(system.removefile("copied.txt", mode))
+	end
+
+	testcase("~")
+	spawn(testcase, "")
+	assert(system.run() == false)
+
+	done()
 end
 
 newtest "removefile" -----------------------------------------------------------
