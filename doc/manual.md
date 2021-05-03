@@ -120,12 +120,12 @@ Multithreading
 
 This section describes modules for creation of threads of execution of Lua code,
 either using standard coroutines,
-or other abstractions that allows to execute code on different system threads.
+or other abstractions that allows to execute code on multiple system threads.
 
 Coroutine Finalizers
 --------------------
 
-Module `coutil.spawn` provides functions to execute functions in new coroutines with an associated handler functions to deal with the results.
+Module `coutil.spawn` provides functions to execute functions in new coroutines with an associated handler function to deal with the results.
 
 ### `spawn.catch (h, f, ...)`
 
@@ -161,7 +161,7 @@ For instance, `coroutine.status(co, ...)` can be written as `co:status()`, where
 ### `coroutine.close (co)`
 
 Similar to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
-but for  [_state coroutines_](#coroutineload-chunk--chunkname--mode).
+but for _state coroutines_.
 
 ### `coroutine.load (chunk [, chunkname [, mode]])`
 
@@ -177,14 +177,14 @@ The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.
 ### `coroutine.status (co)`
 
 Similar to [`coroutine.status`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.status),
-but for [_state coroutines_](#coroutineload-chunk--chunkname--mode).
+but for _state coroutines_.
 In particular,
 it returns:
 
-- `"running"`: if the coroutine is running
-(that is, it is being executed in another thread);
-- `"suspended"`: if the coroutine is suspended in a call to yield
-(for instance, by waiting on a [channel](#channelcreate-name)),
+- `"running"`: if the _state coroutine_ is running
+(that is, it is being executed in another system thread);
+- `"suspended"`: if the _state coroutine_ is suspended in a call to yield
+(like, when its chunk calls [`coroutine.yield`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield)),
 or if it has not started running yet;
 - `"dead"`: if the coroutine has finished its chunk,
 or if it has stopped with an error.
@@ -570,13 +570,12 @@ Must be called while `system.run` is executing.
 Thread Synchronization
 ----------------------
 
-This section describes functions of `coutil.system` for thread synchronization and communication using [channels](#channelcreate-name) and [state coroutines](#coroutineload-chunk--chunkname--mode).
+This section describes functions of `coutil.system` for thread synchronization and communication using [_channels_](#channelcreate-name) and [_state coroutines_](#state-coroutines).
 
 ### `system.awaitch (ch, endpoint, ...)`
 
 [Await function](#await-function) that awaits on an _endpoint_ of [channel](#channelcreate-name) `ch` for a similar call on the opposite _endpoint_,
-either from another [_thread coroutine_](http://www.lua.org/manual/5.4/manual.html#2.6),
-[_state coroutine_](#coroutineload-chunk--chunkname--mode),
+either from another coroutine,
 or [_task_](#threadsdostring-pool-chunk--chunkname--mode-).
 
 `endpoint` is either string `"in"` or `"out"`,
@@ -594,14 +593,13 @@ Otherwise,
 it [fails](#failures) with an error message related to transfering the arguments from the matching call.
 In any case,
 if this call does not raise errors,
-it resumed the _thread coroutine_,
-_state coroutine_,
+it resumed the coroutine,
 or _task_ of the matching call.
 
 ### `system.resume (co, ...)`
 
 [Await function](#await-function) that is like [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
-but for [_state coroutines_](#coroutineload-chunk--chunkname--mode).
+but for [_state coroutines_](#state-coroutines).
 It executes _state coroutine_ `co` on a separate system thread,
 and awaits for its completion or suspension.
 Moreover,
@@ -613,8 +611,14 @@ and it will not be able to be resumed again until it suspends.
 In such case,
 the results of the execution of `co` are discarded.
 
-_State coroutines_ are executed using a limited set of threads that are also used by the underlying system.
+_State coroutines_ are executed using a limited set of threads that are also used by the underlying system to execute some _await functions_.
 The number of threads is given by environment variable [`UV_THREADPOOL_SIZE`](http://docs.libuv.org/en/v1.x/threadpool.html).
+Therefore,
+_state coroutines_ that execute for too long,
+might degrade the performance of some _await functions_.
+
+For long running tasks,
+consider using a [_thread pool_](#thread-pools).
 
 Time Measure
 ------------
