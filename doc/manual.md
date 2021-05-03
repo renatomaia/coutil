@@ -621,6 +621,12 @@ Time Measure
 
 This section describes functions of `coutil.system` to obtain a measure of time or to wait for a particular period of time.
 
+### `system.nanosecs ()`
+
+Returns a timestamp in nanoseconds that represents the current time of the system.
+It increases monotonically from some arbitrary point in time,
+and is not subject to clock drift.
+
 ### `system.time ([mode])`
 
 Returns a timestamp as a number of seconds with precision of milliseconds according to the value of `mode`,
@@ -637,12 +643,6 @@ Therefore,
 unlike the other options,
 it is affected by discontinuous jumps in the system time
 (for instance, if the system administrator manually changes the system time).
-
-### `system.nanosecs ()`
-
-Returns a timestamp in nanoseconds that represents the current time of the system.
-It increases monotonically from some arbitrary point in time,
-and is not subject to clock drift.
 
 ### `system.suspend ([seconds [, mode]])`
 
@@ -1169,82 +1169,11 @@ File System
 
 This section describes functions of `coutil.system` to access files and the file system.
 
-### `system.filebits`
+### `system.linkfile (path, destiny [, mode])`
 
-Table with the following fields containing numbers with the bit masks for a [file mode](https://man7.org/linux/man-pages/man7/inode.7.html).
+[Await function](#await-function) that awaits for the creation of a link on path `destiny` refering the file on path given by string `path`.
 
-- `type`: Bit mask for the type of the file .
-- `socket`: Socket file type.
-- `link`: Symbolic link file type.
-- `file`: Regular file type.
-- `block`: Block device file type.
-- `directory`: Directory file type.
-- `character`: Character device file type.
-- `fifo`: FIFO file type.
-- `setuid`: Set-user-ID bit.
-- `setgid`: Set-group-ID bit.
-- `sticky`: Sticky bit.
-- `ruser`: Read permission bit for the file's onwer user ID.
-- `wuser`: Write permission bit for the file's onwer user ID.
-- `xuser`: Execute permission bit for the file's onwer user ID.
-- `rgroup`: Read permission bit for the file's owner group ID.
-- `wgroup`: Write permission bit for the file's owner group ID.
-- `xgroup`: Execute permission bit for the file's owner group ID.
-- `rother`: Read permission bit for others.
-- `wother`: Write permission bit for others.
-- `xother`: Execute permission bit for others.
-
-### `system.fileinfo (path, mode)`
-
-Similar to [`file:info`](#fileinfo-mode)
-but for file in path given by string `path`.
-In addition to the characters supported by [`file:info`](#fileinfo-mode),
-`mode` can also contain:
-
-| Character | Type  | Description |
-| --------- | ----- | ----------- |
-| `p` | string <!-- uv_fs_realpath --> | Canonicalized absolute **path** name for the file. |
-| `=` | string <!-- uv_fs_readlink --> | The **value** of the symbolic link, or `nil` if `path` does not refer a symbolic link. |
-| `@` | string <!-- f_type --> | _Type_ of the **file system** of the file. |
-| `N` | integer <!-- f_type --> | **Numeric** ID of the _type_ of the file system of the file. |
-| `I` | integer <!-- f_bsize --> | **Ideal** transfer _block size_ for the file system of the file. |
-| `A` | integer <!-- f_bavail --> | Free blocks **available** to unprivileged user in the file system of the file. |
-| `F` | integer <!-- f_bfree --> | **Free** _blocks_ in the file system of the file. |
-| `f` | integer <!-- f_ffree --> | **Free** _inodes_ in the file system of the file. |
-| `T` | integer <!-- f_blocks --> | **Total** data _blocks_ in the file system of the file. |
-| `t` | integer <!-- f_files --> | **Total** _inodes_ in the file system of the file. |
-
-Moreover,
-`mode` can also be prefixed with `l` to indicate that,
-if `path` refers a symbolic link,
-the values corresponding to characters supported by [`file:info`](#fileinfo-mode) shall be about the symbolic link file instead of the link's target file.
-The value of the other options are not affected.
-Similar to `~`,
-`l` does not produce a value to be returned.
-
-### `system.maketemp (prefix [, mode])`
-
-[Await function](#await-function) that awaits for the creation of a uniquely named temporary directory with the prefix given by string `prefix`.
-
-String `mode` might contain any of the following characters to make it create a file instead of a directory.
-These characters also define the sequence of values returned by the call in case of success.
-
-- `f`: returns the path to the **file** created.
-- `o`: returns the created file already **opened**.
-
-If `mode` does not contain any of the above characters,
-this function returns the path to the created directory on success.
-
-`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
-
-By default,
-mode is the empty string.
-
-### `system.linkfile (path, linkpath [, mode])`
-
-[Await function](#await-function) that awaits for the creation of a link on path `linkpath` refering the file on path given by string `path`.
-
-It [fails](#failures) if a file in `linkpath` already exists.
+It [fails](#failures) if a file in `destiny` already exists.
 
 String `mode` might contain `s` to create a symbolic link,
 instead of a hard link.
@@ -1276,6 +1205,30 @@ or fails otherwise.
 
 If string `mode` is provided with character `~`,
 it executes in [blocking mode](#blocking-mode).
+
+### `system.removefile (path [, mode])`
+
+[Await function](#await-function) that awaits for removal of file on `path`,
+or empty directory if `mode` is a string with character `d`.
+`mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
+
+### `system.maketemp (prefix [, mode])`
+
+[Await function](#await-function) that awaits for the creation of a uniquely named temporary directory with the prefix given by string `prefix`.
+
+String `mode` might contain any of the following characters to make it create a file instead of a directory.
+These characters also define the sequence of values returned by the call in case of success.
+
+- `f`: returns the path to the **file** created.
+- `o`: returns the created file already **opened**.
+
+If `mode` does not contain any of the above characters,
+this function returns the path to the created directory on success.
+
+`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
+
+By default,
+mode is the empty string.
 
 ### `system.makedir (path, perm [, mode])`
 
@@ -1330,12 +1283,6 @@ Similar to [`file:grant`](#filegrant-perm--mode),
 but for file in path given by string `path`.
 The other arguments are the same of [`file:grant`](#filegrant-perm--mode).
 
-### `system.removefile (path [, mode])`
-
-[Await function](#await-function) that awaits for removal of file on `path`,
-or empty directory if `mode` is a string with character `d`.
-`mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
-
 ### `system.openfile (path [, mode [, perm]])`
 
 [Await function](#await-function) that awaits until file in `path` in opened.
@@ -1377,41 +1324,69 @@ but that takes an unpredictable amount of time to happen.
 If string `mode` is provided with character `~`,
 it executes in [blocking mode](#blocking-mode).
 
-### `file:info (mode)`
+### `file:read (buffer [, i [, j [, offset [, mode]]]])`
 
-[Await function](#await-function) that awaits for information related to `file`.
+[Await function](#await-function) that awaits until it reads from file `file` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
+following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+
+If `offset` is provided,
+the file is read from the `offset` provided from the begin of the file.
+In such case,
+the file offset is not changed by this call.
+In the other case,
+the current file offset is used and updated.
+
+If string `mode` is provided with character `~`,
+it executes in [blocking mode](#blocking-mode).
 
 On success,
-returns values according to the following characters in string `mode`:
+returns the number of bytes copied to `buffer`.
 
-| Character | Type  | Description |
-| --------- | ----- | ----------- |
-| `?` | string <!-- st_mode --> | **Type** of the file. |
-| `M` | integer <!-- st_mode --> | [_Bit flags_](#systemfilebits) of the file (_imode_ **mode**). |
-| `_` | integer <!-- st_flags --> | User **defined** flags for the file. |
-| `u` | integer <!-- st_uid --> | Owner **user** _identifier_ (uid). |
-| `g` | integer <!-- st_gid --> | Owner user **group** identifier (gid). |
-| `#` | integer <!-- st_ino --> | ID of the file in the file system (_inode_ **number**). |
-| `d` | integer <!-- st_dev --> | ID of the **device** _containing_ the file. |
-| `D` | integer <!-- st_rdev --> | ID of the **device** _represented_ by the file, or `0` is not applicable. |
-| `*` | integer <!-- st_nlink --> | _Number_ of **hard links** to the file. |
-| `B` | integer <!-- st_size --> | Total size of the file (**bytes**). |
-| `b` | integer <!-- st_blocks --> | Number of 512B **blocks** allocated for the file. |
-| `i` | integer <!-- st_blksize --> | **Ideal** transfer _block size_ for the file. |
-| `v` | integer <!-- st_gen --> | **Generation** number of the file. |
-| `a` | number <!-- st_atim --> | Time of last **access** of the file. |
-| `s` | number <!-- st_ctim --> | Time of last **status** change of the file. |
-| `m` | number <!-- st_mtim --> | Time of last **modification** of the file. |
-| `c` | number <!-- st_birthtim --> | Time of file **creation**. |
+### `file:write (data [, i [, j [, offset [, mode]]]])`
 
-`mode` can also contain any of the characters valid for argument `perm` of [`file:grant`](#filegrant-perm--mode).
-For these characters a boolean is returned indicating whether such bit is set.
+[Await function](#await-function) that awaits until it writes to file `file` the substring of `data` that starts at `i` and continues until `j`,
+following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
 
-`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
-Unlike other characters,
-`~` does not produce a value to be returned.
+If `offset` is provided,
+the data is written from the `offset` provided from the begin of the file.
+In such case,
+the file offset is not changed by this call.
+In the other case,
+the current file offset is used and updated.
 
-**Note**: all time values returned are seconds relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time).
+If `data` is a file opened for reading,
+it works as if the contents of the file were the string `data`.
+In such case,
+`i` and `j` are mandatory.
+Moreover,
+`offset` is ignored,
+thus the current offset of `file` is used and updated.
+
+If string `mode` is provided with character `~`,
+it executes in [blocking mode](#blocking-mode).
+
+On success,
+returns the number of bytes written to `file`.
+
+### `file:resize (size [, mode])`
+
+[Await function](#await-function) that awaits until it resizes `file` to `size` bytes.
+If the file previously was larger than this size, the extra data is lost.
+If the file previously was shorter,
+it is extended,
+and the extended part reads as null bytes.
+
+If string `mode` is provided with character `~`,
+it executes in [blocking mode](#blocking-mode).
+
+### `file:flush ([mode])`
+
+[Await function](#await-function) that awaits until it saves any data written to `file` into the file's device.
+
+If string `mode` contains `d`,
+it minimizes the device activity by skipping metadata not necessary for later data retrieval.
+
+`mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
 
 ### `file:touch ([mode, times...])`
 
@@ -1464,69 +1439,94 @@ as listed below:
 If string `mode` is provided with character `~`,
 it executes in [blocking mode](#blocking-mode).
 
-### `file:read (buffer [, i [, j [, offset [, mode]]]])`
+### `file:info (mode)`
 
-[Await function](#await-function) that awaits until it reads from file `file` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
-following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
-
-If `offset` is provided,
-the file is read from the `offset` provided from the begin of the file.
-In such case,
-the file offset is not changed by this call.
-In the other case,
-the current file offset is used and updated.
-
-If string `mode` is provided with character `~`,
-it executes in [blocking mode](#blocking-mode).
+[Await function](#await-function) that awaits for information related to `file`.
 
 On success,
-returns the number of bytes copied to `buffer`.
+returns values according to the following characters in string `mode`:
 
-### `file:write (data [, i [, j [, offset [, mode]]]])`
+| Character | Type  | Description |
+| --------- | ----- | ----------- |
+| `?` | string <!-- st_mode --> | **Type** of the file. |
+| `M` | integer <!-- st_mode --> | [_Bit flags_](#systemfilebits) of the file (_imode_ **mode**). |
+| `_` | integer <!-- st_flags --> | User **defined** flags for the file. |
+| `u` | integer <!-- st_uid --> | Owner **user** _identifier_ (uid). |
+| `g` | integer <!-- st_gid --> | Owner user **group** identifier (gid). |
+| `#` | integer <!-- st_ino --> | ID of the file in the file system (_inode_ **number**). |
+| `d` | integer <!-- st_dev --> | ID of the **device** _containing_ the file. |
+| `D` | integer <!-- st_rdev --> | ID of the **device** _represented_ by the file, or `0` is not applicable. |
+| `*` | integer <!-- st_nlink --> | _Number_ of **hard links** to the file. |
+| `B` | integer <!-- st_size --> | Total size of the file (**bytes**). |
+| `b` | integer <!-- st_blocks --> | Number of 512B **blocks** allocated for the file. |
+| `i` | integer <!-- st_blksize --> | **Ideal** transfer _block size_ for the file. |
+| `v` | integer <!-- st_gen --> | **Generation** number of the file. |
+| `a` | number <!-- st_atim --> | Time of last **access** of the file. |
+| `s` | number <!-- st_ctim --> | Time of last **status** change of the file. |
+| `m` | number <!-- st_mtim --> | Time of last **modification** of the file. |
+| `c` | number <!-- st_birthtim --> | Time of file **creation**. |
 
-[Await function](#await-function) that awaits until it writes to file `file` the substring of `data` that starts at `i` and continues until `j`,
-following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+`mode` can also contain any of the characters valid for argument `perm` of [`file:grant`](#filegrant-perm--mode).
+For these characters a boolean is returned indicating whether such bit is set.
 
-If `offset` is provided,
-the data is written from the `offset` provided from the begin of the file.
-In such case,
-the file offset is not changed by this call.
-In the other case,
-the current file offset is used and updated.
+`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
+Unlike other characters,
+`~` does not produce a value to be returned.
 
-If `data` is a file opened for reading,
-it works as if the contents of the file were the string `data`.
-In such case,
-`i` and `j` are mandatory.
+**Note**: all time values returned are seconds relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time).
+
+### `system.filebits`
+
+Table with the following fields containing numbers with the bit masks for a [file mode](https://man7.org/linux/man-pages/man7/inode.7.html).
+
+- `type`: Bit mask for the type of the file .
+- `socket`: Socket file type.
+- `link`: Symbolic link file type.
+- `file`: Regular file type.
+- `block`: Block device file type.
+- `directory`: Directory file type.
+- `character`: Character device file type.
+- `fifo`: FIFO file type.
+- `setuid`: Set-user-ID bit.
+- `setgid`: Set-group-ID bit.
+- `sticky`: Sticky bit.
+- `ruser`: Read permission bit for the file's onwer user ID.
+- `wuser`: Write permission bit for the file's onwer user ID.
+- `xuser`: Execute permission bit for the file's onwer user ID.
+- `rgroup`: Read permission bit for the file's owner group ID.
+- `wgroup`: Write permission bit for the file's owner group ID.
+- `xgroup`: Execute permission bit for the file's owner group ID.
+- `rother`: Read permission bit for others.
+- `wother`: Write permission bit for others.
+- `xother`: Execute permission bit for others.
+
+### `system.fileinfo (path, mode)`
+
+Similar to [`file:info`](#fileinfo-mode)
+but for file in path given by string `path`.
+In addition to the characters supported by [`file:info`](#fileinfo-mode),
+`mode` can also contain:
+
+| Character | Type  | Description |
+| --------- | ----- | ----------- |
+| `p` | string <!-- uv_fs_realpath --> | Canonicalized absolute **path** name for the file. |
+| `=` | string <!-- uv_fs_readlink --> | The **value** of the symbolic link, or `nil` if `path` does not refer a symbolic link. |
+| `@` | string <!-- f_type --> | _Type_ of the **file system** of the file. |
+| `N` | integer <!-- f_type --> | **Numeric** ID of the _type_ of the file system of the file. |
+| `I` | integer <!-- f_bsize --> | **Ideal** transfer _block size_ for the file system of the file. |
+| `A` | integer <!-- f_bavail --> | Free blocks **available** to unprivileged user in the file system of the file. |
+| `F` | integer <!-- f_bfree --> | **Free** _blocks_ in the file system of the file. |
+| `f` | integer <!-- f_ffree --> | **Free** _inodes_ in the file system of the file. |
+| `T` | integer <!-- f_blocks --> | **Total** data _blocks_ in the file system of the file. |
+| `t` | integer <!-- f_files --> | **Total** _inodes_ in the file system of the file. |
+
 Moreover,
-`offset` is ignored,
-thus the current offset of `file` is used and updated.
-
-If string `mode` is provided with character `~`,
-it executes in [blocking mode](#blocking-mode).
-
-On success,
-returns the number of bytes written to `file`.
-
-### `file:resize (length [, mode])`
-
-[Await function](#await-function) that awaits until it resizes `file` to `length` bytes.
-If the file previously was larger than this size, the extra data is lost.
-If the file previously was shorter,
-it is extended,
-and the extended part reads as null bytes.
-
-If string `mode` is provided with character `~`,
-it executes in [blocking mode](#blocking-mode).
-
-### `file:flush ([mode])`
-
-[Await function](#await-function) that awaits until it saves any data written to `file` into the file's device.
-
-If string `mode` contains `d`,
-it minimizes the device activity by skipping metadata not necessary for later data retrieval.
-
-`mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
+`mode` can also be prefixed with `l` to indicate that,
+if `path` refers a symbolic link,
+the values corresponding to characters supported by [`file:info`](#fileinfo-mode) shall be about the symbolic link file instead of the link's target file.
+The value of the other options are not affected.
+Similar to `~`,
+`l` does not produce a value to be returned.
 
 System Information
 ------------------
@@ -1711,7 +1711,7 @@ Index
 	- [`system.grantfile`](#systemgrantfile-path-perm--mode)
 	- [`system.halt`](#systemhalt-)
 	- [`system.isrunning`](#systemisrunning-)
-	- [`system.linkfile`](#systemlinkfile-path-linkpath--mode)
+	- [`system.linkfile`](#systemlinkfile-path-destiny--mode)
 	- [`system.listdir`](#systemlistdir-path--mode)
 	- [`system.makedir`](#systemmakedir-path-perm--mode)
 	- [`system.maketemp`](#systemmaketemp-prefix--mode)
@@ -1720,13 +1720,13 @@ Index
 	- [`system.nanosecs`](#systemnanosecs-)
 	- [`system.netinfo`](#systemnetinfo-option-which)
 	- [`system.openfile`](#systemopenfile-path--mode--perm)
-		- [`file:close`](#fileclose-)
+		- [`file:close`](#fileclose-mode)
 		- [`file:flush`](#fileflush-mode)
 		- [`file:grant`](#filegrant-perm--mode)
 		- [`file:info`](#fileinfo-mode)
 		- [`file:own`](#fileown-uid-gid--mode)
 		- [`file:read`](#fileread-buffer--i--j--offset--mode)
-		- [`file:resize`](#fileresize-length--mode)
+		- [`file:resize`](#fileresize-size--mode)
 		- [`file:touch`](#filetouch-mode-times)
 		- [`file:write`](#filewrite-data--i--j--offset--mode)
 	- [`system.ownfile`](#systemownfile-path-uid-gid--mode)
