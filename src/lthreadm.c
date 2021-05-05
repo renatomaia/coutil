@@ -1,5 +1,6 @@
 #include "lthpool.h"
 #include "lmodaux.h"
+#include "lttyaux.h"
 #include "lchaux.h"
 
 #include <string.h>
@@ -191,7 +192,8 @@ LCUMOD_API int luaopen_coutil_threads (lua_State *L) {
 		{"dofile", threads_dofile},
 		{NULL, NULL}
 	};
-	lcuCS_tochannelmap(L);  /* map shall be GC after 'threads' on Lua close */
+	(void)lcuTY_tostdiofd(L);  /* must be available to be copied to new threads */
+	(void)lcuCS_tochannelmap(L);  /* map shall be GC after 'threads' on Lua close */
 	luaL_newlib(L, modulef);
 	luaL_newmetatable(L, TPOOLGCCLS)  /* metatable for tpool sentinel */;
 	luaL_setfuncs(L, poolrefmt, 0);  /* add metamethods to metatable */

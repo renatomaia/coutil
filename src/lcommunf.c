@@ -1,6 +1,7 @@
 #include "lmodaux.h"
 #include "loperaux.h"
 #include "lsckdefs.h"
+#include "lttyaux.h"
 
 #include <string.h>
 #include <lmemlib.h>
@@ -12,7 +13,6 @@
 #include <winsock2.h>
 typedef unsigned short in_port_t;
 #endif
-
 
 /*
  * Addresses 
@@ -617,8 +617,10 @@ static int k_setupnameaddr (lua_State *L,
 			case 'd': flags |= NI_DGRAM; break;
 #ifdef NI_IDN
 			case 'i': flags |= NI_IDN; break;
+#ifndef _GNU_SOURCE
 			case 'u': flags |= NI_IDN|NI_IDN_ALLOW_UNASSIGNED; break;
 			case 'a': flags |= NI_IDN|NI_IDN_USE_STD3_ASCII_RULES; break;
+#endif
 #endif
 			default: return luaL_error(L, "unknown mode char (got '%c')", *mode);
 		}
@@ -1722,7 +1724,7 @@ static const luaL_Reg ip[] = {
 	{NULL, NULL}
 };
 
-static const luaL_Reg udp[] = {
+static const luaL_Reg udpsocket[] = {
 	{"getaddress", udp_getaddress},
 	{"bind", udp_bind},
 	{"setoption", udp_setoption},
@@ -1744,7 +1746,7 @@ static const luaL_Reg passive[] = {
 	{NULL, NULL}
 };
 
-static const luaL_Reg tcp[] = {
+static const luaL_Reg tcpsocket[] = {
 	{"getaddress", tcp_getaddress},
 	{"bind", tcp_bind},
 	{NULL, NULL}
@@ -1761,7 +1763,7 @@ static const luaL_Reg tcppassive[] = {
 	{NULL, NULL}
 };
 
-static const luaL_Reg pipe[] = {
+static const luaL_Reg pipesocket[] = {
 	{"getdomain", pipe_getdomain},
 	{"getaddress", pipe_getaddress},
 	{"bind", pipe_bind},
@@ -1824,7 +1826,7 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	lua_newtable(L);  /* create method table */
 	lcuM_setfuncs(L, object, 1);
 	lcuM_setfuncs(L, ip, 1);
-	luaL_setfuncs(L, udp, 0);
+	luaL_setfuncs(L, udpsocket, 0);
 	luaL_newmetatable(L, LCU_UDPSOCKETCLS);
 	lua_insert(L, -2);  /* place below method table */
 	lua_setfield(L, -2, "__index");  /* metatable.__index = method table */
@@ -1835,7 +1837,7 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	lua_newtable(L);  /* create method table */
 	lcuM_setfuncs(L, object, 1);
 	lcuM_setfuncs(L, ip, 1);
-	lcuM_setfuncs(L, tcp, 1);
+	lcuM_setfuncs(L, tcpsocket, 1);
 	lcuM_setfuncs(L, active, 1);
 	luaL_setfuncs(L, tcpactive, 0);
 	luaL_newmetatable(L, LCU_TCPACTIVECLS);
@@ -1848,7 +1850,7 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	lua_newtable(L);  /* create method table */
 	lcuM_setfuncs(L, object, 1);
 	lcuM_setfuncs(L, ip, 1);
-	lcuM_setfuncs(L, tcp, 1);
+	lcuM_setfuncs(L, tcpsocket, 1);
 	lcuM_setfuncs(L, passive, 1);
 	luaL_setfuncs(L, tcppassive, 0);
 	luaL_newmetatable(L, LCU_TCPPASSIVECLS);
@@ -1860,7 +1862,7 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	lua_pushstring(L, LCU_PIPESHARECLS);
 	lua_newtable(L);  /* create method table */
 	lcuM_setfuncs(L, object, 1);
-	lcuM_setfuncs(L, pipe, 1);
+	lcuM_setfuncs(L, pipesocket, 1);
 	lcuM_setfuncs(L, active, 1);
 	lcuM_setfuncs(L, pipeactive, 1);
 	luaL_setfuncs(L, pipeipc, 0);
@@ -1873,7 +1875,7 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	lua_pushstring(L, LCU_PIPEACTIVECLS);
 	lua_newtable(L);  /* create method table */
 	lcuM_setfuncs(L, object, 1);
-	lcuM_setfuncs(L, pipe, 1);
+	lcuM_setfuncs(L, pipesocket, 1);
 	lcuM_setfuncs(L, active, 1);
 	lcuM_setfuncs(L, pipeactive, 1);
 	luaL_newmetatable(L, LCU_PIPEACTIVECLS);
@@ -1885,7 +1887,7 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	lua_pushstring(L, LCU_PIPEPASSIVECLS);
 	lua_newtable(L);  /* create method table */
 	lcuM_setfuncs(L, object, 1);
-	lcuM_setfuncs(L, pipe, 1);
+	lcuM_setfuncs(L, pipesocket, 1);
 	lcuM_setfuncs(L, passive, 1);
 	luaL_setfuncs(L, pipepassive, 0);
 	luaL_newmetatable(L, LCU_PIPEPASSIVECLS);
@@ -1908,23 +1910,22 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	luaL_setfuncs(L, modf, 0);
 	lcuM_setfuncs(L, upvf, LCU_MODUPVS);
 
-	// TODO: this currently causes std. files to be uninheritable and cause
-	//       programs by `os.execute` to fail with SIGABRT.
-	// {
-	// 	static const char *const field[] = { "stdin", "stdout", "stderr" };
-	// 	int fd;
-	// 	for (fd = 0; fd < 3; fd++) {
-	// 		lcu_Scheduler *sched = (lcu_Scheduler *)lua_touserdata(L, -2);
-	// 		uv_loop_t *loop = lcu_toloop(sched);
-	// 		lcu_TermSocket *term = lcuT_newudhdl(L, lcu_TermSocket, LCU_TERMSOCKETCLS);
-	// 		int err = uv_tty_init(loop, (uv_tty_t *)lcu_ud2hdl(term), fd, 0);
-	// 		if (err) {
-	// 			lua_pop(L, 1);
-	// 			lcuL_warnerr(L, field[fd], err);
-	// 		} else {
-	// 			term->flags = 0;
-	// 			lua_setfield(L, -2, field[fd]);
-	// 		}
-	// 	}
-	// }
+	{
+		static const char *const field[] = { "stdin", "stdout", "stderr" };
+		lcu_Scheduler *sched = (lcu_Scheduler *)lua_touserdata(L, -2);
+		uv_loop_t *loop = lcu_toloop(sched);
+		int *stdiofd = lcuTY_tostdiofd(L);
+		int i;
+		for (i = 0; i < LCU_STDIOFDCOUNT; i++) {
+			lcu_TermSocket *term = lcuT_newudhdl(L, lcu_TermSocket, LCU_TERMSOCKETCLS);
+			int err = uv_tty_init(loop, (uv_tty_t *)lcu_ud2hdl(term), stdiofd[i], 0);
+			if (err) {
+				lua_pop(L, 1);
+				lcuL_warnerr(L, field[i], err);
+			} else {
+				term->flags = 0;
+				lua_setfield(L, -2, field[i]);
+			}
+		}
+	}
 }
