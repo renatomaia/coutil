@@ -41,7 +41,7 @@ PLATS= guess generic linux macosx solaris
 
 LIB_A= libluacoutil.a
 MOD_M= coutil.so
-MOD_O= lmodaux.o loperaux.o lchaux.o lthpool.o \
+MOD_O= lmodaux.o loperaux.o lchaux.o lthpool.o lttyaux.o \
        lcommunf.o lfilef.o linfof.o lprocesf.o lscheduf.o ltimef.o \
        lchannem.o lcoroutm.o lsystemm.o lthreadm.o
 
@@ -102,7 +102,7 @@ guess:
 generic: $(ALL)
 
 Linux linux:
-	$(MAKE) $(ALL) SYSCFLAGS="-DLUA_USE_LINUX -fPIC" \
+	$(MAKE) $(ALL) SYSCFLAGS="-DLUA_USE_LINUX -D_GNU_SOURCE -fPIC" \
 	               SYSLDFLAGS="-shared"
 
 Darwin macos macosx:

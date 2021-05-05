@@ -128,6 +128,14 @@ static int writer (lua_State *L, const void *b, size_t size, void *B) {
 	(void)L;
 	luaL_addlstring((luaL_Buffer *) B, (const char *)b, size);
 	return 0;
+};
+
+static void copylightud (lua_State *L, lua_State *NL, const void *field) {
+	lua_getfield(L, LUA_REGISTRYINDEX, field);
+	lcu_assert(lua_touserdata(L, -1) != NULL);
+	lua_pushlightuserdata(NL, lua_touserdata(L, -1));
+	lua_setfield(NL, LUA_REGISTRYINDEX, field);
+	lua_pop(L, 1);
 }
 
 static void warnf (void *ud, const char *message, int tocont);
@@ -150,12 +158,8 @@ LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
 
 	luaL_checkstack(NL, 3, "not enough memory");
 
-	/* copy channel map reference */
-	lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELSREGKEY);
-	lcu_assert(lua_touserdata(L, -1) != NULL);
-	lua_pushlightuserdata(NL, lua_touserdata(L, -1));
-	lua_setfield(NL, LUA_REGISTRYINDEX, LCU_CHANNELSREGKEY);
-	lua_pop(L, 1);
+	copylightud(L, NL, LCU_CHANNELSREGKEY);  /* copy channel map reference */
+	copylightud(L, NL, LCU_STDIOFDREGKEY);  /* copy duplicated stdio files */
 
 	luaL_requiref(NL, LUA_LOADLIBNAME, luaopen_package, 0);
 	luaL_getsubtable(NL, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
