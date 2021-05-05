@@ -18,7 +18,9 @@ LIBUV_LIB= uv
 
 LD= ld
 CC= gcc -std=gnu89
-CFLAGS= -O2 -Wall -Wextra -I. -I$(LUA_INCDIR) -I$(LUAMEM_INCDIR) -I$(LIBUV_INCDIR) $(SYSCFLAGS) $(MYCFLAGS)
+CFLAGS= -O2 -Wall -Wextra -DLCU_ENABLESTDIODUP -I. \
+        -I$(LUA_INCDIR) -I$(LUAMEM_INCDIR) -I$(LIBUV_INCDIR) \
+        $(SYSCFLAGS) $(MYCFLAGS)
 LDFLAGS= -L$(LUAMEM_LIBDIR) -L$(LIBUV_LIBDIR) $(SYSLDFLAGS) $(MYLDFLAGS)
 LIBS= -l$(LUAMEM_LIB) -l$(LIBUV_LIB) $(SYSLIBS) $(MYLIBS)
 
@@ -41,7 +43,7 @@ PLATS= guess generic linux macosx solaris
 
 LIB_A= libluacoutil.a
 MOD_M= coutil.so
-MOD_O= lmodaux.o loperaux.o lchaux.o lthpool.o \
+MOD_O= lmodaux.o loperaux.o lchaux.o lthpool.o lttyaux.o \
        lcommunf.o lfilef.o linfof.o lprocesf.o lscheduf.o ltimef.o \
        lchannem.o lcoroutm.o lsystemm.o lthreadm.o
 
@@ -102,7 +104,7 @@ guess:
 generic: $(ALL)
 
 Linux linux:
-	$(MAKE) $(ALL) SYSCFLAGS="-DLUA_USE_LINUX -fPIC" \
+	$(MAKE) $(ALL) SYSCFLAGS="-DLUA_USE_LINUX -D_GNU_SOURCE -fPIC" \
 	               SYSLDFLAGS="-shared"
 
 Darwin macos macosx:
