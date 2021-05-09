@@ -30,6 +30,7 @@ LCUI_FUNC int lcuL_pushresults (lua_State *L, int n, int err) {
 LCUI_FUNC void lcuL_warnmsg (lua_State *L, const char *prefix, const char *msg) {
 	lua_warning(L, LCU_WARNPREFIX, 1);
 	lua_warning(L, prefix, 1);
+	lua_warning(L, ": ", 1);
 	lua_warning(L, msg, 0);
 }
 
