@@ -48,7 +48,7 @@ static int addthread_mx (lcu_ThreadPool *pool, lua_State *L) {
 			uv_thread_t tid;
 			int err = uv_thread_create(&tid, threadmain, pool);
 			if (!err) pool->threads++;
-			else lcuL_warnerr(L, "system.threads: ", err);
+			else lcuL_warnerr(L, "system.threads", err);
 		}
 	}
 	if (pool->status == TPOOL_CLOSED) return 0;
@@ -99,7 +99,7 @@ static void threadmain (void *arg) {
 			}
 		} else {
 			if (status != LUA_OK) {
-				lcuL_warnmsg(L, "threads: ", lua_tostring(L, -1));
+				lcuL_warnmsg(L, "threads", lua_tostring(L, -1));
 			}
 			/* avoid 'pool->tasks--' */
 			lua_settop(L, 0);
