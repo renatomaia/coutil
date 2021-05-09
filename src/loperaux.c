@@ -54,7 +54,7 @@ static int terminateloop (lua_State *L) {
 		if (err >= 0) err = uv_loop_close(loop);
 		else {
 			lcu_log(NULL, L, "failure: unable to close UV loop!");
-			lcuL_warnerr(L, "system.run: ", err);
+			lcuL_warnerr(L, "system.run", err);
 			uv_print_all_handles(loop, stderr);
 		}
 	}
@@ -107,7 +107,7 @@ static void resumethread (lua_State *thread,
 	if (status != LUA_OK && status != LUA_YIELD) {
 		const char *errmsg = lua_tostring(thread, -1);
 		if (errmsg == NULL) errmsg = "(error object is not a string)";
-		lcuL_warnmsg(L, "system.run: ", errmsg);
+		lcuL_warnmsg(L, "system.run", errmsg);
 	}
 	lua_pop(thread, nret);  /* dicard yielded values */
 }
@@ -524,7 +524,7 @@ static void stopudhdl (lua_State *L, lcu_UdataHandle *udhdl) {
 	pushsaved(L, handle);  /* restore saved object being stopped */
 	if (err < 0) {
 		lcu_closeudhdl(L, -1);
-		lcuL_warnerr(L, "object:stop: ", err);
+		lcuL_warnerr(L, "object:stop", err);
 	}
 	else freevalue(L, (void *)handle);
 	lua_pop(L, 1);  /* discard restored saved object */
