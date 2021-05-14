@@ -8,6 +8,22 @@
 #endif
 
 
+#ifdef _WIN32
+#define S_IFIFO _S_IFIFO
+#define S_ISUID 04000
+#define S_ISGID 02000
+#define S_ISVTX 01000
+#define S_IRUSR 00400
+#define S_IWUSR 00200
+#define S_IXUSR 00100
+#define S_IRGRP 00040
+#define S_IWGRP 00020
+#define S_IXGRP 00010
+#define S_IROTH 00004
+#define S_IWOTH 00002
+#define S_IXOTH 00001
+#endif
+
 static int checkperm (lua_State *L, int arg) {
 	if (lua_type(L, arg) == LUA_TSTRING) {
 		const char *mode = lua_tostring(L, arg);
@@ -35,13 +51,19 @@ static int checkperm (lua_State *L, int arg) {
 
 static void pushfiletype (lua_State *L, uint64_t type) {
 	switch (type) {
+#ifdef S_IFSOCK
 		case S_IFSOCK: lua_pushliteral(L, "socket"); break;
+#endif
 		case S_IFLNK: lua_pushliteral(L, "link"); break;
 		case S_IFREG: lua_pushliteral(L, "file"); break;
+#ifdef S_IFBLK
 		case S_IFBLK: lua_pushliteral(L, "block"); break;
+#endif
 		case S_IFDIR: lua_pushliteral(L, "directory"); break;
 		case S_IFCHR: lua_pushliteral(L, "character"); break;
-		case S_IFIFO: lua_pushliteral(L, "fifo"); break;
+#ifdef S_IFIFO
+		case S_IFIFO: lua_pushliteral(L, "pipe"); break;
+#endif
 		default: lua_pushliteral(L, "unknown"); break;
 	}
 }
@@ -628,10 +650,11 @@ static void checktouchargs (lua_State *L,
 		}
 	}
 	if (*atime == -1 || *mtime == -1) {
+		lua_Number time;
 		uv_timeval64_t timeval;
 		int err = uv_gettimeofday(&timeval);
 		if (err < 0) lcu_error(L, err);
-		lua_Number time = lcu_time2sec(timeval);
+		time = lcu_time2sec(timeval);
 		if (*atime == -1) *atime = time;
 		if (*mtime == -1) *mtime = time;
 	}
@@ -1046,7 +1069,7 @@ static int dirinfo_call (lua_State *L) {
 		case UV_DIRENT_BLOCK: lua_pushliteral(L, "block"); break;
 		case UV_DIRENT_DIR: lua_pushliteral(L, "directory"); break;
 		case UV_DIRENT_CHAR: lua_pushliteral(L, "character"); break;
-		case UV_DIRENT_FIFO: lua_pushliteral(L, "fifo"); break;
+		case UV_DIRENT_FIFO: lua_pushliteral(L, "pipe"); break;
 		default: lua_pushliteral(L, "unknown"); break;
 	}
 	return 2;
@@ -1519,13 +1542,19 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 	};
 	static const struct { const char *name; int value; } bits[] = {
 		{ "type", S_IFMT },
+#ifdef S_IFSOCK
 		{ "socket", S_IFSOCK },
+#endif
 		{ "link", S_IFLNK },
 		{ "file", S_IFREG },
+#ifdef S_IFBLK
 		{ "block", S_IFBLK },
+#endif
 		{ "directory", S_IFDIR },
 		{ "character", S_IFCHR },
-		{ "fifo", S_IFIFO },
+#ifdef S_IFIFO
+		{ "pipe", S_IFIFO },
+#endif
 		{ "setuid", S_ISUID },
 		{ "setgid", S_ISGID },
 		{ "sticky", S_ISVTX },

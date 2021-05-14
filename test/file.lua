@@ -41,6 +41,7 @@ do case "list contents"
 			[".git"] = "directory",
 			demo = "directory",
 			doc = "directory",
+			etc = "directory",
 			LICENSE = "file",
 			lua = "directory",
 			["README.md"] = "file",
