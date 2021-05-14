@@ -8,6 +8,21 @@
 #endif
 
 
+#ifdef _WIN32
+#define S_ISUID 04000
+#define S_ISGID 02000
+#define S_ISVTX 01000
+#define S_IRUSR 00400
+#define S_IWUSR 00200
+#define S_IXUSR 00100
+#define S_IRGRP 00040
+#define S_IWGRP 00020
+#define S_IXGRP 00010
+#define S_IROTH 00004
+#define S_IWOTH 00002
+#define S_IXOTH 00001
+#endif
+
 static int checkperm (lua_State *L, int arg) {
 	if (lua_type(L, arg) == LUA_TSTRING) {
 		const char *mode = lua_tostring(L, arg);
@@ -33,6 +48,7 @@ static int checkperm (lua_State *L, int arg) {
 	return (int)luaL_checkinteger(L, arg);
 }
 
+#ifndef _WIN32
 static void pushfiletype (lua_State *L, uint64_t type) {
 	switch (type) {
 		case S_IFSOCK: lua_pushliteral(L, "socket"); break;
@@ -45,6 +61,9 @@ static void pushfiletype (lua_State *L, uint64_t type) {
 		default: lua_pushliteral(L, "unknown"); break;
 	}
 }
+#else
+#define pushfiletype(L,T) lua_pushliteral(L, "unsupported")
+#endif
 
 static void pushfilesystype (lua_State *L, uint64_t type) {
 	switch (type) {
@@ -628,10 +647,11 @@ static void checktouchargs (lua_State *L,
 		}
 	}
 	if (*atime == -1 || *mtime == -1) {
+		lua_Number time;
 		uv_timeval64_t timeval;
 		int err = uv_gettimeofday(&timeval);
 		if (err < 0) lcu_error(L, err);
-		lua_Number time = lcu_time2sec(timeval);
+		time = lcu_time2sec(timeval);
 		if (*atime == -1) *atime = time;
 		if (*mtime == -1) *mtime = time;
 	}
@@ -1518,6 +1538,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{NULL, NULL}
 	};
 	static const struct { const char *name; int value; } bits[] = {
+#ifndef _WIN32
 		{ "type", S_IFMT },
 		{ "socket", S_IFSOCK },
 		{ "link", S_IFLNK },
@@ -1526,6 +1547,7 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{ "directory", S_IFDIR },
 		{ "character", S_IFCHR },
 		{ "fifo", S_IFIFO },
+#endif
 		{ "setuid", S_ISUID },
 		{ "setgid", S_ISGID },
 		{ "sticky", S_ISVTX },

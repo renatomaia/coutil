@@ -1,0 +1,70 @@
+# See ../doc/readme.md for installation and 
+# == CHANGE THE SETTINGS BELOW TO SUIT YOUR ENVIRONMENT =======================
+
+LUA_DIR= C:\Installed
+LUA_INCDIR= $(LUA_DIR)\include
+LUA_LIBDIR= $(LUA_DIR)\lib
+LUA_BINDIR= $(LUA_DIR)\bin
+LUA_LIB= lua.lib
+LUA_BIN= lua.exe
+
+LUAMEM_DIR= $(LUA_DIR)
+LUAMEM_INCDIR= $(LUAMEM_DIR)\include
+LUAMEM_LIBDIR= $(LUAMEM_DIR)\lib
+LUAMEM_LIB= luamem.lib
+
+LIBUV_DIR= $(LUA_DIR)
+LIBUV_INCDIR= $(LIBUV_DIR)\include
+LIBUV_LIBDIR= $(LIBUV_DIR)\lib
+LIBUV_LIB= uv.lib
+
+LMOD= coutil
+
+CFLAGS= /DLCUMOD_API=__declspec(dllexport) /Isrc /I$(LUA_INCDIR) /I$(LUAMEM_INCDIR) /I$(LIBUV_INCDIR) $(SYSCFLAGS) $(MYCFLAGS)
+LDFLAGS= /dll /LIBPATH:$(LUA_LIBDIR) /LIBPATH:$(LUAMEM_LIBDIR) /LIBPATH:$(LIBUV_LIBDIR) $(SYSLDFLAGS) $(MYLDFLAGS)
+LIBS= $(LUA_LIB) $(LUAMEM_LIB) $(LIBUV_LIB) ws2_32.lib $(SYSLIBS) $(MYLIBS)
+
+LINK= link.exe
+CC= cl.exe
+RM= del
+
+SYSCFLAGS=
+SYSLDFLAGS=
+SYSLIBS=
+
+MYCFLAGS=
+MYLDFLAGS=
+MYLIBS=
+
+# == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
+
+MLIB= $(LMOD).dll $(LMOD).dll.manifest $(LMOD).exp $(LMOD).lib
+
+OBJS= lmodaux.obj loperaux.obj lchaux.obj lthpool.obj \
+      lcommunf.obj lfilef.obj linfof.obj lprocesf.obj lscheduf.obj ltimef.obj \
+      lchannem.obj lcoroutm.obj lsystemm.obj lthreadm.obj
+
+{src\}.c.obj:
+	$(CC) $(CFLAGS) /c $<
+
+# Targets start here.
+all mod: $(LMOD).dll
+
+obj: $(OBJS)
+
+$(LMOD).dll: $(OBJS)
+	$(LINK) /out:$@ $(LDFLAGS) $** $(LIBS)
+
+clean:
+	$(RM) $(MLIB) $(OBJS)
+
+echo:
+	@echo "CC= $(CC)"
+	@echo "CFLAGS= $(CFLAGS)"
+	@echo "LDFLAGS= $(LDFLAGS)"
+	@echo "LIBS= $(LIBS)"
+	@echo "LINK= $(LINK)"
+	@echo "RM= $(RM)"
+
+# list targets that do not create files (but not all makes understand .PHONY)
+.PHONY: all mod obj clean echo
