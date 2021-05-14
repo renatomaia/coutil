@@ -3,9 +3,15 @@
 #include "lsckdefs.h"
 
 #include <string.h>
+#include <lmemlib.h>
+
+#ifndef _WIN32
 #include <netinet/in.h>  /* network addresses */
 #include <arpa/inet.h>  /* IP addresses */
-#include <lmemlib.h>
+#else
+#include <winsock2.h>
+typedef unsigned short in_port_t;
+#endif
 
 
 /*
@@ -212,8 +218,8 @@ static int system_address (lua_State *L) {
 			err = setaddrliteral(na, literal);
 			if (err) return lcu_error(L, err);
 		} else {
-			port = int2port(L, luaL_checkinteger(L, 3), 3);
 			const char *mode = luaL_optstring(L, 4, "t");
+			port = int2port(L, luaL_checkinteger(L, 3), 3);
 			if (mode[0] == 'b' && mode[1] == '\0') {  /* binary format */
 				luaL_argcheck(L, sz == addrbinsz(type), 2, "invalid binary address");
 				setaddrbytes(na, data);
@@ -975,8 +981,8 @@ static int k_udprecv (lua_State *L) {
 	lcu_UdpSocket *udp = (lcu_UdpSocket *)lua_touserdata(L, 1);
 	if (lua_isinteger(L, 6)) {
 		const struct sockaddr *src = (const struct sockaddr *)lua_touserdata(L, 8);
-		lua_pop(L, 1);  /* discard 'addr' lightuserdata */
 		struct sockaddr *dst = tonetaddr(L, 5);
+		lua_pop(L, 1);  /* discard 'addr' lightuserdata */
 		if (dst) {
 			lcu_assert(src->sa_family == netdomainof(udp));
 			memcpy(dst, src, src->sa_family == AF_INET ? sizeof(struct sockaddr_in)

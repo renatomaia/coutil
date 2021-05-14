@@ -8,22 +8,21 @@
 
 
 static const struct { const char *name; int value; } signals[] = {
-	/* uncatchable signals */
 	{ "TERMINATE", SIGKILL },
-	{ "STOP", SIGSTOP },
-	/* catchable signals */
 	{ "interrupt", SIGINT },
 	{ "terminate", SIGTERM },
+	{ "hangup", SIGHUP },
+	{ "abort", SIGABRT },
+#ifndef _WIN32
+	{ "STOP", SIGSTOP },
 	{ "stop", SIGTSTP },
 	{ "continue", SIGCONT },
-	{ "hangup", SIGHUP },
 	{ "stdinoff", SIGTTIN },
 	{ "stdoutoff", SIGTTOU },
 #ifdef SIGWINCH
 	{ "winresize", SIGWINCH },
 #endif
 	{ "quit", SIGQUIT },
-	{ "abort", SIGABRT },
 	{ "child", SIGCHLD },
 	{ "brokenpipe", SIGPIPE },
 	{ "urgentsock", SIGURG },
@@ -44,6 +43,7 @@ static const struct { const char *name; int value; } signals[] = {
 #endif
 #ifdef SIGSYS
 	{ "sysargerr", SIGSYS },
+#endif
 #endif
 	{ NULL, 0 }
 };
@@ -208,8 +208,9 @@ static int system_getenv (lua_State *L) {
 			char array[256];
 			char *buffer = array;
 			size_t len = sizeof(array);
+			int err;
 			luaL_argcheck(L, !strchr(name, '='), 1, "cannot contain '='");
-			int err = uv_os_getenv(name, buffer, &len);
+			err = uv_os_getenv(name, buffer, &len);
 			if (err == UV_ENOBUFS) {
 				buffer = (char *)malloc(len*sizeof(char));
 				err = uv_os_getenv(name, buffer, &len);
@@ -254,7 +255,7 @@ static char **newprocenv (lua_State *L, int idx) {
 
 	mem = lua_newuserdatauv(L, envsz, 0);
 	envl = (char **)mem;
-	envv = (char *)(mem+(envc+1)*sizeof(char *));  /* variables + NULL */
+	envv = ((char *)mem)+(envc+1)*sizeof(char *);  /* variables + NULL */
 	lua_pushnil(L);  /* first key */
 	while (lua_next(L, idx) != 0) {
 		const char *c = lua_tostring(L, -2);  /* variable name */

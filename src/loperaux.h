@@ -77,8 +77,7 @@ typedef struct lcu_UdataHandle {
 
 #define lcu_ud2hdl(O)	(&(O)->handle)
 
-#define lcu_hdl2ud(H) ({ const char *p = (const char *)H; \
-                           (lcu_UdataHandle *)(p-offsetof(lcu_UdataHandle, H)); })
+#define lcu_hdl2ud(H) ((lcu_UdataHandle *)(((const char *)H)-offsetof(lcu_UdataHandle, H)))
 
 LCUI_FUNC lcu_UdataHandle *lcuT_createudhdl (lua_State *L, size_t sz, const char *cls);
 
@@ -106,8 +105,7 @@ typedef struct lcu_UdataRequest {
 
 #define lcu_ud2req(O)	(&(O)->request)
 
-#define lcu_req2ud(H) ({ const char *p = (const char *)H; \
-                           (lcu_UdataRequest *)(p-offsetof(lcu_UdataRequest, H)); })
+#define lcu_req2ud(H) ((lcu_UdataRequest *)(((const char *)H)-offsetof(lcu_UdataRequest, H)))
 
 LCUI_FUNC lcu_UdataRequest *lcuT_createudreq (lua_State *L, size_t sz);
 
