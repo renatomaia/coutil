@@ -264,9 +264,9 @@ LCUI_FUNC lcu_ChannelMap *lcuCS_tochannelmap (lua_State *L) {
 	lcu_ChannelMap *map;
 	int type = lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELSREGKEY);
 	if (type == LUA_TNIL) {
-		map = (lcu_ChannelMap *)lua_newuserdatauv(L, sizeof(lcu_ChannelMap), 0);
 		void *allocud;
 		lua_Alloc allocf = lua_getallocf(L, &allocud);
+		map = (lcu_ChannelMap *)lua_newuserdatauv(L, sizeof(lcu_ChannelMap), 0);
 		map->L = NULL;
 		lcuL_setfinalizer(L, channelmap_gc);
 		map->L = lua_newstate(allocf, allocud);

@@ -3,9 +3,15 @@
 #include "lsckdefs.h"
 
 #include <string.h>
+#include <lmemlib.h>
+
+#ifndef _WIN32
 #include <netinet/in.h>  /* network addresses */
 #include <arpa/inet.h>  /* IP addresses */
-#include <lmemlib.h>
+#else
+#include <winsock2.h>
+typedef unsigned short in_port_t;
+#endif
 
 
 /*
@@ -212,8 +218,8 @@ static int system_address (lua_State *L) {
 			err = setaddrliteral(na, literal);
 			if (err) return lcu_error(L, err);
 		} else {
-			port = int2port(L, luaL_checkinteger(L, 3), 3);
 			const char *mode = luaL_optstring(L, 4, "t");
+			port = int2port(L, luaL_checkinteger(L, 3), 3);
 			if (mode[0] == 'b' && mode[1] == '\0') {  /* binary format */
 				luaL_argcheck(L, sz == addrbinsz(type), 2, "invalid binary address");
 				setaddrbytes(na, data);
@@ -342,8 +348,11 @@ static AddressList *openedaddrlist (lua_State *L) {
 }
 
 static struct addrinfo *findvalidaddr (struct addrinfo *addr) {
-	for (addr = addr->ai_next; addr; addr = addr->ai_next) {
+	for (; addr; addr = addr->ai_next) {
 		switch (addr->ai_socktype) {
+#ifdef _WIN32
+			case 0:
+#endif
 			case SOCK_DGRAM:
 			case SOCK_STREAM: return addr;
 		}
@@ -377,7 +386,7 @@ static int found_close (lua_State *L) {
 /* changed = found:next() */
 static int found_next (lua_State *L) {
 	AddressList *list = openedaddrlist(L);
-	struct addrinfo *found = findvalidaddr(list->current);
+	struct addrinfo *found = findvalidaddr(list->current->ai_next);
 	if (found) {
 		list->current = found;
 		lua_pushboolean(L, 1);
@@ -422,8 +431,16 @@ static int found_getdomain (lua_State *L) {
 static int found_getsocktype (lua_State *L) {
 	AddressList *list = openedaddrlist(L);
 	struct addrinfo *found = list->current;
-	lua_pushstring(L, (found->ai_socktype == SOCK_DGRAM ? "datagram" :
-	                  (found->ai_flags&AI_PASSIVE ? "passive" : "stream" )));
+	switch (found->ai_socktype) {
+		case SOCK_DGRAM: {
+			lua_pushliteral(L, "datagram");
+		} break;
+		case SOCK_STREAM: {
+			if (found->ai_flags&AI_PASSIVE) lua_pushliteral(L, "passive");
+			else lua_pushliteral(L, "stream");
+		} break;
+		default: lua_pushnil(L);
+	}
 	return 1;
 }
 
@@ -465,7 +482,7 @@ static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	const char *servname = luaL_optstring(L, 2, NULL);
 	const char *mode = luaL_optstring(L, 3, "");
 	struct addrinfo hints;
-	int err;
+	int res;
 	memset(&hints, 0, sizeof(struct addrinfo));
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_flags = AI_ADDRCONFIG;
@@ -495,6 +512,9 @@ static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 		case 'm':
 			hints.ai_flags |= AI_V4MAPPED;
 			break;
+		case 'n':
+			hints.ai_flags |= AI_NUMERICHOST;
+			break;
 		default:
 			return luaL_error(L, "unknown mode char (got '%c')", *mode);
 	}
@@ -505,10 +525,11 @@ static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	}
 	hints.ai_protocol = 0;  /* clear mark that 'ai_socktype' was defined above */
 	lua_settop(L, 2);
+	lua_tointegerx(L, 2, &res);  /* check if servname is numeric */
+	if (res) hints.ai_flags |= AI_NUMERICSERV;
 	lua_newuserdatauv(L, sizeof(AddressList), 0);  /* raise memory errors */
-	err = uv_getaddrinfo(loop, addrreq, uv_onresolved,
-	                     nodename, servname, &hints);
-	if (err < 0) return lcuL_pusherrres(L, err);
+	res = uv_getaddrinfo(loop, addrreq, uv_onresolved, nodename, servname, &hints);
+	if (res < 0) return lcuL_pusherrres(L, res);
 	return -1;  /* yield on success */
 }
 static int system_findaddr (lua_State *L) {
@@ -975,8 +996,8 @@ static int k_udprecv (lua_State *L) {
 	lcu_UdpSocket *udp = (lcu_UdpSocket *)lua_touserdata(L, 1);
 	if (lua_isinteger(L, 6)) {
 		const struct sockaddr *src = (const struct sockaddr *)lua_touserdata(L, 8);
-		lua_pop(L, 1);  /* discard 'addr' lightuserdata */
 		struct sockaddr *dst = tonetaddr(L, 5);
+		lua_pop(L, 1);  /* discard 'addr' lightuserdata */
 		if (dst) {
 			lcu_assert(src->sa_family == netdomainof(udp));
 			memcpy(dst, src, src->sa_family == AF_INET ? sizeof(struct sockaddr_in)
