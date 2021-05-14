@@ -98,8 +98,8 @@ do case "inexistent variable"
 end
 
 do case "invalid variable names"
-	asserterr("cannot contain '='", pcall(system.setenv, "COUTIL_TEST=abc", "def"))
-	asserterr("cannot contain '='", pcall(system.getenv, "COUTIL_TEST=abc"))
+	asserterr("invalid argument", system.setenv("COUTIL_TEST=abc", "def"))
+	asserterr("no such file or directory", system.getenv("COUTIL_TEST=abc"))
 	asserterr("no such file or directory", system.getenv("COUTIL_TEST"))
 	assert(os.getenv("COUTIL_TEST=abc") == nil)
 	assert(os.getenv("COUTIL_TEST") == nil)
@@ -107,7 +107,8 @@ do case "invalid variable names"
 	assert(system.setenv("COUTIL_TEST", "abc=def"))
 	assert(system.getenv("COUTIL_TEST") == "abc=def")
 	assert(os.getenv("COUTIL_TEST") == "abc=def")
-	asserterr("cannot contain '='", pcall(system.getenv, "COUTIL_TEST=abc"))
+	assert(os.getenv("COUTIL_TEST=abc") == "def")
+	assert(system.getenv("COUTIL_TEST=abc") == "def")
 
 	done()
 end
