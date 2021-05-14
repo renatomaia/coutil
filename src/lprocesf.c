@@ -7,32 +7,74 @@
 #include <signal.h>
 
 
+#ifdef SIGSTOP
+#define CATCHABLE_INDEX 2
+#else
+#define CATCHABLE_INDEX 1
+#endif
+
 static const struct { const char *name; int value; } signals[] = {
-	/* uncatchable signals */
 	{ "TERMINATE", SIGKILL },
+#ifdef SIGSTOP
 	{ "STOP", SIGSTOP },
-	/* catchable signals */
+#endif
+#ifdef SIGINT
 	{ "interrupt", SIGINT },
+#endif
+#ifdef SIGTERM
 	{ "terminate", SIGTERM },
+#endif
+#ifdef SIGTSTP
 	{ "stop", SIGTSTP },
+#endif
+#ifdef SIGCONT
 	{ "continue", SIGCONT },
+#endif
+#ifdef SIGHUP
 	{ "hangup", SIGHUP },
+#endif
+#ifdef SIGTTIN
 	{ "stdinoff", SIGTTIN },
+#endif
+#ifdef SIGTTOU
 	{ "stdoutoff", SIGTTOU },
+#endif
 #ifdef SIGWINCH
 	{ "winresize", SIGWINCH },
 #endif
+#ifdef SIGQUIT
 	{ "quit", SIGQUIT },
-	{ "abort", SIGABRT },
+#endif
+#ifdef SIGCHLD
 	{ "child", SIGCHLD },
+#endif
+#ifdef SIGABRT
+	{ "abort", SIGABRT },
+#endif
+#ifdef SIGPIPE
 	{ "brokenpipe", SIGPIPE },
+#endif
+#ifdef SIGURG
 	{ "urgentsock", SIGURG },
+#endif
+#ifdef SIGUSR1
 	{ "userdef1", SIGUSR1 },
+#endif
+#ifdef SIGUSR2
 	{ "userdef2", SIGUSR2 },
+#endif
+#ifdef SIGTRAP
 	{ "trap", SIGTRAP },
+#endif
+#ifdef SIGXFSZ
 	{ "filelimit", SIGXFSZ },
+#endif
+#ifdef SIGALRM
 	{ "clocktime", SIGALRM },
+#endif
+#ifdef SIGXCPU
 	{ "cpulimit", SIGXCPU },
+#endif
 #ifdef SIGPROF
 	{ "cputotal", SIGPROF },
 #endif
@@ -44,6 +86,9 @@ static const struct { const char *name; int value; } signals[] = {
 #endif
 #ifdef SIGSYS
 	{ "sysargerr", SIGSYS },
+#endif
+#ifdef SIGBREAK
+	{ "break", SIGBREAK },
 #endif
 	{ NULL, 0 }
 };
@@ -59,7 +104,7 @@ static void pushsignal (lua_State *L, int signum) {
 static int checksignal (lua_State *L, int arg, int catch) {
 	const char *name = luaL_checkstring(L, arg);
 	int i;
-	for (i = catch ? 2 : 0; signals[i].name; i++)
+	for (i = catch ? CATCHABLE_INDEX : 0; signals[i].name; i++)
 		if (strcmp(signals[i].name, name) == 0)
 			return signals[i].value;
 	return luaL_argerror(L, arg,
@@ -208,8 +253,9 @@ static int system_getenv (lua_State *L) {
 			char array[256];
 			char *buffer = array;
 			size_t len = sizeof(array);
+			int err;
 			luaL_argcheck(L, !strchr(name, '='), 1, "cannot contain '='");
-			int err = uv_os_getenv(name, buffer, &len);
+			err = uv_os_getenv(name, buffer, &len);
 			if (err == UV_ENOBUFS) {
 				buffer = (char *)malloc(len*sizeof(char));
 				err = uv_os_getenv(name, buffer, &len);
@@ -254,7 +300,7 @@ static char **newprocenv (lua_State *L, int idx) {
 
 	mem = lua_newuserdatauv(L, envsz, 0);
 	envl = (char **)mem;
-	envv = (char *)(mem+(envc+1)*sizeof(char *));  /* variables + NULL */
+	envv = ((char *)mem)+(envc+1)*sizeof(char *);  /* variables + NULL */
 	lua_pushnil(L);  /* first key */
 	while (lua_next(L, idx) != 0) {
 		const char *c = lua_tostring(L, -2);  /* variable name */

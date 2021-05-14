@@ -1,6 +1,5 @@
 #include "lmodaux.h"
 #include "loperaux.h"
-#include "lchaux.h"
 
 #include <lmemlib.h>
 

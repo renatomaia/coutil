@@ -1,26 +1,30 @@
 # See ../doc/readme.md for installation and 
 # == CHANGE THE SETTINGS BELOW TO SUIT YOUR ENVIRONMENT =======================
 
-LUA_HOME= /usr/local
-LUA_INC= $(LUA_HOME)/include
-LUA_LIB= $(LUA_HOME)/lib
-LUA_BIN= $(LUA_HOME)/bin
+LUA_DIR= /usr/local
+LUA_INCDIR= $(LUA_DIR)/include
+LUA_LIBDIR= $(LUA_DIR)/lib
+LUA_BINDIR= $(LUA_DIR)/bin
+LUALIB= lua
+LUA= lua
 
-LUAMEM_HOME= $(LUA_HOME)
-LUAMEM_INC= $(LUAMEM_HOME)/include
-LUAMEM_LIB= $(LUAMEM_HOME)/lib
+LUAMEM_DIR= $(LUA_DIR)
+LUAMEM_INCDIR= $(LUAMEM_DIR)/include
+LUAMEM_LIBDIR= $(LUAMEM_DIR)/lib
+LUAMEM_LIB= luamemlib
 
-LIBUV_HOME= $(LUA_HOME)
-LIBUV_INC= $(LIBUV_HOME)/include
-LIBUV_LIB= $(LIBUV_HOME)/lib
+LIBUV_DIR= $(LUA_DIR)
+LIBUV_INCDIR= $(LIBUV_DIR)/include
+LIBUV_LIBDIR= $(LIBUV_DIR)/lib
+LIBUV_LIB= uv
 
 LIB_A=	libluacoutil.a
 MOD_M=	coutil.so
 
 LD= ld
 CC= gcc -std=gnu89
-CFLAGS= -g -Wall -I. -I$(LUA_INC) -I$(LUAMEM_INC) -I$(LIBUV_INC) $(SYSCFLAGS) $(MYCFLAGS)
-LDFLAGS= -L$(LUA_LIB) -L$(LUAMEM_LIB) -L$(LIBUV_LIB) $(SYSLDFLAGS) $(MYLDFLAGS)
+CFLAGS= -g -Wall -I. -I$(LUA_INCDIR) -I$(LUAMEM_INCDIR) -I$(LIBUV_INCDIR) $(SYSCFLAGS) $(MYCFLAGS)
+LDFLAGS= -L$(LUA_LIBDIR) -L$(LUAMEM_LIBDIR) -L$(LIBUV_LIBDIR) $(SYSLDFLAGS) $(MYLDFLAGS)
 LIBS= -lluamemlib -luv $(SYSLIBS) $(MYLIBS)
 
 AR= ar rcu
@@ -38,13 +42,11 @@ MYOBJS=
 
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 
-MOD_O=	lmodaux.o loperaux.o lchaux.o lthpool.o \
-      	lcommunf.o lfilef.o linfof.o lprocesf.o lscheduf.o ltimef.o \
-      	lchannem.o lcoroutm.o lsystemm.o lthreadm.o
+MOD_O= lmodaux.o loperaux.o lchaux.o lthpool.o \
+       lcommunf.o lfilef.o linfof.o lprocesf.o lscheduf.o ltimef.o \
+       lchannem.o lcoroutm.o lsystemm.o lthreadm.o
 
-
-
-ALL_O=	$(MOD_O) $(MYOBJS)
+ALL_O= $(MOD_O) $(MYOBJS)
 ALL_A= $(LIB_A)
 ALL_M= $(MOD_M)
 ALL_T= $(ALL_A) $(ALL_M)
@@ -99,7 +101,7 @@ macosx:
 	$(MAKE) $(ALL) SYSCFLAGS="-fno-common" \
 	               SYSLDFLAGS="-bundle -undefined dynamic_lookup" \
 	               CC='export MACOSX_DEPLOYMENT_TARGET="10.3"; gcc' \
-                 LD='export MACOSX_DEPLOYMENT_TARGET="10.3"; gcc'
+	               LD='export MACOSX_DEPLOYMENT_TARGET="10.3"; gcc'
 
 solaris:
 	$(MAKE) $(ALL) SYSCFLAGS="-fpic" SYSLDFLAGS="-O -shared"
