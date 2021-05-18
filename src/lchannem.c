@@ -136,6 +136,7 @@ static void uv_onsynced (uv_async_t *async) {
 typedef struct ArmSyncedArgs {
 	uv_loop_t *loop;
 	uv_async_t *async;
+	lcu_Operation *op;
 	LuaChannel *channel;
 } ArmSyncedArgs;
 
@@ -157,7 +158,8 @@ static lua_State *armsynced (lua_State *L, void *data) {
 		return NULL;
 	}
 	if (args->loop != NULL) {
-		err = lcuT_armcohdl(L, uv_async_init(args->loop, args->async, uv_onsynced));
+		err = uv_async_init(args->loop, args->async, uv_onsynced);
+		lcuT_armcohdl(L, args->op, err);
 		if (err < 0) {
 			lua_settop(L, 0);
 			lcuL_pusherrres(L, err);
@@ -171,12 +173,16 @@ static lua_State *armsynced (lua_State *L, void *data) {
 	return cL;
 }
 
-static int k_setupsynced (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
+static int k_setupsynced (lua_State *L,
+                          uv_handle_t *handle,
+                          uv_loop_t *loop,
+                          lcu_Operation *op) {
 	ArmSyncedArgs args;
 	LuaChannel *channel = chklchannel(L, 1);
 	luaL_argcheck(L, channel->handle == NULL, 1, "in use");
 	args.loop = loop;
 	args.async = (uv_async_t *)handle;
+	args.op = op;
 	args.channel = channel;
 	if (channelsync(channel->sync, L, armsynced, &args)) return lua_gettop(L);
 	return -1;

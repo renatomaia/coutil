@@ -38,10 +38,13 @@ static int returntrue (lua_State *L) {
 static void uv_onidle (uv_idle_t *handle) {
 	lcuU_resumecohdl((uv_handle_t *)handle, 0);
 }
-static int k_setupidle (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
+static int k_setupidle (lua_State *L,
+                        uv_handle_t *handle,
+                        uv_loop_t *loop,
+                        lcu_Operation *op) {
 	if (loop) {
 		uv_idle_t *idle = (uv_idle_t *)handle;
-		int err = lcuT_armcohdl(L, uv_idle_init(loop, idle));
+		int err = lcuT_armcohdl(L, op, uv_idle_init(loop, idle));
 		if (err >= 0) err = uv_idle_start(idle, uv_onidle);
 		if (err < 0) return lcuL_pusherrres(L, err);
 	}
@@ -50,11 +53,14 @@ static int k_setupidle (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 static void uv_ontimer (uv_timer_t *handle) {
 	lcuU_resumecohdl((uv_handle_t *)handle, 0);
 }
-static int k_setuptimer (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
+static int k_setuptimer (lua_State *L,
+                         uv_handle_t *handle,
+                         uv_loop_t *loop,
+                         lcu_Operation *op) {
 	uv_timer_t *timer = (uv_timer_t *)handle;
 	uint64_t msecs = (uint64_t)(lua_tonumber(L, 1)*1e3);
 	int err;
-	if (loop) err = lcuT_armcohdl(L, uv_timer_init(loop, timer));
+	if (loop) err = lcuT_armcohdl(L, op, uv_timer_init(loop, timer));
 	else if (uv_timer_get_repeat(timer) != msecs) err = uv_timer_stop(timer);
 	else return -1;  /* yield on success */
 	if (err >= 0) err = uv_timer_start(timer, uv_ontimer, msecs, msecs);
