@@ -90,7 +90,7 @@ LCUI_FUNC lua_State *lcuCS_removestateq (lcu_StateQ *q, lua_State *L) {
 
 
 LCUI_FUNC int lcuCS_checksyncargs (lua_State *L) {
-	static const char *const options[] = { "in", "out", "any" };
+	static const char *const options[] = { "in", "out", "any", NULL };
 	static const int endpoints[] = { LCU_CHSYNCIN, LCU_CHSYNCOUT, LCU_CHSYNCANY };
 	const char *name = luaL_optstring(L, 2, "any");
 	int i;

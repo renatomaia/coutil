@@ -354,6 +354,7 @@ LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
 					typename = lua_tostring(L, -1);
 					lua_pop(L, 2);
 				}
+				/* FALLTHRU */
 			default:
 				printf("%s: %p", typename ? typename : luaL_typename(L, i),
 				                 lua_topointer(L, i));
