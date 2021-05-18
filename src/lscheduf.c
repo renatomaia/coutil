@@ -5,6 +5,7 @@
 static int k_resumeall (lua_State *L, int status, lua_KContext kctx) {
 	uv_loop_t *loop = (uv_loop_t *)kctx;
 	int pending;
+	lcu_assert(status == LUA_YIELD);
 	lua_settop(L, 0);
 	pending = uv_run(loop, UV_RUN_DEFAULT);
 	if (pending && lua_isuserdata(L, 1))

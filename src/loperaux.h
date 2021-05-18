@@ -17,6 +17,8 @@ LCUI_FUNC void lcuM_newmodupvs (lua_State *L);
 
 typedef struct lcu_Scheduler lcu_Scheduler;
 
+typedef struct lcu_Operation lcu_Operation;
+
 #define lcu_getsched(L)	(lcu_Scheduler *)lua_touserdata(L, lua_upvalueindex(1))
 
 #define lcu_tosched(U)	((lcu_Scheduler *)U)
@@ -33,7 +35,10 @@ LCUI_FUNC int lcu_pushopvalue (lua_State *L);
 
 /* request operations */
 
-typedef int (*lcu_RequestSetup) (lua_State *L, uv_req_t *r, uv_loop_t *l);
+typedef int (*lcu_RequestSetup) (lua_State *L,
+                                 uv_req_t *request,
+                                 uv_loop_t *loop,
+                                 lcu_Operation *op);
 
 LCUI_FUNC int lcuT_resetcoreqk (lua_State *L,
                                 lcu_Scheduler *sched,
@@ -41,13 +46,21 @@ LCUI_FUNC int lcuT_resetcoreqk (lua_State *L,
                                 lua_CFunction results,
                                 lua_CFunction cancel);
 
+LCUI_FUNC void lcuT_armcoreq (lua_State *L,
+                              uv_loop_t *loop,
+                              lcu_Operation *op,
+                              int err);
+
 LCUI_FUNC lua_State *lcuU_endcoreq (uv_loop_t *loop, uv_req_t *request);
 
 LCUI_FUNC void lcuU_resumecoreq (uv_loop_t *loop, uv_req_t *request, int narg);
 
 /* thread operations */
 
-typedef int (*lcu_HandleSetup) (lua_State *L, uv_handle_t *h, uv_loop_t *l);
+typedef int (*lcu_HandleSetup) (lua_State *L,
+                                uv_handle_t *handle,
+                                uv_loop_t *loop,
+                                lcu_Operation *op);
 
 LCUI_FUNC int lcuT_resetcohdlk (lua_State *L,
                                 uv_handle_type type,
@@ -56,7 +69,7 @@ LCUI_FUNC int lcuT_resetcohdlk (lua_State *L,
                                 lua_CFunction results,
                                 lua_CFunction cancel);
 
-LCUI_FUNC int lcuT_armcohdl (lua_State *L, int err);
+LCUI_FUNC int lcuT_armcohdl (lua_State *L, lcu_Operation *op, int err);
 
 LCUI_FUNC int lcuU_endcohdl (uv_handle_t *handle);
 

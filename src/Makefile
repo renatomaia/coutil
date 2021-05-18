@@ -1,12 +1,10 @@
-# See ../doc/readme.md for installation and 
 # == CHANGE THE SETTINGS BELOW TO SUIT YOUR ENVIRONMENT =======================
+
+# Your platform. See PLATS for possible values.
+PLAT= guess
 
 LUA_DIR= /usr/local
 LUA_INCDIR= $(LUA_DIR)/include
-LUA_LIBDIR= $(LUA_DIR)/lib
-LUA_BINDIR= $(LUA_DIR)/bin
-LUALIB= lua
-LUA= lua
 
 LUAMEM_DIR= $(LUA_DIR)
 LUAMEM_INCDIR= $(LUAMEM_DIR)/include
@@ -18,18 +16,16 @@ LIBUV_INCDIR= $(LIBUV_DIR)/include
 LIBUV_LIBDIR= $(LIBUV_DIR)/lib
 LIBUV_LIB= uv
 
-LIB_A=	libluacoutil.a
-MOD_M=	coutil.so
-
 LD= ld
 CC= gcc -std=gnu89
-CFLAGS= -g -Wall -I. -I$(LUA_INCDIR) -I$(LUAMEM_INCDIR) -I$(LIBUV_INCDIR) $(SYSCFLAGS) $(MYCFLAGS)
-LDFLAGS= -L$(LUA_LIBDIR) -L$(LUAMEM_LIBDIR) -L$(LIBUV_LIBDIR) $(SYSLDFLAGS) $(MYLDFLAGS)
-LIBS= -lluamemlib -luv $(SYSLIBS) $(MYLIBS)
+CFLAGS= -O2 -Wall -Wextra -I. -I$(LUA_INCDIR) -I$(LUAMEM_INCDIR) -I$(LIBUV_INCDIR) $(SYSCFLAGS) $(MYCFLAGS)
+LDFLAGS= -L$(LUAMEM_LIBDIR) -L$(LIBUV_LIBDIR) $(SYSLDFLAGS) $(MYLDFLAGS)
+LIBS= -l$(LUAMEM_LIB) -l$(LIBUV_LIB) $(SYSLIBS) $(MYLIBS)
 
 AR= ar rcu
 RANLIB= ranlib
 RM= rm -f
+UNAME= uname
 
 SYSCFLAGS=
 SYSLDFLAGS=
@@ -38,15 +34,18 @@ SYSLIBS=
 MYCFLAGS=
 MYLDFLAGS=
 MYLIBS=
-MYOBJS=
 
 # == END OF USER SETTINGS -- NO NEED TO CHANGE ANYTHING BELOW THIS LINE =======
 
+PLATS= guess generic linux macosx solaris
+
+LIB_A= libluacoutil.a
+MOD_M= coutil.so
 MOD_O= lmodaux.o loperaux.o lchaux.o lthpool.o \
        lcommunf.o lfilef.o linfof.o lprocesf.o lscheduf.o ltimef.o \
        lchannem.o lcoroutm.o lsystemm.o lthreadm.o
 
-ALL_O= $(MOD_O) $(MYOBJS)
+ALL_O= $(MOD_O)
 ALL_A= $(LIB_A)
 ALL_M= $(MOD_M)
 ALL_T= $(ALL_A) $(ALL_M)
@@ -84,26 +83,31 @@ echo:
 	@echo "AR= $(AR)"
 	@echo "RANLIB= $(RANLIB)"
 	@echo "RM= $(RM)"
+	@echo "UNAME= $(UNAME)"
 
 # Convenience targets for popular platforms
 ALL= all
 
-none:
-	@echo "Please do 'make PLATFORM' where PLATFORM is one of these:"
+help:
+	@echo "Do 'make PLATFORM' where PLATFORM is one of these:"
 	@echo "   $(PLATS)"
+
+guess:
+	@echo Guessing `$(UNAME)`
+	@$(MAKE) `$(UNAME)`
 
 generic: $(ALL)
 
-linux:
+Linux linux:
 	$(MAKE) $(ALL) LD="gcc" SYSCFLAGS="-fPIC" SYSLDFLAGS="-shared"
 
-macosx:
+Darwin macos macosx:
 	$(MAKE) $(ALL) SYSCFLAGS="-fno-common" \
 	               SYSLDFLAGS="-bundle -undefined dynamic_lookup" \
 	               CC='export MACOSX_DEPLOYMENT_TARGET="10.3"; gcc' \
 	               LD='export MACOSX_DEPLOYMENT_TARGET="10.3"; gcc'
 
-solaris:
+SunOS solaris:
 	$(MAKE) $(ALL) SYSCFLAGS="-fpic" SYSLDFLAGS="-O -shared"
 
 # list targets that do not create files (but not all makes understand .PHONY)
