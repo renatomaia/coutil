@@ -172,11 +172,15 @@ static void uv_onworked(uv_work_t* work, int status) {
 		stateco->cancel = NULL;
 	}
 }
-static int k_setupwork (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupwork (lua_State *L,
+                        uv_req_t *request,
+                        uv_loop_t *loop,
+                        lcu_Operation *op) {
 	StateCoro *stateco = (StateCoro *)lua_touserdata(L, 1);
 	lua_State *co = stateco->L;
 	int narg = lua_gettop(L)-1;
 	int err;
+	lcu_assert(op == NULL);
 	if (lcuL_movefrom(co, L, narg, "argument") != LUA_OK) {
 		const char *msg = lua_tostring(co, -1);
 		lua_pushboolean(L, 0);

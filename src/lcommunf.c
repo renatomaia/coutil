@@ -476,7 +476,10 @@ static void uv_onresolved (uv_getaddrinfo_t *addrreq,
 	}
 	else if (!err) uv_freeaddrinfo(results);
 }
-static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupfindaddr (lua_State *L,
+                            uv_req_t *request,
+                            uv_loop_t *loop,
+                            lcu_Operation *op) {
 	uv_getaddrinfo_t *addrreq = (uv_getaddrinfo_t *)request;
 	const char *nodename = luaL_optstring(L, 1, NULL);
 	const char *servname = luaL_optstring(L, 2, NULL);
@@ -529,6 +532,7 @@ static int k_setupfindaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	if (res) hints.ai_flags |= AI_NUMERICSERV;
 	lua_newuserdatauv(L, sizeof(AddressList), 0);  /* raise memory errors */
 	res = uv_getaddrinfo(loop, addrreq, uv_onresolved, nodename, servname, &hints);
+	lcuT_armcoreq(L, loop, op, res);
 	if (res < 0) return lcuL_pusherrres(L, res);
 	return -1;  /* yield on success */
 }
@@ -590,7 +594,10 @@ static void uv_oncannonical (uv_getaddrinfo_t *addrreq,
 	}
 	uv_freeaddrinfo(results);
 }
-static int k_setupnameaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupnameaddr (lua_State *L,
+                            uv_req_t *request,
+                            uv_loop_t *loop,
+                            lcu_Operation *op) {
 	int err;
 	int ltype = lua_type(L, 1);
 	if (ltype == LUA_TSTRING) {
@@ -628,6 +635,7 @@ static int k_setupnameaddr (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 			err = uv_getnameinfo(loop, namereq, uv_onaddrnamed, addr, flags);
 		}
 	}
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
@@ -970,7 +978,10 @@ static int udp_connect (lua_State *L) {
 static void uv_onsent (uv_udp_send_t *request, int err) {
 	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
-static int k_setupsend (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupsend (lua_State *L,
+                        uv_req_t *request,
+                        uv_loop_t *loop,
+                        lcu_Operation *op) {
 	lcu_UdpSocket *udp = (lcu_UdpSocket *)lua_touserdata(L, 1);
 	uv_udp_send_t *send = (uv_udp_send_t *)request;
 	uv_udp_t *handle = (uv_udp_t *)lcu_ud2hdl(udp);
@@ -980,6 +991,7 @@ static int k_setupsend (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	int err;
 	lcu_getinputbuf(L, 2, bufs);
 	err = uv_udp_send(send, handle, bufs, 1, addr, uv_onsent);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
@@ -1077,11 +1089,15 @@ static int udp_receive (lua_State *L) {
 static void uv_onshutdown (uv_shutdown_t *request, int err) {
 	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
-static int k_setupshutdown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupshutdown (lua_State *L,
+                            uv_req_t *request,
+                            uv_loop_t *loop,
+                            lcu_Operation *op) {
 	lcu_UdataHandle *object = (lcu_UdataHandle *)lua_touserdata(L, 1);
 	uv_stream_t *stream = (uv_stream_t *)lcu_ud2hdl(object);
 	uv_shutdown_t *shutdown = (uv_shutdown_t *)request;
 	int err = uv_shutdown(shutdown, stream, uv_onshutdown);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
@@ -1097,7 +1113,10 @@ static int active_shutdown (lua_State *L) {
 static void uv_onwritten (uv_write_t *request, int err) {
 	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
-static int k_setupwrite (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupwrite (lua_State *L,
+                         uv_req_t *request,
+                         uv_loop_t *loop,
+                         lcu_Operation *op) {
 	lcu_UdataHandle *object = (lcu_UdataHandle *)lua_touserdata(L, 1);
 	uv_stream_t *stream = (uv_stream_t *)lcu_ud2hdl(object);
 	uv_write_t *write = (uv_write_t *)request;
@@ -1105,6 +1124,7 @@ static int k_setupwrite (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	int err;
 	lcu_getinputbuf(L, 2, bufs);
 	err = uv_write(write, stream, bufs, 1, uv_onwritten);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
@@ -1117,7 +1137,10 @@ static int active_send (lua_State *L) {
 
 
 /* sent [, errmsg] = pipe:send(data [, i [, j [, object]]]) */
-static int k_setupwriteobj (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupwriteobj (lua_State *L,
+                            uv_req_t *request,
+                            uv_loop_t *loop,
+                            lcu_Operation *op) {
 	lcu_UdataHandle *object = (lcu_UdataHandle *)lua_touserdata(L, 1);
 	uv_stream_t *stream = (uv_stream_t *)lcu_ud2hdl(object);
 	uv_write_t *write = (uv_write_t *)request;
@@ -1150,6 +1173,7 @@ static int k_setupwriteobj (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
 	}
 	lcu_getinputbuf(L, 2, bufs);
 	err = uv_write2(write, stream, bufs, 1, wrtstrm, uv_onwritten);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
@@ -1417,11 +1441,15 @@ static int tcp_setoption (lua_State *L) {
 static void uv_onconnected (uv_connect_t *request, int err) {
 	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
-static int k_setuptcpconn (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setuptcpconn (lua_State *L,
+                           uv_req_t *request,
+                           uv_loop_t *loop,
+                           lcu_Operation *op) {
 	lcu_TcpSocket *tcp = (lcu_TcpSocket *)lua_touserdata(L, 1);
 	const struct sockaddr *addr = toobjaddr(L, 2, netdomainof(tcp));
 	uv_connect_t *connect = (uv_connect_t *)request;
 	int err = uv_tcp_connect(connect, lcu_ud2hdl(tcp), addr, uv_onconnected);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
@@ -1522,11 +1550,15 @@ static int pipe_setoption (lua_State *L) {
 
 
 /* succ [, errmsg] = pipe:connect(address) */
-static int k_setuppipeconn (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setuppipeconn (lua_State *L,
+                            uv_req_t *request,
+                            uv_loop_t *loop,
+                            lcu_Operation *op) {
 	lcu_PipeSocket *pipe = (lcu_PipeSocket *)lua_touserdata(L, 1);
 	const char *addr = luaL_checkstring(L, 2);
 	uv_connect_t *connect = (uv_connect_t *)request;
 	uv_pipe_connect(connect, lcu_ud2hdl(pipe), addr, uv_onconnected);
+	lcuT_armcoreq(L, loop, op, 0);
 	return -1;  /* yield on success */
 }
 static int pipe_connect (lua_State *L) {
@@ -1614,9 +1646,13 @@ static int callrandom (lua_State *L,
 	lua_settop(L, 1);
 	return uv_random(loop, random, buf.base, buf.len, 0, callback);
 }
-static int k_setuprand (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setuprand (lua_State *L,
+                        uv_req_t *request,
+                        uv_loop_t *loop,
+                        lcu_Operation *op) {
 	uv_random_t *random = (uv_random_t *)request;
 	int err = callrandom(L, loop, random, uv_onrandom);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }

@@ -139,11 +139,14 @@ static void uv_onsignal (uv_signal_t *handle, int signum) {
 	lua_pushinteger(thread, signum);
 	lcuU_resumecohdl((uv_handle_t *)handle, 1);
 }
-static int k_setupsignal (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
+static int k_setupsignal (lua_State *L,
+                          uv_handle_t *handle,
+                          uv_loop_t *loop,
+                          lcu_Operation *op) {
 	uv_signal_t *signal = (uv_signal_t *)handle;
 	int signum = checksignal(L, 1, 1);
 	int err = 0;
-	if (loop) err = lcuT_armcohdl(L, uv_signal_init(loop, signal));
+	if (loop) err = lcuT_armcohdl(L, op, uv_signal_init(loop, signal));
 	else if (signal->signum != signum) err = uv_signal_stop(signal);
 	else return -1;  /* yield on success */
 	if (err >= 0) err = uv_signal_start(signal, uv_onsignal, signum);
@@ -506,7 +509,10 @@ static void uv_procexited (uv_process_t *process, int64_t exitval, int signum) {
 	}
 	lcuU_resumecohdl((uv_handle_t *)process, 2);
 }
-static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
+static int k_setupproc (lua_State *L,
+                        uv_handle_t *handle,
+                        uv_loop_t *loop,
+                        lcu_Operation *op) {
 	uv_process_t *process = (uv_process_t *)handle;
 	uv_process_options_t procopts;
 	uv_stdio_container_t streams[3];
@@ -521,7 +527,7 @@ static int k_setupproc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
 	tabarg = getprocopts(L, loop, &procopts);
 
 	err = uv_spawn(loop, process, &procopts);
-	lcuT_armcohdl(L, 0);  /* 'uv_spawn' always arms the operation */
+	lcuT_armcohdl(L, op, 0);  /* 'uv_spawn' always arms the operation */
 	if (err < 0) return lcuL_pusherrres(L, err);
 	if (tabarg) {
 		lua_pushinteger(L, uv_process_get_pid(process));

@@ -123,7 +123,7 @@ static void checkyieldable (lua_State *L) {
 	if (!lua_isyieldable(L)) luaL_error(L, "unable to yield");
 }
 
-typedef struct Operation {
+struct lcu_Operation {
 	union {
 		union uv_any_req request;
 		union uv_any_handle handle;
@@ -131,24 +131,24 @@ typedef struct Operation {
 	int flags;
 	lua_CFunction results;
 	lua_CFunction cancel;
-} Operation;
+};
 
-static Operation *tothrop (lua_State *L) {
-	Operation *op;
+static lcu_Operation *tothrop (lua_State *L) {
+	lcu_Operation *op;
 	pushopmap(L);
 	lua_pushthread(L);
 	if (lua_gettable(L, -2) == LUA_TNIL) {
 		uv_req_t *request;
 		lua_pushthread(L);
-		op = (Operation *)lua_newuserdatauv(L, sizeof(Operation), 1);
+		op = (lcu_Operation *)lua_newuserdatauv(L, sizeof(lcu_Operation), 1);
 		lua_settable(L, -4);
 		op->flags = FLAG_REQUEST;
 		request = torequest(op);
 		request->type = UV_UNKNOWN_REQ;
 		request->data = (void *)L;
 	}
-	else op = (Operation *)lua_touserdata(L, -1);
-	lua_pop(L, 2);  /* pops 'Operation' and 'opmap' */
+	else op = (lcu_Operation *)lua_touserdata(L, -1);
+	lua_pop(L, 2);  /* pops 'lcu_Operation' and 'opmap' */
 	return op;
 }
 
@@ -160,7 +160,7 @@ LCUI_FUNC void lcu_setopvalue (lua_State *L) {
 		lua_setiuservalue(L, -2, 1);
 	}
 	else lcu_assert(0);
-	lua_pop(L, 3);  /* pops 'Operation', 'opmap' and 'value' */
+	lua_pop(L, 3);  /* pops 'lcu_Operation', 'opmap' and 'value' */
 }
 
 LCUI_FUNC int lcu_pushopvalue (lua_State *L) {
@@ -171,14 +171,14 @@ LCUI_FUNC int lcu_pushopvalue (lua_State *L) {
 	lua_remove(L, -2);  /* opmap */
 	if (ltype == LUA_TUSERDATA) {
 		ltype = lua_getiuservalue(L, -1, 1);
-		lua_remove(L, -2);  /* Operation */
+		lua_remove(L, -2);  /* lcu_Operation */
 	}
 	else lcu_assert(ltype == LUA_TNIL);
 	return ltype;
 }
 
 static void closedhdl (uv_handle_t *handle) {
-	Operation *op = (Operation *)handle;
+	lcu_Operation *op = (lcu_Operation *)handle;
 	uv_loop_t *loop = handle->loop;
 	lua_State *L = (lua_State *)loop->data;
 	lua_State *thread = (lua_State *)handle->data;
@@ -198,7 +198,7 @@ static void closedhdl (uv_handle_t *handle) {
 	else lcuU_resumecoreq(loop, request, 0);
 }
 
-static void cancelop (Operation *op) {
+static void cancelop (lcu_Operation *op) {
 	if (lcuL_maskflag(op, FLAG_REQUEST)) {
 		uv_req_t *request = torequest(op);
 		if (!lcuL_maskflag(op, FLAG_NOCANCEL)) {
@@ -215,7 +215,7 @@ static void cancelop (Operation *op) {
 }
 
 static int k_endop (lua_State *L, int status, lua_KContext kctx) {
-	Operation *op = tothrop(L);
+	lcu_Operation *op = tothrop(L);
 	int narg = (int)kctx;
 	lcu_Scheduler *sched = (lcu_Scheduler *)lua_touserdata(L, narg);
 	lcu_assert(status == LUA_YIELD);
@@ -234,19 +234,11 @@ static int k_endop (lua_State *L, int status, lua_KContext kctx) {
 
 static int startedopk (lua_State *L,
                        lcu_Scheduler *sched,
-                       Operation *op,
+                       lcu_Operation *op,
                        int nret) {
 	lcu_assert(!lcuL_maskflag(op, FLAG_PENDING));
-	if (lcuL_maskflag(op, FLAG_REQUEST)) {
-		uv_req_t *request = torequest(op);
-		if (request->type != UV_UNKNOWN_REQ) sched->nactive++;
-	}
 	if (nret < 0) {  /* shall yield, and wait for callback */
-		if (lcuL_maskflag(op, FLAG_REQUEST|FLAG_THRSAVED) == FLAG_REQUEST) {
-			savethread(L, (void *)torequest(op));  // TODO: memory error here makes 'lcu_Operation' be GC.
-			lcuL_setflag(op, FLAG_THRSAVED|FLAG_PENDING);
-		}
-		else lcuL_setflag(op, FLAG_PENDING);
+		lcuL_setflag(op, FLAG_PENDING);
 		lua_pushlightuserdata(L, (void *)sched);
 		lcu_log(op, L, "suspended operation");
 		return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), k_endop);
@@ -255,11 +247,11 @@ static int startedopk (lua_State *L,
 	return nret;
 }
 
-#define startcoreqk(L,S,O,F) startedopk(L, S, O, (F)(L, torequest(O), lcu_toloop(S)))
-#define startcohdlk(L,S,O,F,U) startedopk(L, S, O, (F)(L, tohandle(O), U))
+#define startcoreqk(L,S,O,F) startedopk(L, S, O, (F)(L, torequest(O), lcu_toloop(S), O))
+#define startcohdlk(L,S,O,F,U) startedopk(L, S, O, (F)(L, tohandle(O), U, O))
 
 static int k_resetopk (lua_State *L, int status, lua_KContext kctx) {
-	Operation *op = tothrop(L);
+	lcu_Operation *op = tothrop(L);
 	int narg = (int)kctx;
 	lcu_Scheduler *sched = (lcu_Scheduler *)lua_touserdata(L, narg-2);
 	lcu_assert(status == LUA_YIELD);
@@ -286,7 +278,7 @@ static int k_resetopk (lua_State *L, int status, lua_KContext kctx) {
 
 static int yieldresetk (lua_State *L,
                         lcu_Scheduler *sched,
-                        Operation *op,
+                        lcu_Operation *op,
                         int mkreq,
                         void *setup) {
 	lcu_assert(!lcuL_maskflag(op, FLAG_PENDING));
@@ -300,7 +292,7 @@ static int yieldresetk (lua_State *L,
 
 typedef enum { FREEOP, SAMEOP, WAITOP } OpStatus;
 
-static OpStatus checkreset (Operation *op,
+static OpStatus checkreset (lcu_Operation *op,
                             lua_CFunction results,
                             lua_CFunction cancel,
                             int type) {
@@ -348,7 +340,7 @@ LCUI_FUNC int lcuT_resetcoreqk (lua_State *L,
                                 lcu_RequestSetup setup,
                                 lua_CFunction results,
                                 lua_CFunction cancel) {
-	Operation *op = tothrop(L);
+	lcu_Operation *op = tothrop(L);
 	checkyieldable(L);
 	switch (checkreset(op, results, cancel, 0)) {
 		case FREEOP: return startcoreqk(L, sched, op, setup);
@@ -358,9 +350,27 @@ LCUI_FUNC int lcuT_resetcoreqk (lua_State *L,
 	return 0;  /* unreachable */
 }
 
+LCUI_FUNC void lcuT_armcoreq (lua_State *L,
+                              uv_loop_t *loop,
+                              lcu_Operation *op,
+                              int err) {
+	uv_req_t *request = torequest(op);
+	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST));
+	if (err >= 0) {
+		lcu_Scheduler *sched = lcu_tosched(loop);
+		if (!lcuL_maskflag(op, FLAG_THRSAVED)) {
+			savethread(L, (void *)request);  // TODO: memory error here makes 'lcu_Operation' be GC.
+			lcuL_setflag(op, FLAG_THRSAVED);
+		}
+		sched->nactive++;
+	} else {
+		request->type = UV_UNKNOWN_REQ;
+	}
+}
+
 LCUI_FUNC lua_State *lcuU_endcoreq (uv_loop_t *loop, uv_req_t *request) {
 	lua_State *L = (lua_State *)loop->data;
-	Operation *op = (Operation *)request;
+	lcu_Operation *op = (lcu_Operation *)request;
 	lcu_Scheduler *sched = lcu_tosched(loop);
 	sched->nactive--;
 	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST|FLAG_THRSAVED) == (FLAG_REQUEST|FLAG_THRSAVED));
@@ -375,7 +385,7 @@ LCUI_FUNC lua_State *lcuU_endcoreq (uv_loop_t *loop, uv_req_t *request) {
 LCUI_FUNC void lcuU_resumecoreq (uv_loop_t *loop, uv_req_t *request, int narg) {
 	lua_State *L = (lua_State *)loop->data;
 	lua_State *thread = (lua_State *)request->data;
-	Operation *op = (Operation *)request;
+	lcu_Operation *op = (lcu_Operation *)request;
 	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST|FLAG_THRSAVED|FLAG_PENDING) == (FLAG_REQUEST|FLAG_THRSAVED|FLAG_PENDING));
 	resumethread(thread, L, narg, loop);
 	if (lcuL_maskflag(op, FLAG_REQUEST) && request->type == UV_UNKNOWN_REQ) {
@@ -396,7 +406,7 @@ LCUI_FUNC int lcuT_resetcohdlk (lua_State *L,
                                 lcu_HandleSetup setup,
                                 lua_CFunction results,
                                 lua_CFunction cancel) {
-	Operation *op = tothrop(L);
+	lcu_Operation *op = tothrop(L);
 	uv_loop_t *loop = NULL;
 	lcu_assert(type);
 	checkyieldable(L);
@@ -408,24 +418,25 @@ LCUI_FUNC int lcuT_resetcohdlk (lua_State *L,
 	return 0;  /* unreachable */
 }
 
-LCUI_FUNC int lcuT_armcohdl (lua_State *L, int err) {
-	lcu_assert(lcuL_maskflag(tothrop(L), FLAG_REQUEST));
-	lcu_assert(tohandle(tothrop(L))->type != UV_UNKNOWN_HANDLE);
+LCUI_FUNC int lcuT_armcohdl (lua_State *L, lcu_Operation *op, int err) {
+	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST));
 	if (err >= 0) {
-		Operation *op = tothrop(L);
 		uv_handle_t *handle = tohandle(op);
 		lcu_Scheduler *sched = lcu_tosched(handle->loop);
-		if (!lcuL_maskflag(op, FLAG_THRSAVED)) savethread(L, (void *)handle);
+		if (!lcuL_maskflag(op, FLAG_THRSAVED)) savethread(L, (void *)handle);  // TODO: memory error here makes 'lcu_Operation' be GC.
 		handle->data = (void *)L;
 		lcuL_clearflag(op, FLAG_REQUEST|FLAG_THRSAVED);
 		if (handle->type == UV_ASYNC) sched->nasync++;
 		else sched->nactive++;
+	} else {
+		uv_req_t *request = torequest(op);
+		request->type = UV_UNKNOWN_REQ;
 	}
 	return err;
 }
 
 LCUI_FUNC int lcuU_endcohdl (uv_handle_t *handle) {
-	Operation *op = (Operation *)handle;
+	lcu_Operation *op = (lcu_Operation *)handle;
 	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST));
 	if (lcuL_maskflag(op, FLAG_PENDING|FLAG_NOCANCEL) == FLAG_PENDING) return 1;
 	lcuL_clearflag(op, FLAG_NOCANCEL);
@@ -438,7 +449,7 @@ LCUI_FUNC void lcuU_resumecohdl (uv_handle_t *handle, int narg) {
 	uv_loop_t *loop = handle->loop;
 	lua_State *L = (lua_State *)loop->data;
 	lua_State *thread = (lua_State *)handle->data;
-	Operation *op = (Operation *)handle;
+	lcu_Operation *op = (lcu_Operation *)handle;
 	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST));
 	lcu_assert(lcuL_maskflag(op, FLAG_PENDING));
 	resumethread(thread, L, narg, loop);
@@ -659,6 +670,7 @@ static int k_resetudreqk (lua_State *L, int status, lua_KContext kctx) {
 	uv_req_t *request = lcu_ud2req(udreq);
 	lcu_assert(status == LUA_YIELD);
 	if (!haltedop(L, sched)) {
+		int nret;
 		uv_loop_t *loop = lcu_toloop(sched);
 		lcu_RequestSetup setup = (lcu_RequestSetup)lua_touserdata(L, narg-2);
 		lua_CFunction results = (lua_CFunction)lua_touserdata(L, narg-1);
@@ -666,7 +678,8 @@ static int k_resetudreqk (lua_State *L, int status, lua_KContext kctx) {
 		lcu_assert(request->type == UV_UNKNOWN_REQ);
 		lua_settop(L, narg-4);  /* discard yield, 'sched', 'setup', 'results' and 'cancel' */
 		lcu_log(request, L, "resumed operation");
-		return startedudreqk(L, sched, udreq, setup(L, request, loop), results, cancel);
+		nret = setup(L, request, loop, NULL);
+		return startedudreqk(L, sched, udreq, nret, results, cancel);
 	}
 	else lcu_log(request, L, "resumed coroutine");
 	return lua_gettop(L)-narg; /* return yield */
@@ -688,7 +701,8 @@ LCUI_FUNC int lcuT_resetudreqk (lua_State *L,
 	}
 	if (request->type == UV_REQ_TYPE_MAX) {
 		uv_loop_t *loop = lcu_toloop(sched);
-		return startedudreqk(L, sched, udreq, setup(L, request, loop), results, cancel);
+		int nret = setup(L, request, loop, NULL);
+		return startedudreqk(L, sched, udreq, nret, results, cancel);
 	}
 	lua_pushlightuserdata(L, (void *)sched);
 	lua_pushlightuserdata(L, (void *)setup);

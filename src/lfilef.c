@@ -536,12 +536,12 @@ static int missinfosrc (int *bits, int src) {
 	return 0;
 }
 
-static void getinfosrc (lua_State *L,
-                        int *bits,
-                        uv_loop_t *loop,
-                        uv_fs_t *filereq,
-                        const char *path,
-                        uv_fs_cb callback) {
+static int getinfosrc (lua_State *L,
+                       int *bits,
+                       uv_loop_t *loop,
+                       uv_fs_t *filereq,
+                       const char *path,
+                       uv_fs_cb callback) {
 	int err;
 	if (missinfosrc(bits, INFO_STAT)) {
 		err = (*bits&INFO_LSTAT) ? uv_fs_lstat(loop, filereq, path, callback)
@@ -557,7 +557,7 @@ static void getinfosrc (lua_State *L,
 			err = 0;
 		}
 	}
-	if (err < 0) lcu_error(L, err);
+	return err;
 }
 
 /* ... = system.fileinfo (path, which) */
@@ -587,11 +587,16 @@ static void on_fileinfo (uv_fs_t *filereq) {
 	}
 	else uv_fs_req_cleanup(filereq);
 }
-static int k_setupfileinfo (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupfileinfo (lua_State *L,
+                            uv_req_t *request,
+                            uv_loop_t *loop,
+                            lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *path = luaL_checkstring(L, 1);
 	int bits = lua_tointeger(L, 3);
-	getinfosrc(L, &bits, loop, filereq, path, on_fileinfo);
+	int err = getinfosrc(L, &bits, loop, filereq, path, on_fileinfo);
+	lcuT_armcoreq(L, loop, op, err);
+	if (err < 0) lcu_error(L, err);
 	lua_pushinteger(L, bits);
 	lua_replace(L, 3);
 	return -1;  /* yield on success */
@@ -613,7 +618,8 @@ static int system_fileinfo (lua_State *L) {
 		uv_fs_t filereq;
 		const char *path = luaL_checkstring(L, 1);
 		while (bits&INFO_SRCMASK) {
-			getinfosrc(L, &bits, loop, &filereq, path, NULL);
+			int err = getinfosrc(L, &bits, loop, &filereq, path, NULL);
+			if (err < 0) lcu_error(L, err);
 			pushfileinfo(L, 2, bits, mode, &filereq);
 			uv_fs_req_cleanup(&filereq);
 		}
@@ -663,13 +669,18 @@ static void checktouchargs (lua_State *L,
 /* true = system.touchfile (path [, mode, times...]) */
 #define callutime(B,L,R,P,A,M,C)	( (B&INFO_LSTAT) ? uv_fs_lutime(L,R,P,A,M,C) \
                                 	                 : uv_fs_utime(L,R,P,A,M,C) )
-static int k_setupfiletouch (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupfiletouch (lua_State *L,
+                             uv_req_t *request,
+                             uv_loop_t *loop,
+                             lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *path = luaL_checkstring(L, 1);
 	int bits = (int)lua_tointeger(L, 2);
 	lua_Number atime = lua_tonumber(L, 3);
 	lua_Number mtime = lua_tonumber(L, 4);
-	int err = callutime(bits, loop, filereq, path, (double)atime, (double)mtime, on_fileopdone);
+	int err = callutime(bits, loop, filereq, path,
+	                    (double)atime, (double)mtime, on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
@@ -697,13 +708,17 @@ static int system_touchfile (lua_State *L) {
 /* true = system.ownfile (path, user, group [, mode]) */
 #define callchown(B,L,R,P,U,G,C)	( (B&INFO_LSTAT) ? uv_fs_lchown(L,R,P,U,G,C) \
                                 	                 : uv_fs_chown(L,R,P,U,G,C) )
-static int k_setupfileown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupfileown (lua_State *L,
+                           uv_req_t *request,
+                           uv_loop_t *loop,
+                           lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *path = luaL_checkstring(L, 1);
 	uv_uid_t uid = (uv_uid_t)luaL_checkinteger(L, 2);
 	uv_gid_t gid = (uv_gid_t)luaL_checkinteger(L, 3);
 	int bits = (int)lua_tointeger(L, 4);
 	int err = callchown(bits, loop, filereq, path, uid, gid, on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
@@ -731,11 +746,15 @@ static int system_ownfile (lua_State *L) {
 
 
 /* true = system.grantfile (path, perm [, mode]) */
-static int k_setupfilegrant (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupfilegrant (lua_State *L,
+                             uv_req_t *request,
+                             uv_loop_t *loop,
+                             lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *path = luaL_checkstring(L, 1);
 	int perm = (int)lua_tointeger(L, 2);
 	int err = uv_fs_chmod(loop, filereq, path, perm, on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
@@ -760,12 +779,17 @@ static int system_grantfile (lua_State *L) {
 #define MKLNK_NOYIELD   0x01
 #define MKLNK_SYMBOLIC  0x02
 #define callmklnk(S,L,R,P,N,F,C) (S) ? uv_fs_symlink(L,R,P,N,F,C) : uv_fs_link(L,R,P,N,C)
-static int k_setupmklnk (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupmklnk (lua_State *L,
+                         uv_req_t *request,
+                         uv_loop_t *loop,
+                         lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *path = luaL_checkstring(L, 1);
 	const char *link = luaL_checkstring(L, 2);
 	int flags = lua_tonumber(L, 3);
-	int err = callmklnk(lua_isinteger(L, 3), loop, filereq, path, link, flags, on_fileopdone);
+	int err = callmklnk(lua_isinteger(L, 3), loop, filereq, path, link, flags,
+	                    on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
@@ -798,11 +822,15 @@ static int system_linkfile (lua_State *L) {
 
 
 /* true = system.movefile (src, dst [, mode]) */
-static int k_setupmvfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupmvfile (lua_State *L,
+                          uv_req_t *request,
+                          uv_loop_t *loop,
+                          lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *src = luaL_checkstring(L, 1);
 	const char *dst = luaL_checkstring(L, 2);
 	int err = uv_fs_rename(loop, filereq, src, dst, on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
@@ -822,12 +850,16 @@ static int system_movefile (lua_State *L) {
 
 
 /* true = system.copyfile (src, dst [, mode]) */
-static int k_setupcpfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupcpfile (lua_State *L,
+                          uv_req_t *request,
+                          uv_loop_t *loop,
+                          lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *src = luaL_checkstring(L, 1);
 	const char *dst = luaL_checkstring(L, 2);
 	int flags = lua_tointeger(L, 3);
 	int err = uv_fs_copyfile(loop, filereq, src, dst, flags, on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
@@ -862,10 +894,15 @@ static int system_copyfile (lua_State *L) {
 #define RMFILE_NOYIELD    0x01
 #define RMFILE_DIRECTORY  0x02
 #define callrmfile(D,L,R,P,C)	((D) ? uv_fs_rmdir(L,R,P,C) : uv_fs_unlink(L,R,P,C))
-static int k_setuprmfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setuprmfile (lua_State *L,
+                          uv_req_t *request,
+                          uv_loop_t *loop,
+                          lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *path = luaL_checkstring(L, 1);
-	int err = callrmfile(lua_toboolean(L, 2), loop, filereq, path, on_fileopdone);
+	int err = callrmfile(lua_toboolean(L, 2), loop, filereq, path,
+	                     on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
@@ -959,10 +996,15 @@ static int returnmktmp (lua_State *L) {
 	if (err != LUA_OK) return lua_error(L);
 	return lua_gettop(L);
 }
-static int k_setupmktmp (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupmktmp (lua_State *L,
+                         uv_req_t *request,
+                         uv_loop_t *loop,
+                         lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *prefix = lua_tostring(L, 1);
-	int err = callmktmp(lua_isuserdata(L, 3), loop, filereq, prefix, on_fileinfo);
+	int err = callmktmp(lua_isuserdata(L, 3), loop, filereq, prefix,
+	                    on_fileinfo);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
@@ -1005,11 +1047,15 @@ static int system_maketemp (lua_State *L) {
  */
 
 /* true = system.makedir (path, perm [, mode]) */
-static int k_setupmkdir (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupmkdir (lua_State *L,
+                         uv_req_t *request,
+                         uv_loop_t *loop,
+                         lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *path = luaL_checkstring(L, 1);
 	int perm = checkperm(L, 2);
 	int err = uv_fs_mkdir(loop, filereq, path, perm, on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
@@ -1094,10 +1140,14 @@ static void uv_onlistdir (uv_fs_t *filereq) {
 		filereq->result = -1;
 	}
 }
-static int k_setuplistdir (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setuplistdir (lua_State *L,
+                           uv_req_t *request,
+                           uv_loop_t *loop,
+                           lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *path = lua_tostring(L, 2);
 	int err = uv_fs_scandir(loop, filereq, path, 0, uv_onlistdir);
+	lcu_assert(op == NULL);
 	if (err < 0) return lcu_error(L, err);
 	lua_pop(L, 1);  /* discard 'path' */
 	return -1;  /* yield on success */
@@ -1148,12 +1198,16 @@ static void on_fileopen (uv_fs_t *filereq) {
 		lcuU_resumecoreq(loop, request, 1);
 	}
 }
-static int k_setupfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupfile (lua_State *L,
+                        uv_req_t *request,
+                        uv_loop_t *loop,
+                        lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *path = luaL_checkstring(L, 1);
 	int flags = (int)lua_tointeger(L, 3);
 	int perm = (int)lua_tointeger(L, 4);
 	int err = uv_fs_open(loop, filereq, path, flags, perm, on_fileopen);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_pop(L, 2);  /* discard 'flags' and 'perm' */
 	return -1;  /* yield on success */
@@ -1231,10 +1285,14 @@ static int file_gc (lua_State *L) {
 }
 
 /* true = file:close([mode]) */
-static int k_setupclosef (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupclosef (lua_State *L,
+                          uv_req_t *request,
+                          uv_loop_t *loop,
+                          lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	uv_file *file = openedfile(L);
 	int err = uv_fs_close(loop, filereq, *file, on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	*file = -1;
 	lua_settop(L, 1);
@@ -1266,10 +1324,14 @@ static int callread (lua_State *L,
 	lcu_getoutputbuf(L, 2, &buf);
 	return uv_fs_read(loop, filereq, file, &buf, 1, offset, callback);
 }
-static int k_setupreadfile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupreadfile (lua_State *L,
+                            uv_req_t *request,
+                            uv_loop_t *loop,
+                            lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	uv_file file = *openedfile(L);
 	int err = callread(L, loop, filereq, file, on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
@@ -1306,10 +1368,14 @@ static int callwrite (lua_State *L,
 		return uv_fs_write(loop, filereq, file, &buf, 1, offset, callback);
 	}
 }
-static int k_setupwritefile (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupwritefile (lua_State *L,
+                             uv_req_t *request,
+                             uv_loop_t *loop,
+                             lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	uv_file file = *openedfile(L);
 	int err = callwrite(L, loop, filereq, file, on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
@@ -1328,11 +1394,15 @@ static int file_write (lua_State *L) {
 }
 
 /* true = file:resize (length [, mode]) */
-static int k_setupfresize (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupfresize (lua_State *L,
+                           uv_req_t *request,
+                           uv_loop_t *loop,
+                           lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	uv_file file = *openedfile(L);
 	int64_t length = (int64_t)luaL_checkinteger(L, 2);
 	int err = uv_fs_ftruncate(loop, filereq, file, length, on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
@@ -1354,10 +1424,14 @@ static int file_resize (lua_State *L) {
 #define FLUSH_NOYIELD   0x01
 #define FLUSH_DATAONLY  0x02
 #define callfsync(D,L,R,F,C) (D) ? uv_fs_fdatasync(L,R,F,C) : uv_fs_fsync(L,R,F,C)
-static int k_setupfobjflush (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupfobjflush (lua_State *L,
+                             uv_req_t *request,
+                             uv_loop_t *loop,
+                             lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	uv_file file = *openedfile(L);
 	int err = callfsync(lua_toboolean(L, 2), loop, filereq, file, on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
@@ -1397,10 +1471,14 @@ static int returnfobjinfo (lua_State *L) {
 	uv_fs_req_cleanup(filereq);
 	return lcu_error(L, filereq->result);
 }
-static int k_setupfobjinfo (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupfobjinfo (lua_State *L,
+                            uv_req_t *request,
+                            uv_loop_t *loop,
+                            lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	uv_file file = *openedfile(L);
 	int err = uv_fs_fstat(loop, filereq, file, on_fileinfo);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcu_error(L, err);
 	return -1;  /* yield on success */
 }
@@ -1422,12 +1500,16 @@ static int file_info (lua_State *L) {
 }
 
 /* true = file:touch ([mode, times...]) */
-static int k_setupfobjtouch (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupfobjtouch (lua_State *L,
+                             uv_req_t *request,
+                             uv_loop_t *loop,
+                             lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	uv_file file = *openedfile(L);
 	lua_Number atime = lua_tonumber(L, 2);
 	lua_Number mtime = lua_tonumber(L, 3);
 	int err = uv_fs_futime(loop, filereq, file, (double)atime, (double)mtime, on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
@@ -1451,12 +1533,16 @@ static int file_touch (lua_State *L) {
 }
 
 /* true = file:own (user, group [, mode]) */
-static int k_setupfobjown (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupfobjown (lua_State *L,
+                           uv_req_t *request,
+                           uv_loop_t *loop,
+                           lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	uv_file file = *openedfile(L);
 	uv_uid_t uid = (uv_uid_t)luaL_checkinteger(L, 2);
 	uv_gid_t gid = (uv_gid_t)luaL_checkinteger(L, 3);
 	int err = uv_fs_fchown(loop, filereq, file, uid, gid, on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
@@ -1476,11 +1562,15 @@ static int file_own (lua_State *L) {
 }
 
 /* true = file:grant (perm [, mode]) */
-static int k_setupfobjgrant (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupfobjgrant (lua_State *L,
+                             uv_req_t *request,
+                             uv_loop_t *loop,
+                             lcu_Operation *op) {
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	uv_file file = *openedfile(L);
 	int perm = (int)lua_tointeger(L, 2);
 	int err = uv_fs_fchmod(loop, filereq, file, perm, on_fileopdone);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	lua_settop(L, 1);
 	return -1;  /* yield on success */
