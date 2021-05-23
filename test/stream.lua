@@ -186,9 +186,6 @@ function teststream(create, addresses)
 			for i = 1, 3 do
 				local stream = assert(server:accept())
 				assert(stream:close())
-				for j = 1, 3 do
-					assert(stage[j] == 0)
-				end
 			end
 			assert(server:close())
 			accepted = true
@@ -228,9 +225,6 @@ function teststream(create, addresses)
 			if count > 0 then
 				local stream = assert(server:accept())
 				assert(stream:close())
-				for j = 1, 3 do
-					assert(stage[j] == 0)
-				end
 				spawn(acceptor, count-1)
 			else
 				assert(server:close())
@@ -602,7 +596,7 @@ function teststream(create, addresses)
 			assert(a == nil)
 			assert(b == nil)
 			stage = 1
-			local a,b = stream:connect(addresses.bindable)
+			a,b = stream:connect(addresses.bindable)
 			assert(a == true or b == "socket is already connected")
 			stage = 2
 		end)
@@ -723,6 +717,7 @@ function teststream(create, addresses)
 
 	local backlog = 3
 
+if standard == "posix" then
 	do case "errors"
 		local server = assert(create("passive"))
 		assert(server:bind(addresses.bindable))
@@ -759,7 +754,6 @@ function teststream(create, addresses)
 			stage1 = 6
 		end)
 		assert(stage1 == 1)
-
 		local stage2 = 0
 		spawn(function ()
 			stream = assert(create("stream"))
@@ -774,11 +768,11 @@ function teststream(create, addresses)
 			stage2 = 5
 			system.suspend()
 			assert(accepted:close() == true)
+			system.suspend()
 			stage2 = 6
-			coroutine.resume(brokenpipe)
+			if brokenpipe then coroutine.resume(brokenpipe) end
 		end)
 		assert(stage2 == 1)
-
 		assert(system.run("step") == true)
 		assert(stage1 == 2)
 		assert(stage2 == 3)
@@ -794,6 +788,7 @@ function teststream(create, addresses)
 
 		done()
 	end
+end
 
 	do case "end of transmission"
 		local server = assert(create("passive"))
@@ -811,7 +806,7 @@ function teststream(create, addresses)
 			assert(stream:read(buffer) == 64)
 			assert(memory.tostring(buffer, 1, 64) == data1)
 			asserterr("end of file", stream:read(buffer))
-			asserterr("end of file", stream:read(buffer))
+			asserterr(standard == "win32" and "socket is not connected" or "end of file", stream:read(buffer))
 			assert(stream:write(data2))
 			done1 = true
 		end)
@@ -1154,6 +1149,7 @@ function teststream(create, addresses)
 
 	newtest "send"
 
+if standard == "posix" then
 	do case "errors"
 		local server = assert(create("passive"))
 		assert(server:bind(addresses.bindable))
@@ -1215,6 +1211,7 @@ function teststream(create, addresses)
 
 		done()
 	end
+end
 
 	do case "cancel schedule"
 
@@ -1295,6 +1292,7 @@ function teststream(create, addresses)
 		done()
 	end
 
+if standard == "posix" then
 	do case "double cancel"
 		local stage = 0
 		spawn(function ()
@@ -1339,6 +1337,7 @@ function teststream(create, addresses)
 
 		done()
 	end
+end
 
 	do case "ignore errors"
 
@@ -1372,6 +1371,7 @@ function teststream(create, addresses)
 		done()
 	end
 
+if standard == "posix" then
 	do case "ignore errors after cancel"
 
 		local brokenpipe
@@ -1413,5 +1413,6 @@ function teststream(create, addresses)
 
 		done()
 	end
+end
 
 end

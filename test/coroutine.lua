@@ -440,9 +440,11 @@ do case "resume same coroutine"
 
 	assert(stage == 0)
 	assert(co:status() == "running")
-	assert(system.run("step") == true)
-	assert(co:status() == "running")
-	assert(stage == 1)
+	if standard == "posix" then
+		assert(system.run("step") == true)
+		assert(co:status() == "running")
+		assert(stage == 1)
+	end
 	assert(system.run() == false)
 	assert(stage == 2)
 	assert(co:status() == "dead")
@@ -475,10 +477,12 @@ do case "resume different coroutines"
 	assert(stage == 0)
 	assert(co1:status() == "running")
 	assert(co2:status() == "suspended")
-	assert(system.run("step") == true)
-	assert(co1:status() == "suspended")
-	assert(co2:status() == "running")
-	assert(stage == 1)
+	if standard == "posix" then
+		assert(system.run("step") == true)
+		assert(co1:status() == "suspended")
+		assert(co2:status() == "running")
+		assert(stage == 1)
+	end
 	assert(system.run() == false)
 	assert(stage == 2)
 	assert(co1:status() == "suspended")
@@ -521,9 +525,11 @@ do case "resume transfer"
 	end)
 	assert(b == 1)
 
-	assert(system.run("step") == true)
-	assert(a == 2)
-	assert(b == 2)
+	if standard == "posix" then
+		assert(system.run("step") == true)
+		assert(a == 2)
+		assert(b == 2)
+	end
 	gc()
 	assert(system.run() == false)
 	assert(b == 3)
@@ -719,8 +725,10 @@ do case "chunk from file"
 	assert(co:status() == "running")
 
 	assert(stage == 0)
-	assert(system.run("step") == true)
-	assert(stage == 1)
+	if standard == "posix" then
+		assert(system.run("step") == true)
+		assert(stage == 1)
+	end
 	assert(system.run() == false)
 	assert(stage == 2)
 

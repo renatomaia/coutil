@@ -139,7 +139,11 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 		asserterr("invalid argument", datagram:setoption("mcastiface", "localhost"))
 
 		if domain == "ipv6" then
-			assert(datagram:setoption("mcastiface", ipaddr.ipv4.localhost) == true)
+			if standard == "win32" then
+				asserterr("invalid argument", datagram:setoption("mcastiface", ipaddr.ipv4.localhost))
+			else
+				assert(datagram:setoption("mcastiface", ipaddr.ipv4.localhost) == true)
+			end
 		end
 
 		assert(datagram:setoption("mcastiface", nil) == true)
@@ -191,12 +195,21 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 				datagram:setoption("mcastleave", addr.multicast, addr.localhost, ipaddr.ipv6.dnshost1))
 		else
 			local addr = ipaddr.ipv4
-			assert(datagram:setoption("mcastjoin", addr.multicast, addr.localhost, addr.dnshost1) == true)
-			assert(datagram:setoption("mcastleave", addr.multicast, addr.localhost, addr.dnshost1) == true)
-			assert(datagram:setoption("mcastjoin", addr.multicast, addr.localhost) == true)
-			assert(datagram:setoption("mcastleave", addr.multicast, addr.localhost) == true)
-			assert(datagram:setoption("mcastjoin", addr.multicast) == true)
-			assert(datagram:setoption("mcastleave", addr.multicast) == true)
+			if standard == "win32" then
+				asserterr("invalid argument", datagram:setoption("mcastjoin", addr.multicast, addr.localhost, addr.dnshost1))
+				asserterr("invalid argument", datagram:setoption("mcastleave", addr.multicast, addr.localhost, addr.dnshost1))
+				asserterr("invalid argument", datagram:setoption("mcastjoin", addr.multicast, addr.localhost))
+				asserterr("invalid argument", datagram:setoption("mcastleave", addr.multicast, addr.localhost))
+				asserterr("invalid argument", datagram:setoption("mcastjoin", addr.multicast))
+				asserterr("invalid argument", datagram:setoption("mcastleave", addr.multicast))
+			else
+				assert(datagram:setoption("mcastjoin", addr.multicast, addr.localhost, addr.dnshost1) == true)
+				assert(datagram:setoption("mcastleave", addr.multicast, addr.localhost, addr.dnshost1) == true)
+				assert(datagram:setoption("mcastjoin", addr.multicast, addr.localhost) == true)
+				assert(datagram:setoption("mcastleave", addr.multicast, addr.localhost) == true)
+				assert(datagram:setoption("mcastjoin", addr.multicast) == true)
+				assert(datagram:setoption("mcastleave", addr.multicast) == true)
+			end
 		end
 
 		done()
@@ -885,8 +898,10 @@ do case "used after library collection"
 		local cases = {}
 		table.insert(cases, { socket = system.socket("datagram", addr.type), op = "write", "xxx", nil, nil, addr })
 		table.insert(cases, { socket = system.socket("stream", addr.type), op = "connect", addr })
-		table.insert(cases, { socket = system.socket("stream", "local"), op = "connect", path })
-		table.insert(cases, { socket = system.socket("stream", "share"), op = "connect", path })
+		if standard ~= "win32" then
+			table.insert(cases, { socket = system.socket("stream", "local"), op = "connect", path })
+			table.insert(cases, { socket = system.socket("stream", "share"), op = "connect", path })
+		end
 
 		garbage.system = system
 		system = nil
