@@ -256,9 +256,7 @@ static int system_getenv (lua_State *L) {
 			char array[256];
 			char *buffer = array;
 			size_t len = sizeof(array);
-			int err;
-			luaL_argcheck(L, !strchr(name, '='), 1, "cannot contain '='");
-			err = uv_os_getenv(name, buffer, &len);
+			int err = uv_os_getenv(name, buffer, &len);
 			if (err == UV_ENOBUFS) {
 				buffer = (char *)malloc(len*sizeof(char));
 				err = uv_os_getenv(name, buffer, &len);
@@ -274,11 +272,9 @@ static int system_getenv (lua_State *L) {
 
 /* true = system.setenv (name, value) */
 static int system_setenv (lua_State *L) {
-	int err;
 	const char *name = luaL_checkstring(L, 1);
-	luaL_argcheck(L, !strchr(name, '='), 1, "cannot contain '='");
-	err = lua_isnil(L, 2) ? uv_os_unsetenv(name)
-	                      : uv_os_setenv(name, luaL_checkstring(L, 2));
+	int err = lua_isnil(L, 2) ? uv_os_unsetenv(name)
+	                          : uv_os_setenv(name, luaL_checkstring(L, 2));
 	return lcuL_pushresults(L, 0, err);
 }
 
