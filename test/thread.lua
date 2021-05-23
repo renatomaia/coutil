@@ -238,6 +238,7 @@ do case "yielding tasks"
 	done()
 end
 
+if standard == "posix" then
 do case "many threads, even more tasks"
 	local path = {}
 	local m, n = 50, 5
@@ -288,6 +289,7 @@ do case "many threads, even more tasks"
 	end
 
 	done()
+end
 end
 
 do case "pending tasks"
@@ -613,9 +615,11 @@ do case "reschedule same channel"
 		assert(channel.create(name):sync() == true)
 	end)
 
-	gc()
-	assert(system.run("step") == true)
-	assert(stage == 1)
+	if standard == "posix" then
+		gc()
+		assert(system.run("step") == true)
+		assert(stage == 1)
+	end
 
 	gc()
 	assert(system.run() == false)
@@ -644,9 +648,11 @@ do case "reschedule different channels"
 		assert(channel.create(name2):sync() == true)
 	end)
 
-	gc()
-	assert(system.run("step") == true)
-	assert(stage == 1)
+	if standard == "posix" then
+		gc()
+		assert(system.run("step") == true)
+		assert(stage == 1)
+	end
 
 	gc()
 	assert(system.run() == false)
@@ -1398,7 +1404,7 @@ do case "resume listed channels"
 			local names = channel.getnames()
 			local name, value = next(names)
 			assert(next(names, name) == nil)
-			assert(string.match(name, "thread: 0x%x+") ~= nil)
+			assert(string.match(name, "^thread: "))
 			assert(value == true)
 			local ch = channel.create(name)
 			ch:sync(nil, "reset")
