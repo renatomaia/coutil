@@ -35,6 +35,7 @@ static void pushopmap (lua_State *L) {
 }
 
 static void closehandle (uv_handle_t* handle, void* arg) {
+	(void)arg;
 	if (!uv_is_closing(handle)) uv_close(handle, NULL);
 }
 
@@ -295,7 +296,7 @@ typedef enum { FREEOP, SAMEOP, WAITOP } OpStatus;
 static OpStatus checkreset (lcu_Operation *op,
                             lua_CFunction results,
                             lua_CFunction cancel,
-                            int type) {
+                            uv_handle_type type) {
 	op->results = results;
 	op->cancel = cancel;
 	if (lcuL_maskflag(op, FLAG_REQUEST)) {
@@ -411,7 +412,7 @@ LCUI_FUNC int lcuT_resetcohdlk (lua_State *L,
 	lcu_assert(type);
 	checkyieldable(L);
 	switch (checkreset(op, results, cancel, type)) {
-		case FREEOP: loop = lcu_toloop(sched);
+		case FREEOP: loop = lcu_toloop(sched); /* FALLTHRU */
 		case SAMEOP: return startcohdlk(L, sched, op, setup, loop);
 		case WAITOP: return yieldresetk(L, sched, op, 0, (void *)setup);
 	}

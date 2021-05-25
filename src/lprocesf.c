@@ -447,7 +447,7 @@ static int getprocopts (lua_State *L,
 		return 0;
 	} else if (lua_istable(L, 1)) {
 		static const char *streamfields[] = { "stdin", "stdout", "stderr", NULL };
-		size_t argc = 0;
+		int argc = 0;
 
 		lua_settop(L, 1);  /* discard all other arguments */
 		procopts->file = getstrfield(L, "execfile", 1);

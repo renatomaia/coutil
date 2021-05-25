@@ -1,5 +1,6 @@
 #include "lmodaux.h"
 #include "loperaux.h"
+#include "lchaux.h"
 
 #include <lmemlib.h>
 
@@ -59,6 +60,7 @@ static void freestate(StateCoro *stateco) {
 }
 
 static int freepending(lua_State *L) {
+	(void)L;
 	return 1;  /* same as 'stateco->cancel == NULL' */
 }
 
@@ -180,6 +182,7 @@ static int k_setupwork (lua_State *L,
 	lua_State *co = stateco->L;
 	int narg = lua_gettop(L)-1;
 	int err;
+	(void)request;
 	lcu_assert(op == NULL);
 	if (lcuL_movefrom(co, L, narg, "argument") != LUA_OK) {
 		const char *msg = lua_tostring(co, -1);
