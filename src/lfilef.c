@@ -411,14 +411,18 @@ static void pushfileinfo (lua_State *L,
 	                        int bits,
 	                        const char *mode,
 	                        uv_fs_t *filereq) {
-	char selected = 'p';
 	int i;
 	switch (bits>>INFO_BITCOUNT) {  /* get current source */
-		case INFO_READLINK: selected = '=';
-		case INFO_REALPATH: {
-			for (i = 0; mode[i]; i++) if (mode[i] == selected) {
+		case INFO_READLINK: {
+			for (i = 0; mode[i]; i++) if (mode[i] == '=') {
 				if (filereq->result == UV_EINVAL) lua_pushnil(L);
 				else lua_pushstring(L, (const char *)filereq->ptr);
+				placeat(L, i+1+base);
+			}
+		} break;
+		case INFO_REALPATH: {
+			for (i = 0; mode[i]; i++) if (mode[i] == 'p') {
+				lua_pushstring(L, (const char *)filereq->ptr);
 				placeat(L, i+1+base);
 			}
 		} break;
@@ -489,14 +493,14 @@ static int toinfosrc (lua_State *L, const char mode, int mask) {
 		case 'p': return INFO_REALPATH;
 		case '=': return INFO_READLINK;
 		/* options */
-		case 'l': if (!(mask&INFO_LSTAT)) break;
+		case 'l': if (!(mask&INFO_LSTAT)) break;  /* FALLTHRU */
 		case LCU_NOYIELDMODE:
 			return luaL_error(L, "'%c' must be in the begin of 'mode'", mode);
 	}
 	return 0;
 }
 
-static const char *checkprefixflags (lua_State *L, const char *mode, int *bits) {
+static const char *checkprefixflags (const char *mode, int *bits) {
 	int mask = *bits;
 	*bits = 0;
 	for (; *mode; mode++) switch (*mode) {
@@ -516,7 +520,7 @@ static const char *checkprefixflags (lua_State *L, const char *mode, int *bits) 
 static const char *checkinfomode (lua_State *L, int arg, int *bits) {
 	int i, mask = *bits;
 	const char *mode = luaL_checkstring(L, arg);
-	mode = checkprefixflags(L, mode, bits);
+	mode = checkprefixflags(mode, bits);
 	for (i = 0; mode[i]; i++) {
 		int sel = toinfosrc(L, mode[i], mask);
 		if (sel&mask) *bits |= sel;
@@ -536,13 +540,12 @@ static int missinfosrc (int *bits, int src) {
 	return 0;
 }
 
-static int getinfosrc (lua_State *L,
-                       int *bits,
+static int getinfosrc (int *bits,
                        uv_loop_t *loop,
                        uv_fs_t *filereq,
                        const char *path,
                        uv_fs_cb callback) {
-	int err;
+	int err = UV_EAI_FAIL;
 	if (missinfosrc(bits, INFO_STAT)) {
 		err = (*bits&INFO_LSTAT) ? uv_fs_lstat(loop, filereq, path, callback)
 		                         : uv_fs_stat(loop, filereq, path, callback);
@@ -594,7 +597,7 @@ static int k_setupfileinfo (lua_State *L,
 	uv_fs_t *filereq = (uv_fs_t *)request;
 	const char *path = luaL_checkstring(L, 1);
 	int bits = lua_tointeger(L, 3);
-	int err = getinfosrc(L, &bits, loop, filereq, path, on_fileinfo);
+	int err = getinfosrc(&bits, loop, filereq, path, on_fileinfo);
 	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) lcu_error(L, err);
 	lua_pushinteger(L, bits);
@@ -618,7 +621,7 @@ static int system_fileinfo (lua_State *L) {
 		uv_fs_t filereq;
 		const char *path = luaL_checkstring(L, 1);
 		while (bits&INFO_SRCMASK) {
-			int err = getinfosrc(L, &bits, loop, &filereq, path, NULL);
+			int err = getinfosrc(&bits, loop, &filereq, path, NULL);
 			if (err < 0) lcu_error(L, err);
 			pushfileinfo(L, 2, bits, mode, &filereq);
 			uv_fs_req_cleanup(&filereq);
@@ -638,7 +641,7 @@ static void checktouchargs (lua_State *L,
                             lua_Number *mtime) {
 	int i, mask = *bits;
 	const char *mode = luaL_checkstring(L, arg);
-	mode = checkprefixflags(L, mode, bits);
+	mode = checkprefixflags(mode, bits);
 	*atime = -1;
 	*mtime = -1;
 	for (i = 0; mode[i]; i++) {
@@ -648,11 +651,13 @@ static void checktouchargs (lua_State *L,
 			case 'a': *atime = time; break;
 			case 'm': *mtime = time; break;
 			case 'b': *atime = *mtime = time; break;
-			case 'l': if (!(mask&INFO_LSTAT)) goto badchar;
+			case 'l': if (!(mask&INFO_LSTAT)) goto badchar;  /* FALLTHRU */
 			case LCU_NOYIELDMODE:
 				luaL_error(L, "'%c' must be in the begin of 'mode'", mode[i]);
+				return;
 			default: badchar:
 				luaL_error(L, "bad argument #%d, unknown mode char (got '%c')", 3+i, mode[i]);
+				return;
 		}
 	}
 	if (*atime == -1 || *mtime == -1) {
@@ -727,7 +732,7 @@ static int system_ownfile (lua_State *L) {
 	lcu_Scheduler *sched = lcu_getsched(L);
 	const char *mode = luaL_optstring(L, 4, "");
 	int bits = INFO_LSTAT;
-	mode = checkprefixflags(L, mode, &bits);
+	mode = checkprefixflags(mode, &bits);
 	if (*mode)
 		luaL_error(L, "bad argument #%d, unknown mode char (got '%c')", 4, *mode);
 	if (bits&INFO_NOYIELD) {

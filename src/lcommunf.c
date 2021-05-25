@@ -567,6 +567,7 @@ static void uv_onservnamed (uv_getnameinfo_t *namereq,
 	uv_loop_t *loop = namereq->loop;
 	uv_req_t *request = (uv_req_t *)namereq;
 	lua_State *thread = lcuU_endcoreq(loop, request);
+	(void)hostname;
 	if (thread) {
 		int nret;
 		if (!err) {
@@ -902,7 +903,7 @@ static int udp_getaddress (lua_State *L) {
 	struct sockaddr *addr = settopaddrarg(L, 3, domain, &addrsz);
 	int err = peer ? uv_udp_getpeername(handle, addr, &addrsz)
 	               : uv_udp_getsockname(handle, addr, &addrsz);
-	lcu_assert(addrsz == lua_rawlen(L, 3));
+	lcu_assert((lua_Unsigned)addrsz == lua_rawlen(L, 3));
 	return lcuL_pushresults(L, 1, err);
 }
 
@@ -1397,7 +1398,7 @@ static int tcp_getaddress (lua_State *L) {
 	struct sockaddr *addr = settopaddrarg(L, 3, domain, &addrsz);
 	int err = peer ? uv_tcp_getpeername(handle, addr, &addrsz)
 	               : uv_tcp_getsockname(handle, addr, &addrsz);
-	lcu_assert(addrsz == lua_rawlen(L, 3));
+	lcu_assert((lua_Unsigned)addrsz == lua_rawlen(L, 3));
 	return lcuL_pushresults(L, 1, err);
 }
 
@@ -1535,7 +1536,7 @@ static int pipe_setoption (lua_State *L) {
 	switch (opt) {
 		case 0: {  /* permission */
 			const char *mode = luaL_optstring(L, 3, "");
-			int flags;
+			int flags = 0;
 			for (; *mode; mode++) switch (*mode) {
 				case 'r': flags |= UV_READABLE; break;
 				case 'w': flags |= UV_WRITABLE; break;
@@ -1632,6 +1633,8 @@ static void uv_onrandom (uv_random_t *random, int err, void *buf, size_t sz) {
 	uv_loop_t *loop = random->loop;
 	uv_req_t *request = (uv_req_t *)random;
 	lua_State *thread = lcuU_endcoreq(loop, request);
+	(void)buf;
+	(void)sz;
 	if (thread) {
 		lua_pushinteger(thread, err);
 		lcuU_resumecoreq(loop, request, 1);

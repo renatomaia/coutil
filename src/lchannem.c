@@ -197,6 +197,7 @@ static int system_awaitch (lua_State *L) {
 
 /* res [, errmsg] = channel:sync(endpoint) */
 static lua_State *cancelsuspension (lua_State *L, void *data) {
+	lcu_assert(data == NULL);
 	lua_settop(L, 0);
 	lua_pushboolean(L, 0);
 	lua_pushliteral(L, "empty");

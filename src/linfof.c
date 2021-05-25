@@ -95,7 +95,7 @@ static int userinfo_gc (lua_State *L) {
 	return 0;
 }
 
-static double *sysload (lua_State *L, CurrProcInfo *procinf) {
+static double *sysload (CurrProcInfo *procinf) {
 	if (!(procinf->flags&LOADAVG)) {
 		uv_loadavg(procinf->loadavg);
 		procinf->flags |= LOADAVG;
@@ -173,9 +173,9 @@ static int system_procinfo (lua_State *L) {
 		case 'X': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_nivcsw); break;
 		case 'c': lua_pushnumber(L, lcu_time2sec(sysusage(L, &procinf)->ru_utime)); break;
 		case 's': lua_pushnumber(L, lcu_time2sec(sysusage(L, &procinf)->ru_stime)); break;
-		case '1': lua_pushnumber(L, (lua_Number)sysload(L, &procinf)[0]); break;
-		case 'l': lua_pushnumber(L, (lua_Number)sysload(L, &procinf)[1]); break;
-		case 'L': lua_pushnumber(L, (lua_Number)sysload(L, &procinf)[2]); break;
+		case '1': lua_pushnumber(L, (lua_Number)sysload(&procinf)[0]); break;
+		case 'l': lua_pushnumber(L, (lua_Number)sysload(&procinf)[1]); break;
+		case 'L': lua_pushnumber(L, (lua_Number)sysload(&procinf)[2]); break;
 		case 't': {
 			double val;
 			uv_uptime(&val);
