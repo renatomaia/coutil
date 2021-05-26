@@ -182,7 +182,7 @@ static int k_setupwork (lua_State *L,
 	lua_State *co = stateco->L;
 	int narg = lua_gettop(L)-1;
 	int err;
-	(void)request;
+	lcu_assert(request == (uv_req_t *)&stateco->work);
 	lcu_assert(op == NULL);
 	if (lcuL_movefrom(co, L, narg, "argument") != LUA_OK) {
 		const char *msg = lua_tostring(co, -1);
