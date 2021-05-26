@@ -44,7 +44,6 @@ build = {
 		SYSLIBFLAG="$(LIBFLAG)",
 		LUA_LIB="$(LUALIB)",
 		LUA_LIBDIR="$(LUA_LIBDIR)",
-		LUA_BINDIR="$(LUA_BINDIR)",
 		LUA_INCDIR="$(LUA_INCDIR)",
 		LUAMEM_LIBDIR="$(LUAMEM_LIBDIR)",
 		LUAMEM_INCDIR="$(LUAMEM_INCDIR)",
@@ -61,10 +60,17 @@ build = {
 			["coutil.spawn"] = "lua/coutil/spawn.lua",
 		},
 		lib = {
-			["coutil"] = "coutil.dll",
+			["coutil"] = "src/coutil.so",
 		},
 	},
 	platforms = {
-		windows = { makefile = "etc/Makefile.win" },
+		windows = {
+			makefile = "etc/Makefile.win",
+			install = {
+				lib = {
+					["coutil"] = "coutil.dll",
+				},
+			},
+		},
 	},
 }
