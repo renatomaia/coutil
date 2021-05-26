@@ -106,9 +106,14 @@ do case "invalid variable names"
 
 	assert(system.setenv("COUTIL_TEST", "abc=def"))
 	assert(system.getenv("COUTIL_TEST") == "abc=def")
-	assert(os.getenv("COUTIL_TEST") == "abc=def")
-	assert(os.getenv("COUTIL_TEST=abc") == "def")
-	assert(system.getenv("COUTIL_TEST=abc") == "def")
+	if standard == "win32" then
+		assert(os.getenv("COUTIL_TEST") == nil)
+		asserterr("no such", system.getenv("COUTIL_TEST=abc"))
+	else
+		assert(os.getenv("COUTIL_TEST") == "abc=def")
+		assert(os.getenv("COUTIL_TEST=abc") == "def")
+		assert(system.getenv("COUTIL_TEST=abc") == "def")
+	end
 
 	done()
 end
