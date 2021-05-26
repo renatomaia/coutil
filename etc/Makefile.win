@@ -1,10 +1,8 @@
-# See ../README.md for installation and 
 # == CHANGE THE SETTINGS BELOW TO SUIT YOUR ENVIRONMENT =======================
 
 LUA_DIR= C:\Installed
 LUA_INCDIR= $(LUA_DIR)\include
 LUA_LIBDIR= $(LUA_DIR)\lib
-LUA_BINDIR= $(LUA_DIR)\bin
 LUA_LIB= lua.lib
 
 LUAMEM_DIR= $(LUA_DIR)
