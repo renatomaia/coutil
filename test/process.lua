@@ -99,15 +99,21 @@ end
 
 do case "invalid variable names"
 	asserterr("invalid argument", system.setenv("COUTIL_TEST=abc", "def"))
-	asserterr(standard == "win32" and "no such" or "invalid argument", system.getenv("COUTIL_TEST=abc"))
+	asserterr("no such file or directory", system.getenv("COUTIL_TEST=abc"))
 	asserterr("no such file or directory", system.getenv("COUTIL_TEST"))
 	assert(os.getenv("COUTIL_TEST=abc") == nil)
 	assert(os.getenv("COUTIL_TEST") == nil)
 
 	assert(system.setenv("COUTIL_TEST", "abc=def"))
 	assert(system.getenv("COUTIL_TEST") == "abc=def")
-	assert(os.getenv("COUTIL_TEST") == (standard == "posix" and "abc=def" or nil))
-	asserterr(standard == "win32" and "no such" or "invalid argument", system.getenv("COUTIL_TEST=abc"))
+	if standard == "win32" then
+		assert(os.getenv("COUTIL_TEST") == nil)
+		asserterr("no such", system.getenv("COUTIL_TEST=abc"))
+	else
+		assert(os.getenv("COUTIL_TEST") == "abc=def")
+		assert(os.getenv("COUTIL_TEST=abc") == "def")
+		assert(system.getenv("COUTIL_TEST=abc") == "def")
+	end
 
 	done()
 end
