@@ -113,11 +113,15 @@ static int lua_myawait (lua_State *L) {
 	return lcuT_resetcoreqk(L, sched, k_setupfunc, onreturn, cancancel);
 }
 
-static int k_setupfunc (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+static int k_setupfunc (lua_State *L,
+                        uv_req_t *request,
+                        uv_loop_t *loop,
+                        lcu_Operation *op) {
 	uv_myevent_t *myevent = (uv_myevent_t *)request;
 	/* check argments and obtain desired configs for myevent */
 	/* leave on the stack values required to produce the results */
 	int err = uv_myevent(loop, myevent, uv_onmyevent, /* configs */);
+	lcuT_armcoreq(L, loop, op, err);
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
@@ -169,12 +173,15 @@ static int lua_myawait (lua_State *L) {
 	return lcuT_resetcohdlk(L, UV_MYEVENT, sched, k_setupfunc, onreturn, cancancel);
 }
 
-static int k_setupfunc (lua_State *L, uv_handle_t *handle, uv_loop_t *loop) {
+static int k_setupfunc (lua_State *L,
+                        uv_handle_t *handle,
+                        uv_loop_t *loop,
+                        lcu_Operation *op) {
 	uv_myevent_t *myevent = (uv_myevent_t *)handle;
 	/* check argments and obtain desired configs for myevent */
 	/* leave on the stack values required to produce the results */
 	int err = 0;
-	if (loop) err = lcuT_armcohdl(L, uv_myevent_init(loop, myevent));
+	if (loop) err = lcuT_armcohdl(L, op, uv_myevent_init(loop, myevent));
 	else if (/* myevent is misconfigured? */) err = uv_myevent_stop(myevent);
 	else return -1;  /* yield on success */
 	if (err >= 0) err = uv_myevent_start(myevent, uv_onmyevent, /* configs */);
