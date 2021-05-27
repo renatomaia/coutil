@@ -136,8 +136,8 @@ static void copylightud (lua_State *L, lua_State *NL, const void *field) {
 		lcu_assert(lua_touserdata(L, -1) != NULL);
 		lua_pushlightuserdata(NL, lua_touserdata(L, -1));
 		lua_setfield(NL, LUA_REGISTRYINDEX, field);
-		lua_pop(L, 1);
 	}
+	lua_pop(L, 1);
 }
 
 static void warnf (void *ud, const char *message, int tocont);
