@@ -64,4 +64,7 @@ build = {
 			["coutil"] = "coutil.dll",
 		},
 	},
+	platforms = {
+		windows = { makefile = "etc/Makefile.win" },
+	},
 }

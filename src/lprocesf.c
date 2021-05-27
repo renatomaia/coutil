@@ -7,31 +7,74 @@
 #include <signal.h>
 
 
+#ifdef SIGSTOP
+#define CATCHABLE_INDEX 2
+#else
+#define CATCHABLE_INDEX 1
+#endif
+
 static const struct { const char *name; int value; } signals[] = {
 	{ "TERMINATE", SIGKILL },
-	{ "interrupt", SIGINT },
-	{ "terminate", SIGTERM },
-	{ "hangup", SIGHUP },
-	{ "abort", SIGABRT },
-#ifndef _WIN32
+#ifdef SIGSTOP
 	{ "STOP", SIGSTOP },
+#endif
+#ifdef SIGINT
+	{ "interrupt", SIGINT },
+#endif
+#ifdef SIGTERM
+	{ "terminate", SIGTERM },
+#endif
+#ifdef SIGTSTP
 	{ "stop", SIGTSTP },
+#endif
+#ifdef SIGCONT
 	{ "continue", SIGCONT },
+#endif
+#ifdef SIGHUP
+	{ "hangup", SIGHUP },
+#endif
+#ifdef SIGTTIN
 	{ "stdinoff", SIGTTIN },
+#endif
+#ifdef SIGTTOU
 	{ "stdoutoff", SIGTTOU },
+#endif
 #ifdef SIGWINCH
 	{ "winresize", SIGWINCH },
 #endif
+#ifdef SIGQUIT
 	{ "quit", SIGQUIT },
+#endif
+#ifdef SIGCHLD
 	{ "child", SIGCHLD },
+#endif
+#ifdef SIGABRT
+	{ "abort", SIGABRT },
+#endif
+#ifdef SIGPIPE
 	{ "brokenpipe", SIGPIPE },
+#endif
+#ifdef SIGURG
 	{ "urgentsock", SIGURG },
+#endif
+#ifdef SIGUSR1
 	{ "userdef1", SIGUSR1 },
+#endif
+#ifdef SIGUSR2
 	{ "userdef2", SIGUSR2 },
+#endif
+#ifdef SIGTRAP
 	{ "trap", SIGTRAP },
+#endif
+#ifdef SIGXFSZ
 	{ "filelimit", SIGXFSZ },
+#endif
+#ifdef SIGALRM
 	{ "clocktime", SIGALRM },
+#endif
+#ifdef SIGXCPU
 	{ "cpulimit", SIGXCPU },
+#endif
 #ifdef SIGPROF
 	{ "cputotal", SIGPROF },
 #endif
@@ -44,6 +87,8 @@ static const struct { const char *name; int value; } signals[] = {
 #ifdef SIGSYS
 	{ "sysargerr", SIGSYS },
 #endif
+#ifdef SIGBREAK
+	{ "break", SIGBREAK },
 #endif
 	{ NULL, 0 }
 };
@@ -59,7 +104,7 @@ static void pushsignal (lua_State *L, int signum) {
 static int checksignal (lua_State *L, int arg, int catch) {
 	const char *name = luaL_checkstring(L, arg);
 	int i;
-	for (i = catch ? 2 : 0; signals[i].name; i++)
+	for (i = catch ? CATCHABLE_INDEX : 0; signals[i].name; i++)
 		if (strcmp(signals[i].name, name) == 0)
 			return signals[i].value;
 	return luaL_argerror(L, arg,

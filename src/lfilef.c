@@ -9,6 +9,7 @@
 
 
 #ifdef _WIN32
+#define S_IFIFO _S_IFIFO
 #define S_ISUID 04000
 #define S_ISGID 02000
 #define S_ISVTX 01000
@@ -48,22 +49,24 @@ static int checkperm (lua_State *L, int arg) {
 	return (int)luaL_checkinteger(L, arg);
 }
 
-#ifndef _WIN32
 static void pushfiletype (lua_State *L, uint64_t type) {
 	switch (type) {
+#ifdef S_IFSOCK
 		case S_IFSOCK: lua_pushliteral(L, "socket"); break;
+#endif
 		case S_IFLNK: lua_pushliteral(L, "link"); break;
 		case S_IFREG: lua_pushliteral(L, "file"); break;
+#ifdef S_IFBLK
 		case S_IFBLK: lua_pushliteral(L, "block"); break;
+#endif
 		case S_IFDIR: lua_pushliteral(L, "directory"); break;
 		case S_IFCHR: lua_pushliteral(L, "character"); break;
-		case S_IFIFO: lua_pushliteral(L, "fifo"); break;
+#ifdef S_IFIFO
+		case S_IFIFO: lua_pushliteral(L, "pipe"); break;
+#endif
 		default: lua_pushliteral(L, "unknown"); break;
 	}
 }
-#else
-#define pushfiletype(L,T) lua_pushliteral(L, "unsupported")
-#endif
 
 static void pushfilesystype (lua_State *L, uint64_t type) {
 	switch (type) {
@@ -1066,7 +1069,7 @@ static int dirinfo_call (lua_State *L) {
 		case UV_DIRENT_BLOCK: lua_pushliteral(L, "block"); break;
 		case UV_DIRENT_DIR: lua_pushliteral(L, "directory"); break;
 		case UV_DIRENT_CHAR: lua_pushliteral(L, "character"); break;
-		case UV_DIRENT_FIFO: lua_pushliteral(L, "fifo"); break;
+		case UV_DIRENT_FIFO: lua_pushliteral(L, "pipe"); break;
 		default: lua_pushliteral(L, "unknown"); break;
 	}
 	return 2;
@@ -1538,15 +1541,19 @@ LCUI_FUNC void lcuM_addfilef (lua_State *L) {
 		{NULL, NULL}
 	};
 	static const struct { const char *name; int value; } bits[] = {
-#ifndef _WIN32
 		{ "type", S_IFMT },
+#ifdef S_IFSOCK
 		{ "socket", S_IFSOCK },
+#endif
 		{ "link", S_IFLNK },
 		{ "file", S_IFREG },
+#ifdef S_IFBLK
 		{ "block", S_IFBLK },
+#endif
 		{ "directory", S_IFDIR },
 		{ "character", S_IFCHR },
-		{ "fifo", S_IFIFO },
+#ifdef S_IFIFO
+		{ "pipe", S_IFIFO },
 #endif
 		{ "setuid", S_ISUID },
 		{ "setgid", S_ISGID },
