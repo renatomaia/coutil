@@ -1,3 +1,4 @@
+local system = require "coutil.system"
 dofile "utils.lua"
 
 local test
@@ -21,6 +22,7 @@ function done()
 	collectgarbage("collect")
 	assert(next(garbage) == nil)
 	print(" OK")
+	assert(system.run() == false)
 end
 
 dofile "info.lua"
@@ -32,7 +34,7 @@ dofile "spawn.lua"
 dofile "system.lua"
 dofile "time.lua"
 dofile "file.lua"
-dofile "signal.lua"
+if standard == "posix" then dofile "signal.lua" end
 dofile "netaddr.lua"
 dofile "stream.lua"
 dofile "network.lua"

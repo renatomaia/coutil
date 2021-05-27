@@ -208,7 +208,7 @@ local hosts = {
 		["127.0.0.1"] = "ipv4",
 		["::1"] = "ipv6",
 	},
-	["ip6-localhost"] = { ["::1"] = "ipv6" },
+	--["ip6-localhost"] = { ["::1"] = "ipv6" },
 	["*"] = {
 		["0.0.0.0"] = "ipv4",
 		["::"] = "ipv6",
@@ -242,7 +242,13 @@ local function allexpected(ips, hostname, servport)
 end
 
 local function clearexpected(missing, found, scktype)
-	missing[found.literal.." "..found.port.." "..scktype] = nil
+	if standard == "win32" and scktype == nil then
+		missing[found.literal.." "..found.port.." datagram"] = nil
+		missing[found.literal.." "..found.port.." stream"] = nil
+		missing[found.literal.." "..found.port.." passive"] = nil
+	else
+		missing[found.literal.." "..found.port.." "..scktype] = nil
+	end
 end
 
 do case "reusing addresses"
@@ -264,8 +270,8 @@ do case "reusing addresses"
 							assert(ips[found.literal] == domain)
 							assert(found.port == servport)
 							scktype = addrlist:getsocktype()
-							assert(scktypes[scktype] == true)
 							assert(domain == nil or addrtypes[domain] ~= nil)
+							assert(standard == "win32" and scktype == nil or scktypes[scktype] == true)
 							clearexpected(missing, found, scktype)
 						until not addrlist:next()
 						assert(domain == addrlist:getdomain())
@@ -294,7 +300,7 @@ do case "create addresses"
 						assert(addrlist:getdomain() == found.type)
 						assert(ips[found.literal] ~= nil)
 						assert(found.port == servport)
-						assert(scktypes[scktype] == true)
+						assert(standard == "win32" and scktype == nil or scktypes[scktype] == true)
 						clearexpected(missing, found, scktype)
 					until not addrlist:next()
 				end
@@ -348,7 +354,7 @@ do case "host and service"
 				for domain, ip in pairs(ips) do
 					local addr = system.address(domain, ip, port)
 					local name, service = system.nameaddr(addr)
-					assert(name == hostname)
+					assert(name == standard == "win32" and system.procinfo("n") or hostname)
 					assert(service == servname)
 				end
 			end

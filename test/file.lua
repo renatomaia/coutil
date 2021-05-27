@@ -15,10 +15,8 @@ do case "errors"
 		end
 	end
 
-	local path = ".."
-	local iterator, state, init, closing
 	spawn(function ()
-		asserterr("not a directory", pcall(system.listdir, "file.lua", "~"))
+		asserterr("not a directory", pcall(system.listdir, "file.lua"))
 	end)
 	system.run()
 
@@ -142,7 +140,7 @@ do
 		local file, extra = system.maketemp("lcutest_", mode.."o")
 		assert(file:close(mode))
 		assert(extra == nil)
-		os.execute("rm lcutest_??????")
+		os.execute((standard == "win32" and "del" or "rm").." lcutest_??????")
 	end
 	function testcases.fileopen(mode)
 		local path, file = system.maketemp("lcutest_", mode.."fo")
@@ -189,10 +187,11 @@ do case "errors"
 	end
 
 	local function testerr(mode)
+		local expectederrmsg = "already exists"
 		if not mode:find("s", 1, "plain search") then
 			asserterr("no such", system.linkfile("LICENSE", "link.lua", mode))
 		end
-		asserterr("already exists", system.linkfile("../LICENSE", "file.lua", mode))
+		asserterr(expectederrmsg, system.linkfile("../LICENSE", "file.lua", mode))
 	end
 
 	testerr("~")
@@ -211,7 +210,11 @@ do
 	function testcases.hardlink(mode)
 		assert(system.linkfile("file.lua", "link.lua", mode) == true)
 		assert(system.fileinfo("link.lua", mode.."?") == "file")
-		assert(system.fileinfo("link.lua", mode.."=") == nil)
+		if standard == "win32" then
+			asserterr("unknown error", pcall(system.fileinfo, "link.lua", mode.."=")) -- TODO: check if this is a bug in libuv
+		else
+			assert(system.fileinfo("link.lua", mode.."=") == nil)
+		end
 		assert(system.fileinfo("link.lua", mode.."*") == 2)
 		assert(system.fileinfo("file.lua", mode.."*") == 2)
 		assert(system.removefile("link.lua", mode))
@@ -257,7 +260,9 @@ do case "errors"
 
 	local function testerr(mode)
 		asserterr("no such", system.movefile("LICENSE", "link.lua", mode))
-		asserterr("not a directory", system.movefile("benchmarks", "file.lua", mode))
+		if standard ~= "win32" then
+			asserterr("not a directory", system.movefile("benchmarks", "file.lua", mode))
+		end
 	end
 
 	testerr("~")
@@ -271,7 +276,8 @@ do
 	local testcases = {}
 	function testcases.file(mode)
 		assert(system.movefile("../LICENSE", "license.txt", mode) == true)
-		assert(system.fileinfo("license.txt", mode.."B") == 1080)
+		local filesize = standard == "win32" and 1098 or 1080
+		assert(system.fileinfo("license.txt", mode.."B") == filesize)
 		assert(system.movefile("license.txt", "../LICENSE", mode) == true)
 	end
 	function testcases.directory(mode)
@@ -305,7 +311,8 @@ do case "errors"
 	local function testerr(mode)
 		asserterr("no such", system.copyfile("LICENSE", "copied.lua", mode))
 		asserterr("already exists", system.copyfile("../LICENSE", "file.lua", mode.."n"))
-		asserterr("directory", system.copyfile("benchmarks", "copied.dir", mode))
+		asserterr(standard == "win32" and "operation not permitted" or "directory",
+			system.copyfile("benchmarks", "copied.dir", mode))
 	end
 
 	testerr("~")
@@ -345,7 +352,8 @@ do case "errors"
 	local function testerr(mode)
 		asserterr("no such", system.removefile("MISSING.FILE", mode))
 		asserterr("no such", system.removefile("MISSING.DIR", "d"..mode))
-		asserterr("directory", system.removefile("benchmarks", mode))
+		asserterr(standard == "win32" and "operation not permitted" or "directory",
+			system.removefile("benchmarks", mode))
 		asserterr("not empty", system.removefile("benchmarks", "d"..mode))
 	end
 
@@ -375,7 +383,7 @@ end
 
 newtest "openfile" -------------------------------------------------------------
 
-local validpath = "/dev/null"
+local validpath = "file.lua"
 local validmodes = "rwanNrftwx"
 
 do case "non existent file"
@@ -438,7 +446,8 @@ do case "errors"
 		end
 	end
 
-	asserterr("bad file descriptor", file:read(buffer, nil, nil, nil, "~"))
+	local expectederrmsg = standard == "win32" and "operation not permitted" or "bad file descriptor"
+	asserterr(expectederrmsg, file:read(buffer, nil, nil, nil, "~"))
 
 	file:close("~")
 
@@ -454,7 +463,8 @@ do case "read contents"
 		file = assert(system.openfile("../LICENSE"))
 		assert(file:read(buffer) == #buffer)
 		assert(not buffer:diff("Copyright (C) 2017  "))
-		assert(file:read(buffer, 11, 20, 57) == 10)
+		local offset = standard == "win32" and 59 or 57  -- due to line breaks
+		assert(file:read(buffer, 11, 20, offset) == 10)
 		assert(not buffer:diff("Copyright Permission"))
 	end)
 	system.run()
@@ -481,7 +491,8 @@ do case "errors"
 		end
 	end
 
-	asserterr("bad file descriptor", file:write("foo bar", nil, nil, nil, "~"))
+	local expectederrmsg = standard == "win32" and "operation not permitted" or "bad file descriptor"
+	asserterr(expectederrmsg, file:write("foo bar", nil, nil, nil, "~"))
 
 	file:close("~")
 
@@ -518,7 +529,11 @@ do case "from file"
 
 	spawn(function () assert(file:write(srcf, 1, 10) == 10) end)
 	system.run()
-	assert(file:write(srcf, 58, 67, nil, "~") == 10)
+	local first, last = 58, 67
+	if standard == "win32" then
+		first, last = first+2, last+2
+	end
+	assert(file:write(srcf, first, last, nil, "~") == 10)
 
 	file = assert(io.open(path))
 	assert(file:read("a") == "Copyright Permission")
@@ -541,7 +556,8 @@ do case "errors"
 		end
 	end
 
-	asserterr("invalid argument", file:resize(32, "~"))
+	local expectederrmsg = standard == "win32" and "operation not permitted" or "invalid argument"
+	asserterr(expectederrmsg, file:resize(32, "~"))
 
 	file:close("~")
 
@@ -737,20 +753,25 @@ for _, spec in ipairs{
 
 	do case "single value"
 		for c in string.gmatch(options , ".") do
-			local ltype = type(spec.func(spec.arg, "~"..c))
-			assert(string.find(typemap[ltype], c, 1, "plain"))
+			if c == "=" and standard == "win32" then -- TODO: check if this is a bug in libuv
+				asserterr("unknown error", pcall(spec.func, spec.arg, "~="))
+			else
+				local ltype = type(spec.func(spec.arg, "~"..c))
+				assert(string.find(typemap[ltype], c, 1, "plain"))
 
-			local v1, v2, v3 = spec.func(spec.arg, "~"..c..c..c)
+				local v1, v2, v3 = spec.func(spec.arg, "~"..c..c..c)
 
-			assert(type(v1) == ltype)
-			assert(v2 == v1)
-			assert(v3 == v1)
+				assert(type(v1) == ltype)
+				assert(v2 == v1)
+				assert(v3 == v1)
+			end
 		end
 
 		done()
 	end
 
 	do case "all values"
+		local options = standard == "win32" and options:gsub("[=p]", "") or options
 		local vararg = require "vararg"
 		local packed
 		spawn(function ()
@@ -834,35 +855,41 @@ for _, spec in ipairs{
 
 	do case "change times"
 		local function testchange(mode)
-			assert(spec.func(spec.arg, mode) == true)
+			if standard == "win32" and spec.name == "file:touch" then -- TODO: check if this is a bug in libuv
+				asserterr("operation not permitted", spec.func(spec.arg, mode))
+			else
+				assert(spec.func(spec.arg, mode) == true)
 
-			local access1, modify1 = spec.get(spec.arg)
-			assert(access1 > access)
-			assert(modify1 > modify)
+				local access1, modify1 = spec.get(spec.arg)
+				assert(access1 > access)
+				assert(modify1 > modify)
 
-			assert(spec.func(spec.arg, mode.."a", access) == true)
+				system.suspend(0.01, mode)
+				assert(spec.func(spec.arg, mode.."a", access) == true)
 
-			local access2, modify2 = spec.get(spec.arg)
-			assert(timeequals(access2, access))
-			assert(modify2 > modify1)
+				local access2, modify2 = spec.get(spec.arg)
+				assert(timeequals(access2, access))
+				assert(modify2 > modify1)
 
-			assert(spec.func(spec.arg, mode.."m", modify) == true)
+				system.suspend(0.01, mode)
+				assert(spec.func(spec.arg, mode.."m", modify) == true)
 
-			local access3, modify3 = spec.get(spec.arg)
-			assert(access3 > access2)
-			assert(timeequals(modify3, modify))
+				local access3, modify3 = spec.get(spec.arg)
+				assert(access3 > access2)
+				assert(timeequals(modify3, modify))
 
-			assert(spec.func(spec.arg, mode.."b", access1) == true)
+				assert(spec.func(spec.arg, mode.."b", access1) == true)
 
-			local access4, modify4 = spec.get(spec.arg)
-			assert(timeequals(access4, access1))
-			assert(timeequals(modify4, access1))
+				local access4, modify4 = spec.get(spec.arg)
+				assert(timeequals(access4, access1))
+				assert(timeequals(modify4, access1))
 
-			assert(spec.func(spec.arg, mode.."am", access, modify) == true)
+				assert(spec.func(spec.arg, mode.."am", access, modify) == true)
 
-			local access5, modify5 = spec.get(spec.arg)
-			assert(timeequals(access5, access))
-			assert(timeequals(modify5, modify))
+				local access5, modify5 = spec.get(spec.arg)
+				assert(timeequals(access5, access))
+				assert(timeequals(modify5, modify))
+			end
 		end
 
 		testchange("~")
@@ -1004,7 +1031,7 @@ for _, spec in ipairs{
 
 	do case "change permissions"
 		local function testchange(mode)
-			local newmode = system.filebits.ruser|system.filebits.wuser
+			local newmode = system.filebits.ruser|system.filebits.rgroup|system.filebits.rother
 			assert(spec.func(spec.arg, newmode, mode))
 			assert(spec.get(spec.arg) == newmode)
 
