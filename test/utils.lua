@@ -10,6 +10,14 @@ local debug = require "debug"
 package.path = "../lua/?.lua;"..package.path
 
 local vararg = require "vararg"
+local system = require "coutil.system"
+
+local kernel = system.procinfo("k")
+if kernel:find("Windows", 1, "plain search") then
+	standard = "win32"
+else
+	standard = "posix"
+end
 
 garbage = setmetatable({ thread = nil }, { __mode = "v" })
 
@@ -92,14 +100,14 @@ do
 	local successfile = os.tmpname()
 
 	function dostring(chunk, ...)
-		writeto(scriptfile, [[
-			local function main(...) ]], chunk, [[ end
+		writeto(scriptfile, string.format([[
+			local function main(...) %s end
 			local exitval = main(...)
-			local file = assert(io.open("]], successfile, [[", "w"))
+			local file = assert(io.open(%q, "w"))
 			assert(file:write("SUCCESS!"))
 			assert(file:close())
 			os.exit(exitval, true)
-		]])
+		]], chunk, successfile))
 		local command = table.concat({ luabin, scriptfile, ... }, " ")
 		local ok, exitmode, exitvalue = os.execute(command)
 		assert(ok == true)
@@ -151,8 +159,8 @@ function checkcount(threads, options, ...)
 	return true
 end
 
-utilschunk = string.format([[
+utilschunk = [[
 	local _G = require "_G"
 	dofile "utils.lua"
-]])
+]]
 
