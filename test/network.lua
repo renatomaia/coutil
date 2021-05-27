@@ -48,7 +48,6 @@ local function testsockaddr(create, domain, ...)
 		local badaddr = ipaddr[otherdomain[domain]].free
 		asserterr("wrong domain", pcall(sock.bind, sock, badaddr))
 		assert(sock:bind(ipaddr[domain].free) == true)
-		asserterr("invalid argument", sock:bind(ipaddr[domain].bindable))
 
 		local addr = sock:getaddress()
 		assert(addr == ipaddr[domain].free)
@@ -139,10 +138,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 		assert(datagram:setoption("mcastiface", ipaddr[domain].localhost) == true)
 		asserterr("invalid argument", datagram:setoption("mcastiface", "localhost"))
 
-		if domain == "ipv4" then
-			asserterr("protocol not available",
-				datagram:setoption("mcastiface", ipaddr.ipv6.localhost))
-		else
+		if domain == "ipv6" then
 			assert(datagram:setoption("mcastiface", ipaddr.ipv4.localhost) == true)
 		end
 
@@ -181,13 +177,13 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			datagram:setoption("mcastjoin", addr.multicast, addr.localhost, "localhost"))
 
 		if domain == "ipv4" then
-			asserterr("protocol not available",
+			asserterr(standard == "win32" and "invalid argument" or "protocol not available",
 				datagram:setoption("mcastjoin", ipaddr.ipv6.multicast))
 			asserterr("invalid argument",
 				datagram:setoption("mcastjoin", addr.multicast, ipaddr.ipv6.localhost))
 			asserterr("invalid argument",
 				datagram:setoption("mcastjoin", addr.multicast, addr.localhost, ipaddr.ipv6.dnshost1))
-			asserterr("protocol not available",
+			asserterr(standard == "win32" and "invalid argument" or "protocol not available",
 				datagram:setoption("mcastleave", ipaddr.ipv6.multicast))
 			asserterr("invalid argument",
 				datagram:setoption("mcastleave", addr.multicast, ipaddr.ipv6.localhost))
