@@ -43,6 +43,7 @@ do case "list contents"
 			doc = "directory",
 			LICENSE = "file",
 			lua = "directory",
+			Makefile = "file",
 			["README.md"] = "file",
 			src = "directory",
 			test = "directory",
