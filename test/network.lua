@@ -48,7 +48,6 @@ local function testsockaddr(create, domain, ...)
 		local badaddr = ipaddr[otherdomain[domain]].free
 		asserterr("wrong domain", pcall(sock.bind, sock, badaddr))
 		assert(sock:bind(ipaddr[domain].free) == true)
-		asserterr("invalid argument", sock:bind(ipaddr[domain].bindable))
 
 		local addr = sock:getaddress()
 		assert(addr == ipaddr[domain].free)
@@ -139,11 +138,12 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 		assert(datagram:setoption("mcastiface", ipaddr[domain].localhost) == true)
 		asserterr("invalid argument", datagram:setoption("mcastiface", "localhost"))
 
-		if domain == "ipv4" then
-			asserterr("protocol not available",
-				datagram:setoption("mcastiface", ipaddr.ipv6.localhost))
-		else
-			assert(datagram:setoption("mcastiface", ipaddr.ipv4.localhost) == true)
+		if domain == "ipv6" then
+			if standard == "win32" then
+				asserterr("invalid argument", datagram:setoption("mcastiface", ipaddr.ipv4.localhost))
+			else
+				assert(datagram:setoption("mcastiface", ipaddr.ipv4.localhost) == true)
+			end
 		end
 
 		assert(datagram:setoption("mcastiface", nil) == true)
@@ -181,13 +181,13 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			datagram:setoption("mcastjoin", addr.multicast, addr.localhost, "localhost"))
 
 		if domain == "ipv4" then
-			asserterr("protocol not available",
+			asserterr(standard == "win32" and "invalid argument" or "protocol not available",
 				datagram:setoption("mcastjoin", ipaddr.ipv6.multicast))
 			asserterr("invalid argument",
 				datagram:setoption("mcastjoin", addr.multicast, ipaddr.ipv6.localhost))
 			asserterr("invalid argument",
 				datagram:setoption("mcastjoin", addr.multicast, addr.localhost, ipaddr.ipv6.dnshost1))
-			asserterr("protocol not available",
+			asserterr(standard == "win32" and "invalid argument" or "protocol not available",
 				datagram:setoption("mcastleave", ipaddr.ipv6.multicast))
 			asserterr("invalid argument",
 				datagram:setoption("mcastleave", addr.multicast, ipaddr.ipv6.localhost))
@@ -195,12 +195,21 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 				datagram:setoption("mcastleave", addr.multicast, addr.localhost, ipaddr.ipv6.dnshost1))
 		else
 			local addr = ipaddr.ipv4
-			assert(datagram:setoption("mcastjoin", addr.multicast, addr.localhost, addr.dnshost1) == true)
-			assert(datagram:setoption("mcastleave", addr.multicast, addr.localhost, addr.dnshost1) == true)
-			assert(datagram:setoption("mcastjoin", addr.multicast, addr.localhost) == true)
-			assert(datagram:setoption("mcastleave", addr.multicast, addr.localhost) == true)
-			assert(datagram:setoption("mcastjoin", addr.multicast) == true)
-			assert(datagram:setoption("mcastleave", addr.multicast) == true)
+			if standard == "win32" then
+				asserterr("invalid argument", datagram:setoption("mcastjoin", addr.multicast, addr.localhost, addr.dnshost1))
+				asserterr("invalid argument", datagram:setoption("mcastleave", addr.multicast, addr.localhost, addr.dnshost1))
+				asserterr("invalid argument", datagram:setoption("mcastjoin", addr.multicast, addr.localhost))
+				asserterr("invalid argument", datagram:setoption("mcastleave", addr.multicast, addr.localhost))
+				asserterr("invalid argument", datagram:setoption("mcastjoin", addr.multicast))
+				asserterr("invalid argument", datagram:setoption("mcastleave", addr.multicast))
+			else
+				assert(datagram:setoption("mcastjoin", addr.multicast, addr.localhost, addr.dnshost1) == true)
+				assert(datagram:setoption("mcastleave", addr.multicast, addr.localhost, addr.dnshost1) == true)
+				assert(datagram:setoption("mcastjoin", addr.multicast, addr.localhost) == true)
+				assert(datagram:setoption("mcastleave", addr.multicast, addr.localhost) == true)
+				assert(datagram:setoption("mcastjoin", addr.multicast) == true)
+				assert(datagram:setoption("mcastleave", addr.multicast) == true)
+			end
 		end
 
 		done()
@@ -530,6 +539,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 		pspawn(function ()
 			garbage.coro = coroutine.running()
 			local unconnected = assert(create())
+			assert(unconnected:bind(ipaddr[domain].bindable))
 			stage = 1
 			assert(unconnected:read(memory.create(10)) == garbage)
 			stage = 2
@@ -884,13 +894,15 @@ end
 do case "used after library collection"
 	dostring(utilschunk..[===[
 		local system = require "coutil.system"
-		local addr = system.address("ipv4", "127.0.0.1:65432")
+		local addr = system.address("ipv4", "8.8.8.8:80")
 		local path = os.tmpname()
 		local cases = {}
 		table.insert(cases, { socket = system.socket("datagram", addr.type), op = "write", "xxx", nil, nil, addr })
 		table.insert(cases, { socket = system.socket("stream", addr.type), op = "connect", addr })
-		table.insert(cases, { socket = system.socket("stream", "local"), op = "connect", path })
-		table.insert(cases, { socket = system.socket("stream", "share"), op = "connect", path })
+		if standard ~= "win32" then
+			table.insert(cases, { socket = system.socket("stream", "local"), op = "connect", path })
+			table.insert(cases, { socket = system.socket("stream", "share"), op = "connect", path })
+		end
 
 		garbage.system = system
 		system = nil

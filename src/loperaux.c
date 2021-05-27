@@ -579,19 +579,25 @@ LCUI_FUNC int lcuT_resetudhdlk (lua_State *L,
 	lcu_Scheduler *sched = lcu_tosched(handle->loop);
 	luaL_argcheck(L, handle->data == NULL, 1, "already in use");
 	checkyieldable(L);
+	udhdl->step = step;
 	if (udhdl->stop == NULL) {
 		int err;
 		lua_pushvalue(L, 1);
-		savevalue(L, (void *)handle);
+		savevalue(L, (void *)handle);  /* may raise memory error */
+		handle->data = (void *)L;  /* this is eventually done if 'start' returns no error, */
+		                           /* but libuv might call 'uv_alloc_cb' inside 'uv_*_start', */
+		                           /* therefore we must set everything up prematurely. */
+		                           /* Ref.: https://groups.google.com/g/libuv/c/bTwH1X_F4p4 */
 		err = start(handle);
 		if (err < 0) {
+			udhdl->step = NULL; 
+			handle->data = NULL;  /* rollback the premature setup for callbacks (see above) */
 			freevalue(L, (void *)handle);
 			return lcuL_pusherrres(L, err);
 		}
 		udhdl->stop = stop;
 		sched->nactive++;
 	}
-	udhdl->step = step;
 	return scheduleudhdlk (L, handle);
 }
 

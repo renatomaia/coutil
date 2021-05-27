@@ -48,7 +48,7 @@ do case "nanosecs"
 
 	assert(system.run() == false)
 	assert(elapsed >= 1e6, elapsed)
-	assert(elapsed < 2e6, elapsed)
+	assert(elapsed < 1e9, elapsed)
 
 	done()
 end
