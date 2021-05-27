@@ -6,6 +6,11 @@ local pipenames = {
 	bindable = "./localaddress.usock",
 	denied = "/dev/null",
 }
+if standard == "win32" then
+	pipenames.free = [[\\?\pipe\freeaddress.pipe]]
+	pipenames.bindable = [[\\?\pipe\localaddress.pipe]]
+	pipenames.denied = nil
+end
 
 local function testgetdomain(create, domain, ...)
 	case "getdomain"
@@ -25,7 +30,7 @@ local function testgetaddr(create)
 	asserterr("invalid argument", sock:bind(pipenames.bindable))
 
 	local addr = sock:getaddress()
-	assert(addr == pipenames.free)
+	assert(addr == pipenames.free, tostring(addr))
 	local addr = sock:getaddress("self")
 	assert(addr == pipenames.free)
 	asserterr("socket is not connected", sock:getaddress("peer"))
@@ -78,12 +83,16 @@ testgetdomain(create, "share", "stream")
 testgetaddr(create)
 teststream(create, pipenames)
 
-do case "tranfer socket"
+if standard == "posix" then case "tranfer socket"
 	local serveraddr = os.tmpname()
 	local parentaddr = os.tmpname()
 	os.remove(parentaddr)
 	os.remove(serveraddr)
-
+	if standard == "win32" then
+		serveraddr = [[\\?\pipe\]]..serveraddr:match("[^\\/]+$")
+		parentaddr = [[\\?\pipe\]]..parentaddr:match("[^\\/]+$")
+	end
+	
 	local done1
 	spawn(function ()
 		local parent<close> = assert(system.socket("passive", "share"))
@@ -130,13 +139,13 @@ do case "tranfer socket"
 			assert(value == 0)
 			done3 = true
 		end)
-		assert(childspec.stdin:write(utilschunk..[[
+		assert(childspec.stdin:write(string.format([[%s
 			local memory = require "memory"
 			local system = require "coutil.system"
 			local done3
 			spawn(function ()
 				local parent<close> = assert(system.socket("stream", "share"))
-				assert(parent:connect("]]..parentaddr..[["))
+				assert(parent:connect(%q))
 
 				local buffer = memory.create(#("parent"))
 				local bytes, client<close> = assert(parent:read(buffer))
@@ -149,7 +158,7 @@ do case "tranfer socket"
 			assert(done3 == nil)
 			system.run()
 			assert(done3 == true)
-		]]))
+		]], utilschunk, parentaddr)))
 		assert(childspec.stdin:shutdown())
 	end)
 	assert(done3 == nil)

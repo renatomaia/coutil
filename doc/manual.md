@@ -69,7 +69,7 @@ Therefore function [`require`](http://www.lua.org/manual/5.4/manual.html#pdf-req
 In particular, [basic functions](http://www.lua.org/manual/5.4/manual.html#6.1) can be loaded using `require "_G"`.
 
 Just bare in mind that requiring the preloaded modules for the standard libraries does not set their corresponding global tables.
-To mimic the set up of the [standard standalone interpreter](http://www.lua.org/manual/5.4/manual.html#7) use a code like below:
+To mimic the set up of the [standard standalone interpreter](http://www.lua.org/manual/5.4/manual.html#7) do something like:
 
 ```lua
 for _, module in ipairs{
