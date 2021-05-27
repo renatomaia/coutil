@@ -9,7 +9,7 @@ LUA_INCDIR= $(LUA_DIR)/include
 LUAMEM_DIR= $(LUA_DIR)
 LUAMEM_INCDIR= $(LUAMEM_DIR)/include
 LUAMEM_LIBDIR= $(LUAMEM_DIR)/lib
-LUAMEM_LIB= luamemlib
+LUAMEM_LIB= lmemlib
 
 LIBUV_DIR= $(LUA_DIR)
 LIBUV_INCDIR= $(LIBUV_DIR)/include
@@ -85,6 +85,9 @@ echo:
 	@echo "RM= $(RM)"
 	@echo "UNAME= $(UNAME)"
 
+fromrockspec:
+	@cd src && $(MAKE) $(PLAT)
+
 # Convenience targets for popular platforms
 ALL= all
 
@@ -99,16 +102,17 @@ guess:
 generic: $(ALL)
 
 Linux linux:
-	$(MAKE) $(ALL) LD="gcc" SYSCFLAGS="-fPIC" SYSLDFLAGS="-shared"
+	$(MAKE) $(ALL) SYSCFLAGS="-DLUA_USE_LINUX -fPIC" \
+	               SYSLDFLAGS="-shared"
 
 Darwin macos macosx:
-	$(MAKE) $(ALL) SYSCFLAGS="-fno-common" \
+	$(MAKE) $(ALL) SYSCFLAGS="-DLUA_USE_MACOSX -fno-common" \
 	               SYSLDFLAGS="-bundle -undefined dynamic_lookup" \
-	               CC='export MACOSX_DEPLOYMENT_TARGET="10.3"; gcc' \
-	               LD='export MACOSX_DEPLOYMENT_TARGET="10.3"; gcc'
+	               CC='export MACOSX_DEPLOYMENT_TARGET="10.10"; gcc' \
+	               LD='export MACOSX_DEPLOYMENT_TARGET="10.10"; gcc'
 
 SunOS solaris:
 	$(MAKE) $(ALL) SYSCFLAGS="-fpic" SYSLDFLAGS="-O -shared"
 
 # list targets that do not create files (but not all makes understand .PHONY)
-.PHONY: all $(PLATS) default o a so clean depend echo none
+.PHONY: all $(PLATS) default o a so clean depend echo fromrockspec
