@@ -27,6 +27,7 @@ Documentation
 -------------
 
 - [License](LICENSE)
+- [Install](doc/install.md)
 - [Manual](doc/manual.md)
 - [Source](doc/devnotes.md)
 
