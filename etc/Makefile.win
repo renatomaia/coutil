@@ -8,7 +8,7 @@ LUA_LIB= lua.lib
 LUAMEM_DIR= $(LUA_DIR)
 LUAMEM_INCDIR= $(LUAMEM_DIR)\include
 LUAMEM_LIBDIR= $(LUAMEM_DIR)\lib
-LUAMEM_LIB= luamem.lib
+LUAMEM_LIB= lmemlib.lib
 
 LIBUV_DIR= $(LUA_DIR)
 LIBUV_INCDIR= $(LIBUV_DIR)\include
