@@ -1,4 +1,3 @@
-local system = require "coutil.system"
 dofile "utils.lua"
 
 local test
@@ -22,7 +21,6 @@ function done()
 	collectgarbage("collect")
 	assert(next(garbage) == nil)
 	print(" OK")
-	assert(system.run() == false)
 end
 
 dofile "info.lua"

@@ -34,14 +34,14 @@ do
 			command = info
 			--]===]
 		end
-		writeto(scriptfile, string.format([[
-			local function main(...) %s end
+		writeto(scriptfile, [[
+			local function main(...) ]], script, [[ end
 			local exitval = main(...)
-			local file = assert(io.open(%q, "w"))
+			local file = assert(io.open("]], successfile, [[", "w"))
 			assert(file:write("SUCCESS!"))
 			assert(file:close())
 			os.exit(exitval, true)
-		]], script, successfile))
+		]])
 		local ended, exitval = system.execute(command, scriptfile, ...)
 		assert(ended == "exit")
 		assert(type(command) ~= "table" or type(command.pid) == "number")
@@ -98,22 +98,16 @@ do case "inexistent variable"
 end
 
 do case "invalid variable names"
-	asserterr("invalid argument", system.setenv("COUTIL_TEST=abc", "def"))
-	asserterr("no such file or directory", system.getenv("COUTIL_TEST=abc"))
+	asserterr("cannot contain '='", pcall(system.setenv, "COUTIL_TEST=abc", "def"))
+	asserterr("cannot contain '='", pcall(system.getenv, "COUTIL_TEST=abc"))
 	asserterr("no such file or directory", system.getenv("COUTIL_TEST"))
 	assert(os.getenv("COUTIL_TEST=abc") == nil)
 	assert(os.getenv("COUTIL_TEST") == nil)
 
 	assert(system.setenv("COUTIL_TEST", "abc=def"))
 	assert(system.getenv("COUTIL_TEST") == "abc=def")
-	if standard == "win32" then
-		assert(os.getenv("COUTIL_TEST") == nil)
-		asserterr("no such", system.getenv("COUTIL_TEST=abc"))
-	else
-		assert(os.getenv("COUTIL_TEST") == "abc=def")
-		assert(os.getenv("COUTIL_TEST=abc") == "def")
-		assert(system.getenv("COUTIL_TEST=abc") == "def")
-	end
+	assert(os.getenv("COUTIL_TEST") == "abc=def")
+	asserterr("cannot contain '='", pcall(system.getenv, "COUTIL_TEST=abc"))
 
 	done()
 end
@@ -122,7 +116,7 @@ do case "large values"
 	local value = string.rep("X", 1024)
 	assert(system.setenv("COUTIL_TEST_HUGE", value))
 	assert(system.getenv("COUTIL_TEST_HUGE") == value)
-	assert(os.getenv("COUTIL_TEST_HUGE") == (standard == "posix" and value or nil))
+	assert(os.getenv("COUTIL_TEST_HUGE") == value)
 
 	done()
 end
@@ -134,13 +128,7 @@ do case "listing all variables"
 		assert(type(name) == "string")
 		assert(type(value) == "string")
 		assert(system.getenv(name) == value)
-
-		if standard == "posix" then
-			assert(os.getenv(name) == value)
-		else
-			local actual = os.getenv(name)
-			assert(actual == value or actual == nil)
-		end
+		assert(os.getenv(name) == value)
 	end
 
 	local tab = { 1,2,3, extra = "unchanged", COUTIL_TEST = "oops!" }
@@ -403,7 +391,6 @@ do case "relative run path"
 	done()
 end
 
-if standard == "posix" then
 do case "absolute run path"
 	spawn(function ()
 		runscript{
@@ -416,7 +403,6 @@ do case "absolute run path"
 	assert(system.run() == false)
 
 	done()
-end
 end
 
 do case "invalid run path"
@@ -513,7 +499,6 @@ do case "redirect streams to files"
 	done()
 end
 
-if standard == "posix" then
 do case "redirect streams to a socket"
 	local memory = require "memory"
 
@@ -565,7 +550,7 @@ do case "redirect streams to a socket"
 	done()
 end
 
-do case "redirect streams to created pipe"
+do case "redirect streams to created socket"
 	local memory = require "memory"
 
 	local spec = {
@@ -598,7 +583,6 @@ do case "redirect streams to created pipe"
 
 	done()
 end
-end
 
 do case "redirect streams to null"
 	local memory = require "memory"
@@ -621,7 +605,6 @@ do case "redirect streams to null"
 	done()
 end
 
-if standard == "posix" then
 do case "signal termination"
 	for i, signal in ipairs{
 		"TERMINATE",
@@ -654,7 +637,6 @@ do case "signal termination"
 	assert(system.run() == false)
 
 	done()
-end
 end
 
 do case "yield values"
@@ -708,11 +690,9 @@ do case "reschedule"
 	end)
 	assert(stage == 0)
 
-	if standard == "posix" then
-		gc()
-		assert(system.run("step") == true)
-		assert(stage == 1)
-	end
+	gc()
+	assert(system.run("step") == true)
+	assert(stage == 1)
 
 	gc()
 	assert(system.run() == false)
@@ -853,20 +833,11 @@ do case "own priority"
 	assert(type(name) == "string")
 	assert(type(value) == "number")
 
-	if standard == "win32" then
-		assert(system.setpriority(pid, "below"))
+	assert(system.setpriority(pid, value+1))
 
-		local name, newval = system.getpriority(pid)
-		assert(name == "below")
-		assert(newval == 10)
-	else
-		assert(system.setpriority(pid, value+1))
-
-		local name, newval = system.getpriority(pid)
-		assert(name == "other")
-		assert(newval == value+1)
-	end
-
+	local name, newval = system.getpriority(pid)
+	assert(name == "other")
+	assert(newval == value+1)
 
 	done()
 end

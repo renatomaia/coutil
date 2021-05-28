@@ -1,59 +1,8 @@
 local system = require "coutil.system"
 
-local function buildopts(typeof)
-	local options = {}
-	for option, luatype in pairs(typeof) do
-		table.insert(options, option)
-	end
-	return table.concat(options), typeof
-end
-
 newtest("info")
 
-local options, typeof = buildopts{
-	["#"] = "number",
-	["$"] = "string",
-	["^"] = "number",
-	["="] = "number",
-	["<"] = "number",
-	[">"] = "number",
-	["1"] = "number",
-	["b"] = "number",
-	["c"] = "number",
-	["d"] = "number",
-	["e"] = "string",
-	["f"] = "number",
-	["g"] = "number",
-	["h"] = "string",
-	["H"] = "string",
-	["i"] = "number",
-	["k"] = "string",
-	["l"] = "number",
-	["L"] = "number",
-	["m"] = "number",
-	["M"] = "number",
-	["n"] = "string",
-	["o"] = "number",
-	["p"] = "number",
-	["P"] = "number",
-	["r"] = "number",
-	["R"] = "number",
-	["s"] = "number",
-	["S"] = "number",
-	["t"] = "number",
-	["T"] = "string",
-	["u"] = "number",
-	["U"] = "string",
-	["v"] = "string",
-	["V"] = "string",
-	["w"] = "number",
-	["x"] = "number",
-	["X"] = "number",
-}
-
-if standard == "win32" then
-	typeof["$"] = "nil"
-end
+local options = "#$^=<>1bcdefghHiklLmMnopPrRsStTuUvVwxX"
 
 do case "errors"
 	for i = 1, 255 do
@@ -73,7 +22,7 @@ end
 do case "single value"
 	for c in string.gmatch(options , ".") do
 		local ltype = type(system.procinfo(c))
-		assert(ltype == typeof[c])
+		assert(ltype == "number" or ltype == "string")
 
 		local v1, v2, v3 = system.procinfo(c..c..c)
 
@@ -90,7 +39,7 @@ do case "all values"
 	assert(#packed == #options)
 	for i = 1, #options do
 		local ltype = type(packed[i])
-		assert(ltype == typeof[options:sub(i, i)])
+		assert(ltype == "number" or ltype == "string")
 	end
 
 	done()
