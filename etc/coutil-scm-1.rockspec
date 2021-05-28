@@ -39,6 +39,8 @@ external_dependencies = {
 }
 build = {
 	type = "make",
+	makefile = "src/Makefile",
+	build_target = "fromrockspec",
 	build_variables = {
 		SYSCFLAGS = "$(CFLAGS)",
 		SYSLIBFLAG = "$(LIBFLAG)",

@@ -85,6 +85,9 @@ echo:
 	@echo "RM= $(RM)"
 	@echo "UNAME= $(UNAME)"
 
+fromrockspec:
+	@cd src && $(MAKE) $(PLAT)
+
 # Convenience targets for popular platforms
 ALL= all
 
@@ -112,4 +115,4 @@ SunOS solaris:
 	$(MAKE) $(ALL) SYSCFLAGS="-fpic" SYSLDFLAGS="-O -shared"
 
 # list targets that do not create files (but not all makes understand .PHONY)
-.PHONY: all $(PLATS) default o a so clean depend echo none
+.PHONY: all $(PLATS) default o a so clean depend echo fromrockspec
