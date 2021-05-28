@@ -132,11 +132,12 @@ static int writer (lua_State *L, const void *b, size_t size, void *B) {
 };
 
 static void copylightud (lua_State *L, lua_State *NL, const void *field) {
-	lua_getfield(L, LUA_REGISTRYINDEX, field);
-	lcu_assert(lua_touserdata(L, -1) != NULL);
-	lua_pushlightuserdata(NL, lua_touserdata(L, -1));
-	lua_setfield(NL, LUA_REGISTRYINDEX, field);
-	lua_pop(L, 1);
+	if (lua_getfield(L, LUA_REGISTRYINDEX, field) != LUA_TNIL) {
+		lcu_assert(lua_touserdata(L, -1) != NULL);
+		lua_pushlightuserdata(NL, lua_touserdata(L, -1));
+		lua_setfield(NL, LUA_REGISTRYINDEX, field);
+		lua_pop(L, 1);
+	}
 }
 
 static void warnf (void *ud, const char *message, int tocont);
