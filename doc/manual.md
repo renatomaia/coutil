@@ -25,6 +25,7 @@ Summary
 	- [System Processes](#system-processes)
 	- [Network & IPC](#network--ipc)
 	- [File System](#file-system)
+	- [Standard Streams](#standard-streams)
 	- [System Information](#system-information)
 - [Index](#index)
 
@@ -1532,6 +1533,45 @@ The value of the other options are not affected.
 Similar to `~`,
 `l` does not produce a value to be returned.
 
+Standard Streams
+----------------
+
+This section describes objects provided in `coutil.system` to access the current process standard streams.
+
+### `system.stdin|stdout|stderr`
+
+Terminal, [socket](#systemsocket-type-domain) or [file](#systemopenfile-path--mode--perm) representing the standard input (`stdin`), output (`stdout`), or error (`stderr`) stream of the current process.
+Or `nil` if the type of such stream is unsupported.
+
+### `terminal:close ()`
+
+Closes terminal `terminal`.
+
+### `terminal:read (buffer [, i [, j]])`
+
+Same as [read](#socketread-buffer--i--j--address) of stream sockets.
+
+### `terminal:write (data [, i [, j]])`
+
+Same as [write](#socketwrite-data--i--j--address) of stream sockets.
+
+### `terminal:shutdown ()`
+
+Same as [shutdown](#socketshutdown-) of stream sockets.
+
+### `terminal:setmode (mode)`
+
+Sets the terminal mode,
+according the following values of `mode`:
+
+- `"normal"`: normal terminal mode
+- `"raw"`: raw input mode (on Windows, [ENABLE_WINDOW_INPUT](https://docs.microsoft.com/en-us/windows/console/setconsolemode) is also enabled)
+- `"binary"`: binary-safe I/O mode for IPC (Unix-only)
+
+### `terminal:winsize ()`
+
+Returns the width and height of the current terminal window size (in number of characters).
+
 System Information
 ------------------
 
@@ -1755,6 +1795,13 @@ Index
 		- [`socket:setoption`](#socketsetoption-name-value-)
 		- [`socket:shutdown`](#socketshutdown-)
 		- [`socket:write`](#socketwrite-data--i--j--address)
+	- [`system.stdin|stdout|stderr`](#systemstdinstdoutstderr)
+		- [`terminal:close`](#terminalclose-)
+		- [`terminal:read`](#terminalread-buffer--i--j)
+		- [`terminal:setmode`](#terminalsetmode-mode)
+		- [`terminal:shutdown`](#terminalshutdown-)
+		- [`terminal:winsize`](#terminalwinsize-)
+		- [`terminal:write`](#terminalwrite-data--i--j)
 	- [`system.suspend`](#systemsuspend-seconds--mode)
 	- [`system.time`](#systemtime-mode)
 	- [`system.touchfile`](#systemtouchfile-path--mode-times)
