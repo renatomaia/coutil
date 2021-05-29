@@ -96,7 +96,7 @@ do case "tranfer socket"
 
 		local child<close> = assert(parent:accept())
 		local client<close> = assert(server:accept())
-		assert(child:send("parent", 1, -1, client))
+		assert(child:write("parent", 1, -1, client))
 		done1 = true
 	end)
 	assert(done1 == nil)
@@ -105,12 +105,12 @@ do case "tranfer socket"
 	spawn(function ()
 		local stream<close> = assert(system.socket("stream", "local"))
 		assert(stream:connect(serveraddr))
-		assert(stream:send("client"))
+		assert(stream:write("client"))
 
 		local buffer = memory.create(#("child"))
 		local bytes = 0
 		repeat
-			bytes = bytes+assert(stream:receive(buffer, bytes+1))
+			bytes = bytes+assert(stream:read(buffer, bytes+1))
 		until bytes == #buffer
 		assert(not memory.diff(buffer, "child"))
 		done2 = true
@@ -130,7 +130,7 @@ do case "tranfer socket"
 			assert(value == 0)
 			done3 = true
 		end)
-		assert(childspec.stdin:send(utilschunk..[[
+		assert(childspec.stdin:write(utilschunk..[[
 			local memory = require "memory"
 			local system = require "coutil.system"
 			local done3
@@ -139,11 +139,11 @@ do case "tranfer socket"
 				assert(parent:connect("]]..parentaddr..[["))
 
 				local buffer = memory.create(#("parent"))
-				local bytes, client<close> = assert(parent:receive(buffer))
+				local bytes, client<close> = assert(parent:read(buffer))
 				assert(bytes == #("parent"))
 				assert(not memory.diff(buffer, "parent"))
 
-				assert(client:send("child"))
+				assert(client:write("child"))
 				done3 = true
 			end)
 			assert(done3 == nil)
