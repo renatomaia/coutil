@@ -24,8 +24,8 @@ end
 
 local function readbytes(conn, buffer, bytes, expected)
 	while bytes < expected do
-		local received, errmsg = conn:receive(buffer, bytes+1)
-		if received == nil then
+		local received, errmsg = conn:read(buffer, bytes+1)
+		if not received then
 			return nil, errmsg
 		end
 		bytes = bytes+received
@@ -39,22 +39,22 @@ local function doconn(...)
 	local timeout = spawn(timedresume, maxtime, coroutine.running())
 	local buffer = memory.create(szlen+maxlen)
 	local res, errmsg = readbytes(conn, buffer, 0, szlen)
-	if res ~= nil then
+	if res then
 		local size = memory.unpack(buffer, szfmt)
 		if size <= maxlen then
 			res, errmsg = readbytes(conn, buffer, res, szlen+size)
-			if res ~= nil then
+			if res then
 				local ok, command = pcall(unpackcmd, buffer)
 				if ok then
 					log("executing command ",command.execfile,"\n")
 					res, errmsg = system.execute(command)
-					if res ~= nil then
+					if res then
 						res = string.format("%s(%s)", res, errmsg)
 					elseif errmsg == "timeout" then
 						log("terminating command ",command.execfile,"\n")
 						system.emitsig(command.pid, "terminate")
 					end
-				elseif string.find(command, "data too short", 1, "noregex") ~= nil then
+				elseif string.find(command, "data too short", 1, "noregex") then
 					errmsg = "malformed message"
 				else
 					error(command)
@@ -68,7 +68,7 @@ local function doconn(...)
 		coroutine.resume(timeout, nil, "terminate")
 	end
 	local _, index = memory.pack(buffer, "s"..szlen, 1, res or errmsg)
-	conn:send(buffer, 1, index-1)
+	conn:write(buffer, 1, index-1)
 	conn:shutdown()
 	log("client request complete (res=",res or errmsg,")\n")
 end
@@ -88,12 +88,12 @@ spawn(function ()
 	log("started\n")
 	repeat
 		local conn, errmsg = server:accept()
-		if conn ~= nil then
+		if conn then
 			spawn(doconn, conn)
 		elseif errmsg ~= "terminate" then
 			error(errmsg)
 		end
-	until conn == nil
+	until not conn
 end)
 
 system.run()

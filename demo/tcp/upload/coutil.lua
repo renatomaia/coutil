@@ -13,7 +13,7 @@ assert(coroutine.resume(coroutine.create(function ()
 	local buffer<const> = memory.create(2*msgsize)
 	local missing = msgtotal*msgsize
 	repeat
-		missing = missing-assert(stream:receive(buffer))
+		missing = missing-assert(stream:read(buffer))
 	until missing <= 0
 end)))
 
@@ -21,7 +21,7 @@ assert(coroutine.resume(coroutine.create(function ()
 	local stream<close> = assert(system.socket("stream", address.type))
 	assert(stream:connect(address))
 	for msg = 1, msgtotal do
-		assert(stream:send(msgdata))
+		assert(stream:write(msgdata))
 	end
 end)))
 
