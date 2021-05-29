@@ -13,15 +13,15 @@ spawn(function ()
 	local address = assert(system.findaddr(host, port, "s6")):getaddress()
 	local conn<close> = assert(system.socket("stream", address.type))
 	assert(conn:connect(address))
-	assert(conn:send(buffer, 1, index-1))
+	assert(conn:write(buffer, 1, index-1))
 	local bytes = 0
 	while bytes < szlen do
-		bytes = bytes+assert(conn:receive(buffer, bytes+1))
+		bytes = bytes+assert(conn:read(buffer, bytes+1))
 	end
 	local size, index = memory.unpack(buffer, szfmt)
 	assert(size <= maxlen, "out of memory")
 	while bytes < szlen+size do
-		bytes = bytes+assert(conn:receive(buffer, bytes+1))
+		bytes = bytes+assert(conn:read(buffer, bytes+1))
 	end
 	print(">", memory.tostring(buffer, szlen+1, bytes))
 end)

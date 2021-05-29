@@ -977,7 +977,7 @@ static int udp_connect (lua_State *L) {
 
 
 
-/* sent [, errmsg] = udp:send(data [, i [, j [, address]]]) */
+/* sent [, errmsg] = udp:write(data [, i [, j [, address]]]) */
 static void uv_onsent (uv_udp_send_t *request, int err) {
 	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
@@ -998,7 +998,7 @@ static int k_setupsend (lua_State *L,
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
-static int udp_send (lua_State *L) {
+static int udp_write (lua_State *L) {
 	lcu_UdpSocket *udp = openedudp(L);
 	uv_udp_t *handle = (uv_udp_t *)lcu_ud2hdl(udp);
 	lcu_Scheduler *sched = lcu_tosched(handle->loop);
@@ -1006,7 +1006,7 @@ static int udp_send (lua_State *L) {
 }
 
 
-/* bytes [, errmsg] = udp:receive(buffer [, i [, j [, address]]]) */
+/* bytes [, errmsg] = udp:read(buffer [, i [, j [, address]]]) */
 static int k_udprecv (lua_State *L) {
 	lcu_UdpSocket *udp = (lcu_UdpSocket *)lua_touserdata(L, 1);
 	if (lua_isinteger(L, 6)) {
@@ -1069,7 +1069,7 @@ static void uv_ongetbuffer (uv_handle_t *handle,
 		lcu_assert(thread);
 		lua_pushlightuserdata(thread, buf);
 		lcuU_resumeudhdl(handle, 1);
-	} /* while 'socket:receive' is called again after error getting buffer */
+	} /* while 'socket:read' is called again after error getting buffer */
 	while (handle->data && buf->base == (char *)buf);
 }
 static int udpstoprecv (uv_handle_t *handle) {
@@ -1078,7 +1078,7 @@ static int udpstoprecv (uv_handle_t *handle) {
 static int udpstartrecv (uv_handle_t *handle) {
 	return uv_udp_recv_start((uv_udp_t *)handle, uv_ongetbuffer, uv_onudprecv);
 }
-static int udp_receive (lua_State *L) {
+static int udp_read (lua_State *L) {
 	lcu_UdataHandle *object = lcu_openedudhdl(L, 1, LCU_UDPSOCKETCLS);
 	lua_settop(L, 5);
 	return lcuT_resetudhdlk(L, object, udpstartrecv, udpstoprecv, k_udpbuffer);
@@ -1112,7 +1112,7 @@ static int active_shutdown (lua_State *L) {
 }
 
 
-/* sent [, errmsg] = stream:send(data [, i [, j]]) */
+/* sent [, errmsg] = stream:write(data [, i [, j]]) */
 static void uv_onwritten (uv_write_t *request, int err) {
 	completereqop(request->handle->loop, (uv_req_t *)request, err);
 }
@@ -1131,7 +1131,7 @@ static int k_setupwrite (lua_State *L,
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
-static int active_send (lua_State *L) {
+static int active_write (lua_State *L) {
 	lcu_UdataHandle *object = lcu_openedudhdl(L, 1, toclass(L));
 	uv_handle_t *handle = lcu_ud2hdl(object);
 	lcu_Scheduler *sched = lcu_tosched(handle->loop);
@@ -1139,7 +1139,7 @@ static int active_send (lua_State *L) {
 }
 
 
-/* sent [, errmsg] = pipe:send(data [, i [, j [, object]]]) */
+/* sent [, errmsg] = pipe:write(data [, i [, j [, object]]]) */
 static int k_setupwriteobj (lua_State *L,
                             uv_req_t *request,
                             uv_loop_t *loop,
@@ -1180,14 +1180,14 @@ static int k_setupwriteobj (lua_State *L,
 	if (err < 0) return lcuL_pusherrres(L, err);
 	return -1;  /* yield on success */
 }
-static int pipe_send (lua_State *L) {
+static int pipe_write (lua_State *L) {
 	lcu_UdataHandle *object = lcu_openedudhdl(L, 1, LCU_PIPESHARECLS);
 	uv_handle_t *handle = lcu_ud2hdl(object);
 	lcu_Scheduler *sched = lcu_tosched(handle->loop);
 	return lcuT_resetcoreqk(L, sched, k_setupwriteobj, NULL, NULL);
 }
 
-/* bytes [, errmsg] = stream:receive(buffer [, i [, j]]) */
+/* bytes [, errmsg] = stream:read(buffer [, i [, j]]) */
 static int k_recvdata (lua_State *L) {
 	return lua_gettop(L)-5;
 }
@@ -1237,7 +1237,7 @@ static int startrecvdata (uv_handle_t *handle) {
 	lcu_log(handle, handle->data, "uv_read_start");
 	return uv_read_start((uv_stream_t *)handle, uv_ongetbuffer, uv_onrecvdata);
 }
-static int active_receive (lua_State *L) {
+static int active_read (lua_State *L) {
 	lcu_UdataHandle *object = lcu_openedudhdl(L, 1, toclass(L));
 	lua_settop(L, 4);
 	lua_pushlightuserdata(L, k_recvdata);
@@ -1245,7 +1245,7 @@ static int active_receive (lua_State *L) {
 }
 
 
-/* bytes [, errmsg] = pipe:receive(buffer [, i [, j]]) */
+/* bytes [, errmsg] = pipe:read(buffer [, i [, j]]) */
 static int pushstreamread (lua_State *L, uv_pipe_t *pipe) {
 	uv_handle_type type = uv_pipe_pending_type(pipe);
 	lcu_UdataHandle *object;
@@ -1282,7 +1282,7 @@ static int k_recvpipedata (lua_State *L) {
 	}
 	return lua_gettop(L)-5;
 }
-static int pipe_receive (lua_State *L) {
+static int pipe_read (lua_State *L) {
 	lcu_UdataHandle *object = lcu_openedudhdl(L, 1, LCU_PIPESHARECLS);
 	uv_handle_t *handle = lcu_ud2hdl(object);
 	uv_pipe_t *pipe = (uv_pipe_t *)handle;
@@ -1729,15 +1729,15 @@ static const luaL_Reg udpsocket[] = {
 	{"bind", udp_bind},
 	{"setoption", udp_setoption},
 	{"connect", udp_connect},
-	{"send", udp_send},
-	{"receive", udp_receive},
+	{"write", udp_write},
+	{"read", udp_read},
 	{NULL, NULL}
 };
 
 static const luaL_Reg active[] = {
 	{"shutdown", active_shutdown},
-	{"send", active_send},
-	{"receive", active_receive},
+	{"write", active_write},
+	{"read", active_read},
 	{NULL, NULL}
 };
 
@@ -1782,8 +1782,8 @@ static const luaL_Reg pipepassive[] = {
 };
 
 static const luaL_Reg pipeipc[] = {
-	{"send", pipe_send},
-	{"receive", pipe_receive},
+	{"write", pipe_write},
+	{"read", pipe_read},
 	{NULL, NULL}
 };
 
