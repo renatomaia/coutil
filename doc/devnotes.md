@@ -20,8 +20,7 @@ UV asynchronous operations are classified into the following categories:
 
 ### Handle Operations (`hdl`)
 
-- Requires a UV handle ([`uv_handle_t`](http://docs.libuv.org/en/v1.x/handle.html)),
-but not associated with a system object (_e.g._ file descriptor).
+- Requires a UV handle ([`uv_handle_t`](http://docs.libuv.org/en/v1.x/handle.html)).
 - Requires an initialized `uv_loop_t` structure.
 - Started using a UV function that registers a callback to be continuously called until the operation is stopped using another UV function.
 - Terminated by function `uv_close`,
