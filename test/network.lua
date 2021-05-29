@@ -222,13 +222,13 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			unconnected = assert(create())
 			assert(unconnected:bind(ipaddr[domain].bindable))
 			stage1 = 2
-			asserterr("memory expected", pcall(unconnected.receive, unconnected))
+			asserterr("memory expected", pcall(unconnected.read, unconnected))
 			asserterr("number has no integer representation",
-				pcall(unconnected.receive, unconnected, buffer, 1.1))
+				pcall(unconnected.read, unconnected, buffer, 1.1))
 			asserterr("number has no integer representation",
-				pcall(unconnected.receive, unconnected, buffer, nil, 2.2))
+				pcall(unconnected.read, unconnected, buffer, nil, 2.2))
 			stage1 = 3
-			assert(unconnected:receive(buffer) == 64)
+			assert(unconnected:read(buffer) == 64)
 			stage1 = 4
 			assert(connected:close() == true)
 			stage1 = 5
@@ -241,16 +241,16 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			connected = assert(create())
 			assert(connected:connect(ipaddr[domain].bindable))
 			stage2 = 2
-			asserterr("already in use", pcall(unconnected.receive, unconnected, buffer))
+			asserterr("already in use", pcall(unconnected.read, unconnected, buffer))
 			stage2 = 3
-			assert(connected:send(string.rep("x", 64)) == true)
+			assert(connected:write(string.rep("x", 64)) == true)
 			stage2 = 4
-			asserterr("closed", connected:receive(buffer))
+			asserterr("closed", connected:read(buffer))
 			stage2 = 5
 		end)
 		assert(stage2 == 3)
 
-		asserterr("unable to yield", pcall(connected.receive, connected, buffer))
+		asserterr("unable to yield", pcall(connected.read, connected, buffer))
 
 		gc()
 		assert(system.run() == false)
@@ -276,15 +276,15 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			local unconnected = assert(create())
 			assert(unconnected:bind(ipaddr[domain].bindable))
 			local buffer = memory.create(128)
-			local bytes, trunced = unconnected:receive(buffer)
+			local bytes, trunced = unconnected:read(buffer)
 			assert(bytes == 64)
 			assert(trunced == false)
 			assertfilled(buffer, 64)
-			local bytes, trunced = unconnected:receive(buffer, 65, 96)
+			local bytes, trunced = unconnected:read(buffer, 65, 96)
 			assert(bytes == 32)
 			assert(trunced == true)
 			assertfilled(buffer, 96)
-			local bytes, trunced = unconnected:receive(buffer, 97)
+			local bytes, trunced = unconnected:read(buffer, 97)
 			assert(bytes == 0)
 			assert(trunced == false)
 			assertfilled(buffer, 96)
@@ -296,9 +296,9 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 		spawn(function ()
 			local connected = assert(create())
 			assert(connected:connect(ipaddr[domain].bindable))
-			assert(connected:send(data, 1, 64))
-			assert(connected:send(data, 65, 128))
-			assert(connected:send(data, 129, 128))  -- send empty datagram
+			assert(connected:write(data, 1, 64))
+			assert(connected:write(data, 65, 128))
+			assert(connected:write(data, 129, 128))  -- send empty datagram
 			done2 = true
 		end)
 		assert(done2 == nil)
@@ -319,7 +319,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 		spawn(function ()
 			unconnected = assert(create())
 			assert(unconnected:bind(ipaddr[domain].bindable))
-			assert(unconnected:receive(buffer) == size)
+			assert(unconnected:read(buffer) == size)
 			assert(not memory.diff(buffer, string.rep("a", size)))
 			coroutine.resume(thread)
 		end)
@@ -328,9 +328,9 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 		spawn(function ()
 			thread = coroutine.running()
 			coroutine.yield()
-			asserterr("already in use", pcall(unconnected.receive, unconnected))
+			asserterr("already in use", pcall(unconnected.read, unconnected))
 			coroutine.yield()
-			assert(unconnected:receive(buffer) == size)
+			assert(unconnected:read(buffer) == size)
 			assert(not memory.diff(buffer, string.rep("b", size)))
 			assert(unconnected:close())
 			complete = true
@@ -340,8 +340,8 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			local connected = assert(create())
 			assert(connected:connect(ipaddr[domain].bindable))
 			coroutine.resume(thread)
-			assert(connected:send(string.rep("a", size)))
-			assert(connected:send(string.rep("b", size)))
+			assert(connected:write(string.rep("a", size)))
+			assert(connected:write(string.rep("b", size)))
 			assert(connected:close())
 		end)
 
@@ -363,19 +363,19 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 				assert(unconnected:bind(ipaddr[domain][addrname]))
 				spawn(function ()
 					local buffer = memory.create(64)
-					assert(unconnected:receive(buffer) == 32)
+					assert(unconnected:read(buffer) == 32)
 					memory.fill(buffer, buffer, 33, 64)
-					assert(unconnected:send(buffer, nil, nil, connected:getaddress()))
+					assert(unconnected:write(buffer, nil, nil, connected:getaddress()))
 				end)
 			end)
 
 			spawn(function ()
 				connected = assert(create())
 				assert(connected:connect(ipaddr[domain][addrname]))
-				assert(connected:send(string.rep("x", 32)))
+				assert(connected:write(string.rep("x", 32)))
 				local buffer = memory.create(64)
 				local addr = system.address(domain)
-				assert(connected:receive(buffer, nil, nil, addr) == 64)
+				assert(connected:read(buffer, nil, nil, addr) == 64)
 				assert(not memory.diff(buffer, string.rep("x", 64)))
 				assert(tostring(addr) == tostring(unconnected:getaddress()))
 				assert(connected:close())
@@ -400,7 +400,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			garbage.coro = coroutine.running()
 			local unconnected = assert(create())
 			assert(unconnected:bind(ipaddr[domain].bindable))
-			local res, a,b,c = unconnected:receive(memory.create(10))
+			local res, a,b,c = unconnected:read(memory.create(10))
 			assert(res == garbage)
 			assert(a == true)
 			assert(b == nil)
@@ -431,12 +431,12 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			local unconnected = assert(create())
 			assert(unconnected:bind(ipaddr[domain].bindable))
 			local buffer = memory.create("9876543210")
-			local bytes, extra = unconnected:receive(buffer)
+			local bytes, extra = unconnected:read(buffer)
 			assert(bytes == nil)
 			assert(extra == nil)
 			assert(not memory.diff(buffer, "9876543210"))
 			stage = 2
-			assert(unconnected:receive(buffer) == 10)
+			assert(unconnected:read(buffer) == 10)
 			assert(not memory.diff(buffer, "0123456789"))
 			assert(unconnected:close())
 			stage = 3
@@ -448,7 +448,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			coroutine.resume(garbage.coro)
 			assert(stage == 2)
 			local connected = assert(create())
-			assert(connected:send("0123456789", nil, nil, ipaddr[domain].bindable))
+			assert(connected:write("0123456789", nil, nil, ipaddr[domain].bindable))
 		end)
 
 		gc()
@@ -467,11 +467,11 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			assert(unconnected:bind(ipaddr[domain].bindable))
 			local buffer = memory.create("9876543210")
 			stage = 1
-			local bytes, extra = unconnected:receive(buffer)
+			local bytes, extra = unconnected:read(buffer)
 			assert(bytes == nil)
 			assert(extra == nil)
 			stage = 2
-			local a,b,c = unconnected:receive(buffer)
+			local a,b,c = unconnected:read(buffer)
 			assert(a == .1)
 			assert(b == 2.2)
 			assert(c == 33.3)
@@ -505,7 +505,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			assert(unconnected:bind(ipaddr[domain].bindable))
 			local buffer = memory.create("9876543210")
 			stage = 1
-			assert(unconnected:receive(buffer) == 10)
+			assert(unconnected:read(buffer) == 10)
 			assert(not memory.diff(buffer, "0123456789"))
 			stage = 2
 			error("oops!")
@@ -514,7 +514,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 
 		spawn(function ()
 			local unconnected = assert(create())
-			assert(unconnected:send("0123456789", nil, nil, ipaddr[domain].bindable))
+			assert(unconnected:write("0123456789", nil, nil, ipaddr[domain].bindable))
 		end)
 
 		gc()
@@ -531,7 +531,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			garbage.coro = coroutine.running()
 			local unconnected = assert(create())
 			stage = 1
-			assert(unconnected:receive(memory.create(10)) == garbage)
+			assert(unconnected:read(memory.create(10)) == garbage)
 			stage = 2
 			error("oops!")
 		end)
@@ -560,11 +560,11 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			connected = assert(create())
 			assert(connected:connect(ipaddr[domain].bindable))
 			asserterr("memory expected",
-				pcall(connected.send, connected))
+				pcall(connected.write, connected))
 			asserterr("number has no integer representation",
-				pcall(connected.send, connected, data, 1.1))
+				pcall(connected.write, connected, data, 1.1))
 			asserterr("number has no integer representation",
-				pcall(connected.send, connected, data, nil, 2.2))
+				pcall(connected.write, connected, data, nil, 2.2))
 			complete = true
 		end)
 		assert(complete == true)
@@ -573,21 +573,21 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 		spawn(function ()
 			unconnected = assert(create())
 			asserterr("address expected",
-				pcall(unconnected.send, unconnected))
+				pcall(unconnected.write, unconnected))
 			asserterr("memory expected",
-				pcall(unconnected.send, unconnected, nil, nil, nil, addr))
+				pcall(unconnected.write, unconnected, nil, nil, nil, addr))
 			asserterr("number has no integer representation",
-				pcall(unconnected.send, unconnected, data, 1.1, nil, addr))
+				pcall(unconnected.write, unconnected, data, 1.1, nil, addr))
 			asserterr("number has no integer representation",
-				pcall(unconnected.send, unconnected, data, nil, 2.2, addr))
+				pcall(unconnected.write, unconnected, data, nil, 2.2, addr))
 			complete = true
 		end)
 		assert(complete == true)
 
 		asserterr("unable to yield",
-			pcall(connected.send, connected, buffer))
+			pcall(connected.write, connected, buffer))
 		asserterr("unable to yield",
-			pcall(unconnected.send, unconnected, buffer))
+			pcall(unconnected.write, unconnected, buffer))
 
 		gc()
 		assert(system.run() == false)
@@ -602,7 +602,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			local unconnected = assert(create())
 			assert(unconnected:bind(ipaddr[domain].bindable))
 			local buffer = memory.create(128)
-			assert(unconnected:receive(buffer) == 128)
+			assert(unconnected:read(buffer) == 128)
 			assert(not memory.diff(buffer, string.rep("x", 128)))
 			stage1 = 1
 		end)
@@ -613,7 +613,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			garbage.coro = coroutine.running()
 			local unconnected = assert(create())
 			stage2 = 1
-			local res, a,b,c = unconnected:send(string.rep("x", 128), nil, nil,
+			local res, a,b,c = unconnected:write(string.rep("x", 128), nil, nil,
 			                                    ipaddr[domain].bindable)
 			assert(res == garbage)
 			assert(a == true)
@@ -649,10 +649,10 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			assert(unconnected:bind(ipaddr[domain].bindable))
 			local buffer = memory.create(128)
 			stage1 = 2
-			assert(unconnected:receive(buffer) == 128)
+			assert(unconnected:read(buffer) == 128)
 			assert(not memory.diff(buffer, string.rep("x", 128)))
 			local buffer = memory.create(64)
-			assert(unconnected:receive(buffer) == 64)
+			assert(unconnected:read(buffer) == 64)
 			assert(not memory.diff(buffer, string.rep("x", 64)))
 			stage1 = 3
 		end)
@@ -665,11 +665,11 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			local connected = assert(create())
 			assert(connected:connect(ipaddr[domain].bindable))
 			stage2 = 2
-			local ok, extra = connected:send(string.rep("x", 128))
+			local ok, extra = connected:write(string.rep("x", 128))
 			assert(ok == nil)
 			assert(extra == nil)
 			stage2 = 3
-			assert(connected:send(string.rep("x", 64)) == true)
+			assert(connected:write(string.rep("x", 64)) == true)
 			stage2 = 4
 			assert(connected:close())
 			stage2 = 5
@@ -706,10 +706,10 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			assert(unconnected:bind(ipaddr[domain].bindable))
 			local buffer = memory.create(128)
 			stage1 = 2
-			assert(unconnected:receive(buffer) == 128)
+			assert(unconnected:read(buffer) == 128)
 			assert(not memory.diff(buffer, string.rep("x", 128)))
 			--local buffer = memory.create(64)
-			--assert(unconnected:receive(buffer) == 64)
+			--assert(unconnected:read(buffer) == 64)
 			--assert(not memory.diff(buffer, string.rep("x", 64)))
 			stage1 = 3
 		end)
@@ -722,11 +722,11 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			local connected = assert(create())
 			assert(connected:connect(ipaddr[domain].bindable))
 			stage2 = 2
-			local ok, extra = connected:send(string.rep("x", 128))
+			local ok, extra = connected:write(string.rep("x", 128))
 			assert(ok == nil)
 			assert(extra == nil)
 			stage2 = 3
-			local res, a,b,c = connected:send(string.rep("x", 64))
+			local res, a,b,c = connected:write(string.rep("x", 64))
 			assert(res == garbage)
 			assert(a == true)
 			assert(b == nil)
@@ -757,7 +757,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			assert(unconnected:bind(ipaddr[domain].bindable))
 			local buffer = memory.create(10)
 			stage1 = 1
-			assert(unconnected:receive(buffer) == 10)
+			assert(unconnected:read(buffer) == 10)
 			assert(not memory.diff(buffer, "0123456789"))
 			stage1 = 2
 		end)
@@ -768,7 +768,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			local connected = assert(create())
 			assert(connected:connect(ipaddr[domain].bindable))
 			stage2 = 1
-			assert(connected:send("0123456789"))
+			assert(connected:write("0123456789"))
 			stage2 = 2
 			error("oops!")
 			stage2 = 3
@@ -791,7 +791,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			local unconnected = assert(create())
 			assert(unconnected:bind(ipaddr[domain].bindable))
 			local buffer = memory.create(128)
-			assert(unconnected:receive(buffer) == 128)
+			assert(unconnected:read(buffer) == 128)
 			assert(not memory.diff(buffer, string.rep("x", 128)))
 			stage1 = 1
 		end)
@@ -802,7 +802,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			garbage.coro = coroutine.running()
 			local unconnected = assert(create())
 			stage2 = 1
-			local res, a,b,c = unconnected:send(string.rep("x", 128), nil, nil,
+			local res, a,b,c = unconnected:write(string.rep("x", 128), nil, nil,
 			                                    ipaddr[domain].bindable)
 			assert(res == garbage)
 			assert(a == true)
@@ -887,7 +887,7 @@ do case "used after library collection"
 		local addr = system.address("ipv4", "127.0.0.1:65432")
 		local path = os.tmpname()
 		local cases = {}
-		table.insert(cases, { socket = system.socket("datagram", addr.type), op = "send", "xxx", nil, nil, addr })
+		table.insert(cases, { socket = system.socket("datagram", addr.type), op = "write", "xxx", nil, nil, addr })
 		table.insert(cases, { socket = system.socket("stream", addr.type), op = "connect", addr })
 		table.insert(cases, { socket = system.socket("stream", "local"), op = "connect", path })
 		table.insert(cases, { socket = system.socket("stream", "share"), op = "connect", path })
@@ -901,7 +901,7 @@ do case "used after library collection"
 		for _, case in ipairs(cases) do
 			spawn(function ()
 				local ok, err = case.socket[case.op](case.socket, table.unpack(case))
-				if case.op == "send" then
+				if case.op == "write" then
 					assert(ok)
 				else
 					assert(not ok)
