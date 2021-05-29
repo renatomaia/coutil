@@ -388,10 +388,11 @@ static void getstreamfield (lua_State *L,
 		for (; *mode; mode++) switch (*mode) {
 			case 'w': stream->flags |= UV_READABLE_PIPE; break;
 			case 'r': stream->flags |= UV_WRITABLE_PIPE; break;
-			case 'i': socktranf = 1; break;
+			case 's': socktranf = 1; break;
 			default: luaL_error(L, "unknown '%s' mode char (got '%c')", field, *mode);
 		}
-		pipe = lcuT_newudhdl(L, lcu_PipeSocket, LCU_PIPEACTIVECLS);
+		pipe = lcuT_newudhdl(L, lcu_PipeSocket, socktranf ? LCU_PIPESHARECLS
+		                                                  : LCU_PIPEACTIVECLS);
 		stream->data.stream = (uv_stream_t *)lcu_ud2hdl(pipe);
 		err = uv_pipe_init(loop, lcu_ud2hdl(pipe), socktranf);
 		if (err) lcu_error(L, err);

@@ -1110,7 +1110,7 @@ For non-local domain sockets,
 `address` can be an [IP address](#systemaddress-type--data--port--mode) to store the result,
 otherwise a new object is returned with the result data.
 
-### `socket:send (data [, i [, j [, address]]])`
+### `socket:write (data [, i [, j [, address]]])`
 
 [Await function](#await-function) that awaits until it sends through socket `socket` the substring of `data` that starts at `i` and continues until `j`,
 following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
@@ -1127,7 +1127,7 @@ This operation is not available for passive sockets.
 **Note**: if `data` is a [memory](https://github.com/renatomaia/lua-memory),
 it is not converted to a Lua string prior to have its specified contents transfered.
 
-### `socket:receive (buffer [, i [, j [, address]]])`
+### `socket:read (buffer [, i [, j [, address]]])`
 
 [Await function](#await-function) that awaits until it receives from socket `socket` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
 following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
@@ -1751,10 +1751,10 @@ Index
 		- [`socket:getaddress`](#socketgetaddress-site--address)
 		- [`socket:getdomain`](#socketgetdomain-)
 		- [`socket:listen`](#socketlisten-backlog)
-		- [`socket:receive`](#socketreceive-buffer--i--j--address)
-		- [`socket:send`](#socketsend-data--i--j--address)
+		- [`socket:read`](#socketread-buffer--i--j--address)
 		- [`socket:setoption`](#socketsetoption-name-value-)
 		- [`socket:shutdown`](#socketshutdown-)
+		- [`socket:write`](#socketwrite-data--i--j--address)
 	- [`system.suspend`](#systemsuspend-seconds--mode)
 	- [`system.time`](#systemtime-mode)
 	- [`system.touchfile`](#systemtouchfile-path--mode-times)

@@ -12,7 +12,7 @@ local function doconn(stream)
 	local replier<const> = coroutine.create(function ()
 		while true do
 			repeat
-				assert(stream:send(replydata))
+				assert(stream:write(replydata))
 				pending = pending-1
 			until pending == 0
 			coroutine.yield()
@@ -24,7 +24,7 @@ local function doconn(stream)
 	local buffer<const> = memory.create(buffsize)
 	repeat
 		repeat
-			bytes = bytes+assert(stream:receive(buffer, bytes+1))
+			bytes = bytes+assert(stream:read(buffer, bytes+1))
 		until bytes >= msgsize
 		repeat
 			bytes = bytes-msgsize
@@ -53,14 +53,14 @@ for i = 1, conncount do
 
 		assert(coroutine.resume(coroutine.create(function ()
 			for msg = 1, msgcount do
-				assert(stream:send(msgdata))
+				assert(stream:write(msgdata))
 			end
 		end)))
 
 		local buffer<const> = memory.create(buffsize)
 		local bytes = msgcount*replysize
 		repeat
-			bytes = bytes-assert(stream:receive(buffer))
+			bytes = bytes-assert(stream:read(buffer))
 		until bytes == 0
 	end)))
 end

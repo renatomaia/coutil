@@ -1542,7 +1542,7 @@ do case "don't suspend with other events"
 				local socket = system.socket("stream", "ipv4")
 				local address = system.address("ipv4", "127.0.0.1", ]]..baseport..[[+%d)
 				assert(socket:connect(address) == true)
-				assert(socket:receive(memory.create(8192)) == 8192)
+				assert(socket:read(memory.create(8192)) == 8192)
 				assert(socket:close() == true)
 			end)
 			assert(system.run() == false)
@@ -1567,7 +1567,7 @@ do case "don't suspend with other events"
 		end
 
 		for i = count, 1, -1 do
-			assert(conns[i]:send(string.rep("x", 8192)) == true)
+			assert(conns[i]:write(string.rep("x", 8192)) == true)
 			assert(conns[i]:close() == true)
 			assert(sockets[i]:close() == true)
 		end

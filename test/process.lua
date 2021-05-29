@@ -511,12 +511,12 @@ do case "redirect streams to a socket"
 			assert(passive:listen(2))
 			local control = assert(passive:accept())
 			assert(passive:close())
-			assert(control:send("stdin"))
+			assert(control:write("stdin"))
 			assert(control:shutdown())
 			local buffer = memory.create(12)
 			local bytes = 0
 			while bytes < #buffer do
-				bytes = bytes+assert(control:receive(buffer, bytes+1))
+				bytes = bytes+assert(control:read(buffer, bytes+1))
 			end
 			assert(tostring(buffer) == "stdoutstderr")
 			assert(control:close())
@@ -567,13 +567,13 @@ do case "redirect streams to created socket"
 	spawn(runscript, spec)
 
 	spawn(function ()
-		assert(spec.stdin:send("stdin"))
+		assert(spec.stdin:write("stdin"))
 		assert(spec.stdin:shutdown())
 		local buffer = memory.create(6)
 		for name, stream in pairs{ stdout = spec.stdout, stderr = spec.stderr } do
 			local bytes = 0
 			while bytes < #buffer do
-				bytes = bytes+assert(stream:receive(buffer, bytes+1))
+				bytes = bytes+assert(stream:read(buffer, bytes+1))
 			end
 			assert(tostring(buffer) == name)
 			assert(stream:close())

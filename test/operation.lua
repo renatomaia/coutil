@@ -738,7 +738,7 @@ do newtest "udpsend" -----------------------------------------------------------
 			assert(system.run() == false)
 		end,
 		await = function (self, cfgid)
-			return self.sockets[cfgid]:send("Hello!", 1, -1, addr[1])
+			return self.sockets[cfgid]:write("Hello!", 1, -1, addr[1])
 		end,
 	})
 end
@@ -757,7 +757,7 @@ for title, domain in pairs{ tcp = "ipv4", pipe = "local" } do
 		setup = setuptcp,
 		teardown = teardowntcp,
 		await = function (self, cfgid)
-			return self.stream[cfgid][2]:send("Hello from "..cfgid)
+			return self.stream[cfgid][2]:write("Hello from "..cfgid)
 		end,
 	}
 	testOp(op)
@@ -835,11 +835,11 @@ for title, domain in pairs{ tcp = "ipv4", pipe = "local" } do
 		teardown = teardowntcp,
 		await = function (self, cfgid)
 			local buffer = memory.create(6)
-			return self.stream[cfgid][2]:receive(buffer)
+			return self.stream[cfgid][2]:read(buffer)
 		end,
 		trigger = function (self, cfgid)
 			spawn(function ()
-				self.stream[cfgid][1]:send("Hello"..cfgid)
+				self.stream[cfgid][1]:write("Hello"..cfgid)
 			end)
 		end,
 		check = function (self, cfsgid, bytes)
@@ -868,12 +868,12 @@ do newtest "udprecv" -----------------------------------------------------------
 		end,
 		await = function (self, cfgid)
 			local buffer = memory.create(6)
-			return self.sockets[cfgid]:receive(buffer)
+			return self.sockets[cfgid]:read(buffer)
 		end,
 		trigger = function (self, cfgid)
 			spawn(function ()
 				local address = self.sockets[cfgid]:getaddress()
-				self.sockets[3-cfgid]:send("Hello!", 1, 6, address)
+				self.sockets[3-cfgid]:write("Hello!", 1, 6, address)
 			end)
 		end,
 		check = function (self, cfsgid, bytes)
