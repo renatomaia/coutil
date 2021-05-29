@@ -11,9 +11,9 @@ local function doconn(...)
 	for msg = 1, msgcount do
 		local bytes = 0
 		repeat
-			bytes = bytes+assert(stream:receive(buffer, bytes+1))
+			bytes = bytes+assert(stream:read(buffer, bytes+1))
 		until bytes == msgsize
-		assert(stream:send(replydata))
+		assert(stream:write(replydata))
 	end
 end
 
@@ -32,10 +32,10 @@ for i = 1, conncount do
 		assert(stream:connect(address))
 		local buffer = memory.create(replysize)
 		for msg = 1, msgcount do
-			assert(stream:send(msgdata))
+			assert(stream:write(msgdata))
 			local bytes = 0
 			repeat
-				bytes = bytes+assert(stream:receive(buffer, bytes+1))
+				bytes = bytes+assert(stream:read(buffer, bytes+1))
 			until bytes == replysize
 		end
 	end)))
