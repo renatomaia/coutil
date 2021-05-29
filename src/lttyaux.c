@@ -115,7 +115,7 @@ LCUI_FUNC int *lcuTY_tostdiofd (lua_State *L) {
 		int fd;
 		stdiofd = (int *)lua_newuserdatauv(L, sizeof(int)*LCU_STDIOFDCOUNT, 0);
 		for (fd = 0; fd < LCU_STDIOFDCOUNT; fd++) {
-			stdiofd[fd] = uv_guess_handle(fd) == UV_TTY ? lcu_dupfd(fd) : fd;
+			stdiofd[fd] = (uv_guess_handle(fd) == UV_TTY) ? lcu_dupfd(fd) : fd;
 		}
 		lcuL_setfinalizer(L, stdiofd_gc);
 		lua_setfield(L, LUA_REGISTRYINDEX, LCU_STDIOFDREGKEY);

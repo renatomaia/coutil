@@ -40,6 +40,7 @@ dofile "pipe.lua"
 dofile "process.lua"
 dofile "coroutine.lua"
 dofile "thread.lua"
-dofile "operation.lua"
+dofile "stdio.lua"
+if standard == "posix" then dofile "operation.lua" end
 
 print "\nSuccess!\n"

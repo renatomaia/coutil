@@ -1,8 +1,16 @@
-#ifndef lsockaux_h
-#define lsockaux_h
+#ifndef lsckdefs_h
+#define lsckdefs_h
 
 
 #include "loperaux.h"
+
+#ifndef _WIN32
+#include <netinet/in.h>  /* network addresses */
+#include <arpa/inet.h>  /* IP addresses */
+#else
+#include <winsock2.h>
+typedef unsigned short in_port_t;
+#endif
 
 
 typedef struct lcu_UdpSocket {
