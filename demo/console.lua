@@ -11,12 +11,13 @@ local stdout = system.stdout
 
 local function writeto(file, ...)
 	for i = 1, select("#", ...) do
-		file:send((select(i, ...)))
+		file:write((select(i, ...)))
 	end
 end
 
 local function catcherr(errmsg)
-	writeto(stderr, debug.traceback(errmsg))
+	io.stderr:write(debug.traceback(errmsg), "\n")
+	io.stderr:flush()
 	return errmsg
 end
 
@@ -24,7 +25,7 @@ local function spawn(f, ...)
 	return catch(catcherr, f, ...)
 end
 
-local buffsz = 16
+local buffsz = 256
 local buffer = alloc(buffsz)
 local filled = {}
 local start, finish = 1, 0
@@ -32,7 +33,7 @@ local start, finish = 1, 0
 spawn(function ()
 	writeto(stdout, "> ")
 	while true do
-		local result, errmsg = stdin:receive(buffer, finish+1)
+		local result, errmsg = stdin:read(buffer, finish+1)
 		if not result then
 			writeto(stderr, errmsg, "\n")
 			break

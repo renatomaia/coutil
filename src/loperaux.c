@@ -465,15 +465,20 @@ LCUI_FUNC void lcuU_resumecohdl (uv_handle_t *handle, int narg) {
 #define UPV_THREAD	1
 #define UPV_SCHEDULER	2
 
-LCUI_FUNC lcu_UdataHandle *lcuT_createudhdl (lua_State *L, size_t sz, const char *cls) {
-	lcu_UdataHandle *udhdl = (lcu_UdataHandle *)lua_newuserdatauv(L, sz, 2);
+LCUI_FUNC lcu_UdataHandle *lcuT_createudhdl (lua_State *L,
+                                             int schedidx,
+                                             size_t sz,
+                                             const char *cls) {
+	lcu_UdataHandle *udhdl;
+	lua_pushvalue(L, schedidx);  /* push scheduler object */
+	udhdl = (lcu_UdataHandle *)lua_newuserdatauv(L, sz, 2);
 	lcu_assert(sz >= sizeof(lcu_UdataHandle));
 	udhdl->flags = LCU_HANDLECLOSEDFLAG;
 	udhdl->stop = NULL;
 	udhdl->step = NULL;
 	udhdl->handle.data = NULL;
 	luaL_setmetatable(L, cls);
-	lua_pushvalue(L, lua_upvalueindex(1));  /* push scheduler object */
+	lua_insert(L, -2);
 	lua_setiuservalue(L, -2, UPV_SCHEDULER);  /* avoid scheduler to be collected */
 	return udhdl;
 }

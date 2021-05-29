@@ -6,14 +6,6 @@
 #include <string.h>
 #include <lmemlib.h>
 
-#ifndef _WIN32
-#include <netinet/in.h>  /* network addresses */
-#include <arpa/inet.h>  /* IP addresses */
-#else
-#include <winsock2.h>
-typedef unsigned short in_port_t;
-#endif
-
 /*
  * Addresses 
  */
@@ -1909,23 +1901,4 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 
 	luaL_setfuncs(L, modf, 0);
 	lcuM_setfuncs(L, upvf, LCU_MODUPVS);
-
-	{
-		static const char *const field[] = { "stdin", "stdout", "stderr" };
-		lcu_Scheduler *sched = (lcu_Scheduler *)lua_touserdata(L, -2);
-		uv_loop_t *loop = lcu_toloop(sched);
-		int *stdiofd = lcuTY_tostdiofd(L);
-		int i;
-		for (i = 0; i < LCU_STDIOFDCOUNT; i++) {
-			lcu_TermSocket *term = lcuT_newudhdl(L, lcu_TermSocket, LCU_TERMSOCKETCLS);
-			int err = uv_tty_init(loop, (uv_tty_t *)lcu_ud2hdl(term), stdiofd[i], 0);
-			if (err) {
-				lua_pop(L, 1);
-				lcuL_warnerr(L, field[i], err);
-			} else {
-				term->flags = 0;
-				lua_setfield(L, -2, field[i]);
-			}
-		}
-	}
 }

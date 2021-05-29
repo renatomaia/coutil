@@ -10,6 +10,7 @@ LCUI_FUNC void lcuM_addinfof (lua_State *L);
 LCUI_FUNC void lcuM_addprocesf (lua_State *L);
 LCUI_FUNC void lcuM_addscheduf (lua_State *L);
 LCUI_FUNC void lcuM_addtimef (lua_State *L);
+LCUI_FUNC void lcuM_addstdiof (lua_State *L);
 
 LCUMOD_API int luaopen_coutil_system (lua_State *L) {
 	(void)lcuTY_tostdiofd(L);  /* stdio files must be GC after 'sched' on 'lua_close' */
@@ -24,5 +25,6 @@ LCUMOD_API int luaopen_coutil_system (lua_State *L) {
 	lcuM_addprocesf(L);
 	lcuM_addscheduf(L);
 	lcuM_addtimef(L);
+	lcuM_addstdiof(L);
 	return 1;
 }

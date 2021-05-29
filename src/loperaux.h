@@ -92,9 +92,12 @@ typedef struct lcu_UdataHandle {
 
 #define lcu_hdl2ud(H) ((lcu_UdataHandle *)(((const char *)H)-offsetof(lcu_UdataHandle, H)))
 
-LCUI_FUNC lcu_UdataHandle *lcuT_createudhdl (lua_State *L, size_t sz, const char *cls);
+LCUI_FUNC lcu_UdataHandle *lcuT_createudhdl (lua_State *L,
+                                             int schedidx,
+                                             size_t sz,
+                                             const char *cls);
 
-#define lcuT_newudhdl(L,T,C)	(T *)lcuT_createudhdl(L,sizeof(T),C)
+#define lcuT_newudhdl(L,T,C)	(T *)lcuT_createudhdl(L,lua_upvalueindex(1),sizeof(T),C)
 
 LCUI_FUNC int lcu_closeudhdl (lua_State *L, int idx);
 

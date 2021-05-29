@@ -36,7 +36,7 @@ MYLIBS=
 LMOD= coutil
 MLIB= $(LMOD).dll $(LMOD).dll.manifest $(LMOD).exp $(LMOD).lib
 OBJS= lmodaux.obj loperaux.obj lchaux.obj lthpool.obj \
-      lcommunf.obj lfilef.obj linfof.obj lprocesf.obj lscheduf.obj ltimef.obj \
+      lcommunf.obj lfilef.obj linfof.obj lprocesf.obj lscheduf.obj lstdiof.obj ltimef.obj \
       lchannem.obj lcoroutm.obj lsystemm.obj lthreadm.obj
 
 {src\}.c.obj:
