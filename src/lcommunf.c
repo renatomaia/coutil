@@ -1917,13 +1917,68 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 		int *stdiofd = lcuTY_tostdiofd(L);
 		int i;
 		for (i = 0; i < LCU_STDIOFDCOUNT; i++) {
-			lcu_TermSocket *term = lcuT_newudhdl(L, lcu_TermSocket, LCU_TERMSOCKETCLS);
-			int err = uv_tty_init(loop, (uv_tty_t *)lcu_ud2hdl(term), stdiofd[i], 0);
-			if (err) {
+			int fd = stdiofd[i];
+			uv_handle_type type = uv_guess_handle(fd);
+			lcu_UdataHandle *udhdl = NULL;
+			int err, flags = 0;
+			switch (type) {
+				case UV_TTY: {
+					udhdl = lcuT_createudhdl(L, sizeof(lcu_TermSocket), LCU_TERMSOCKETCLS);
+					err = uv_tty_init(loop, (uv_tty_t *)lcu_ud2hdl(udhdl), fd, 0);
+				} break;
+				case UV_TCP: {
+					uv_tcp_t *tcp;
+					udhdl = lcuT_createudhdl(L, sizeof(lcu_TcpSocket), LCU_TCPACTIVECLS);
+					tcp = (uv_tcp_t *)lcu_ud2hdl(udhdl);
+					err = uv_tcp_init_ex(loop, tcp, AF_UNSPEC);
+					if (err >= 0) {
+						err = uv_tcp_open(tcp, fd);
+						if (err >= 0) {
+							struct sockaddr_storage addr;
+							int addrsz = sizeof(addr);
+							err = uv_tcp_getsockname(tcp, (struct sockaddr *)&addr, &addrsz);
+							if (err >= 0 && addr.ss_family == AF_INET6) flags = LCU_SOCKIPV6FLAG;
+						}
+					}
+					else lua_pushnil(L);
+				} break;
+				case UV_UDP: {
+					uv_udp_t *udp;
+					udhdl = lcuT_createudhdl(L, sizeof(lcu_UdpSocket), LCU_UDPSOCKETCLS);
+					udp = (uv_udp_t *)lcu_ud2hdl(udhdl);
+					err = uv_udp_init_ex(loop, udp, AF_UNSPEC);
+					if (err >= 0) {
+						err = uv_udp_open(udp, fd);
+						if (err >= 0) {
+							struct sockaddr_storage addr;
+							int addrsz = sizeof(addr);
+							err = uv_udp_getsockname(udp, (struct sockaddr *)&addr, &addrsz);
+							if (err >= 0 && addr.ss_family == AF_INET6) flags = LCU_SOCKIPV6FLAG;
+						}
+					}
+					else lua_pushnil(L);
+				} break;
+				case UV_NAMED_PIPE: {
+					uv_pipe_t *pipe;
+					udhdl = lcuT_createudhdl(L, sizeof(lcu_PipeSocket), LCU_PIPESHARECLS);
+					pipe = (uv_pipe_t *)lcu_ud2hdl(udhdl);
+					err = uv_pipe_init(loop, pipe, 1);
+					if (err >= 0) {
+						err = uv_pipe_open(pipe, fd);
+						if (err >= 0) flags = LCU_SOCKTRANFFLAG;
+					}
+				} break;
+				default: {
+					err = UV_EAI_SOCKTYPE;
+					lua_pushnil(L);
+				} break;
+			}
+			if (err < 0) {
 				lua_pop(L, 1);
 				lcuL_warnerr(L, field[i], err);
 			} else {
-				term->flags = 0;
+				lcu_assert(udhdl != NULL);
+				udhdl->flags = flags;
 				lua_setfield(L, -2, field[i]);
 			}
 		}
