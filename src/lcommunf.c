@@ -4,7 +4,7 @@
 #include "lttyaux.h"
 
 #include <string.h>
-#include <lmemlib.h>
+#include <luamem.h>
 
 /*
  * Addresses 
@@ -185,7 +185,7 @@ static int system_address (lua_State *L) {
 	if (n > 1) {
 		in_port_t port = 0;
 		size_t sz;
-		const char *data = luamem_checkstring(L, 2, &sz);
+		const char *data = luamem_checkarray(L, 2, &sz);
 		if (n == 2) {  /* URI format */
 			int err;
 			char literal[LCU_ADDRMAXLITERAL];
@@ -304,7 +304,7 @@ static int addr_newindex (lua_State *L) {
 		} break;
 		case 1: {  /* binary */
 			size_t sz;
-			const char *data = luamem_checkstring(L, 3, &sz);
+			const char *data = luamem_checkarray(L, 3, &sz);
 			luaL_argcheck(L, sz == addrbinsz(na->sa_family), 3, "wrong byte size");
 			setaddrbytes(na, data);
 		} break;
