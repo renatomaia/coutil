@@ -2,10 +2,10 @@
 #include "loperaux.h"
 
 #include <string.h>
-#include <lmemlib.h>
 #ifdef __linux__
 #include </usr/include/linux/magic.h>
 #endif
+#include <luamem.h>
 
 
 #ifdef _WIN32
