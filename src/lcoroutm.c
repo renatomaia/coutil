@@ -3,7 +3,7 @@
 #include "lttyaux.h"
 #include "lchaux.h"
 
-#include <lmemlib.h>
+#include <luamem.h>
 
 
 typedef struct StateCoro {
@@ -35,7 +35,7 @@ static int doloaded (lua_State *L, lua_State *NL, int status) {
 /* succ [, errmsg] = coroutine.load(chunk, chunkname, mode) */
 static int coroutine_load (lua_State *L) {
 	size_t l;
-	const char *s = luamem_checkstring(L, 1, &l);
+	const char *s = luamem_checkarray(L, 1, &l);
 	const char *chunkname = luaL_optstring(L, 2, s);
 	const char *mode = luaL_optstring(L, 3, NULL);
 	lua_State *NL = lcuL_newstate(L);  /* create a similar state */
