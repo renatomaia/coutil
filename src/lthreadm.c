@@ -116,7 +116,7 @@ static int dochunk (lua_State *L,
 static int threads_dostring (lua_State *L) {
 	lcu_ThreadPool *pool = tothreads(L, 1);
 	size_t l;
-	const char *s = luamem_checkchararray(L, 2, &l);
+	const char *s = luamem_checkarray(L, 2, &l);
 	const char *chunkname = luaL_optstring(L, 3, s);
 	const char *mode = luaL_optstring(L, 4, NULL);
 	lua_State *NL = lcuL_newstate(L);  /* create a similar state */

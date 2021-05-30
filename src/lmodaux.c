@@ -75,7 +75,7 @@ static void setupbuf (lua_State *L, int arg, uv_buf_t *buf, char *data, size_t s
 
 LCUI_FUNC void lcu_getinputbuf (lua_State *L, int arg, uv_buf_t *buf) {
 	size_t sz;
-	const char *data = luamem_checkchararray(L, arg, &sz);
+	const char *data = luamem_checkarray(L, arg, &sz);
 	setupbuf(L, arg, buf, (char *)data, sz);
 }
 
