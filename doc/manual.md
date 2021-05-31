@@ -98,15 +98,16 @@ Transferable Values
 
 Values that are transfered between [independent states](#independent-state) are copied or recreated in the target state.
 Only _nil_, _boolean_, _number_, _string_ and _light userdata_ values are allowed as _transferable values_.
-_Strings_ in particular are replicated in every state they are transfered to.
+_Strings_, in particular, are replicated in every state they are transfered to.
 
 Failures
 --------
 
 Unless otherwise stated,
 functions return [fail](http://www.lua.org/manual/5.4/manual.html#6) on failure,
-plus an error message as a second result and a system-dependent error code as a third result,
-and some non-false value on success.
+plus an error message as a second result and a system-dependent error code as a third result.
+On success,
+some non-false value is returned.
 
 Object-Oriented Style
 ---------------------
@@ -130,7 +131,7 @@ Module `coutil.spawn` provides functions to execute functions in new coroutines 
 ### `spawn.catch (h, f, ...)`
 
 Calls function `f` with the given arguments in a new coroutine.
-If any error is raised inside `f`,
+If any error is raised in `f`,
 the coroutine executes the error message handler function `h` with the error message as argument.
 `h` is executed in the calling context of the raised error,
 just like an error message handler in `xpcall`.
@@ -140,7 +141,7 @@ Returns the new coroutine.
 
 Calls function `f` with the given arguments in a new coroutine.
 If `f` executes without any error, the coroutine executes function `h` passing as arguments `true` followed by all the results from `f`.
-In case of any error,
+In case of any error in `f`,
 `h` is executed with arguments `false` and the error message.
 In the latter case,
 `h` is executed in the calling context of the raised error,
@@ -214,8 +215,11 @@ Defines that [_thread pool_](#threadscreate-size) `pool` shall keep `size` syste
 If `size` is smaller than the current number of threads,
 the exceeding threads are destroyed at the rate they are released from the _tasks_ currently executing in `pool`.
 Otherwise, new threads are created on demand until the defined value is reached.
-Unless `create` evaluates to `true`,
-in which case new threads are created immediatelly to reach the defined value.
+However,
+if `create` evaluates to `true`,
+new threads are created to reach the defined value before the function returns.
+
+Returns `true` on success.
 
 ### `threads.count (pool, options)`
 
@@ -298,9 +302,13 @@ but that takes an unpredictable amount of time to happen.
 ### `channel.create (name)`
 
 In case of success,
-returns a new _channel_ with name `name`.
+returns a new _channel_ with name given by string `name`.
 
 Channels with the same name share the same two opposite [_endpoints_](#systemawaitch-ch-endpoint-).
+
+### `channel.getname (ch)`
+
+Returns the name of channel `ch`.
 
 ### `channel.getnames ([names])`
 
@@ -310,7 +318,7 @@ returns a table mapping each name of existing channels to `true`.
 If table `names` is provided,
 it checks only the names stored as string keys in `names`,
 and returns `names` with each of its string keys set to either `true`,
-if there is a channel with that name,
+when there is a channel with that name,
 or `nil` otherwise.
 In other words,
 any non existent channel name as a key in `names` is removed from it.
@@ -534,27 +542,32 @@ including [await functions]("#await-function") to await on system conditions.
 Event Processing
 ----------------
 
-This section describes functions of `coutil.system` related to the processing of system events and resumption of coroutines executing [await functions]("#await-function") waiting for such events.
+This section describes functions of `coutil.system` related to the processing of system events and resumption of coroutines executing [await functions]("#await-function") of `coutil.system`.
 
 ### `system.run ([mode])`
 
-Resumes coroutines awaiting system conditions.
+Resumes coroutines executing [await functions]("#await-function") of `coutil.system` when they are _ready_,
+which is when their _await function_ have a result to process.
+Note that even though a coroutine is _ready_,
+its _await function_ may not conclude just yet,
+because it may require additional results to conclude and return.
 
 `mode` is a string that defines how `run` executes,
 as described below:
 
-- `"loop"` (default): it executes continously resuming every awaiting coroutine when their system condition is satisfied,
-until there are no more awaiting coroutines,
+- `"loop"` (default): it executes continously resuming every awaiting coroutine when their become _ready_,
+until there are no more coroutines awaiting,
 or [`system.halt`](#systemhalt-) is called.
-- `"step"`: it resumes every ready coroutine once,
-or waits to resume at least one coroutine that becomes ready.
-- `"ready"`: it resumes only coroutines that are currently ready.
+- `"step"`: it resumes every _ready_ coroutine once,
+or waits to resume at least one coroutine that becomes _ready_.
+- `"ready"`: it resumes only coroutines that are currently _ready_.
 
 Returns `true` if there are remaining awaiting coroutines,
 or `false` otherwise.
 
 **Note**: when called with `mode` as `"loop"` from the main thread of a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) and there are only [`system.awaitch`](#systemawaitch-ch-endpoint-) calls pending,
-the task is suspended until one of the pending calls is matched.
+this call yields suspending the task,
+until one of the pending calls is matched.
 
 ### `system.isrunning ()`
 
@@ -580,13 +593,14 @@ or [_task_](#threadsdostring-pool-chunk--chunkname--mode-).
 
 `endpoint` is either string `"in"` or `"out"`,
 each identifying an opposite _endpoint_.
-Therefore, the call `system.awaitch(ch1, "in")` will await for a call like `system.awaitch(ch2, "out")` on another channel with the same name.
+Therefore, the call `system.awaitch(ch1, "in")` will await for a call like `system.awaitch(ch2, "out")` if both `ch1` and `ch2` are distinct channels with the same name.
 
 Alternativelly,
 if `endpoint` is either `nil` or `"any"`,
 the call will await for a matching call on either _endpoints_.
-For instance, the call `system.awaitch(ch1, "any")` will match either a call `system.awaitch(ch2, "in")` or `system.awaitch(ch2, "out")`,
-or even `system.awaitch(ch2, "any")` as a matter of fact.
+For instance, the call `system.awaitch(ch1, "any")` will match either a call `system.awaitch(ch2, "in")`,
+or `system.awaitch(ch2, "out")`,
+or even `system.awaitch(ch2, "any")` if both `ch1` and `ch2` are distinct channels with the same name..
 
 Returns `true` followed by the extra [transferable](#transferable-values) arguments `...` from the matching call.
 Otherwise,
@@ -614,7 +628,7 @@ the results of the execution of `co` are discarded.
 _State coroutines_ are executed using a limited set of threads that are also used by the underlying system to execute some _await functions_.
 The number of threads is given by environment variable [`UV_THREADPOOL_SIZE`](http://docs.libuv.org/en/v1.x/threadpool.html).
 Therefore,
-_state coroutines_ that execute for too long,
+_state coroutines_ that do not execute briefly,
 might degrade the performance of some _await functions_.
 
 For long running tasks,
@@ -636,7 +650,8 @@ and is not subject to clock drift.
 Returns a timestamp as a number of seconds with precision of milliseconds according to the value of `mode`,
 as described below:
 
-- `"cached"` (default): the last calculated timestamp used to evaluate [time-related events](#systemsuspend-seconds--mode).
+- `"cached"` (default): the cached timestamp periodically updated by [`system.run`](#systemrun-mode)after resuming coroutines that are ready.
+It is used as the current time to calculate when future calls to [system.suspend](#systemsuspend-seconds--mode) shall be resumed.
 It increases monotonically from some arbitrary point in time,
 and is not subject to clock drift.
 - `"updated"`: updates the cached timestamp to reflect the current time,

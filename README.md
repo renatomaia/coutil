@@ -1,27 +1,14 @@
-CoUtil Libraries
-================
+Coutil
+======
 
-`coutil` provides a set of Lua libraries to support multithreading in Lua using coroutines,
-in particular, to support:
+`coutil` provides a set of integrated libraries to support multithreading in Lua;
+both cooperatively using coroutines and preemptively by running code on distinct system threads.
+It also provides synchronous (no callbacks) and non-blocking (suspends only the caller) functions for a variety of features:
+from synchronization mechanisms like events, channels, and others;
+to access to system resources like networking, processes, file system, and more.
 
-- Coroutine execution finalizers.
-- Coroutine syncronization abstractions:
-	- [events](https://en.wikipedia.org/wiki/Async/await);
-	- [mutexes](https://en.wikipedia.org/wiki/Mutex);
-	- [promises](https://en.wikipedia.org/wiki/Futures_and_promises).
-- Coroutine resumption on conditions on system features (and API to such features):
-	- Measure of time lapse;
-	- Signals of system processes;
-	- Program execution;
-	- Data transmission over network and IPC sockets;
-	- DNS lookups;
-	- Code chunk execution on separate system threads:
-		- Preemptive coroutines;
-		- Thread pools;
-		- Copy values between code chunks.
-
-**Note:** The support for system features is implemented over [`libuv`](https://libuv.org/) library,
-therefore they should be available in all plataforms supported by such library.
+**Note:** The access to system features is implemented over [`libuv`](https://libuv.org/),
+thus it should be available in all plataforms supported by such library.
 
 Documentation
 -------------
@@ -29,7 +16,7 @@ Documentation
 - [License](LICENSE)
 - [Install](doc/install.md)
 - [Manual](doc/manual.md)
-- [Source](doc/devnotes.md)
+- [Development](doc/devnotes.md)
 
 History
 -------
@@ -63,6 +50,5 @@ TODO
 
 ### New Features
 
-- TTY support.
-- File system support (events and operations).
+- File system events.
 - File descriptor/handler polling suport.
