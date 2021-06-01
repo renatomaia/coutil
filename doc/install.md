@@ -4,8 +4,8 @@ Install
 To build it from the sources,
 the following additional libraries are required.
 
-- [libuv](https://libuv.org)
-- [LuaMemory](https://github.com/renatomaia/lua-memory)
+- [libuv](https://libuv.org) (version 1.x)
+- [LuaMemory](https://github.com/renatomaia/lua-memory) (version 2.0)
 
 Once you have these libraries available,
 you can use [LuaRocks](https://luarocks.org) to build and install it as a rock from the sources using the provided [rockspec](../etc/coutil-scm-1.rockspec):

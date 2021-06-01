@@ -376,7 +376,7 @@ end
 newtest "openfile" -------------------------------------------------------------
 
 local validpath = "/dev/null"
-local validmodes = "rwanNrstwx"
+local validmodes = "rwanNrftwx"
 
 do case "non existent file"
 	spawn(function ()

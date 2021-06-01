@@ -155,8 +155,8 @@ static int system_procinfo (lua_State *L) {
 		case '$': lua_pushstring(L, sysuser(L, &procinf)->shell); break;
 		case 'H': lua_pushstring(L, sysuser(L, &procinf)->homedir); break;
 		case 'U': lua_pushstring(L, sysuser(L, &procinf)->username); break;
-		case 'g': lua_pushinteger(L, (lua_Integer)sysuser(L, &procinf)->gid); break;
 		case 'u': lua_pushinteger(L, (lua_Integer)sysuser(L, &procinf)->uid); break;
+		case 'g': lua_pushinteger(L, (lua_Integer)sysuser(L, &procinf)->gid); break;
 		case '=': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_isrss*1024); break;
 		case 'd': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_idrss*1024); break;
 		case 'm': lua_pushinteger(L, (lua_Integer)sysusage(L, &procinf)->ru_ixrss*1024); break;

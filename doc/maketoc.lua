@@ -144,10 +144,10 @@ local function isorted(t)
 	return ipairs(sorted)
 end
 
-local function writeindex(indexed, prefix)
+local function writeindex(list, indexed, prefix)
 	for _, section in isorted(indexed) do
-		writeanchor(section.indexed, section, prefix.."- ")
-		writeindex(indexed[section], "\t"..prefix)
+		table.insert(list, prefix.."<a href='#"..section.anchor.."'><code>"..section.indexed:sub(2, -2).."</code></a><br>")
+		writeindex(list, indexed[section], "&nbsp;&nbsp;&nbsp;&nbsp;"..prefix)
 	end
 end
 
@@ -176,5 +176,20 @@ io.write[[
 Index
 =====
 
+<table><tr><td>
 ]]
-writeindex(indexed, "")
+local lines = {}
+writeindex(lines, indexed, "")
+local columnlines = math.ceil(#lines/4)
+for i, line in ipairs(lines) do
+	if i > 1 and (i-1)%columnlines == 0 then
+		io.write("</td><td>\n")
+	end
+	io.write(line, "\n")
+end
+for i = 1, columnlines*4-#lines do
+	io.write("<br>\n")
+end
+io.write[[
+</td></tr></table>
+]]

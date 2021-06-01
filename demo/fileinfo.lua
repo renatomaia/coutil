@@ -5,7 +5,7 @@ local id,
       device,
       user,
       group,
-      fdev,
+      filedev,
       created,
       modified,
       stchanged,
@@ -27,13 +27,13 @@ local id,
       fs_totalb,
       fs_tranfsz,
       path,
-      linked = system.fileinfo(..., "~l#dugDcmsav?M_Bbi*@NftAFTIp=")
+      linked = system.fileinfo(..., "~l#Dugdcmsav?M_Bbi*@NftAFTIp=")
 
 local details
 if type == "link" then
   details = " ("..linked..")"
 elseif type == "character" or type == "block" then
-  details = " device (ID="..fdev..")"
+  details = " device (ID="..filedev..")"
 else
   details = ""
 end

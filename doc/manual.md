@@ -48,12 +48,12 @@ the _await function_ returns the values provided to `coroutine.resume`.
 Otherwise,
 the _await function_ returns as described in the following sections.
 In any case,
-the coroutine is not registered to be implicitly resumed once the _await function_ returns.
+the coroutine is not registered to be implicitly resumed anymore once the _await function_ returns.
 
 Blocking Mode
 -------------
 
-Some [await functions](#await-function) accept an argument with character `~` to avoid the function to yield.
+Some [await functions](#await-function) accept as argument a string with character `~` to avoid the function to yield.
 In such case,
 the function works like ordinary functions blocking the entire Lua state execution until its completion,
 thus preventing any other coroutine to execute.
@@ -88,7 +88,7 @@ for _, module in ipairs{
 end
 ```
 
-**Note**: These _independent states_ run in a separate thread,
+**Note**: these _independent states_ run in a separate thread,
 but share the same [memory allocation](http://www.lua.org/manual/5.4/manual.html#lua_Alloc) and [panic function](http://www.lua.org/manual/5.4/manual.html#lua_atpanic) of the caller.
 Therefore, it is required that thread-safe implementations are used,
 such as the ones used in the [standard standalone interpreter](http://www.lua.org/manual/5.4/manual.html#7).
@@ -98,22 +98,23 @@ Transferable Values
 
 Values that are transfered between [independent states](#independent-state) are copied or recreated in the target state.
 Only _nil_, _boolean_, _number_, _string_ and _light userdata_ values are allowed as _transferable values_.
-_Strings_ in particular are replicated in every state they are transfered to.
+_Strings_, in particular, are replicated in every state they are transfered to.
 
 Failures
 --------
 
 Unless otherwise stated,
 functions return [fail](http://www.lua.org/manual/5.4/manual.html#6) on failure,
-plus an error message as a second result and a system-dependent error code as a third result,
-and some non-false value on success.
+plus an error message as a second result and a system-dependent error code as a third result.
+On success,
+some non-false value is returned.
 
 Object-Oriented Style
 ---------------------
 
 Some modules that create objects also set a metatable for these objects,
 where the `__index` field points to the table with all the functions of the module.
-Therefore, you can use these library functions in object-oriented style.
+Therefore, you can use these library functions in object-oriented style on the objects they create.
 
 Multithreading
 ==============
@@ -130,7 +131,7 @@ Module `coutil.spawn` provides functions to execute functions in new coroutines 
 ### `spawn.catch (h, f, ...)`
 
 Calls function `f` with the given arguments in a new coroutine.
-If any error is raised inside `f`,
+If any error is raised in `f`,
 the coroutine executes the error message handler function `h` with the error message as argument.
 `h` is executed in the calling context of the raised error,
 just like an error message handler in `xpcall`.
@@ -140,7 +141,7 @@ Returns the new coroutine.
 
 Calls function `f` with the given arguments in a new coroutine.
 If `f` executes without any error, the coroutine executes function `h` passing as arguments `true` followed by all the results from `f`.
-In case of any error,
+In case of any error in `f`,
 `h` is executed with arguments `false` and the error message.
 In the latter case,
 `h` is executed in the calling context of the raised error,
@@ -214,8 +215,11 @@ Defines that [_thread pool_](#threadscreate-size) `pool` shall keep `size` syste
 If `size` is smaller than the current number of threads,
 the exceeding threads are destroyed at the rate they are released from the _tasks_ currently executing in `pool`.
 Otherwise, new threads are created on demand until the defined value is reached.
-Unless `create` evaluates to `true`,
-in which case new threads are created immediatelly to reach the defined value.
+However,
+if `create` evaluates to `true`,
+new threads are created to reach the defined value before the function returns.
+
+Returns `true` on success.
 
 ### `threads.count (pool, options)`
 
@@ -244,7 +248,7 @@ and gerenate a [warning](http://www.lua.org/manual/5.4/manual.html#pdf-warn).
 
 Returns `true` if `chunk` is loaded successfully.
 
-**Note**: The loaded `chunk` can [yield](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) a string with a channel name followed by an endpoint name and the other arguments of [`system.awaitch`](#systemawaitch-ch-endpoint-) to suspend the _task_ awaiting on a channel without the need to load other modules.
+**Note**: the loaded `chunk` can [yield](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) a string with a channel name followed by an endpoint name and the other arguments of [`system.awaitch`](#systemawaitch-ch-endpoint-) to suspend the _task_ awaiting on a channel without the need to load other modules.
 In such case,
 [coroutine.yield](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) returns just like [`system.awaitch`](#systemawaitch-ch-endpoint-).
 
@@ -281,9 +285,9 @@ or [independent states](#independent-state) running in separate system threads.
 Channels
 --------
 
-Module `coutil.channel` provides functions for manipulation of _channels_ to be used to synchronize and transfer values between [independent states](#independent-state).
+Module `coutil.channel` provides functions for manipulation of _channels_ to be used to synchronize and transfer values between coroutines running in different [states](#independent-state).
 
-_Channels_ can be used for standard coroutines.
+_Channels_ can also be used by coroutines in the same _state_.
 However [events](#events) are usually more flexible and efficient in such case.
 
 You can access these library functions on _channels_ in [object-oriented style](#objectoriented-style).
@@ -298,9 +302,13 @@ but that takes an unpredictable amount of time to happen.
 ### `channel.create (name)`
 
 In case of success,
-returns a new _channel_ with name `name`.
+returns a new _channel_ with name given by string `name`.
 
 Channels with the same name share the same two opposite [_endpoints_](#systemawaitch-ch-endpoint-).
+
+### `channel.getname (ch)`
+
+Returns the name of channel `ch`.
 
 ### `channel.getnames ([names])`
 
@@ -310,7 +318,7 @@ returns a table mapping each name of existing channels to `true`.
 If table `names` is provided,
 it checks only the names stored as string keys in `names`,
 and returns `names` with each of its string keys set to either `true`,
-if there is a channel with that name,
+when there is a channel with that name,
 or `nil` otherwise.
 In other words,
 any non existent channel name as a key in `names` is removed from it.
@@ -534,27 +542,33 @@ including [await functions]("#await-function") to await on system conditions.
 Event Processing
 ----------------
 
-This section describes functions of `coutil.system` related to the processing of system events and resumption of coroutines executing [await functions]("#await-function") waiting for such events.
+This section describes functions of `coutil.system` related to the processing of system events and resumption of coroutines executing [await functions]("#await-function") of `coutil.system`.
 
 ### `system.run ([mode])`
 
-Resumes coroutines awaiting system conditions.
+Resumes coroutines executing [await functions]("#await-function") of `coutil.system` when they are _ready_,
+which is when their _await function_ have some result to process.
+Note that even though a coroutine is _ready_,
+its _await function_ may not return just yet,
+because it may require additional results to conclude and return.
 
 `mode` is a string that defines how `run` executes,
 as described below:
 
-- `"loop"` (default): it executes continously resuming every awaiting coroutine when their system condition is satisfied,
-until there are no more awaiting coroutines,
+- `"loop"` (default): it executes continously resuming every awaiting coroutine when they become _ready_,
+until there are no more coroutines awaiting,
 or [`system.halt`](#systemhalt-) is called.
-- `"step"`: it resumes every ready coroutine once,
-or waits to resume at least one coroutine that becomes ready.
-- `"ready"`: it resumes only coroutines that are currently ready.
+- `"step"`: it resumes every _ready_ coroutine once,
+or waits to resume at least one coroutine that becomes _ready_.
+- `"ready"`: does not wait,
+and just resumes coroutines that are currently _ready_.
 
 Returns `true` if there are remaining awaiting coroutines,
 or `false` otherwise.
 
-**Note**: when called with `mode` as `"loop"` from the main thread of a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) and there are only [`system.awaitch`](#systemawaitch-ch-endpoint-) calls pending,
-the task is suspended until one of the pending calls is matched.
+**Note**: when called with `mode` as `"loop"` in the chunk of a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) and there are only [`system.awaitch`](#systemawaitch-ch-endpoint-) calls pending,
+this call yields,
+suspending the task until one of the pending calls is matched.
 
 ### `system.isrunning ()`
 
@@ -580,21 +594,22 @@ or [_task_](#threadsdostring-pool-chunk--chunkname--mode-).
 
 `endpoint` is either string `"in"` or `"out"`,
 each identifying an opposite _endpoint_.
-Therefore, the call `system.awaitch(ch1, "in")` will await for a call like `system.awaitch(ch2, "out")` on another channel with the same name.
+Therefore, the call `system.awaitch(ch1, "in")` will await for a call like `system.awaitch(ch2, "out")` if both `ch1` and `ch2` are distinct channels with the same name.
 
 Alternativelly,
 if `endpoint` is either `nil` or `"any"`,
 the call will await for a matching call on either _endpoints_.
-For instance, the call `system.awaitch(ch1, "any")` will match either a call `system.awaitch(ch2, "in")` or `system.awaitch(ch2, "out")`,
-or even `system.awaitch(ch2, "any")` as a matter of fact.
+For instance, the call `system.awaitch(ch1, "any")` will match either a call `system.awaitch(ch2, "in")`,
+or `system.awaitch(ch2, "out")`,
+or even `system.awaitch(ch2, "any")` if both `ch1` and `ch2` are distinct channels with the same name.
 
 Returns `true` followed by the extra [transferable](#transferable-values) arguments `...` from the matching call.
 Otherwise,
 it [fails](#failures) with an error message related to transfering the arguments from the matching call.
 In any case,
 if this call does not raise errors,
-it resumed the coroutine,
-or _task_ of the matching call.
+nor is resumed prematurely by a call of [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
+then it successfully resumed the coroutine or _task_ of the matching call.
 
 ### `system.resume (co, ...)`
 
@@ -603,18 +618,18 @@ but for [_state coroutines_](#state-coroutines).
 It executes _state coroutine_ `co` on a separate system thread,
 and awaits for its completion or suspension.
 Moreover,
-only [transferable values](#transferable-values) can be passed as arguments or returned from `co`.
+only [transferable values](#transferable-values) can be passed as arguments, yielded, or returned from `co`.
 
-If the coroutine executing this [await function](#await-function) is explicitly resumed,
+If the coroutine executing this _await function_ is explicitly resumed,
 the execution of `co` continues in the separate thread,
 and it will not be able to be resumed again until it suspends.
 In such case,
-the results of the execution of `co` are discarded.
+the results of this execution of `co` are discarded.
 
 _State coroutines_ are executed using a limited set of threads that are also used by the underlying system to execute some _await functions_.
 The number of threads is given by environment variable [`UV_THREADPOOL_SIZE`](http://docs.libuv.org/en/v1.x/threadpool.html).
 Therefore,
-_state coroutines_ that execute for too long,
+_state coroutines_ that do not execute briefly,
 might degrade the performance of some _await functions_.
 
 For long running tasks,
@@ -636,7 +651,8 @@ and is not subject to clock drift.
 Returns a timestamp as a number of seconds with precision of milliseconds according to the value of `mode`,
 as described below:
 
-- `"cached"` (default): the last calculated timestamp used to evaluate [time-related events](#systemsuspend-seconds--mode).
+- `"cached"` (default): the cached timestamp periodically updated by [`system.run`](#systemrun-mode) before resuming coroutines that are ready.
+It is used as the current time to calculate when future calls to [system.suspend](#systemsuspend-seconds--mode) shall be resumed.
 It increases monotonically from some arbitrary point in time,
 and is not subject to clock drift.
 - `"updated"`: updates the cached timestamp to reflect the current time,
@@ -671,7 +687,7 @@ as well as creating new processes by executing programs.
 
 ### `system.emitsig (pid, signal)`
 
-Emits signal indicated by `signal` to the process with identifier `pid`.
+Emits a signal specified by string `signal` to the process with identifier `pid`.
 Aside from the values for `signal` listed in [`system.awaitsig`](#systemawaitsig-signal),
 this function also accepts the following values for `signal`:
 
@@ -715,11 +731,15 @@ as listed below:
 
 Returns string `signal` in case of success.
 
+**Note**: not all signals are availabe in all platforms.
+For more details,
+see the documentation on [signal support by libuv](http://docs.libuv.org/en/v1.x/signal.html).
+
 ### `system.getpriority (pid)`
 
 On success,
 returns a string and a number corresponding to the scheduling priority of the process with identifier `pid`.
-The first returned value is one of the following strings,
+The first value returned is one of the following strings,
 which indicates some convenient distinct priority value (from highest to lowest):
 
 - `"highest"`
@@ -772,7 +792,7 @@ deletes the environment variable.
 ### `system.packenv (vars)`
 
 Returns a _packed environment_ that encapsulates environment variables from table `vars`,
-which maps variable names to the values they must assume.
+which shall map variable names to their corresponding value.
 
 **Note**: by indexing a _packed environment_ `env`,
 like `env.LUA_PATH`,
@@ -812,12 +832,12 @@ This field is required.
 path of the current directory of the new process.
 
 - `stdin`, `stdout`, `stderr`:
-the standard input, output or error output of the new process.
+the standard input, output and error output of the new process.
 The possible values are:
 	- A [Lua file](http://www.lua.org/manual/5.4/manual.html#pdf-io.open) to be provided to the process.
 	- A [stream socket](#systemsocket-type-domain) to be provided to the process.
 	- `false` to indicate it should be discarded
-	(`/dev/null` shall be used).
+	(for instance, `/dev/null` shall be used).
 	- A string with the following characters that indicate a [stream socket](#systemsocket-type-domain) shall be created and stored in the field to allow communication with the process.
 		- `r`: a readable stream socket to receive data from the process.
 		- `w`: a writable stream socket to send data to the process.
@@ -1014,7 +1034,7 @@ which is either:
 - `"local"` for sockets which addresses are file paths on Unix,
 or pipe names on Windows.
 - `"share"` same as `"local"`,
-but allows for transmission of stream sockets.
+but allows for [transmission of stream sockets](#socketwrite-data--i--j--address).
 
 In case of success,
 it returns the new socket.
@@ -1043,29 +1063,29 @@ or `false` otherwise.
 - `"mcastloop"`: `value` is `true` to enable loopback of outgoing multicast datagrams,
 or `false` otherwise.
 - `"mcastttl"`: `value` is a number from 1 to 255 to define the multicast time to live.
-- `"mcastiface"`: `value` is the [literal host address](#systemaddress-type--data--port--mode) of the interface for multicast.
+- `"mcastiface"`: `value` is the _literal host address_ of the interface for multicast.
 Otherwise,
 an appropriate interface is chosen by the system.
-- `"mcastjoin"` or `"mcastleave"`: `value` is the [literal host address](#systemaddress-type--data--port--mode) of the multicast group the application wants to **join** or **leave**.
+- `"mcastjoin"` or `"mcastleave"`: `value` is the _literal host address_ of the multicast group the application wants to **join** or **leave**.
 If an extra third argument is provided,
-it is the [literal host address](#systemaddress-type--data--port--mode) of the local interface with which the system should **join** or **leave** the multicast group.
+it is the _literal host address_ of the local interface with which the system should **join** or **leave** the multicast group.
 Otherwise,
 an appropriate interface is chosen by the system.
 If an extra fourth argument is provided,
-it defines the [literal host address](#systemaddress-type--data--port--mode) of a source the application shall receive data from.
+it defines the _literal host address_ of a source the application shall receive data from.
 Otherwise,
 it can receive data from any source.
 
 #### TCP Socket
 
-- `"keepalive"`: is a number of seconds of the initial delay of the periodic transmission of messages when the TCP keep-alive option is enabled,
+- `"keepalive"`: `value` is a number of seconds of the initial delay of the periodic transmission of messages when the TCP keep-alive option is enabled,
 or `nil` otherwise.
-- `"nodelay"`: is `true` when coalescing of small segments shall be avoided,
+- `"nodelay"`: `value` is `true` when coalescing of small segments shall be avoided,
 or `false` otherwise.
 
 #### Local Socket
 
-- `"permission"`: is a string that indicate the permissions over the socket by processes run by other users.
+- `"permission"`: `value` is a string that indicate the permissions over the socket by processes run by other users.
 It can contain the following characters:
 	- `r` indicate processes have permission to read from the socket.
 	- `w` indicate processes have permission to write to the socket.
@@ -1108,12 +1128,15 @@ which can be:
 
 For non-local domain sockets,
 `address` can be an [IP address](#systemaddress-type--data--port--mode) to store the result,
-otherwise a new object is returned with the result data.
+otherwise a new address object is returned with the result data.
+For local domain sockets,
+it returns a string
+(either a path on Unix or a pipe name on Windows).
 
 ### `socket:write (data [, i [, j [, address]]])`
 
 [Await function](#await-function) that awaits until it sends through socket `socket` the substring of `data` that starts at `i` and continues until `j`,
-following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+following the same sematics of these arguments in functions of [memory](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#lua-module).
 
 For unbinded datagram sockets,
 `address` must be destination address,
@@ -1130,7 +1153,7 @@ it is not converted to a Lua string prior to have its specified contents transfe
 ### `socket:read (buffer [, i [, j [, address]]])`
 
 [Await function](#await-function) that awaits until it receives from socket `socket` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
-following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+following the same sematics of these arguments in functions of [memory](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#lua-module).
 
 For datagram sockets,
 if `address` is provided,
@@ -1144,7 +1167,7 @@ this function returns the number of bytes copied to `buffer`.
 For datagram sockets,
 it also returns a boolean indicating whether the copied data was truncated.
 For `"share"` stream sockets,
-it might return a received stream socket after the number of bytes.
+it returns the transfered stream socket after the number of bytes.
 
 ### `socket:shutdown ()`
 
@@ -1212,8 +1235,8 @@ it executes in [blocking mode](#blocking-mode).
 
 ### `system.removefile (path [, mode])`
 
-[Await function](#await-function) that awaits for removal of file on `path`,
-or empty directory if `mode` is a string with character `d`.
+[Await function](#await-function) that awaits to remove from path `path` a file,
+or an empty directory if `mode` is a string with character `d`.
 `mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
 
 ### `system.maketemp (prefix [, mode])`
@@ -1294,17 +1317,17 @@ The string `mode` can contain the following characters that define how the file 
 
 - `a`: write operations are done at the end of the file (implies `w`).
 - `n`: if such file does not exist,
-instead of returning an error,
+instead of [failing](#failures),
 a new file is created in `path` and opened.
 - `N`: ensure a new file is created in `path`,
-otherwise returns an error.
+or [fails](#failures) otherwise.
 - `r`: allows reading operations.
-- `s`: write operations transfers all data to hardware (implies `w`).
+- `f`: write operations [transfers all data to the file's device](#fileflush-mode) (implies `w`).
 - `t`: file contents are erased,
 that is,
 it is truncated to length 0 (implies `w`).
 - `w`: allows writing operations.
-- `x`: file is not inheritable to child processes.
+- `x`: file is not inheritable to child processes (see [`O_CLOEXEC`](https://www.man7.org/linux/man-pages/man2/open.2.html)).
 
 `mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
 
@@ -1331,13 +1354,13 @@ it executes in [blocking mode](#blocking-mode).
 ### `file:read (buffer [, i [, j [, offset [, mode]]]])`
 
 [Await function](#await-function) that awaits until it reads from file `file` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
-following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+following the same sematics of these arguments in functions of [memory](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#lua-module).
 
 If `offset` is provided,
-the file is read from the `offset` provided from the begin of the file.
+it is the byte offset from the begin of the file where the data must be read.
 In such case,
 the file offset is not changed by this call.
-In the other case,
+Otherwise,
 the current file offset is used and updated.
 
 If string `mode` is provided with character `~`,
@@ -1349,21 +1372,22 @@ returns the number of bytes copied to `buffer`.
 ### `file:write (data [, i [, j [, offset [, mode]]]])`
 
 [Await function](#await-function) that awaits until it writes to file `file` the substring of `data` that starts at `i` and continues until `j`,
-following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+following the same sematics of these arguments in functions of [memory](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#lua-module).
 
 If `offset` is provided,
-the data is written from the `offset` provided from the begin of the file.
+it is the byte offset from the begin of the file where the data must be written.
 In such case,
 the file offset is not changed by this call.
-In the other case,
+Otherwise,
 the current file offset is used and updated.
 
 If `data` is a file opened for reading,
 it works as if the contents of the file were the string `data`.
 In such case,
-`i` and `j` are mandatory.
+`i` and `j` are mandatory,
+and must be positive.
 Moreover,
-`offset` is ignored,
+`offset` is ignored in this case,
 thus the current offset of `file` is used and updated.
 
 If string `mode` is provided with character `~`,
@@ -1375,8 +1399,8 @@ returns the number of bytes written to `file`.
 ### `file:resize (size [, mode])`
 
 [Await function](#await-function) that awaits until it resizes `file` to `size` bytes.
-If the file previously was larger than this size, the extra data is lost.
-If the file previously was shorter,
+If the file is larger than this size, the extra data is lost.
+If the file is shorter,
 it is extended,
 and the extended part reads as null bytes.
 
@@ -1412,8 +1436,8 @@ Unlike other characters,
 
 ### `file:own (uid, gid [, mode])`
 
-[Await function](#await-function) that awaits until it changes the onwer user ID of `file` to number `uid`,
-and the owner group ID of `file` to `gid`.
+[Await function](#await-function) that awaits until it changes the owner IDs of `file` to numbers `uid` for the user ID,
+and `gid` for the group ID.
 If the `uid` or `gid` is specified as -1,
 then that ID is not changed.
 
@@ -1423,7 +1447,7 @@ it executes in [blocking mode](#blocking-mode).
 ### `file:grant (perm [, mode])`
 
 [Await function](#await-function) that awaits until it changes the permission bits of `file`.
-`perm` must be either a number with the [file bits](#systemfilebits),
+`perm` must be either a number with the [permission bits](#permissions),
 or a string with characters defining the bits to be set for the file to be created,
 as listed below:
 
@@ -1450,16 +1474,16 @@ it executes in [blocking mode](#blocking-mode).
 On success,
 returns values according to the following characters in string `mode`:
 
-| Character | Type  | Description |
+| Character | Value | Description |
 | --------- | ----- | ----------- |
-| `?` | string <!-- st_mode --> | **Type** of the file. |
+| `?` | string <!-- st_mode --> | **Type** of the file as one of the field names of bit masks for [file types](#file-types). |
 | `M` | integer <!-- st_mode --> | [_Bit flags_](#systemfilebits) of the file (_imode_ **mode**). |
-| `_` | integer <!-- st_flags --> | User **defined** flags for the file. |
+| `_` | integer <!-- st_flags --> | **User defined** flags for the file. |
 | `u` | integer <!-- st_uid --> | Owner **user** _identifier_ (uid). |
 | `g` | integer <!-- st_gid --> | Owner user **group** identifier (gid). |
 | `#` | integer <!-- st_ino --> | ID of the file in the file system (_inode_ **number**). |
-| `d` | integer <!-- st_dev --> | ID of the **device** _containing_ the file. |
-| `D` | integer <!-- st_rdev --> | ID of the **device** _represented_ by the file, or `0` is not applicable. |
+| `D` | integer <!-- st_dev --> | ID of the **device** _containing_ the file. |
+| `d` | integer <!-- st_rdev --> | ID of the **device** _represented_ by the file, or `0` is not applicable. |
 | `*` | integer <!-- st_nlink --> | _Number_ of **hard links** to the file. |
 | `B` | integer <!-- st_size --> | Total size of the file (**bytes**). |
 | `b` | integer <!-- st_blocks --> | Number of 512B **blocks** allocated for the file. |
@@ -1481,16 +1505,21 @@ Unlike other characters,
 
 ### `system.filebits`
 
-Table with the following fields containing numbers with the bit masks for a [file mode](https://man7.org/linux/man-pages/man7/inode.7.html).
+Table with the following fields numbers with the values of [file mode](https://man7.org/linux/man-pages/man7/inode.7.html) bits.
 
-- `type`: Bit mask for the type of the file .
-- `socket`: Socket file type.
-- `link`: Symbolic link file type.
-- `file`: Regular file type.
-- `block`: Block device file type.
-- `directory`: Directory file type.
-- `character`: Character device file type.
-- `fifo`: FIFO file type.
+#### File Types
+
+- `type`: Bit mask for the following fields identifying different file types:
+	- `socket`: Socket file type.
+	- `link`: Symbolic link file type.
+	- `file`: Regular file type.
+	- `block`: Block device file type.
+	- `directory`: Directory file type.
+	- `character`: Character device file type.
+	- `pipe`: FIFO file type.
+
+#### Permissions
+
 - `setuid`: Set-user-ID bit.
 - `setgid`: Set-group-ID bit.
 - `sticky`: Sticky bit.
@@ -1511,7 +1540,7 @@ but for file in path given by string `path`.
 In addition to the characters supported by [`file:info`](#fileinfo-mode),
 `mode` can also contain:
 
-| Character | Type  | Description |
+| Character | Value | Description |
 | --------- | ----- | ----------- |
 | `p` | string <!-- uv_fs_realpath --> | Canonicalized absolute **path** name for the file. |
 | `=` | string <!-- uv_fs_readlink --> | The **value** of the symbolic link, or `nil` if `path` does not refer a symbolic link. |
@@ -1540,46 +1569,48 @@ This section describes functions of `coutil.system` for obtaining information pr
 ### `system.procinfo (which)`
 
 Returns values corresponding to information about the current process and the system where it is running.
-The following characters present in string `which` define the values to be returned:
+The following characters in string `which` define the values to be returned:
 
-- `#`: current process identifier (**pid**).
-- `$`: current user **shell** path.
-- `^`: **parent** process identifier (pid).
-- `=`: integral unshared **stack** size of the process (bytes).
-- `<`: IPC messages **received** by the process.
-- `>`: IPC messages **sent** by the process.
-- `1`: system load of last **1 minute**.
-- `b`: total amount of physical memory in the system (**bytes**).
-- `c`: user **CPU** time used of the process (seconds).
-- `d`: integral unshared **data** size of the process (bytes).
-- `e`: **executable** file path of the process (see note below).
-- `f`: amount of **free** memory available in the system (bytes).
-- `g`: current user **group** identifier (gid).
-- `h`: operating system **hardware** name.
-- `H`: current user **home** directory path.
-- `i`: block **input** operations of the process.
-- `k`: operating system **kernel** name.
-- `l`: system **load** of last _5 minutes_.
-- `L`: system **load** of last _15 minutes_.
-- `m`: _integral_ shared **memory** size of the process (bytes).
-- `M`: _limit_ of **memory** available to the process (bytes).
-- `n`: **network** host name of the system.
-- `o`: block **output** operations of the process.
-- `p`: **page** _reclaims_ (soft page faults) of the process.
-- `P`: **page** _faults_ (hard page faults) of the process.
-- `r`: **resident** memory size of the process (bytes).
-- `R`: _maximum_ **resident** set size of the process (bytes).
-- `s`: **system** CPU time used of the process (seconds).
-- `S`: **signals** received by the process.
-- `t`: current system **uptime** (seconds).
-- `T`: current **temporary** directory path.
-- `u`: current **user** _identifier_ (uid).
-- `U`: current **user** _name_.
-- `v`: operating system _release_ **version** name.
-- `V`: operating system **version** _name_.
-- `w`: **swaps** of the process.
-- `x`: _voluntary_ **context** switches of the process.
-- `X`: _involuntary_ **context** switches of the process.
+| Character | Value | Description |
+| --------- | ----- | ----------- |
+| `e` | string  <!-- uv_exepath --> | **executable** file path of the process (see note below). |
+| `n` | string  <!-- uv_os_gethostname --> | **network** host name of the system. |
+| `T` | string  <!-- uv_os_tmpdir --> | current **temporary** directory path. |
+| `h` | string  <!-- name.machine --> | operating system **hardware** name. |
+| `k` | string  <!-- name.sysname --> | operating system **kernel** name. |
+| `v` | string  <!-- name.release --> | operating system _release_ **version** name. |
+| `V` | string  <!-- name.version --> | operating system **version** _name_. |
+| `$` | string  <!-- user.shell --> | current user **shell** path. |
+| `H` | string  <!-- user.homedir --> | current user **home** directory path. |
+| `U` | string  <!-- user.username --> | current **user** _name_. |
+| `u` | integer <!-- user.uid --> | current **user** _identifier_ (uid). |
+| `g` | integer <!-- user.gid --> | current user **group** identifier (gid). |
+| `=` | integer <!-- usage.ru_isrss --> | integral unshared **stack** size of the process (bytes). |
+| `d` | integer <!-- usage.ru_idrss --> | integral unshared **data** size of the process (bytes). |
+| `m` | integer <!-- usage.ru_ixrss --> | _integral_ shared **memory** size of the process (bytes). |
+| `R` | integer <!-- usage.ru_maxrss --> | _maximum_ **resident** set size of the process (bytes). |
+| `<` | integer <!-- usage.ru_msgrcv --> | IPC messages **received** by the process. |
+| `>` | integer <!-- usage.ru_msgsnd --> | IPC messages **sent** by the process. |
+| `i` | integer <!-- usage.ru_inblock --> | block **input** operations of the process. |
+| `o` | integer <!-- usage.ru_oublock --> | block **output** operations of the process. |
+| `p` | integer <!-- usage.ru_minflt --> | **page** _reclaims_ (soft page faults) of the process. |
+| `P` | integer <!-- usage.ru_majflt --> | **page** _faults_ (hard page faults) of the process. |
+| `S` | integer <!-- usage.ru_nsignals --> | **signals** received by the process. |
+| `w` | integer <!-- usage.ru_nswap --> | **swaps** of the process. |
+| `x` | integer <!-- usage.ru_nvcsw --> | _voluntary_ **context** switches of the process. |
+| `X` | integer <!-- usage.ru_nivcsw --> | _involuntary_ **context** switches of the process. |
+| `c` | number  <!-- usage.ru_utime --> | user **CPU** time used of the process (seconds). |
+| `s` | number  <!-- usage.ru_stime --> | **system** CPU time used of the process (seconds). |
+| `1` | number  <!-- load[0] --> | system load of last **1 minute**. |
+| `l` | number  <!-- load[1] --> | system **load** of last _5 minutes_. |
+| `L` | number  <!-- load[2] --> | system **load** of last _15 minutes_. |
+| `t` | number  <!-- uv_uptime --> | current system **uptime** (seconds). |
+| `#` | integer <!-- uv_os_getpid --> | current process identifier (**pid**). |
+| `^` | integer <!-- uv_os_getppid --> | **parent** process identifier (pid). |
+| `b` | integer <!-- uv_get_total_memory --> | total amount of physical memory in the system (**bytes**). |
+| `f` | integer <!-- uv_get_free_memory --> | amount of **free** memory available in the system (bytes). |
+| `M` | integer <!-- uv_get_constrained_memory --> | _limit_ of **memory** available to the process (bytes). |
+| `r` | integer <!-- uv_resident_set_memory --> | **resident** memory size of the process (bytes). |
 
 This function never [fails](#failures).
 It raises errors instead.
@@ -1592,18 +1623,20 @@ Returns an [iterator](http://www.lua.org/manual/5.4/manual.html#3.3.5) that prod
 The _control variable_ is the index of the CPU.
 The values of the other _loop variables_ are given by the following characters in string `which`:
 
-- `m`: CPU **model** name.
-- `c`: current CPU **clock** speed (MHz).
-- `u`: time the CPU spent executing normal processes in **user** mode (milliseconds).
-- `n`: time the CPU spent executing prioritized (**niced**) processes in user mode (milliseconds).
-- `s`: time the CPU spent executing processes in **kernel** mode (milliseconds).
-- `d`: time the CPU spent servicing **device** interrupts. (milliseconds).
-- `i`: time the CPU was **idle** (milliseconds).
+| Character | Value | Description |
+| --------- | ----- | ----------- |
+| `m` | string | CPU **model** name. |
+| `c` | integer | current CPU **clock** speed (MHz). |
+| `u` | integer | time the CPU spent executing normal processes in **user** mode (milliseconds). |
+| `n` | integer | time the CPU spent executing prioritized (**niced**) processes in user mode (milliseconds). |
+| `s` | integer | time the CPU spent executing processes in **kernel** mode (milliseconds). |
+| `d` | integer | time the CPU spent servicing **device** interrupts. (milliseconds). |
+| `i` | integer | time the CPU was **idle** (milliseconds). |
 
 This function never [fails](#failures).
 It raises errors instead.
 
-**Note**: The _state value_ is the value `which`,
+**Note**: the _state value_ returned is `which`,
 and it only dictates how the values are returned in each call,
 because the _iterator_ contains all the information that can be produced.
 The initial value for the _control variable_ is `0`.
@@ -1624,23 +1657,26 @@ as described below:
 The _control variable_ is the index of the network interface address,
 not the interface index.
 The values of the other _loop variables_ are given by the following characters in string `which`:
-	- `n`: the name of the network interface.
-	- `i`: `true` if the network interface address is internal, or `false` otherwise.
-	- `d`: the domain of the network interface address (`"ipv4"` or `"ipv6"`).
-	- `l`: the length of the subnet mask of the network interface address.
-	- `m`: the binary representation of the subnet mask of the network interface address.
-	- `t`: the text representation of the network interface address.
-	- `b`: the binary representation of the network interface address.
-	- `T`: the text representation of the physical address (MAC) of the network interface.
-	- `B`: the binary representation physical address (MAC) of the network interface.
 
-**Note**: This _iterator_ have the same characteristics of the one returned by [`system.cpuinfo`](#systemcpuinfo-which).
+| Character | Value | Description |
+| --------- | ----- | ----------- |
+| `n` | string | the name of the network interface. |
+| `i` | boolean | `true` if the network interface address is internal, or `false` otherwise. |
+| `d` | string | the domain of the network interface address (`"ipv4"` or `"ipv6"`). |
+| `l` | integer | the length of the subnet mask of the network interface address. |
+| `m` | string | the binary representation of the subnet mask of the network interface address. |
+| `t` | string | the text representation of the network interface address. |
+| `b` | string | the binary representation of the network interface address. |
+| `T` | string | the text representation of the physical address (MAC) of the network interface. |
+| `B` | string | the binary representation physical address (MAC) of the network interface. |
+
+**Note**: this _iterator_ have the same characteristics of the one returned by [`system.cpuinfo`](#systemcpuinfo-which).
 
 ### `system.random (buffer [, i [, j [, mode]]])`
 
 [Await function](#await-function) that awaits until it fills [memory](https://github.com/renatomaia/lua-memory) `buffer` with [cryptographically strong random bytes](https://en.wikipedia.org/wiki/Cryptographically_secure_pseudorandom_number_generator),
 from position `i` until `j`,
-following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+following the same sematics of these arguments in functions of [memory](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#lua-module).
 
 If string `mode` is provided with character `~`,
 it executes in [blocking mode](#blocking-mode).
@@ -1653,116 +1689,124 @@ this function returns `buffer`.
 Index
 =====
 
-- [`coutil.channel`](#channels)
-	- [`channel.close`](#channelclose-ch)
-	- [`channel.create`](#channelcreate-name)
-	- [`channel.getnames`](#channelgetnames-names)
-	- [`channel.sync`](#channelsync-ch-endpoint-)
-- [`coutil.coroutine`](#state-coroutines)
-	- [`coroutine.close`](#coroutineclose-co)
-	- [`coroutine.load`](#coroutineload-chunk--chunkname--mode)
-	- [`coroutine.loadfile`](#coroutineloadfile-filepath--mode)
-	- [`coroutine.status`](#coroutinestatus-co)
-- [`coutil.event`](#events)
-	- [`event.await`](#eventawait-e)
-	- [`event.awaitall`](#eventawaitall-e1-)
-	- [`event.awaitany`](#eventawaitany-e1-)
-	- [`event.emitall`](#eventemitall-e-)
-	- [`event.emitone`](#eventemitone-e-)
-	- [`event.pending`](#eventpending-e)
-- [`coutil.mutex`](#mutex)
-	- [`mutex.islocked`](#mutexislocked-e)
-	- [`mutex.lock`](#mutexlock-e)
-	- [`mutex.ownlock`](#mutexownlock-e)
-	- [`mutex.unlock`](#mutexunlock-e)
-- [`coutil.promise`](#promises)
-	- [`promise.awaitall`](#promiseawaitall-p-)
-	- [`promise.awaitany`](#promiseawaitany-p-)
-	- [`promise.create`](#promisecreate-)
-	- [`promise.onlypending`](#promiseonlypending-p-)
-	- [`promise.pickready`](#promisepickready-p-)
-- [`coutil.queued`](#queued-events)
-	- [`queued.await`](#queuedawait-e)
-	- [`queued.awaitall`](#queuedawaitall-e1-)
-	- [`queued.awaitany`](#queuedawaitany-e1-)
-	- [`queued.emitall`](#queuedemitall-e-)
-	- [`queued.emitone`](#queuedemitone-e-)
-	- [`queued.isqueued`](#queuedisqueued-e)
-	- [`queued.pending`](#queuedpending-e)
-- [`coutil.spawn`](#coroutine-finalizers)
-	- [`spawn.catch`](#spawncatch-h-f-)
-	- [`spawn.trap`](#spawntrap-h-f-)
-- [`coutil.system`](#system-features)
-	- [`system.address`](#systemaddress-type--data--port--mode)
-	- [`system.awaitch`](#systemawaitch-ch-endpoint-)
-	- [`system.awaitsig`](#systemawaitsig-signal)
-	- [`system.copyfile`](#systemcopyfile-path-destiny--mode)
-	- [`system.cpuinfo`](#systemcpuinfo-which)
-	- [`system.emitsig`](#systememitsig-pid-signal)
-	- [`system.execute`](#systemexecute-cmd-)
-	- [`system.filebits`](#systemfilebits)
-	- [`system.fileinfo`](#systemfileinfo-path-mode)
-	- [`system.findaddr`](#systemfindaddr-name--service--mode)
-		- [`addresses:close`](#addressesclose-)
-		- [`addresses:getaddress`](#addressesgetaddress-address)
-		- [`addresses:getdomain`](#addressesgetdomain-)
-		- [`addresses:getsocktype`](#addressesgetsocktype-)
-		- [`addresses:next`](#addressesnext-)
-		- [`addresses:reset`](#addressesreset-)
-	- [`system.getdir`](#systemgetdir-)
-	- [`system.getenv`](#systemgetenv-name)
-	- [`system.getpriority`](#systemgetpriority-pid)
-	- [`system.grantfile`](#systemgrantfile-path-perm--mode)
-	- [`system.halt`](#systemhalt-)
-	- [`system.isrunning`](#systemisrunning-)
-	- [`system.linkfile`](#systemlinkfile-path-destiny--mode)
-	- [`system.listdir`](#systemlistdir-path--mode)
-	- [`system.makedir`](#systemmakedir-path-perm--mode)
-	- [`system.maketemp`](#systemmaketemp-prefix--mode)
-	- [`system.movefile`](#systemmovefile-path-destiny--mode)
-	- [`system.nameaddr`](#systemnameaddr-address--mode)
-	- [`system.nanosecs`](#systemnanosecs-)
-	- [`system.netinfo`](#systemnetinfo-option-which)
-	- [`system.openfile`](#systemopenfile-path--mode--perm)
-		- [`file:close`](#fileclose-mode)
-		- [`file:flush`](#fileflush-mode)
-		- [`file:grant`](#filegrant-perm--mode)
-		- [`file:info`](#fileinfo-mode)
-		- [`file:own`](#fileown-uid-gid--mode)
-		- [`file:read`](#fileread-buffer--i--j--offset--mode)
-		- [`file:resize`](#fileresize-size--mode)
-		- [`file:touch`](#filetouch-mode-times)
-		- [`file:write`](#filewrite-data--i--j--offset--mode)
-	- [`system.ownfile`](#systemownfile-path-uid-gid--mode)
-	- [`system.packenv`](#systempackenv-vars)
-	- [`system.procinfo`](#systemprocinfo-which)
-	- [`system.random`](#systemrandom-buffer--i--j--mode)
-	- [`system.removefile`](#systemremovefile-path--mode)
-	- [`system.resume`](#systemresume-co-)
-	- [`system.run`](#systemrun-mode)
-	- [`system.setdir`](#systemsetdir-path)
-	- [`system.setenv`](#systemsetenv-name-value)
-	- [`system.setpriority`](#systemsetpriority-pid-value)
-	- [`system.socket`](#systemsocket-type-domain)
-		- [`socket:accept`](#socketaccept-)
-		- [`socket:bind`](#socketbind-address)
-		- [`socket:close`](#socketclose-)
-		- [`socket:connect`](#socketconnect-address)
-		- [`socket:getaddress`](#socketgetaddress-site--address)
-		- [`socket:getdomain`](#socketgetdomain-)
-		- [`socket:listen`](#socketlisten-backlog)
-		- [`socket:read`](#socketread-buffer--i--j--address)
-		- [`socket:setoption`](#socketsetoption-name-value-)
-		- [`socket:shutdown`](#socketshutdown-)
-		- [`socket:write`](#socketwrite-data--i--j--address)
-	- [`system.suspend`](#systemsuspend-seconds--mode)
-	- [`system.time`](#systemtime-mode)
-	- [`system.touchfile`](#systemtouchfile-path--mode-times)
-	- [`system.unpackenv`](#systemunpackenv-env--tab)
-- [`coutil.threads`](#thread-pools)
-	- [`threads.close`](#threadsclose-pool)
-	- [`threads.count`](#threadscount-pool-options)
-	- [`threads.create`](#threadscreate-size)
-	- [`threads.dofile`](#threadsdofile-pool-filepath--mode-)
-	- [`threads.dostring`](#threadsdostring-pool-chunk--chunkname--mode-)
-	- [`threads.resize`](#threadsresize-pool-size--create)
+<table><tr><td>
+<a href='#channels'><code>coutil.channel</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#channelclose-ch'><code>channel.close</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#channelcreate-name'><code>channel.create</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#channelgetname-ch'><code>channel.getname</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#channelgetnames-names'><code>channel.getnames</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#channelsync-ch-endpoint-'><code>channel.sync</code></a><br>
+<a href='#state-coroutines'><code>coutil.coroutine</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#coroutineclose-co'><code>coroutine.close</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#coroutineload-chunk--chunkname--mode'><code>coroutine.load</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#coroutineloadfile-filepath--mode'><code>coroutine.loadfile</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#coroutinestatus-co'><code>coroutine.status</code></a><br>
+<a href='#events'><code>coutil.event</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#eventawait-e'><code>event.await</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#eventawaitall-e1-'><code>event.awaitall</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#eventawaitany-e1-'><code>event.awaitany</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#eventemitall-e-'><code>event.emitall</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#eventemitone-e-'><code>event.emitone</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#eventpending-e'><code>event.pending</code></a><br>
+<a href='#mutex'><code>coutil.mutex</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#mutexislocked-e'><code>mutex.islocked</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#mutexlock-e'><code>mutex.lock</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#mutexownlock-e'><code>mutex.ownlock</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#mutexunlock-e'><code>mutex.unlock</code></a><br>
+<a href='#promises'><code>coutil.promise</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#promiseawaitall-p-'><code>promise.awaitall</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#promiseawaitany-p-'><code>promise.awaitany</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#promisecreate-'><code>promise.create</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#promiseonlypending-p-'><code>promise.onlypending</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#promisepickready-p-'><code>promise.pickready</code></a><br>
+</td><td>
+<a href='#queued-events'><code>coutil.queued</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#queuedawait-e'><code>queued.await</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#queuedawaitall-e1-'><code>queued.awaitall</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#queuedawaitany-e1-'><code>queued.awaitany</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#queuedemitall-e-'><code>queued.emitall</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#queuedemitone-e-'><code>queued.emitone</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#queuedisqueued-e'><code>queued.isqueued</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#queuedpending-e'><code>queued.pending</code></a><br>
+<a href='#coroutine-finalizers'><code>coutil.spawn</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#spawncatch-h-f-'><code>spawn.catch</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#spawntrap-h-f-'><code>spawn.trap</code></a><br>
+<a href='#system-features'><code>coutil.system</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemaddress-type--data--port--mode'><code>system.address</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemawaitch-ch-endpoint-'><code>system.awaitch</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemawaitsig-signal'><code>system.awaitsig</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemcopyfile-path-destiny--mode'><code>system.copyfile</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemcpuinfo-which'><code>system.cpuinfo</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systememitsig-pid-signal'><code>system.emitsig</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemexecute-cmd-'><code>system.execute</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemfilebits'><code>system.filebits</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemfileinfo-path-mode'><code>system.fileinfo</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemfindaddr-name--service--mode'><code>system.findaddr</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#addressesclose-'><code>addresses:close</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#addressesgetaddress-address'><code>addresses:getaddress</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#addressesgetdomain-'><code>addresses:getdomain</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#addressesgetsocktype-'><code>addresses:getsocktype</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#addressesnext-'><code>addresses:next</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#addressesreset-'><code>addresses:reset</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemgetdir-'><code>system.getdir</code></a><br>
+</td><td>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemgetenv-name'><code>system.getenv</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemgetpriority-pid'><code>system.getpriority</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemgrantfile-path-perm--mode'><code>system.grantfile</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemhalt-'><code>system.halt</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemisrunning-'><code>system.isrunning</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemlinkfile-path-destiny--mode'><code>system.linkfile</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemlistdir-path--mode'><code>system.listdir</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemmakedir-path-perm--mode'><code>system.makedir</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemmaketemp-prefix--mode'><code>system.maketemp</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemmovefile-path-destiny--mode'><code>system.movefile</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemnameaddr-address--mode'><code>system.nameaddr</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemnanosecs-'><code>system.nanosecs</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemnetinfo-option-which'><code>system.netinfo</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemopenfile-path--mode--perm'><code>system.openfile</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#fileclose-mode'><code>file:close</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#fileflush-mode'><code>file:flush</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#filegrant-perm--mode'><code>file:grant</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#fileinfo-mode'><code>file:info</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#fileown-uid-gid--mode'><code>file:own</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#fileread-buffer--i--j--offset--mode'><code>file:read</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#fileresize-size--mode'><code>file:resize</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#filetouch-mode-times'><code>file:touch</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#filewrite-data--i--j--offset--mode'><code>file:write</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemownfile-path-uid-gid--mode'><code>system.ownfile</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systempackenv-vars'><code>system.packenv</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemprocinfo-which'><code>system.procinfo</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemrandom-buffer--i--j--mode'><code>system.random</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemremovefile-path--mode'><code>system.removefile</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemresume-co-'><code>system.resume</code></a><br>
+</td><td>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemrun-mode'><code>system.run</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemsetdir-path'><code>system.setdir</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemsetenv-name-value'><code>system.setenv</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemsetpriority-pid-value'><code>system.setpriority</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemsocket-type-domain'><code>system.socket</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketaccept-'><code>socket:accept</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketbind-address'><code>socket:bind</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketclose-'><code>socket:close</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketconnect-address'><code>socket:connect</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketgetaddress-site--address'><code>socket:getaddress</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketgetdomain-'><code>socket:getdomain</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketlisten-backlog'><code>socket:listen</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketread-buffer--i--j--address'><code>socket:read</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketsetoption-name-value-'><code>socket:setoption</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketshutdown-'><code>socket:shutdown</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketwrite-data--i--j--address'><code>socket:write</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemsuspend-seconds--mode'><code>system.suspend</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemtime-mode'><code>system.time</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemtouchfile-path--mode-times'><code>system.touchfile</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemunpackenv-env--tab'><code>system.unpackenv</code></a><br>
+<a href='#thread-pools'><code>coutil.threads</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#threadsclose-pool'><code>threads.close</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#threadscount-pool-options'><code>threads.count</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#threadscreate-size'><code>threads.create</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#threadsdofile-pool-filepath--mode-'><code>threads.dofile</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#threadsdostring-pool-chunk--chunkname--mode-'><code>threads.dostring</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#threadsresize-pool-size--create'><code>threads.resize</code></a><br>
+<br>
+<br>
+</td></tr></table>
