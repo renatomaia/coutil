@@ -337,12 +337,12 @@ static int pushfilestat (lua_State *L, char mode, uv_fs_t *filereq) {
 		case '2': lua_pushboolean(L, filereq->statbuf.st_mode&S_IWOTH); break;
 		case '1': lua_pushboolean(L, filereq->statbuf.st_mode&S_IXOTH); break;
 		case 'M': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_mode); break;
-		case 'd': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_dev); break;
+		case 'D': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_dev); break;
 		case '#': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_ino); break;
 		case '*': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_nlink); break;
 		case 'u': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_uid); break;
 		case 'g': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_gid); break;
-		case 'D': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_rdev); break;
+		case 'd': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_rdev); break;
 		case 'B': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_size); break;
 		case 'i': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_blksize); break;
 		case 'b': lua_pushinteger(L, (lua_Integer)filereq->statbuf.st_blocks); break;
@@ -467,12 +467,12 @@ static int toinfosrc (lua_State *L, const char mode, int mask) {
 		case '2':
 		case '1':
 		case 'M':
-		case 'd':
+		case 'D':
 		case '#':
 		case '*':
 		case 'u':
 		case 'g':
-		case 'D':
+		case 'd':
 		case 'B':
 		case 'i':
 		case 'b':
@@ -1225,7 +1225,7 @@ static int system_openfile (lua_State *L) {
 		case 'r': perm |= 1; break;
 		case 'w': perm |= 2; break;
 		case 'a': perm |= 2; flags |= UV_FS_O_APPEND; break;
-		case 's': perm |= 2; flags |= UV_FS_O_SYNC; break;
+		case 'f': perm |= 2; flags |= UV_FS_O_SYNC; break;
 		case 't': perm |= 2; flags |= UV_FS_O_TRUNC; break;
 		case 'n': flags |= UV_FS_O_CREAT; break;
 		case 'N': flags |= UV_FS_O_CREAT|UV_FS_O_EXCL; break;

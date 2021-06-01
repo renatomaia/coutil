@@ -6,19 +6,12 @@ source = {
 description = {
 	summary = "Coroutine utilities to support multithread in Lua",
 	detailed = [[
-		Lua libraries that provide support for:
-		- Coroutine execution finalizers.
-		- Coroutine syncronization abstractions (events, mutexes, and promises)
-		- Coroutine resumption on conditions of system features (and API to such features):
-			- Measure of time lapse;
-			- Signals of system processes;
-			- Program execution;
-			- Data transmission over network and IPC sockets;
-			- DNS lookups;
-			- Code chunk execution on separate system threads:
-				- Preemptive coroutines;
-				- Thread pools;
-				- Copy values between code chunks.
+		coutil provides a set of integrated libraries to support multithreading in Lua;
+		both cooperatively using coroutines and preemptively by running code on distinct
+		system threads. It also provides synchronous (no callbacks) and non-blocking
+		(suspends only the caller) functions for a variety of features: from synchronization
+		mechanisms like events, channels, and others; to access to system resources like
+		networking, processes, file system, and more.
 	]],
 	homepage = "https://github.com/renatomaia/coutil",
 	license = "MIT/X11"
