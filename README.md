@@ -1,8 +1,8 @@
 Coutil
 ======
 
-`coutil` provides a set of integrated libraries to support multithreading in Lua;
-both cooperatively using coroutines and preemptively by running code on distinct system threads.
+Coutil provides a set of integrated libraries to support multithreading in Lua;
+both cooperatively, using coroutines, and preemptively, by running code on distinct system threads.
 It also provides synchronous (no callbacks) and non-blocking (suspends only the caller) functions for a variety of features:
 from synchronization mechanisms like events, channels, and others;
 to access to system resources like networking, processes, file system, and more.
