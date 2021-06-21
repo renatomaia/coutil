@@ -61,6 +61,7 @@ build = {
 	platforms = {
 		windows = {
 			makefile = "etc/Makefile.win",
+			build_target = "mod",
 			install = {
 				lib = {
 					["coutil"] = "coutil.dll",
