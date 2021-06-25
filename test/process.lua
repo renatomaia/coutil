@@ -32,7 +32,6 @@ do
 			info.execfile = command
 			info.environment = fillenv(info.environment)
 			command = info
-			--]===]
 		end
 		writeto(scriptfile, string.format([[
 			local function main(...) %s end
@@ -872,8 +871,8 @@ do case "own priority"
 end
 
 do case "change other process"
-	local proc = { execfile = "sleep", arguments = { "3" } }
-	spawn(system.execute, proc)
+	local proc = { execfile = luabin, arguments = { "-v" } }
+	spawn(function () assert(system.execute(proc)) end)
 
 	assert(system.setpriority(proc.pid, "below"))
 	assert(system.getpriority(proc.pid) == "below")

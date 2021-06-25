@@ -208,7 +208,7 @@ local hosts = {
 		["127.0.0.1"] = "ipv4",
 		["::1"] = "ipv6",
 	},
-	["ip6-localhost"] = { ["::1"] = "ipv6" },
+	--["ip6-localhost"] = { ["::1"] = "ipv6" },
 	["*"] = {
 		["0.0.0.0"] = "ipv4",
 		["::"] = "ipv6",
@@ -354,7 +354,7 @@ do case "host and service"
 				for domain, ip in pairs(ips) do
 					local addr = system.address(domain, ip, port)
 					local name, service = system.nameaddr(addr)
-					assert(name == hostname)
+					assert(name == standard == "win32" and system.procinfo("n") or hostname)
 					assert(service == servname)
 				end
 			end

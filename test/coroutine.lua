@@ -133,14 +133,12 @@ do case "preemptive execution"
 	file:close()
 
 	local removed = false
-	for i=1, 1e3 do
-		file = io.open(path)
-		if not file then
+	for i=1, 1e5 do
+		if not pcall(system.fileinfo, path, "~b") then
 			removed = true
 			break
-		else
-			file:close()
 		end
+		system.suspend(.1, "~")
 	end
 	assert(removed)
 

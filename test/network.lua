@@ -539,6 +539,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 		pspawn(function ()
 			garbage.coro = coroutine.running()
 			local unconnected = assert(create())
+			assert(unconnected:bind(ipaddr[domain].bindable))
 			stage = 1
 			assert(unconnected:read(memory.create(10)) == garbage)
 			stage = 2
@@ -893,7 +894,7 @@ end
 do case "used after library collection"
 	dostring(utilschunk..[===[
 		local system = require "coutil.system"
-		local addr = system.address("ipv4", "127.0.0.1:65432")
+		local addr = system.address("ipv4", "8.8.8.8:80")
 		local path = os.tmpname()
 		local cases = {}
 		table.insert(cases, { socket = system.socket("datagram", addr.type), op = "write", "xxx", nil, nil, addr })

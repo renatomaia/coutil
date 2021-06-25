@@ -1193,7 +1193,7 @@ static int k_recvdata (lua_State *L) {
 }
 static int k_getbuffer (lua_State *L) {
 	lcu_UdataHandle *object = (lcu_UdataHandle *)lua_touserdata(L, 1);
-	lua_CFunction nextstep = (lua_CFunction)lua_touserdata(L, -2);
+	lua_CFunction nextstep = (lua_CFunction)lua_touserdata(L, 5);
 	uv_buf_t *buf = (uv_buf_t *)lua_touserdata(L, -1);
 	lua_pop(L, 1);  /* discard 'buf' pointer */
 	lcu_assert(nextstep);
@@ -1207,10 +1207,10 @@ static void uv_onrecvdata (uv_stream_t *stream,
                            const uv_buf_t *buf) {
 	uv_handle_t *handle = (uv_handle_t *)stream;
 	lua_State *thread = (lua_State *)handle->data;
+	lcu_UdataHandle *object = lcu_hdl2ud(handle);
 	if (nread == 0) {
 		/* 'libuv' indication of EAGAIN or EWOULDBLOCK, ignore it and */
 		/* get ready to restart all over again from obtaining the buffer */
-		lcu_UdataHandle *object = lcu_hdl2ud(handle);
 		object->step = k_getbuffer;
 	} else {
 		int nret;
@@ -1220,10 +1220,10 @@ static void uv_onrecvdata (uv_stream_t *stream,
 			lua_pushinteger(thread, nread);
 			nret = 1;
 		} else {
-			if (nread == UV_EOF) {  /* implies 'handle' is already stopped */
-				lcu_UdataHandle *object = lcu_hdl2ud(handle);
-				object->stop = NULL;
-			}
+			/* in case of errors, 'libuv' might not call 'uv_ongetbuffer' */
+			/* so 'object->step == k_getbuffer', thus it will fail. */
+			object->step = k_recvdata;  /* avoid calling 'k_recvpipedata' in case of error */
+			if (nread == UV_EOF) object->stop = NULL;  /* implies 'handle' is already stopped */
 			nret = lcuL_pusherrres(thread, nread);
 		}
 		lcuU_resumeudhdl(handle, nret);
@@ -1793,12 +1793,12 @@ static const luaL_Reg terminal[] = {
 	{NULL, NULL}
 };
 
-static const luaL_Reg modf[] = {
+static const luaL_Reg modulef[] = {
 	{"address", system_address},
 	{"netinfo", system_netinfo},
 };
 
-static const luaL_Reg upvf[] = {
+static const luaL_Reg upvaluef[] = {
 	{"findaddr", system_findaddr},
 	{"nameaddr", system_nameaddr},
 	{"socket", system_socket},
@@ -1907,8 +1907,8 @@ LCUI_FUNC void lcuM_addcommunf (lua_State *L) {
 	lcuM_setfuncs(L, objectmt, 1);
 	lua_pop(L, 2);  /* pop metatable and name */
 
-	luaL_setfuncs(L, modf, 0);
-	lcuM_setfuncs(L, upvf, LCU_MODUPVS);
+	luaL_setfuncs(L, modulef, 0);
+	lcuM_setfuncs(L, upvaluef, LCU_MODUPVS);
 
 	{
 		static const char *const field[] = { "stdin", "stdout", "stderr" };

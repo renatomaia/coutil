@@ -15,10 +15,6 @@ do case "errors"
 		end
 	end
 
-	if standard == "win32" then -- TODO: check if this is a bug in libuv
-		asserterr("operation not supported", pcall(system.listdir, "file.lua", "~"))
-	end
-
 	spawn(function ()
 		asserterr("not a directory", pcall(system.listdir, "file.lua"))
 	end)
@@ -144,7 +140,7 @@ do
 		local file, extra = system.maketemp("lcutest_", mode.."o")
 		assert(file:close(mode))
 		assert(extra == nil)
-		os.execute("rm lcutest_??????")
+		os.execute((standard == "win32" and "del" or "rm").." lcutest_??????")
 	end
 	function testcases.fileopen(mode)
 		local path, file = system.maketemp("lcutest_", mode.."fo")
@@ -194,8 +190,6 @@ do case "errors"
 		local expectederrmsg = "already exists"
 		if not mode:find("s", 1, "plain search") then
 			asserterr("no such", system.linkfile("LICENSE", "link.lua", mode))
-		elseif standard == "win32" then -- TODO: check if this is a bug in libuv
-			expectederrmsg = "operation not permitted"
 		end
 		asserterr(expectederrmsg, system.linkfile("../LICENSE", "file.lua", mode))
 	end
@@ -218,37 +212,27 @@ do
 		assert(system.fileinfo("link.lua", mode.."?") == "file")
 		if standard == "win32" then
 			asserterr("unknown error", pcall(system.fileinfo, "link.lua", mode.."=")) -- TODO: check if this is a bug in libuv
-			assert(system.fileinfo("link.lua", mode.."*") == 1)
-			assert(system.fileinfo("file.lua", mode.."*") == 1)
 		else
 			assert(system.fileinfo("link.lua", mode.."=") == nil)
-			assert(system.fileinfo("link.lua", mode.."*") == 2)
-			assert(system.fileinfo("file.lua", mode.."*") == 2)
 		end
+		assert(system.fileinfo("link.lua", mode.."*") == 2)
+		assert(system.fileinfo("file.lua", mode.."*") == 2)
 		assert(system.removefile("link.lua", mode))
 		assert(system.fileinfo("file.lua", mode.."*") == 1)
 	end
 	function testcases.symbolic(mode)
-		if standard == "win32" then -- TODO: check if this is a bug in libuv
-			asserterr("operation not permitted", system.linkfile("file.lua", "link.lua", "s"..mode))
-		else
-			assert(system.linkfile("file.lua", "link.lua", "s"..mode) == true)
-			assert(system.fileinfo("link.lua", mode.."l?") == "link")
-			assert(system.fileinfo("link.lua", mode.."?") == "file")
-			assert(system.fileinfo("link.lua", mode.."=") == "file.lua")
-			assert(system.removefile("link.lua", mode))
-		end
+		assert(system.linkfile("file.lua", "link.lua", "s"..mode) == true)
+		assert(system.fileinfo("link.lua", mode.."l?") == "link")
+		assert(system.fileinfo("link.lua", mode.."?") == "file")
+		assert(system.fileinfo("link.lua", mode.."=") == "file.lua")
+		assert(system.removefile("link.lua", mode))
 	end
 	function testcases.directory(mode)
-		if standard == "win32" then -- TODO: check if this is a bug in libuv
-			asserterr("operation not permitted", system.linkfile("benchmarks", "link.dir", "d"..mode))
-		else
-			assert(system.linkfile("benchmarks", "link.dir", "d"..mode) == true)
-			assert(system.fileinfo("link.dir", mode.."l?") == "link")
-			assert(system.fileinfo("link.dir", mode.."?") == "directory")
-			assert(system.fileinfo("link.dir", mode.."=") == "benchmarks")
-			assert(system.removefile("link.dir", mode))
-		end
+		assert(system.linkfile("benchmarks", "link.dir", "d"..mode) == true)
+		assert(system.fileinfo("link.dir", mode.."l?") == "link")
+		assert(system.fileinfo("link.dir", mode.."?") == "directory")
+		assert(system.fileinfo("link.dir", mode.."=") == "benchmarks")
+		assert(system.removefile("link.dir", mode))
 	end
 
 	for casename, casefunc in pairs(testcases) do
@@ -292,7 +276,7 @@ do
 	local testcases = {}
 	function testcases.file(mode)
 		assert(system.movefile("../LICENSE", "license.txt", mode) == true)
-		assert(system.fileinfo("license.txt", mode.."B") == 1080)
+		assert(system.fileinfo("license.txt", mode.."B") == 1098)
 		assert(system.movefile("license.txt", "../LICENSE", mode) == true)
 	end
 	function testcases.directory(mode)
@@ -478,7 +462,7 @@ do case "read contents"
 		file = assert(system.openfile("../LICENSE"))
 		assert(file:read(buffer) == #buffer)
 		assert(not buffer:diff("Copyright (C) 2017  "))
-		assert(file:read(buffer, 11, 20, 57) == 10)
+		assert(file:read(buffer, 11, 20, 59) == 10)
 		assert(not buffer:diff("Copyright Permission"))
 	end)
 	system.run()
@@ -543,7 +527,7 @@ do case "from file"
 
 	spawn(function () assert(file:write(srcf, 1, 10) == 10) end)
 	system.run()
-	assert(file:write(srcf, 58, 67, nil, "~") == 10)
+	assert(file:write(srcf, 60, 69, nil, "~") == 10)
 
 	file = assert(io.open(path))
 	assert(file:read("a") == "Copyright Permission")
@@ -765,8 +749,6 @@ for _, spec in ipairs{
 		for c in string.gmatch(options , ".") do
 			if c == "=" and standard == "win32" then -- TODO: check if this is a bug in libuv
 				asserterr("unknown error", pcall(spec.func, spec.arg, "~="))
-			elseif c == "p" and standard == "win32" then -- TODO: check if this is a bug in libuv
-				asserterr("operation not permitted", pcall(spec.func, spec.arg, "~p"))
 			else
 				local ltype = type(spec.func(spec.arg, "~"..c))
 				assert(string.find(typemap[ltype], c, 1, "plain"))

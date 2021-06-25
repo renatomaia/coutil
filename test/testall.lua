@@ -34,7 +34,7 @@ dofile "spawn.lua"
 dofile "system.lua"
 dofile "time.lua"
 dofile "file.lua"
-dofile "signal.lua"
+if standard == "posix" then dofile "signal.lua" end
 dofile "netaddr.lua"
 dofile "stream.lua"
 dofile "network.lua"
@@ -42,6 +42,6 @@ dofile "pipe.lua"
 dofile "process.lua"
 dofile "coroutine.lua"
 dofile "thread.lua"
-dofile "operation.lua"
+if standard == "posix" then dofile "operation.lua" end
 
 print "\nSuccess!\n"
