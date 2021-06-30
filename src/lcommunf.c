@@ -1068,7 +1068,22 @@ static void uv_ongetbuffer (uv_handle_t *handle,
 		buf->len = 0;
 		lcu_assert(thread);
 		lua_pushlightuserdata(thread, buf);
+#ifndef _WIN32
 		lcuU_resumeudhdl(handle, 1);
+#else
+		if (lua_status(thread) == LUA_YIELD) {
+			lcuU_resumeudhdl(handle, 1);
+		} else {
+			/* this might happen because libuv might call 'uv_alloc_cb' inside */
+			/* 'uv_*_start', before it returns successfully. In such case, we */
+			/* are still running inside the calling coroutine. */
+			/* Ref.: https://groups.google.com/g/libuv/c/bTwH1X_F4p4 */
+			lcu_UdataHandle *object = lcu_hdl2ud(handle);
+			int nret = object->step(thread);
+			lcu_assert(ret == -1);  /* must yield, we can't return from here */
+			lua_pop(thread, 1);  /* pops 'buf' light userdata */
+		}
+#endif
 	} /* while 'socket:read' is called again after error getting buffer */
 	while (handle->data && buf->base == (char *)buf);
 }
