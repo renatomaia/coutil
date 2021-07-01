@@ -875,8 +875,8 @@ static const struct sockaddr *toobjaddr (lua_State *L, int idx, int domain) {
 
 /* domain = ipsock:getdomain() */
 static int ipsock_getdomain (lua_State *L) {
-	lcu_UdataHandle *object = (lcu_UdataHandle *)luaL_checkudata(L, 1, toclass(L));
-	pushaddrtype(L, netdomainof(object));
+	lcu_UdataHandle *udhdl = (lcu_UdataHandle *)luaL_checkudata(L, 1, toclass(L));
+	pushaddrtype(L, netdomainof(udhdl));
 	return 1;
 }
 
@@ -1022,13 +1022,13 @@ static int k_udprecv (lua_State *L) {
 	return lua_gettop(L)-5;
 }
 static int k_udpbuffer (lua_State *L) {
-	lcu_UdataHandle *object = (lcu_UdataHandle *)lua_touserdata(L, 1);
+	lcu_UdataHandle *udhdl = (lcu_UdataHandle *)lua_touserdata(L, 1);
 	uv_buf_t *buf = (uv_buf_t *)lua_touserdata( L, -1);
 	lcu_assert(buf);
 	lua_pop(L, 1);  /* discard 'buf' */
 	lcu_getoutputbuf(L, 2, buf);
 	if (buf->len > 65536) buf->len = 65536;  /* avoid use of recvmmsg by libuv */
-	object->step = k_udprecv;  /* update continuation function */
+	udhdl->step = k_udprecv;  /* update continuation function */
 	return -1;  /* yield on success */
 }
 static void uv_onudprecv (uv_udp_t *udp,
@@ -1040,8 +1040,8 @@ static void uv_onudprecv (uv_udp_t *udp,
 	if (nread == 0 && addr == NULL) {
 		/* 'libuv' indication of datagram end (meaning?!), ignore it and */
 		/* get ready to restart all over again from obtaining the buffer */
-		lcu_UdataHandle *object = lcu_hdl2ud(handle);
-		object->step = k_udpbuffer;
+		lcu_UdataHandle *udhdl = lcu_hdl2ud(handle);
+		udhdl->step = k_udpbuffer;
 	} else {
 		lua_State *thread = (lua_State *)handle->data;
 		int nret;
@@ -1071,32 +1071,34 @@ static void uv_ongetbuffer (uv_handle_t *handle,
 #ifndef _WIN32
 		lcuU_resumeudhdl(handle, 1);
 #else
-		if (lua_status(thread) == LUA_YIELD) {
-			lcuU_resumeudhdl(handle, 1);
-		} else {
+		if (lua_status(thread) == LUA_OK) {
 			/* this might happen because libuv might call 'uv_alloc_cb' inside */
-			/* 'uv_*_start', before it returns successfully. In such case, we */
+			/* 'uv_*_start' before it returns successfully. In such case, we */
 			/* are still running inside the calling coroutine. */
 			/* Ref.: https://groups.google.com/g/libuv/c/bTwH1X_F4p4 */
-			lcu_UdataHandle *object = lcu_hdl2ud(handle);
-			int nret = object->step(thread);
-			lcu_assert(ret == -1);  /* must yield, we can't return from here */
-			lua_pop(thread, 1);  /* pops 'buf' light userdata */
+			lcu_UdataHandle *udhdl = lcu_hdl2ud(handle);
+			int nret = udhdl->step(thread);
+			lcu_assert(nret == -1);  /* must yield, we can't return from here */
+		} else {
+			lcu_assert(lua_status(thread) == LUA_YIELD);
+			lcuU_resumeudhdl(handle, 1);
 		}
 #endif
 	} /* while 'socket:read' is called again after error getting buffer */
 	while (handle->data && buf->base == (char *)buf);
 }
 static int udpstoprecv (uv_handle_t *handle) {
+	lcu_log(handle, handle->data, "uv_udp_recv_stop");
 	return uv_udp_recv_stop((uv_udp_t *)handle);
 }
 static int udpstartrecv (uv_handle_t *handle) {
+	lcu_log(handle, handle->data, "uv_udp_recv_start");
 	return uv_udp_recv_start((uv_udp_t *)handle, uv_ongetbuffer, uv_onudprecv);
 }
 static int udp_read (lua_State *L) {
-	lcu_UdataHandle *object = lcu_openedudhdl(L, 1, LCU_UDPSOCKETCLS);
+	lcu_UdataHandle *udhdl = lcu_openedudhdl(L, 1, LCU_UDPSOCKETCLS);
 	lua_settop(L, 5);
-	return lcuT_resetudhdlk(L, object, udpstartrecv, udpstoprecv, k_udpbuffer);
+	return lcuT_resetudhdlk(L, udhdl, udpstartrecv, udpstoprecv, k_udpbuffer);
 }
 
 /*
@@ -1111,8 +1113,8 @@ static int k_setupshutdown (lua_State *L,
                             uv_req_t *request,
                             uv_loop_t *loop,
                             lcu_Operation *op) {
-	lcu_UdataHandle *object = (lcu_UdataHandle *)lua_touserdata(L, 1);
-	uv_stream_t *stream = (uv_stream_t *)lcu_ud2hdl(object);
+	lcu_UdataHandle *udhdl = (lcu_UdataHandle *)lua_touserdata(L, 1);
+	uv_stream_t *stream = (uv_stream_t *)lcu_ud2hdl(udhdl);
 	uv_shutdown_t *shutdown = (uv_shutdown_t *)request;
 	int err = uv_shutdown(shutdown, stream, uv_onshutdown);
 	lcuT_armcoreq(L, loop, op, err);
@@ -1120,8 +1122,8 @@ static int k_setupshutdown (lua_State *L,
 	return -1;  /* yield on success */
 }
 static int active_shutdown (lua_State *L) {
-	lcu_UdataHandle *object = lcu_openedudhdl(L, 1, toclass(L));
-	uv_handle_t *handle = lcu_ud2hdl(object);
+	lcu_UdataHandle *udhdl = lcu_openedudhdl(L, 1, toclass(L));
+	uv_handle_t *handle = lcu_ud2hdl(udhdl);
 	lcu_Scheduler *sched = lcu_tosched(handle->loop);
 	return lcuT_resetcoreqk(L, sched, k_setupshutdown, NULL, NULL);
 }
@@ -1135,8 +1137,8 @@ static int k_setupwrite (lua_State *L,
                          uv_req_t *request,
                          uv_loop_t *loop,
                          lcu_Operation *op) {
-	lcu_UdataHandle *object = (lcu_UdataHandle *)lua_touserdata(L, 1);
-	uv_stream_t *stream = (uv_stream_t *)lcu_ud2hdl(object);
+	lcu_UdataHandle *udhdl = (lcu_UdataHandle *)lua_touserdata(L, 1);
+	uv_stream_t *stream = (uv_stream_t *)lcu_ud2hdl(udhdl);
 	uv_write_t *write = (uv_write_t *)request;
 	uv_buf_t bufs[1];
 	int err;
@@ -1147,8 +1149,8 @@ static int k_setupwrite (lua_State *L,
 	return -1;  /* yield on success */
 }
 static int active_write (lua_State *L) {
-	lcu_UdataHandle *object = lcu_openedudhdl(L, 1, toclass(L));
-	uv_handle_t *handle = lcu_ud2hdl(object);
+	lcu_UdataHandle *udhdl = lcu_openedudhdl(L, 1, toclass(L));
+	uv_handle_t *handle = lcu_ud2hdl(udhdl);
 	lcu_Scheduler *sched = lcu_tosched(handle->loop);
 	return lcuT_resetcoreqk(L, sched, k_setupwrite, NULL, NULL);
 }
@@ -1159,8 +1161,8 @@ static int k_setupwriteobj (lua_State *L,
                             uv_req_t *request,
                             uv_loop_t *loop,
                             lcu_Operation *op) {
-	lcu_UdataHandle *object = (lcu_UdataHandle *)lua_touserdata(L, 1);
-	uv_stream_t *stream = (uv_stream_t *)lcu_ud2hdl(object);
+	lcu_UdataHandle *udhdl = (lcu_UdataHandle *)lua_touserdata(L, 1);
+	uv_stream_t *stream = (uv_stream_t *)lcu_ud2hdl(udhdl);
 	uv_write_t *write = (uv_write_t *)request;
 	uv_buf_t bufs[1];
 	uv_stream_t *wrtstrm = NULL;
@@ -1196,8 +1198,8 @@ static int k_setupwriteobj (lua_State *L,
 	return -1;  /* yield on success */
 }
 static int pipe_write (lua_State *L) {
-	lcu_UdataHandle *object = lcu_openedudhdl(L, 1, LCU_PIPESHARECLS);
-	uv_handle_t *handle = lcu_ud2hdl(object);
+	lcu_UdataHandle *udhdl = lcu_openedudhdl(L, 1, LCU_PIPESHARECLS);
+	uv_handle_t *handle = lcu_ud2hdl(udhdl);
 	lcu_Scheduler *sched = lcu_tosched(handle->loop);
 	return lcuT_resetcoreqk(L, sched, k_setupwriteobj, NULL, NULL);
 }
@@ -1207,14 +1209,14 @@ static int k_recvdata (lua_State *L) {
 	return lua_gettop(L)-5;
 }
 static int k_getbuffer (lua_State *L) {
-	lcu_UdataHandle *object = (lcu_UdataHandle *)lua_touserdata(L, 1);
+	lcu_UdataHandle *udhdl = (lcu_UdataHandle *)lua_touserdata(L, 1);
 	lua_CFunction nextstep = (lua_CFunction)lua_touserdata(L, 5);
 	uv_buf_t *buf = (uv_buf_t *)lua_touserdata(L, -1);
 	lua_pop(L, 1);  /* discard 'buf' pointer */
 	lcu_assert(nextstep);
 	lcu_assert(buf);
 	lcu_getoutputbuf(L, 2, buf);
-	object->step = nextstep;
+	udhdl->step = nextstep;
 	return -1;
 }
 static void uv_onrecvdata (uv_stream_t *stream,
@@ -1222,11 +1224,11 @@ static void uv_onrecvdata (uv_stream_t *stream,
                            const uv_buf_t *buf) {
 	uv_handle_t *handle = (uv_handle_t *)stream;
 	lua_State *thread = (lua_State *)handle->data;
-	lcu_UdataHandle *object = lcu_hdl2ud(handle);
+	lcu_UdataHandle *udhdl = lcu_hdl2ud(handle);
 	if (nread == 0) {
 		/* 'libuv' indication of EAGAIN or EWOULDBLOCK, ignore it and */
 		/* get ready to restart all over again from obtaining the buffer */
-		object->step = k_getbuffer;
+		udhdl->step = k_getbuffer;
 	} else {
 		int nret;
 		lcu_assert(thread);
@@ -1236,9 +1238,9 @@ static void uv_onrecvdata (uv_stream_t *stream,
 			nret = 1;
 		} else {
 			/* in case of errors, 'libuv' might not call 'uv_ongetbuffer' */
-			/* so 'object->step == k_getbuffer', thus it will fail. */
-			object->step = k_recvdata;  /* avoid calling 'k_recvpipedata' in case of error */
-			if (nread == UV_EOF) object->stop = NULL;  /* implies 'handle' is already stopped */
+			/* so 'udhdl->step==k_getbuffer' making the resume below fail. */
+			udhdl->step = k_recvdata;  /* also avoid calling 'k_recvpipedata' on error */
+			if (nread == UV_EOF) udhdl->stop = NULL;  /* implies 'handle' is already stopped */
 			nret = lcuL_pusherrres(thread, nread);
 		}
 		lcuU_resumeudhdl(handle, nret);
@@ -1253,17 +1255,17 @@ static int startrecvdata (uv_handle_t *handle) {
 	return uv_read_start((uv_stream_t *)handle, uv_ongetbuffer, uv_onrecvdata);
 }
 static int active_read (lua_State *L) {
-	lcu_UdataHandle *object = lcu_openedudhdl(L, 1, toclass(L));
+	lcu_UdataHandle *udhdl = lcu_openedudhdl(L, 1, toclass(L));
 	lua_settop(L, 4);
 	lua_pushlightuserdata(L, k_recvdata);
-	return lcuT_resetudhdlk(L, object, startrecvdata, stoprecvdata, k_getbuffer);
+	return lcuT_resetudhdlk(L, udhdl, startrecvdata, stoprecvdata, k_getbuffer);
 }
 
 
 /* bytes [, errmsg] = pipe:read(buffer [, i [, j]]) */
 static int pushstreamread (lua_State *L, uv_pipe_t *pipe) {
 	uv_handle_type type = uv_pipe_pending_type(pipe);
-	lcu_UdataHandle *object;
+	lcu_UdataHandle *udhdl;
 	uv_stream_t *stream;
 	int err;
 	switch (type) {
@@ -1271,25 +1273,25 @@ static int pushstreamread (lua_State *L, uv_pipe_t *pipe) {
 			lcu_PipeSocket *newpipe = lcuT_newudhdl(L, lcu_PipeSocket, LCU_PIPEACTIVECLS);
 			uv_pipe_t *handle = lcu_ud2hdl(newpipe);
 			err = uv_pipe_init(pipe->loop, handle, 0);
-			object = (lcu_UdataHandle*)newpipe;
+			udhdl = (lcu_UdataHandle*)newpipe;
 			stream = (uv_stream_t *)handle;
 		} break;
 		case UV_TCP: {
 			lcu_TcpSocket *tcp = lcuT_newudhdl(L, lcu_TcpSocket, LCU_TCPACTIVECLS);
 			uv_tcp_t *handle = lcu_ud2hdl(tcp);
 			err = uv_tcp_init(pipe->loop, handle);
-			object = (lcu_UdataHandle*)tcp;
+			udhdl = (lcu_UdataHandle*)tcp;
 			stream = (uv_stream_t *)handle;
 		} break;
 		default: return UV_EAI_SOCKTYPE;
 	}
 	if (err) return err;
-	lcuL_clearflag(object, LCU_HANDLECLOSEDFLAG);
+	lcuL_clearflag(udhdl, LCU_HANDLECLOSEDFLAG);
 	return uv_accept((uv_stream_t *)pipe, stream);
 }
 static int k_recvpipedata (lua_State *L) {
-	lcu_UdataHandle *object = lua_touserdata(L, 1);
-	uv_handle_t *handle = lcu_ud2hdl(object);
+	lcu_UdataHandle *udhdl = lua_touserdata(L, 1);
+	uv_handle_t *handle = lcu_ud2hdl(udhdl);
 	uv_pipe_t *pipe = (uv_pipe_t *)handle;
 	if (uv_pipe_pending_count(pipe)) {  /* only if read was successful? */
 		int err = pushstreamread(L, pipe);
@@ -1298,8 +1300,8 @@ static int k_recvpipedata (lua_State *L) {
 	return lua_gettop(L)-5;
 }
 static int pipe_read (lua_State *L) {
-	lcu_UdataHandle *object = lcu_openedudhdl(L, 1, LCU_PIPESHARECLS);
-	uv_handle_t *handle = lcu_ud2hdl(object);
+	lcu_UdataHandle *udhdl = lcu_openedudhdl(L, 1, LCU_PIPESHARECLS);
+	uv_handle_t *handle = lcu_ud2hdl(udhdl);
 	uv_pipe_t *pipe = (uv_pipe_t *)handle;
 	if (uv_pipe_pending_count(pipe)) {
 		int err;
@@ -1309,7 +1311,7 @@ static int pipe_read (lua_State *L) {
 	}
 	lua_settop(L, 4);
 	lua_pushlightuserdata(L, k_recvpipedata);
-	return lcuT_resetudhdlk(L, object, startrecvdata, stoprecvdata, k_getbuffer);
+	return lcuT_resetudhdlk(L, udhdl, startrecvdata, stoprecvdata, k_getbuffer);
 }
 
 
@@ -1319,9 +1321,9 @@ static int pipe_read (lua_State *L) {
 
 #define addlistenedconn(O)	((O)->flags += LISTENCONN_UNIT)
 
-static int picklistenedconn (lcu_UdataHandle *object) {
-	if (object->flags < 2*LISTENCONN_UNIT) return 0;
-	object->flags -= LISTENCONN_UNIT;
+static int picklistenedconn (lcu_UdataHandle *udhdl) {
+	if (udhdl->flags < 2*LISTENCONN_UNIT) return 0;
+	udhdl->flags -= LISTENCONN_UNIT;
 	return 1;
 }
 
@@ -1340,15 +1342,15 @@ static void uv_onconnection (uv_stream_t *stream, int status) {
 	lcuU_checksuspend(handle->loop);
 }
 static int passive_listen (lua_State *L) {
-	lcu_UdataHandle *object = lcu_openedudhdl(L, 1, toclass(L));
-	uv_handle_t *handle = lcu_ud2hdl(object);
+	lcu_UdataHandle *udhdl = lcu_openedudhdl(L, 1, toclass(L));
+	uv_handle_t *handle = lcu_ud2hdl(udhdl);
 	lua_Integer backlog = luaL_checkinteger(L, 2);
 	int err;
-	luaL_argcheck(L, !islisteningconn(object), 1, "already listening");
+	luaL_argcheck(L, !islisteningconn(udhdl), 1, "already listening");
 	luaL_argcheck(L, 0 <= backlog && backlog <= INT_MAX, 2, "out of range");
 	err = uv_listen((uv_stream_t *)handle, (int)backlog, uv_onconnection);
 	if (err >= 0) {
-		addlistenedconn(object);  /* mark socket as listening */
+		addlistenedconn(udhdl);  /* mark socket as listening */
 		uv_unref(handle);  /* emulate a 'uv_listen_stop(uv_stream_t *)' */
 	}
 	return lcuL_pushresults(L, 0, err);
@@ -1357,24 +1359,24 @@ static int passive_listen (lua_State *L) {
 
 typedef int (*NewAcceptFunc) (lua_State *L,
                               uv_loop_t *loop,
-                              lcu_UdataHandle *object,
-                              lcu_UdataHandle **newobj);
+                              lcu_UdataHandle *udhdl,
+                              lcu_UdataHandle **newudhdl);
 
 /* stream [, errmsg] = passive:accept() */
 static int k_acceptstream (lua_State *L) {
-	lcu_UdataHandle *object = (lcu_UdataHandle *)lua_touserdata(L, 1);
-	uv_handle_t *handle = lcu_ud2hdl(object);
+	lcu_UdataHandle *udhdl = (lcu_UdataHandle *)lua_touserdata(L, 1);
+	uv_handle_t *handle = lcu_ud2hdl(udhdl);
 	NewAcceptFunc newaccept = (NewAcceptFunc)lua_touserdata(L, 2);
-	lcu_UdataHandle *newobj;
+	lcu_UdataHandle *newudhdl;
 	int err = (int)lua_tointeger(L, 3);
 	if (err >= 0) {
-		err = newaccept(L, handle->loop, object, &newobj);
+		err = newaccept(L, handle->loop, udhdl, &newudhdl);
 		if (err >= 0) {
 			err = uv_accept((uv_stream_t *)handle,
-			                (uv_stream_t *)lcu_ud2hdl(newobj));
-			if (err >= 0) lcuL_clearflag(newobj, LCU_HANDLECLOSEDFLAG);
+			                (uv_stream_t *)lcu_ud2hdl(newudhdl));
+			if (err >= 0) lcuL_clearflag(newudhdl, LCU_HANDLECLOSEDFLAG);
 		}
-		else addlistenedconn(object);
+		else addlistenedconn(udhdl);
 	}
 	return lcuL_pushresults(L, 1, err);
 }
@@ -1389,12 +1391,12 @@ static int startlisten (uv_handle_t *handle) {
 static int listen_accept (lua_State *L,
                           const char *class,
                           NewAcceptFunc newaccept) {
-	lcu_UdataHandle *object = lcu_openedudhdl(L, 1, class);
-	luaL_argcheck(L, islisteningconn(object), 1, "not listening");
+	lcu_UdataHandle *udhdl = lcu_openedudhdl(L, 1, class);
+	luaL_argcheck(L, islisteningconn(udhdl), 1, "not listening");
 	lua_settop(L, 1);
 	lua_pushlightuserdata(L, newaccept);
-	if (picklistenedconn(object)) return k_acceptstream(L);
-	return lcuT_resetudhdlk(L, object, startlisten, stoplisten, k_acceptstream);
+	if (picklistenedconn(udhdl)) return k_acceptstream(L);
+	return lcuT_resetudhdlk(L, udhdl, startlisten, stoplisten, k_acceptstream);
 }
 
 
@@ -1482,13 +1484,13 @@ static int tcp_connect (lua_State *L) {
 /* tcp [, errmsg] = tcp:accept() */
 static int newtcpaccept (lua_State *L,
                          uv_loop_t *loop,
-                         lcu_UdataHandle *object,
-                         lcu_UdataHandle **newobj) {
+                         lcu_UdataHandle *udhdl,
+                         lcu_UdataHandle **newudhdl) {
 	lcu_TcpSocket *tcp = lcuT_newudhdl(L, lcu_TcpSocket, LCU_TCPACTIVECLS);
 	int err = uv_tcp_init(loop, lcu_ud2hdl(tcp));
 	if (!err) {
-		tcp->flags |= lcuL_maskflag(object, LCU_SOCKIPV6FLAG);
-		*newobj = (lcu_UdataHandle *)tcp;
+		tcp->flags |= lcuL_maskflag(udhdl, LCU_SOCKIPV6FLAG);
+		*newudhdl = (lcu_UdataHandle *)tcp;
 	}
 	return err;
 }
@@ -1589,15 +1591,15 @@ static int pipe_connect (lua_State *L) {
 
 static int newpipeaccept (lua_State *L,
                           uv_loop_t *loop,
-                          lcu_UdataHandle *object,
-                          lcu_UdataHandle **newobj) {
-	int socktranf = lcuL_maskflag(object, LCU_SOCKTRANFFLAG);
+                          lcu_UdataHandle *udhdl,
+                          lcu_UdataHandle **newudhdl) {
+	int socktranf = lcuL_maskflag(udhdl, LCU_SOCKTRANFFLAG);
 	const char *class = socktranf ? LCU_PIPESHARECLS : LCU_PIPEACTIVECLS;
 	lcu_PipeSocket *pipe = lcuT_newudhdl(L, lcu_PipeSocket, class);
 	int err = uv_pipe_init(loop, lcu_ud2hdl(pipe), socktranf);
 	if (!err) {
 		pipe->flags |= socktranf;
-		*newobj = (lcu_UdataHandle *)pipe;
+		*newudhdl = (lcu_UdataHandle *)pipe;
 	}
 	return err;
 }
