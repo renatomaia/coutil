@@ -1068,9 +1068,6 @@ static void uv_ongetbuffer (uv_handle_t *handle,
 		buf->len = 0;
 		lcu_assert(thread);
 		lua_pushlightuserdata(thread, buf);
-#ifndef _WIN32
-		lcuU_resumeudhdl(handle, 1);
-#else
 		if (lua_status(thread) == LUA_OK) {
 			/* this might happen because libuv might call 'uv_alloc_cb' inside */
 			/* 'uv_*_start' before it returns successfully. In such case, we */
@@ -1083,7 +1080,6 @@ static void uv_ongetbuffer (uv_handle_t *handle,
 			lcu_assert(lua_status(thread) == LUA_YIELD);
 			lcuU_resumeudhdl(handle, 1);
 		}
-#endif
 	} /* while 'socket:read' is called again after error getting buffer */
 	while (handle->data && buf->base == (char *)buf);
 }

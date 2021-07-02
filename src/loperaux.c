@@ -579,18 +579,14 @@ LCUI_FUNC int lcuT_resetudhdlk (lua_State *L,
 		int err;
 		lua_pushvalue(L, 1);
 		savevalue(L, (void *)handle);  /* may raise memory error */
-#ifdef _WIN32
 		handle->data = (void *)L;  /* this is eventually done if 'start' returns no error, */
 		                           /* but libuv might call 'uv_alloc_cb' inside 'uv_*_start', */
 		                           /* therefore we must set everything up prematurely. */
 		                           /* Ref.: https://groups.google.com/g/libuv/c/bTwH1X_F4p4 */
-#endif
 		err = start(handle);
 		if (err < 0) {
 			udhdl->step = NULL; 
-#ifdef _WIN32
-			handle->data = NULL;   /* rollback the premature setup for callbacks (see above) */
-#endif
+			handle->data = NULL;  /* rollback the premature setup for callbacks (see above) */
 			freevalue(L, (void *)handle);
 			return lcuL_pusherrres(L, err);
 		}
