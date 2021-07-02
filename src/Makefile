@@ -44,7 +44,7 @@ PLATS= guess generic linux macosx solaris
 LIB_A= libluacoutil.a
 MOD_M= coutil.so
 MOD_O= lmodaux.o loperaux.o lchaux.o lthpool.o lttyaux.o \
-       lcommunf.o lfilef.o linfof.o lprocesf.o lscheduf.o ltimef.o \
+       lcommunf.o lfilef.o linfof.o lprocesf.o lscheduf.o lstdiof.o ltimef.o \
        lchannem.o lcoroutm.o lsystemm.o lthreadm.o
 
 ALL_O= $(MOD_O)
