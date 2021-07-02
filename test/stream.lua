@@ -1014,7 +1014,7 @@ end
 		spawn(function ()
 			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
-			repeat system.suspend() until stage == 1
+			repeat system.suspend() until stage >= 1
 			coroutine.resume(garbage.coro, garbage, true,nil,3)
 		end)
 		assert(stage == 0)
@@ -1052,7 +1052,7 @@ end
 		spawn(function ()
 			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
-			repeat system.suspend() until stage == 1
+			repeat system.suspend() until stage >= 1
 			coroutine.resume(garbage.coro)
 			assert(stage == 2)
 			assert(stream:write("0123456789"))
@@ -1091,7 +1091,7 @@ end
 		spawn(function ()
 			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
-			repeat system.suspend() until stage == 1
+			repeat system.suspend() until stage >= 1
 			coroutine.resume(garbage.coro)
 			assert(stage == 2)
 			system.suspend()
@@ -1157,7 +1157,7 @@ end
 		spawn(function ()
 			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
-			repeat system.suspend() until stage == 2
+			repeat system.suspend() until stage >= 2
 			coroutine.resume(garbage.coro, garbage)
 		end)
 		assert(stage == 1)
@@ -1258,7 +1258,7 @@ end
 		spawn(function ()
 			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
-			repeat system.suspend() until stage == 1
+			repeat system.suspend() until stage >= 1
 			coroutine.resume(garbage.coro, garbage, true,nil,3)
 
 			local bytes = 1<<24
@@ -1299,7 +1299,7 @@ end
 		spawn(function ()
 			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
-			repeat system.suspend() until stage == 2
+			repeat system.suspend() until stage >= 2
 			coroutine.resume(garbage.coro)
 			local bytes = (1<<24)+64
 			local buffer = memory.create(bytes)
@@ -1379,7 +1379,7 @@ end
 		spawn(function ()
 			local stream = assert(create("stream"))
 			assert(stream:connect(addresses.bindable))
-			repeat system.suspend() until stage == 2
+			repeat system.suspend() until stage >= 2
 			local buffer = memory.create("9876543210")
 			assert(stream:read(buffer) == 10)
 			assert(not memory.diff(buffer, "0123456789"))
