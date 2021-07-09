@@ -6,14 +6,6 @@
 #include <string.h>
 #include <luamem.h>
 
-#ifndef _WIN32
-#include <netinet/in.h>  /* network addresses */
-#include <arpa/inet.h>  /* IP addresses */
-#else
-#include <winsock2.h>
-typedef unsigned short in_port_t;
-#endif
-
 /*
  * Addresses 
  */
