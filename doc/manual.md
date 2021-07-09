@@ -594,14 +594,14 @@ or [_task_](#threadsdostring-pool-chunk--chunkname--mode-).
 
 `endpoint` is either string `"in"` or `"out"`,
 each identifying an opposite _endpoint_.
-Therefore, the call `ch1:awaitch("in")` will await for a call like `ch2:awaitch("out")` if both `ch1` and `ch2` are distinct channels with the same name.
+Therefore, the call `system.awaitch(ch1, "in")` will await for a call like `system.awaitch(ch2, "out")` if both `ch1` and `ch2` are distinct channels with the same name.
 
 Alternativelly,
 if `endpoint` is either `nil` or `"any"`,
 the call will await for a matching call on either _endpoints_.
-For instance, the call `ch1:awaitch("any")` will match either a call `ch2:awaitch("in")`,
-or `ch2:awaitch("out")`,
-or even `ch2:awaitch("any")` if both `ch1` and `ch2` are distinct channels with the same name.
+For instance, the call `system.awaitch(ch1, "any")` will match either a call `system.awaitch(ch2, "in")`,
+or `system.awaitch(ch2, "out")`,
+or even `system.awaitch(ch2, "any")` if both `ch1` and `ch2` are distinct channels with the same name.
 
 Returns `true` followed by the extra [transferable](#transferable-values) arguments `...` from the matching call.
 Otherwise,
@@ -651,7 +651,7 @@ and is not subject to clock drift.
 Returns a timestamp as a number of seconds with precision of milliseconds according to the value of `mode`,
 as described below:
 
-- `"cached"` (default): the cached timestamp periodically updated by [`system.run`](#systemrun-mode)before resuming coroutines that are ready.
+- `"cached"` (default): the cached timestamp periodically updated by [`system.run`](#systemrun-mode) before resuming coroutines that are ready.
 It is used as the current time to calculate when future calls to [system.suspend](#systemsuspend-seconds--mode) shall be resumed.
 It increases monotonically from some arbitrary point in time,
 and is not subject to clock drift.
