@@ -20,8 +20,13 @@ do case "file"
 				spawn(function ()
 					local buffer = memory.create(1024)
 					local bytes = system.stdin:read(buffer)
-					assert(bytes == 13)
-					assert(buffer:tostring(1, 13) == "Hello world!\n")
+					if standard == "win32" then
+						assert(bytes == 14)
+						assert(buffer:tostring(1, 14) == "Hello world!\r\n")
+					else
+						assert(bytes == 13)
+						assert(buffer:tostring(1, 13) == "Hello world!\n")
+					end
 					system.stdout:write("Goodbye world!\n")
 				end)
 				system.run()

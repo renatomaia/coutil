@@ -19,6 +19,7 @@ LCUI_FUNC void lcuM_addstdiof (lua_State *L) {
 			case UV_TTY: {
 				udhdl = lcuT_createudhdl(L, -2, sizeof(lcu_TermSocket), LCU_TERMSOCKETCLS);
 				err = uv_tty_init(loop, (uv_tty_t *)lcu_ud2hdl(udhdl), fd, 0);
+				if (err >= 0) udhdl->flags = 0;
 			} break;
 			case UV_TCP: {
 				uv_tcp_t *tcp;
@@ -31,8 +32,8 @@ LCUI_FUNC void lcuM_addstdiof (lua_State *L) {
 						struct sockaddr_storage addr;
 						int addrsz = sizeof(addr);
 						err = uv_tcp_getsockname(tcp, (struct sockaddr *)&addr, &addrsz);
-						if (err >= 0 && addr.ss_family == AF_INET6)
-							udhdl->flags = LCU_SOCKIPV6FLAG;
+						if (err >= 0) udhdl->flags = (addr.ss_family == AF_INET6) ?
+						                             LCU_SOCKIPV6FLAG : 0;
 					}
 				}
 				else lua_pushnil(L);
@@ -48,8 +49,8 @@ LCUI_FUNC void lcuM_addstdiof (lua_State *L) {
 						struct sockaddr_storage addr;
 						int addrsz = sizeof(addr);
 						err = uv_udp_getsockname(udp, (struct sockaddr *)&addr, &addrsz);
-						if (err >= 0 && addr.ss_family == AF_INET6)
-							udhdl->flags = LCU_SOCKIPV6FLAG;
+						if (err >= 0) udhdl->flags = (addr.ss_family == AF_INET6) ?
+						                             LCU_SOCKIPV6FLAG : 0;
 					}
 				}
 				else lua_pushnil(L);
@@ -62,6 +63,13 @@ LCUI_FUNC void lcuM_addstdiof (lua_State *L) {
 				if (err >= 0) {
 					err = uv_pipe_open(pipe, fd);
 					if (err >= 0) udhdl->flags = LCU_SOCKTRANFFLAG;
+					else if (err == UV_EINVAL) {
+						err = uv_pipe_init(loop, pipe, 0);
+						if (err >= 0) {
+							err = uv_pipe_open(pipe, fd);
+							if (err >= 0) udhdl->flags = 0;
+						}
+					}
 				}
 			} break;
 			case UV_FILE: {
