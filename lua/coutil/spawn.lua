@@ -10,13 +10,13 @@ local resume = coroutine.resume
 
 local function onterm(handler, success, ...)
 	if success then
-		handler(true, ...)
+		return handler(true, ...)
 	end
 end
 
 local function trapcall(f, handler, ...)
 	local function onerror(...)
-		handler(false, ...)
+		return handler(false, ...)
 	end
 	onterm(handler, xpcall(f, onerror, ...))
 end
