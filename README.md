@@ -1,3 +1,5 @@
+![logo](etc/logo.svg)
+
 Coutil
 ======
 
@@ -50,5 +52,4 @@ TODO
 
 ### New Features
 
-- File system events.
 - File descriptor/handler polling suport.
