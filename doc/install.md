@@ -20,6 +20,6 @@ for instance:
 
 ```shell
 luarocks make etc/coutil-scm-1.rockspec \
-              LUAMEM_DIR=/usr/local/lua/5.4/memory/1.0 \
+              LUAMEM_DIR=/usr/local/lua/5.4/memory/2.0 \
               LIBUV_DIR=/usr/local/libuv/1.41
 ```

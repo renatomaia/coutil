@@ -1482,7 +1482,7 @@ returns values according to the following characters in string `mode`:
 | `g` | integer <!-- st_gid --> | Owner user **group** identifier (gid). |
 | `#` | integer <!-- st_ino --> | ID of the file in the file system (_inode_ **number**). |
 | `D` | integer <!-- st_dev --> | ID of the **device** _containing_ the file. |
-| `d` | integer <!-- st_rdev --> | ID of the **device** _represented_ by the file, or `0` is not applicable. |
+| `d` | integer <!-- st_rdev --> | ID of the **device** _represented_ by the file, or `0` if not applicable. |
 | `*` | integer <!-- st_nlink --> | _Number_ of **hard links** to the file. |
 | `B` | integer <!-- st_size --> | Total size of the file (**bytes**). |
 | `b` | integer <!-- st_blocks --> | Number of 512B **blocks** allocated for the file. |
