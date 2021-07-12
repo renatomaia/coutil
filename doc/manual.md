@@ -325,9 +325,8 @@ any non existent channel name as a key in `names` is removed from it.
 
 ### `channel.sync (ch, endpoint, ...)`
 
-Similar to [`system.awaitch`](#systemawaitch-ch-endpoint-),
-but does not await for a matching call.
-In such case,
+Similar to [`system.awaitch`](#systemawaitch-ch-endpoint-) when there already is a matching call on the endpoint of channel `ch`.
+Otherwise,
 it [fails](#failures) with message `"empty"`.
 
 Events
@@ -613,9 +612,9 @@ then it successfully resumed the coroutine or _task_ of the matching call.
 
 ### `system.resume (co, ...)`
 
-[Await function](#await-function) that is like [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
+Similar to [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
 but for [_state coroutines_](#state-coroutines).
-It executes _state coroutine_ `co` on a separate system thread,
+It is an [await function](#await-function) that executes _state coroutine_ `co` on a separate system thread,
 and awaits for its completion or suspension.
 Moreover,
 only [transferable values](#transferable-values) can be passed as arguments, yielded, or returned from `co`.
