@@ -6,7 +6,7 @@ local emitall = event.emitall
 local emitone = event.emitone
 local pending = event.pending
 
-newtest "pending" -----------------------------------------------------------------
+newtest "pending" --------------------------------------------------------------
 
 do case "garbage collection"
 	garbage.e = {}
