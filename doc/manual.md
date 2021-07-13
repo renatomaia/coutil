@@ -33,6 +33,7 @@ Index
 - [`coutil.scheduler`](#scheduler)
 	- [`scheduler.run`](#schedulerrun-mode)
 	- [`scheduler.pause`](#schedulerpause-)
+	- [`scheduler.awaitsig`](#schedulerawaitsig-signal-)
 
 Contents
 ========
@@ -240,3 +241,49 @@ Any arguments to `pause` are passed as extra results to [`coroutine.resume`](htt
 `pause` returns `true` if the calling coroutine is effectively resumed by [`run`](#schedulerrun-mode).
 Otherwise it returns like [`event.await`](#eventawait-e).
 In any case, the coroutine is not scheduled to be resumed anymore after `pause` returns.
+
+### `scheduler.awaitsig (signal, ...)`
+
+Suspends the execution of the calling coroutine (like [`coroutine.yield`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.yield)) but also schedules it to be resumed when the process receives signal indicated by string `signal`, as listed below:
+
+- Process Commands
+
+| `signal`      | UNIX Name | Action    | Indication |
+| ------------- | --------- | --------- | ---------- |
+| `"abort"`     | SIGABRT   | core dump | Process shall **abort**. |
+| `"continue"`  | SIGCONT   | continue  | Process shall **continue**, if stopped. |
+| `"terminate"` | SIGTERM   | terminate | Process shall **terminate**. |
+
+- Terminal Interaction
+
+| `signal`      | UNIX Name | Action    | Indication |
+| ------------- | --------- | --------- | ---------- |
+| `"bgread"`    | SIGTTIN   | stop      | Read from terminal while in background. |
+| `"bgwrite"`   | SIGTTOU   | stop      | Write to terminal while in background. |
+| `"hangup"`    | SIGHUP    | terminate | Terminal was closed. |
+| `"interrupt"` | SIGINT    | terminate | Terminal requests the process to terminate. (_e.g._ `Ctrl+C`) |
+| `"quit"`      | SIGQUIT   | core dump | Terminal requests the process to **quit** with a [core dump](https://en.wikipedia.org/wiki/Core_dump). |
+| `"stop"`      | SIGTSTP   | stop      | Terminal requests the process to **stop**. (_e.g._ `Ctrl+Z`) |
+| `"winresize"` | SIGWINCH  | ignore    | Terminal window size has changed. |
+
+- Standard Notifications
+
+| `signal`      | UNIX Name | Action    | Indication |
+| ------------- | --------- | --------- | ---------- |
+| `"child"`     | SIGCHLD   | ignore    | **Child** process terminated, stopped, or continued. |
+| `"clocktime"` | SIGALRM   | terminate | Real or **clock time** elapsed. |
+| `"cpulimit"`  | SIGXCPU   | core dump | Defined CPU time limit exceeded. |
+| `"cputimall"` | SIGPROF   | terminate | **CPU time** used by the **process** and by the **system on behalf of the process** elapses. |
+| `"cputimprc"` | SIGVTALRM | terminate | **CPU time** used by the **process** elapsed.  |
+| `"debug"`     | SIGTRAP   | core dump | Exception or **debug** trap occurs. |
+| `"filelimit"` | SIGXFSZ   | core dump | Allowed file size limit exceeded. |
+| `"loosepipe"` | SIGPIPE   | terminate | Write on a pipe with no one to read it. |
+| `"polling"`   | SIGPOLL   | terminate | Event occurred on [watched file descriptor](https://pubs.opengroup.org/onlinepubs/9699919799/functions/ioctl.html). |
+| `"sysargerr"` | SIGSYS    | core dump | System call with a bad argument. |
+| `"urgsock"`   | SIGURG    | core dump | High-bandwidth data is available at a socket. |
+| `"user1"`     | SIGUSR1   | terminate | User-defined conditions. |
+| `"user2"`     | SIGUSR2   | terminate | User-defined conditions. |
+
+Any additional arguments to `awaitsig` are passed as extra results to [`coroutine.resume`](http://www.lua.org/manual/5.3/manual.html#pdf-coroutine.resume).
+
+`awaitsig` returns like [`pause`](#schedulerpause-).
