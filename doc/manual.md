@@ -58,7 +58,7 @@ Any `nil` in `e1, ...` is ignored.
 Any repeated values in `e1, ...` are treated as a single one.
 If `e1, ...` are not provided or are all `nil`, this function has no effect.
 
-It returns `true` if the calling coroutine is resumed due to events emitted on all values `e1, ...`.
+It returns `true` if the calling coroutine is resumed due to events emitted on all values `e1, ...` or if `e1, ...` are not provided or are all `nil`.
 Otherwise it returns like [`event.await`](#eventawait-e).
 
 ### `event.awaitany (e1, ...)`
