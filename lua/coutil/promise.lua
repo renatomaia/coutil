@@ -25,6 +25,13 @@ local function pickready(promise, ...)
 	end
 end
 
+local function handlenotify(promise, event, ...)
+	if event == promise then
+		return ...
+	end
+	return event, ...
+end
+
 local module = {
 	version = "1.0 alpha",
 	onlypending = onlypending,
@@ -37,7 +44,7 @@ function module.create()
 		if probe then
 			return results ~= nil
 		elseif results == nil then
-			return select(2, await(promise))
+			return handlenotify(promise, await(promise))
 		end
 		return results()
 	end
