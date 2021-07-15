@@ -81,6 +81,22 @@ end
 
 newtest "execute" ------------------------------------------------------------------
 
+do case "error messages"
+	asserterr("unable to yield", pcall(system.execute))
+	asserterr("unable to yield", pcall(system.execute, function () end))
+	asserterr("unable to yield", pcall(system.execute, "echo", {}))
+	asserterr("unable to yield", pcall(system.execute, "echo", "Hello, World!"))
+
+	spawn(function ()
+		asserterr("string expected", pcall(system.execute))
+		asserterr("string expected", pcall(system.execute, function () end))
+		asserterr("string expected", pcall(system.execute, "echo", {}))
+	end)
+	assert(system.run() == false)
+
+	done()
+end
+
 do case "arguments"
 	local argtests = {
 		{
