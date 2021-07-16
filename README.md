@@ -1,4 +1,4 @@
-![logo](etc/logo.svg)
+![logo](doc/logo.svg)
 
 Coutil
 ======
