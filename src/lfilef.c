@@ -1195,25 +1195,41 @@ static uv_file *openedfile (lua_State *L) {
 	return file;
 }
 
-static int closefile (lua_State *L, uv_file *file) {
-	uv_fs_t closereq;
-	int err = uv_fs_close(lcu_toloop(tosched(L)), &closereq, *file, NULL);
-	if (err >= 0) *file = -1;
-	return err;
-}
-
 /* __gc(file) */
 static int file_gc (lua_State *L) {
 	uv_file *file = checkfile(L);
-	if (*file >= 0) closefile(L, file);
+	if (*file >= 0) {
+		uv_fs_t filereq;
+		int err = uv_fs_close(lcu_toloop(tosched(L)), &filereq, *file, NULL);
+		if (err >= 0) *file = -1;
+		else lcuL_warnerr(L, "__gc(file)", err);
+	}
 	return 0;
 }
 
-/* true = file:close() */
-static int file_close (lua_State *L) {
+/* true = file:close([mode]) */
+static int k_setupclosef (lua_State *L, uv_req_t *request, uv_loop_t *loop) {
+	uv_fs_t *filereq = (uv_fs_t *)request;
 	uv_file *file = openedfile(L);
-	int err = closefile(L, file);
-	return lcuL_pushresults(L, 0, err);
+	int err = uv_fs_close(loop, filereq, *file, on_fileopdone);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	*file = -1;
+	lua_settop(L, 1);
+	return -1;  /* yield on success */
+}
+static int file_close (lua_State *L) {
+	lcu_Scheduler *sched = tosched(L);
+	if (lcuL_checknoyieldmode(L, 2)) {
+		uv_loop_t *loop = lcu_toloop(sched);
+		uv_fs_t filereq;
+		uv_file *file = openedfile(L);
+		int err = uv_fs_close(loop, &filereq, *file, NULL);
+		if (err < 0) return lcuL_pusherrres(L, err);
+		*file = -1;
+		lua_pushboolean(L, 1);
+		return 1;
+	}
+	return lcuT_resetcoreqk(L, sched, k_setupclosef, returntrueover1, NULL);
 }
 
 /* bytes [, err] = file:read(buffer [, i [, j [, offset [, mode]]]]) */
