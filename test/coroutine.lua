@@ -319,11 +319,58 @@ do case "close running"
 		assert(res == "hello")
 		assert(stateco.close(co) == true)
 		asserterr("cannot resume dead coroutine", system.resume(co))
+		assert(stateco.close(co) == true)
 		stage = 1
 	end)
 
 	assert(co:status() == "running")
 	asserterr("cannot close a running coroutine", pcall(stateco.close, co))
+
+	assert(stage == 0)
+	assert(system.run() == false)
+	assert(stage == 1)
+
+	done()
+end
+
+do case "close on error"
+	local stage
+	local co = stateco.load[[
+		require "_G"
+		error("oops!")
+	]]
+
+	spawn(function ()
+		stage = 0
+		asserterr("oops!", system.resume(co))
+		asserterr("oops!", stateco.close(co))
+		asserterr("cannot resume dead coroutine", system.resume(co))
+		assert(stateco.close(co) == true)
+		stage = 1
+	end)
+
+	assert(stage == 0)
+	assert(system.run() == false)
+	assert(stage == 1)
+
+	done()
+end
+
+do case "close on non-transferable error"
+	local stage
+	local co = stateco.load[[
+		require "_G"
+		error(error)
+	]]
+
+	spawn(function ()
+		stage = 0
+		asserterr("unable to transfer error (got function)", system.resume(co))
+		asserterr("unable to transfer error (got function)", stateco.close(co))
+		asserterr("cannot resume dead coroutine", system.resume(co))
+		assert(stateco.close(co) == true)
+		stage = 1
+	end)
 
 	assert(stage == 0)
 	assert(system.run() == false)
