@@ -25,7 +25,7 @@ static int tpoolgc_gc (lua_State *L) {
 /* succ [, errmsg] = threads:close() */
 static int threads_close (lua_State *L) {
 	lcu_ThreadPool **ref = (lcu_ThreadPool **)luaL_checkudata(L, 1, LCU_THREADSCLS);
-	lua_pushboolean(L, *ref != NULL);
+	luaL_argcheck(L, *ref, 1, "closed threads");
 	if (*ref) {
 		lua_pushlightuserdata(L, *ref);
 		if (lua_gettable(L, LUA_REGISTRYINDEX) == LUA_TUSERDATA) {
@@ -43,6 +43,7 @@ static int threads_close (lua_State *L) {
 		lua_pop(L, 1);
 		*ref = NULL;
 	}
+	lua_pushboolean(L, 1);
 	return 1;
 }
 

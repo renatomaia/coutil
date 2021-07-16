@@ -76,11 +76,20 @@ static int coroutine_gc(lua_State *L) {
 /* succ = coroutine.close(co) */
 static int coroutine_close(lua_State *L) {
 	StateCoro *stateco = tostateco(L);
-	if (stateco->work.type == UV_WORK)
-		luaL_error(L, "cannot close a running coroutine");
+	lua_State *co = stateco->L;
+	int status;
+	luaL_argcheck(L, stateco->work.type != UV_WORK, 1,
+		"cannot close a running coroutine");
+	lua_settop(L, 1);
+	status = co ? lua_status(co) : LUA_OK;
+	if (status == LUA_OK || status == LUA_YIELD) {
+		lua_pushboolean(L, 1);
+	} else {
+		lua_pushboolean(L, 0);
+		lcuL_pushfrom(L, co, -1, "error");
+	}
 	coroutine_gc(L);
-	lua_pushboolean(L, 1);
-	return 1;
+	return lua_gettop(L)-1;
 }
 
 
