@@ -687,3 +687,26 @@ Accepts a new pending connection on TCP listen socket `listen`.
 
 Returns a new `stream` socket for the accepted connection in case of success.
 Otherwise it returns `nil` plus an error message.
+
+### `system.pipe (ipc)`
+
+### `pipe:bind (address)`
+
+### `pipe:getaddress ([site])`
+
+### `pipe:setperm (options)`
+
+### `pipe:connect (address)`
+
+### `pipe:listen (backlog)`
+
+### `pipe:accept ()`
+
+### `pipe:shutdown ()`
+
+### `pipe:send (value [, i [, j [, pipe]]])`
+
+### `pipe:receive (buffer [, i [, j]])`
+
+### `pipe:close ()`
+
