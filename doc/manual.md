@@ -6,6 +6,7 @@ Summary
 	- [Blocking Mode](#blocking-mode)
 	- [Independent State](#independent-state)
 	- [Transferable Values](#transferable-values)
+	- [Failures](#failures)
 	- [Object-Oriented Style](#objectoriented-style)
 - [Multithreading](#multithreading)
 	- [Coroutine Finalizers](#coroutine-finalizers)
@@ -32,7 +33,7 @@ Summary
 Basic Concepts
 ==============
 
-This section describes some basic concepts pertaining the modules API described in the following sections.
+This section describes some basic concepts pertaining the modules described in the following sections.
 
 Await Function
 --------------
@@ -43,11 +44,11 @@ but also registers the coroutine to be resumed implicitly on some specific condi
 
 Coroutines executing an _await function_ can be resumed explicitly by [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume).
 In such case,
-the _await function_ returns the values provided to the resume.
+the _await function_ returns the values provided to `coroutine.resume`.
 Otherwise,
 the _await function_ returns as described in the following sections.
 In any case,
-the coroutine is not registered to be implicitly resumed after the _await function_ returns.
+the coroutine is not registered to be implicitly resumed once the _await function_ returns.
 
 Blocking Mode
 -------------
@@ -60,7 +61,7 @@ thus preventing any other coroutine to execute.
 Independent State
 -----------------
 
-Code chunks that run on a separate system thread are loaded into a independent [Lua state](http://www.lua.org/manual/5.4/manual.html#lua_newstate) with only the [`package`](http://www.lua.org/manual/5.4/manual.html#6.3) library loaded.
+[Chunks](http://www.lua.org/manual/5.4/manual.html#3.3.2) that run on a separate system thread are loaded into a [independent state](http://www.lua.org/manual/5.4/manual.html#lua_newstate) with only the [`package`](http://www.lua.org/manual/5.4/manual.html#6.3) library loaded.
 This _independent state_ inherits any [preloaded modules](http://www.lua.org/manual/5.4/manual.html#pdf-package.preload) from the caller of the function that creates it.
 Moreover,
 all other [standard libraries](http://www.lua.org/manual/5.4/manual.html#6) are also provided as preloaded modules.
@@ -99,6 +100,14 @@ Values that are transfered between [independent states](#independent-state) are 
 Only _nil_, _boolean_, _number_, _string_ and _light userdata_ values are allowed as _transferable values_.
 _Strings_ in particular are replicated in every state they are transfered to.
 
+Failures
+--------
+
+Unless otherwise stated,
+functions return [fail](http://www.lua.org/manual/5.4/manual.html#6) on failure,
+plus an error message as a second result and a system-dependent error code as a third result,
+and some non-false value on success.
+
 Object-Oriented Style
 ---------------------
 
@@ -109,12 +118,14 @@ Therefore, you can use these library functions in object-oriented style.
 Multithreading
 ==============
 
-This section describes modules for creation of threads of execution of Lua code.
+This section describes modules for creation of threads of execution of Lua code,
+either using standard coroutines,
+or other abstractions that allows to execute code on multiple system threads.
 
 Coroutine Finalizers
 --------------------
 
-Module `coutil.spawn` provides functions to execute functions in new coroutines with associated handler functions to deal with the results.
+Module `coutil.spawn` provides functions to execute functions in new coroutines with an associated handler function to deal with the results.
 
 ### `spawn.catch (h, f, ...)`
 
@@ -139,10 +150,10 @@ Returns the new coroutine.
 State Coroutines
 ----------------
 
-Module `coutil.coroutine` is similar to module [`coroutine`](http://www.lua.org/manual/5.4/manual.html#6.2),
+Module `coutil.coroutine` provides functions similar to the ones on module [`coroutine`](http://www.lua.org/manual/5.4/manual.html#6.2),
 but for _state coroutines_.
 In contrast to standard _thread coroutines_ that execute a function in a [Lua thread](http://www.lua.org/manual/5.4/manual.html#lua_newthread),
-_state coroutines_ execute a [chunk](http://www.lua.org/manual/5.4/manual.html#3.3.2) in an [independent state](#independent-state) (see [`system.resume`](#systemresume-co-)).
+_state coroutines_ execute a chunk in an [independent state](#independent-state) (see [`system.resume`](#systemresume-co-)).
 
 You can access these library functions on _state coroutines_ in [object-oriented style](#objectoriented-style).
 For instance, `coroutine.status(co, ...)` can be written as `co:status()`, where `co` is a _state coroutine_.
@@ -150,11 +161,12 @@ For instance, `coroutine.status(co, ...)` can be written as `co:status()`, where
 ### `coroutine.close (co)`
 
 Similar to [`coroutine.close`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.close),
-but for  [_state coroutines_](#coroutineload-chunk--chunkname--mode).
+but for _state coroutines_.
 
 ### `coroutine.load (chunk [, chunkname [, mode]])`
 
-Returns a _state coroutine_ with the code given by the arguments `chunk`, `chunkname`, `mode`,
+On success,
+returns a new _state coroutine_ loaded with the code given by the arguments `chunk`, `chunkname`, `mode`,
 which are the same arguments of [`load`](http://www.lua.org/manual/5.4/manual.html#pdf-load).
 
 ### `coroutine.loadfile ([filepath [, mode]])`
@@ -164,10 +176,18 @@ The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.
 
 ### `coroutine.status (co)`
 
-Similar to [`coroutine.status`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
-but for [_state coroutines_](#coroutineload-chunk--chunkname--mode).
+Similar to [`coroutine.status`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.status),
+but for _state coroutines_.
 In particular,
-it never returns `"normal"`.
+it returns:
+
+- `"running"`: if the _state coroutine_ is running
+(that is, it is being executed in another system thread);
+- `"suspended"`: if the _state coroutine_ is suspended in a call to yield
+(like, when its chunk calls [`coroutine.yield`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield)),
+or if it has not started running yet;
+- `"dead"`: if the coroutine has finished its chunk,
+or if it has stopped with an error.
 
 Thread Pools
 ------------
@@ -179,11 +199,13 @@ For instance, `threads.dostring(pool, ...)` can be written as `pool:dostring(...
 
 ### `threads.create ([size])`
 
-Returns a new _thread pool_ with `size` system threads to execute its [_tasks_](#threadsdostring-pool-chunk--chunkname--mode-).
+On success,
+returns a new _thread pool_ with `size` system threads to execute its [_tasks_](#threadsdostring-pool-chunk--chunkname--mode-).
 
 If `size` is omitted,
 returns a new reference to the _thread pool_ where the calling code is executing,
-or `nil` if it is not executing in a _thread pool_ (_e.g._, the main process thread).
+or `nil` if it is not executing in a _thread pool_
+(for instance, the main process thread).
 
 ### `threads.resize (pool, size [, create])`
 
@@ -234,7 +256,7 @@ The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.
 ### `threads.close (pool)`
 
 When this function is called from a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) of [_thread pool_](#threadscreate-size) `pool`
-(_i.e._ using a reference obtained by calling [`system.threads()`](#threadscreate-size) with no arguments),
+(that is, using a reference obtained by calling [`system.threads()`](#threadscreate-size) without any argument),
 it has no effect other than prevent further use of `pool`.
 
 Otherwise, it waits until there are either no more _tasks_ or no more system threads,
@@ -245,23 +267,24 @@ it will retain minimum resources until the termination of the Lua state it was c
 To avoid accumulative resource consumption by creation of multiple _thread pools_,
 call this function on every _thread pool_.
 
-Moreover, a _thread pool_ that is not closed will prevent the current Lua state to terminate (_i.e._ `lua_close` to return) until it has either no more tasks or no more system threads.
+Moreover, a _thread pool_ that is not closed will prevent the current Lua state to terminate (`lua_close` to return) until it has either no more tasks or no more system threads.
 
-Returns `true` if this call closes `pool`,
-or `false` if `pool` was already closed.
+Returns `true` on success.
 
 Synchronization
 ===============
 
-This section describes modules for synchronization and communication between distinct threads of execution of Lua code.
+This section describes modules for synchronization and communication between threads of execution of Lua code,
+either between standard coroutines,
+or [independent states](#independent-state) running in separate system threads.
 
 Channels
 --------
 
-Module `coutil.channel` provides functions for manipulation of _channels_ to be used to synchronize and transfer values to [independent states](#independent-state).
+Module `coutil.channel` provides functions for manipulation of _channels_ to be used to synchronize and transfer values between [independent states](#independent-state).
 
 _Channels_ can be used for standard coroutines.
-However consider using [events](#events) when using only standard thread coroutines.
+However [events](#events) are usually more flexible and efficient in such case.
 
 You can access these library functions on _channels_ in [object-oriented style](#objectoriented-style).
 For instance, `channel.sync(ch, ...)` can be written as `ch:sync(...)`, where `ch` is a _channel_.
@@ -272,19 +295,17 @@ Closes channel `ch`.
 Note that channels are automatically closed when they are garbage collected,
 but that takes an unpredictable amount of time to happen. 
 
-In case of success,
-this function returns `true`.
-Otherwise it returns `false` plus an error message.
-
 ### `channel.create (name)`
 
-Returns a new _channel_ with name `name`.
+In case of success,
+returns a new _channel_ with name `name`.
 
 Channels with the same name share the same two opposite [_endpoints_](#systemawaitch-ch-endpoint-).
 
 ### `channel.getnames ([names])`
 
-Returns a table mapping each name of existing channels to `true`.
+In case of success,
+returns a table mapping each name of existing channels to `true`.
 
 If table `names` is provided,
 it checks only the names stored as string keys in `names`,
@@ -299,7 +320,7 @@ any non existent channel name as a key in `names` is removed from it.
 Similar to [`system.awaitch`](#systemawaitch-ch-endpoint-),
 but does not await for a matching call.
 In such case,
-it returns `false` followed by message "empty".
+it [fails](#failures) with message `"empty"`.
 
 Events
 ------
@@ -510,10 +531,6 @@ System Features
 Module `coutil.system` provides functions that expose system functionalities,
 including [await functions]("#await-function") to await on system conditions.
 
-Unless otherwise stated,
-all these functions return `false` plus an error message on failure,
-and some truly value on success.
-
 Event Processing
 ----------------
 
@@ -523,7 +540,8 @@ This section describes functions of `coutil.system` related to the processing of
 
 Resumes coroutines awaiting system conditions.
 
-`mode` is a string that defines how `run` executes, as described below:
+`mode` is a string that defines how `run` executes,
+as described below:
 
 - `"loop"` (default): it executes continously resuming every awaiting coroutine when their system condition is satisfied,
 until there are no more awaiting coroutines,
@@ -535,7 +553,8 @@ or waits to resume at least one coroutine that becomes ready.
 Returns `true` if there are remaining awaiting coroutines,
 or `false` otherwise.
 
-**Note**: when called with mode `"loop"` from the main thread of a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) and there are only [`system.awaitch`](#systemawaitch-ch-endpoint-) calls pending, the task is suspended until one of the pending calls is resolved.
+**Note**: when called with `mode` as `"loop"` from the main thread of a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) and there are only [`system.awaitch`](#systemawaitch-ch-endpoint-) calls pending,
+the task is suspended until one of the pending calls is matched.
 
 ### `system.isrunning ()`
 
@@ -544,17 +563,20 @@ or `false` otherwise.
 
 ### `system.halt ()`
 
-Causes [`system.run`](#systemrun-mode) to return prematurely after this function returns.
+Sets up [`system.run`](#systemrun-mode) to terminate prematurely,
+and returns before `system.run` terminates.
+Must be called while `system.run` is executing.
 
 Thread Synchronization
 ----------------------
 
-This section describes functions of `coutil.system` for thread synchronization and communication using [channels](#channelcreate-name) and [state coroutines](#coroutineload-chunk--chunkname--mode).
+This section describes functions of `coutil.system` for thread synchronization and communication using [_channels_](#channelcreate-name) and [_state coroutines_](#state-coroutines).
 
 ### `system.awaitch (ch, endpoint, ...)`
 
 [Await function](#await-function) that awaits on an _endpoint_ of [channel](#channelcreate-name) `ch` for a similar call on the opposite _endpoint_,
-either from another coroutine, [_state coroutine_](#coroutineload-chunk--chunkname--mode) or [_task_](#threadsdostring-pool-chunk--chunkname--mode-).
+either from another coroutine,
+or [_task_](#threadsdostring-pool-chunk--chunkname--mode-).
 
 `endpoint` is either string `"in"` or `"out"`,
 each identifying an opposite _endpoint_.
@@ -562,36 +584,52 @@ Therefore, the call `system.awaitch(ch1, "in")` will await for a call like `syst
 
 Alternativelly,
 if `endpoint` is either `nil` or `"any"`,
-the call will await for a call on either _endpoints_.
+the call will await for a matching call on either _endpoints_.
 For instance, the call `system.awaitch(ch1, "any")` will match either a call `system.awaitch(ch2, "in")` or `system.awaitch(ch2, "out")`,
 or even `system.awaitch(ch2, "any")` as a matter of fact.
 
 Returns `true` followed by the extra [transferable](#transferable-values) arguments `...` from the matching call.
-Otherwise, return `false` followed by an error message related to transfering the arguments from the matching call.
+Otherwise,
+it [fails](#failures) with an error message related to transfering the arguments from the matching call.
 In any case,
 if this call does not raise errors,
-it resumed the coroutine, [_state coroutine_](#coroutineload-chunk--chunkname--mode) or [_task_](#threadsdostring-pool-chunk--chunkname--mode-) of the matching call.
+it resumed the coroutine,
+or _task_ of the matching call.
 
 ### `system.resume (co, ...)`
 
 [Await function](#await-function) that is like [`coroutine.resume`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.resume),
-but for [_state coroutines_](#coroutineload-chunk--chunkname--mode).
+but for [_state coroutines_](#state-coroutines).
 It executes _state coroutine_ `co` on a separate system thread,
-and awaits for its completion or [suspension](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
-Moreover, only [transferable values](#transferable-values) can be passed as arguments or returned from `co`.
+and awaits for its completion or suspension.
+Moreover,
+only [transferable values](#transferable-values) can be passed as arguments or returned from `co`.
 
 If the coroutine executing this [await function](#await-function) is explicitly resumed,
 the execution of `co` continues in the separate thread,
-and it will not be able to be resumed again until it [suspends](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield).
-In such case the results of the execution of `co` are discarded.
+and it will not be able to be resumed again until it suspends.
+In such case,
+the results of the execution of `co` are discarded.
 
-_State coroutines_ are executed using a limited set of threads that are also used by the underlying system.
+_State coroutines_ are executed using a limited set of threads that are also used by the underlying system to execute some _await functions_.
 The number of threads is given by environment variable [`UV_THREADPOOL_SIZE`](http://docs.libuv.org/en/v1.x/threadpool.html).
+Therefore,
+_state coroutines_ that execute for too long,
+might degrade the performance of some _await functions_.
+
+For long running tasks,
+consider using a [_thread pool_](#thread-pools).
 
 Time Measure
 ------------
 
-This section describes functions of `coutil.system` to obtain a measure of time or wait for a particular period of time.
+This section describes functions of `coutil.system` to obtain a measure of time or to wait for a particular period of time.
+
+### `system.nanosecs ()`
+
+Returns a timestamp in nanoseconds that represents the current time of the system.
+It increases monotonically from some arbitrary point in time,
+and is not subject to clock drift.
 
 ### `system.time ([mode])`
 
@@ -608,13 +646,7 @@ based on the current time set in the system.
 Therefore,
 unlike the other options,
 it is affected by discontinuous jumps in the system time
-(_e.g._, if the system administrator manually changes the system time).
-
-### `system.nanosecs ()`
-
-Returns a timestamp in nanoseconds that represents the current time of the system.
-It increases monotonically from some arbitrary point in time,
-and is not subject to clock drift.
+(for instance, if the system administrator manually changes the system time).
 
 ### `system.suspend ([seconds [, mode]])`
 
@@ -626,20 +658,20 @@ or negative,
 it is assumed as zero,
 so the calling coroutine will be resumed as soon as possible.
 
-`mode` is a string,
-which might contain character `~` to execute it in [blocking mode](#blocking-mode).
-
-Returns `true` in case of success.
+If string `mode` is provided with character `~`,
+it executes in [blocking mode](#blocking-mode).
 
 System Processes
 ----------------
 
-This section describes functions of `coutil.system` for manipulation of the current process (_i.e._ signals, priority, current directory, and environment variables) and other processes,
+This section describes functions of `coutil.system` for manipulation of the current process
+(signals, priority, current directory, and environment variables),
+and other processes,
 as well as creating new processes by executing programs.
 
 ### `system.emitsig (pid, signal)`
 
-Emits signal indicated by `signal` to process with identifier `pid`.
+Emits signal indicated by `signal` to the process with identifier `pid`.
 Aside from the values for `signal` listed in [`system.awaitsig`](#systemawaitsig-signal),
 this function also accepts the following values for `signal`:
 
@@ -652,7 +684,7 @@ this function also accepts the following values for `signal`:
 
 ### `system.awaitsig (signal)`
 
-[Await function](#await-function) that awaits for the process to receive the signal indicated by string `signal`,
+[Await function](#await-function) that awaits for the current process to receive the signal indicated by string `signal`,
 as listed below:
 
 | `signal` | POSIX | Action | Indication |
@@ -667,12 +699,12 @@ as listed below:
 | `"cputotal"` | SIGPROF | terminate | **CPU** time used by the **process** and by the **system on behalf of the process** elapses. |
 | `"filelimit"` | SIGXFSZ | core dump | Allowed **file** size **limit** exceeded. |
 | `"hangup"` | SIGHUP | terminate | Terminal was closed. |
-| `"interrupt"` | SIGINT | terminate | Terminal requests the process to terminate. (_e.g._, Ctrl+`C`) |
+| `"interrupt"` | SIGINT | terminate | Terminal requests the process to terminate. (Ctrl+`C`) |
 | `"polling"` | SIGPOLL | terminate | Event occurred on [watched file descriptor](https://pubs.opengroup.org/onlinepubs/9699919799/functions/ioctl.html). |
-| `"quit"` | SIGQUIT | core dump | Terminal requests the process to **quit** with a [core dump](https://en.wikipedia.org/wiki/Core_dump). (_e.g._, Ctrl+`\`) |
+| `"quit"` | SIGQUIT | core dump | Terminal requests the process to **quit** with a [core dump](https://en.wikipedia.org/wiki/Core_dump). (Ctrl+`\`) |
 | `"stdinoff"` | SIGTTIN | stop | **Read** from terminal while in **background**. |
 | `"stdoutoff"` | SIGTTOU | stop | **Write** to terminal while in **background**. |
-| `"stop"` | SIGTSTP | stop | Terminal requests the process to **stop**. (_e.g._, Ctrl+`Z`) |
+| `"stop"` | SIGTSTP | stop | Terminal requests the process to **stop**. (Ctrl+`Z`) |
 | `"sysargerr"` | SIGSYS | core dump | **System** call with a **bad argument**. |
 | `"terminate"` | SIGTERM | terminate | Process shall **terminate**. |
 | `"trap"` | SIGTRAP | core dump | Exception or debug **trap** occurs. |
@@ -685,7 +717,8 @@ Returns string `signal` in case of success.
 
 ### `system.getpriority (pid)`
 
-Returns a string and a number corresponding to the scheduling priority of the process with identifier `pid`.
+On success,
+returns a string and a number corresponding to the scheduling priority of the process with identifier `pid`.
 The first returned value is one of the following strings,
 which indicates some convenient distinct priority value (from highest to lowest):
 
@@ -709,7 +742,8 @@ which does not denote a specific priority value.
 
 ### `system.getdir ()`
 
-Returns the path of the current working directory.
+On success,
+returns the path of the current working directory.
 
 ### `system.setdir (path)`
 
@@ -719,6 +753,7 @@ Changes the current working directory to the path in string `path`.
 
 If `name` is not provided,
 returns a table mapping all current environment variable names to their corresponding values.
+
 Alternatively,
 If `name` is a table,
 the results are added to it,
@@ -726,23 +761,22 @@ and `name` is returned.
 
 Otherwise,
 `name` is the name of the process environment variable which value must be returned.
-Fails if the variable `name` is not defined
-(_i.e._, returns `nil` and a error message).
+[Fails](#failures) if the variable `name` is not defined.
 
 ### `system.setenv (name, value)`
 
-Sets `value` as the value of the process environment variable `name`.
+Sets the contents of string `value` as the value of the process environment variable `name`.
 If `value` is `nil`,
 deletes the environment variable.
 
 ### `system.packenv (vars)`
 
 Returns a _packed environment_ that encapsulates environment variables from table `vars`,
-which shall map variable names to the values they must assume.
+which maps variable names to the values they must assume.
 
-**Note**: by indexing a _packed environment_,
+**Note**: by indexing a _packed environment_ `env`,
 like `env.LUA_PATH`,
-a linear search is performed in the list of packed variables to find the value of variable `LUA_PATH`.
+a linear search is performed in the list of packed variables to return the value of variable `LUA_PATH`.
 If such variable does not exist in the packed environment,
 `nil` is returned.
 
@@ -782,10 +816,11 @@ the standard input, output or error output of the new process.
 The possible values are:
 	- A [Lua file](http://www.lua.org/manual/5.4/manual.html#pdf-io.open) to be provided to the process.
 	- A [stream socket](#systemsocket-type-domain) to be provided to the process.
-	- `false` to indicate it should be discarded (_e.g._, `/dev/null` shall be used).
+	- `false` to indicate it should be discarded
+	(`/dev/null` shall be used).
 	- A string with the following characters that indicate a [stream socket](#systemsocket-type-domain) shall be created and stored in the field to allow communication with the process.
-		- `r`: a readable stream socket to send data to the process.
-		- `w`: a writable stream socket to receive data from the process.
+		- `r`: a readable stream socket to receive data from the process.
+		- `w`: a writable stream socket to send data to the process.
 		- `s`: a stream socket that allows transmission of stream sockets (see domain [`"share"`](#systemsocket-type-domain)).
 
 - `arguments`:
@@ -803,7 +838,6 @@ only the variables defined will be available for the new process.
 
 If `cmd` is a table,
 the field `pid` is set with the identifier of the new process
-(see [`system.emitsig`](#systememitsig-pid-signal))
 before the calling coroutine is suspended.
 
 Returns the string `"exit"`,
@@ -811,11 +845,12 @@ followed by a number of the exit status
 when the process terminates normally.
 Otherwise,
 it returns a string indicating the signal that terminated the program,
-as listed in [`system.emitsig`](#systememitsig-pid-signal),
+as accepted by [`system.emitsig`](#systememitsig-pid-signal),
 followed by the platform-dependent number of the signal.
 For signals not listed there,
 the string `"signal"` is returned instead.
 Use the platform-dependent number to differentiate such signals.
+It [fails](#failures) if the process cannot be created.
 
 Network & IPC
 -------------
@@ -925,7 +960,7 @@ By default,
 `mode` is the empty string.
 
 In case of success,
-returns an _addresses_ object that encapsulates all addresses found,
+returns an `addresses` object that encapsulates all addresses found,
 and provides methods to navigate through the addresses found and get them.
 
 ### `addresses:close ()`
@@ -943,6 +978,7 @@ returns `true` and makes `addresses` point to the next address.
 ### `addresses:reset ()`
 
 Makes `addresses` point to the first address.
+Returns no value.
 
 ### `addresses:getaddress ([address])`
 
@@ -989,8 +1025,6 @@ Closes socket `socket`.
 Note that sockets are automatically closed when they are garbage collected,
 but that takes an unpredictable amount of time to happen. 
 
-Returns `true` in case of success.
-
 ### `socket:getdomain ()`
 
 Returns the address domain of `socket`,
@@ -1036,8 +1070,6 @@ It can contain the following characters:
 	- `r` indicate processes have permission to read from the socket.
 	- `w` indicate processes have permission to write to the socket.
 
-Returns `true` in case of success.
-
 ### `socket:bind (address)`
 
 Binds socket `socket` to the address provided as `address`.
@@ -1045,8 +1077,6 @@ Binds socket `socket` to the address provided as `address`.
 For non-local sockets `address` must be an [IP address](#systemaddress-type--data--port--mode).
 For local sockets `address` must be a string
 (either a path on Unix or a pipe name on Windows).
-
-Returns `true` in case of success.
 
 ### `socket:connect ([address])`
 
@@ -1060,17 +1090,16 @@ For local domain sockets,
 (either a path on Unix or a pipe name on Windows).
 
 If `address` is not provided and `socket` is a datagram socket then it is unbinded from its previous binded peer address
-(_i.e._ it is disconnected).
+(that is, it is disconnected).
 For stream sockets argument `address` is mandatory,
 and it is necessary to bind the socket to a peer address before sending any data.
 It is an [await function](#await-function) that awaits for the connection establishment on stream sockets.
 This operation is not available for passive sockets.
 
-Returns `true` in case of success.
-
 ### `socket:getaddress ([site [, address]])`
 
-Returns the address associated with socket `socket`,
+On success,
+returns the address associated with socket `socket`,
 as indicated by `site`,
 which can be:
 
@@ -1086,14 +1115,14 @@ otherwise a new object is returned with the result data.
 [Await function](#await-function) that awaits until it sends through socket `socket` the substring of `data` that starts at `i` and continues until `j`,
 following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
 
-For unbinded datagram sockets `address` must be destination address,
+For unbinded datagram sockets,
+`address` must be destination address,
 but it must be omitted for datagram sockets binded to a peer address.
-For stream sockets `address` is ignored,
+For stream sockets,
+`address` is ignored,
 except for `"share"` stream sockets,
 where `address` might be the stream socket to be transferred.
 This operation is not available for passive sockets.
-
-Returns `true` in case of success.
 
 **Note**: if `data` is a [memory](https://github.com/renatomaia/lua-memory),
 it is not converted to a Lua string prior to have its specified contents transfered.
@@ -1123,16 +1152,12 @@ Shuts down the write side of stream socket `socket`.
 
 This operation is only available for stream sockets.
 
-Returns `true` in case of success.
-
 ### `socket:listen (backlog)`
 
 Starts listening for new connections on passive socket `socket`.
 `backlog` is a hint for the underlying system about the suggested number of outstanding connections that shall be kept in the socket's listen queue.
 
 This operation is only available for passive sockets.
-
-Returns `true` in case of success.
 
 ### `socket:accept ()`
 
@@ -1146,84 +1171,13 @@ this function returns a new stream socket for the accepted connection.
 File System
 -----------
 
-This section describes functions of `coutil.system` to access the file system.
+This section describes functions of `coutil.system` to access files and the file system.
 
-### `system.filebits`
+### `system.linkfile (path, destiny [, mode])`
 
-Table with the following fields containing numbers with the bit values for a [file mode](https://man7.org/linux/man-pages/man7/inode.7.html).
+[Await function](#await-function) that awaits for the creation of a link on path `destiny` refering the file on path given by string `path`.
 
-- `type`: Bit mask for the type of the file .
-- `socket`: Socket file type.
-- `link`: Symbolic link file type.
-- `file`: Regular file type.
-- `block`: Block device file type.
-- `directory`: Directory file type.
-- `character`: Character device file type.
-- `fifo`: FIFO file type.
-- `setuid`: Set-user-ID bit.
-- `setgid`: Set-group-ID bit.
-- `sticky`: Sticky bit.
-- `ruser`: Read permission bit for the file's onwer user ID.
-- `wuser`: Write permission bit for the file's onwer user ID.
-- `xuser`: Execute permission bit for the file's onwer user ID.
-- `rgroup`: Read permission bit for the file's owner group ID.
-- `wgroup`: Write permission bit for the file's owner group ID.
-- `xgroup`: Execute permission bit for the file's owner group ID.
-- `rother`: Read permission bit for others.
-- `wother`: Write permission bit for others.
-- `xother`: Execute permission bit for others.
-
-### `system.fileinfo (path, mode)`
-
-Returns values corresponding to information related to file in `path`,
-according to the following characters in string `mode`:
-
-| Character | Type  | Description |
-| --------- | ----- | ----------- |
-| `p` | string <!-- uv_fs_realpath --> | Canonicalized absolute **path** name for the file. |
-| `=` | string <!-- uv_fs_readlink --> | The **value** of the symbolic link, or `nil` if `path` does not refer a symbolic link. |
-| `@` | string <!-- f_type --> | _Type_ of the **file system** of the file. |
-| `N` | integer <!-- f_type --> | **Numeric** ID of the _type_ of the file system of the file. |
-| `I` | integer <!-- f_bsize --> | **Ideal** transfer _block size_ for the file system of the file. |
-| `A` | integer <!-- f_bavail --> | Free blocks **available** to unprivileged user in the file system of the file. |
-| `F` | integer <!-- f_bfree --> | **Free** _blocks_ in the file system of the file. |
-| `f` | integer <!-- f_ffree --> | **Free** _inodes_ in the file system of the file. |
-| `T` | integer <!-- f_blocks --> | **Total** data _blocks_ in the file system of the file. |
-| `t` | integer <!-- f_files --> | **Total** _inodes_ in the file system of the file. |
-
-Additionally,
-`mode` can also include the characters supported by [`file:info`](#fileinfo-mode) with the same semantics.
-Moreover,
-`mode` can also be prefixed with `l` to indicate that,
-if `path` refers a symbolic link,
-the values corresponding to characters supported by [`file:info`](#fileinfo-mode) shall be about the symbolic link file instead of the link's target file.
-The value of the other options are not affected.
-Similar to `~`,
-`l` does not produce a value to be returned.
-
-### `system.maketemp (prefix [, mode])`
-
-Creates a uniquely named temporary directory with the prefix given by string `prefix`.
-
-String `mode` might contain any of the following characters to make it create a file instead of a directory.
-These characters also define the sequence of values returned by the call in case of success.
-
-- `f`: returns the path to the **file** created.
-- `o`: returns the created file already **opened**.
-
-If `mode` does not contain any of the above characters,
-this function returns the path to the created directory on success.
-
-`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
-
-By default,
-mode is the empty string.
-
-### `system.linkfile (path, linkpath [, mode])`
-
-Creates a link on path `linkpath` refering the file on path given by string `path`.
-If linkpath exists,
-it is **not** overwritten.
+It [fails](#failures) if a file in `destiny` already exists.
 
 String `mode` might contain `s` to create a symbolic link,
 instead of a hard link.
@@ -1239,43 +1193,72 @@ On Windows,
 
 ### `system.copyfile (path, destiny [, mode])`
 
-Copies file from `path` to `destiny`.
+[Await function](#await-function) that awaits until file from `path` is copied to path given by string `destiny`.
 
 `mode` can contain the following characters:
 
+- `~`: executes in [blocking mode](#blocking-mode).
 - `n`: fails if already exists a file in `destiny`.
 - `c`: attempt to create a copy-on-write reflink.
-- `C`: forces a creation of a copy-on-write reflink,
+- `C`: creates a copy-on-write reflink,
 or fails otherwise.
-
-`mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
 
 ### `system.movefile (path, destiny [, mode])`
 
-Moves file from `path` to `destiny`.
+[Await function](#await-function) that awaits until file from `path` is moved to path given by string `destiny`.
 
-`mode` is a string,
-which might contain character `~` to execute it in [blocking mode](#blocking-mode).
+If string `mode` is provided with character `~`,
+it executes in [blocking mode](#blocking-mode).
+
+### `system.removefile (path [, mode])`
+
+[Await function](#await-function) that awaits for removal of file on `path`,
+or empty directory if `mode` is a string with character `d`.
+`mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
+
+### `system.maketemp (prefix [, mode])`
+
+[Await function](#await-function) that awaits for the creation of a uniquely named temporary directory with the prefix given by string `prefix`.
+
+String `mode` might contain any of the following characters to make it create a file instead of a directory.
+These characters also define the sequence of values returned by the call in case of success.
+
+- `f`: returns the path to the **file** created.
+- `o`: returns the created file already **opened**.
+
+If `mode` does not contain any of the above characters,
+this function returns the path to the created directory on success.
+
+`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
+
+By default,
+mode is the empty string.
 
 ### `system.makedir (path, perm [, mode])`
 
-Creates a directory on path given by string `path`.
+[Await function](#await-function) that awaits the creation of a new directory on `path`.
 `perm` indicates the permissions of the directory to be created,
 just like argument `perm` of [`file:grant`](#filegrant-perm--mode).
 
-`mode` is a string,
-which might contain character `~` to execute it in [blocking mode](#blocking-mode).
+It [fails](#failures) if a file in `path` already exists.
+
+If string `mode` is provided with character `~`,
+it executes in [blocking mode](#blocking-mode).
 
 ### `system.listdir (path [, mode])`
 
-Returns an [iterator](http://www.lua.org/manual/5.4/manual.html#3.3.5) that lists the file entries inside the directory in path given by string `path`.
+[Await function](#await-function) that awaits to obtain the list of the file entries in the directory in `path`.
+
+On success,
+returns an [iterator](http://www.lua.org/manual/5.4/manual.html#3.3.5) that lists the entries obtained.
 The _control variable_ is the name of the file entry,
-and an additional _loop variable_ is a string with the type of the file entry.
+and an additional _loop variable_ is a string with the type of the file entry
+(same values by `?` in [`file:info`](#fileinfo-mode)).
 
-`mode` is a string,
-which might contain character `~` to execute it in [blocking mode](#blocking-mode).
+If string `mode` is provided with character `~`,
+it executes in [blocking mode](#blocking-mode).
 
-This function never fails.
+This function never [fails](#failures).
 It raises errors instead.
 
 ### `system.touchfile (path [, mode, times...])`
@@ -1304,16 +1287,10 @@ Similar to [`file:grant`](#filegrant-perm--mode),
 but for file in path given by string `path`.
 The other arguments are the same of [`file:grant`](#filegrant-perm--mode).
 
-### `system.removefile (path [, mode])`
-
-Removes file on path given by string `path`,
-or empty directory if `mode` is a string with character `d`.
-`mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
-
 ### `system.openfile (path [, mode [, perm]])`
 
-Opens file from the path indicated by string `path`.
-The string `mode` can contain the following characters that define properties of the file opened.
+[Await function](#await-function) that awaits until file in `path` in opened.
+The string `mode` can contain the following characters that define how the file is opened.
 
 - `a`: write operations are done at the end of the file (implies `w`).
 - `n`: if such file does not exist,
@@ -1339,21 +1316,139 @@ just like argument `perm` of [`file:grant`](#filegrant-perm--mode).
 They only affect future accesses.
 Files created by this call always allows for all permissions regardless of the permissions defined.
 
-In case of success,
-it returns the file opened.
+On success,
+returns the file opened.
 
-### `file:close ()`
+### `file:close ([mode])`
 
-Closes file `file`.
+[Await function](#await-function) that awaits until `file` is closed.
 Note that files are automatically closed when they are garbage collected,
 but that takes an unpredictable amount of time to happen. 
 
-Returns `true` in case of success.
+If string `mode` is provided with character `~`,
+it executes in [blocking mode](#blocking-mode).
+
+### `file:read (buffer [, i [, j [, offset [, mode]]]])`
+
+[Await function](#await-function) that awaits until it reads from file `file` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
+following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+
+If `offset` is provided,
+the file is read from the `offset` provided from the begin of the file.
+In such case,
+the file offset is not changed by this call.
+In the other case,
+the current file offset is used and updated.
+
+If string `mode` is provided with character `~`,
+it executes in [blocking mode](#blocking-mode).
+
+On success,
+returns the number of bytes copied to `buffer`.
+
+### `file:write (data [, i [, j [, offset [, mode]]]])`
+
+[Await function](#await-function) that awaits until it writes to file `file` the substring of `data` that starts at `i` and continues until `j`,
+following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
+
+If `offset` is provided,
+the data is written from the `offset` provided from the begin of the file.
+In such case,
+the file offset is not changed by this call.
+In the other case,
+the current file offset is used and updated.
+
+If `data` is a file opened for reading,
+it works as if the contents of the file were the string `data`.
+In such case,
+`i` and `j` are mandatory.
+Moreover,
+`offset` is ignored,
+thus the current offset of `file` is used and updated.
+
+If string `mode` is provided with character `~`,
+it executes in [blocking mode](#blocking-mode).
+
+On success,
+returns the number of bytes written to `file`.
+
+### `file:resize (size [, mode])`
+
+[Await function](#await-function) that awaits until it resizes `file` to `size` bytes.
+If the file previously was larger than this size, the extra data is lost.
+If the file previously was shorter,
+it is extended,
+and the extended part reads as null bytes.
+
+If string `mode` is provided with character `~`,
+it executes in [blocking mode](#blocking-mode).
+
+### `file:flush ([mode])`
+
+[Await function](#await-function) that awaits until it saves any data written to `file` into the file's device.
+
+If string `mode` contains `d`,
+it minimizes the device activity by skipping metadata not necessary for later data retrieval.
+
+`mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
+
+### `file:touch ([mode, times...])`
+
+[Await function](#await-function) that awaits until it changes the access and modification times of `file`.
+String `mode` contains a sequence of characters indicating how each provided time value `times...` shall be used in `file`.
+
+- `a`: as the access time.
+- `m`: as the modification time.
+- `b`: as both access and modification times.
+
+Whenever a time value is not provided for either the access or modification time,
+the current time set in the system is used.
+
+`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
+Unlike other characters,
+`~` does not consume a time value from `times...`.
+
+**Note**: all time values are seconds relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time) with sub-second precision.
+
+### `file:own (uid, gid [, mode])`
+
+[Await function](#await-function) that awaits until it changes the onwer user ID of `file` to number `uid`,
+and the owner group ID of `file` to `gid`.
+If the `uid` or `gid` is specified as -1,
+then that ID is not changed.
+
+If string `mode` is provided with character `~`,
+it executes in [blocking mode](#blocking-mode).
+
+### `file:grant (perm [, mode])`
+
+[Await function](#await-function) that awaits until it changes the permission bits of `file`.
+`perm` must be either a number with the [file bits](#systemfilebits),
+or a string with characters defining the bits to be set for the file to be created,
+as listed below:
+
+- `U` Set-**user**-ID _bit_.
+- `G` Set-**group**-ID _bit_.
+- `S` **Sticky** bit.
+- `r` **Read** permission for the file's onwer _user_ ID.
+- `w` **Write** permission for the file's onwer _user_ ID.
+- `x` **Execute** permission for the file's onwer _user_ ID.
+- `R` **Read** permission for the file's owner _group_ ID.
+- `W` **Write** permission for the file's owner _group_ ID.
+- `X` **Execute** permission for the file's owner _group_ ID.
+- `4` **Read** permission for _others_.
+- `2` **Write** permission for _others_.
+- `1` **Execute** permission for _others_.
+
+If string `mode` is provided with character `~`,
+it executes in [blocking mode](#blocking-mode).
 
 ### `file:info (mode)`
 
-Returns values corresponding to file `file`,
-according to the following characters in string `mode`:
+[Await function](#await-function) that awaits for information related to `file`.
+
+On success,
+returns values according to the following characters in string `mode`:
 
 | Character | Type  | Description |
 | --------- | ----- | ----------- |
@@ -1375,7 +1470,7 @@ according to the following characters in string `mode`:
 | `m` | number <!-- st_mtim --> | Time of last **modification** of the file. |
 | `c` | number <!-- st_birthtim --> | Time of file **creation**. |
 
-`mode` can also contain any of the characters valid for argument `perm` of - [`file:grant`](#filegrant-perm--mode).
+`mode` can also contain any of the characters valid for argument `perm` of [`file:grant`](#filegrant-perm--mode).
 For these characters a boolean is returned indicating whether such bit is set.
 
 `mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
@@ -1384,119 +1479,58 @@ Unlike other characters,
 
 **Note**: all time values returned are seconds relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time).
 
-### `file:touch ([mode, times...])`
+### `system.filebits`
 
-Changes the access and modification times of `file`.
-String `mode` contains a sequence of characters indicating how each provided time value `times...` shall be used in `file`.
+Table with the following fields containing numbers with the bit masks for a [file mode](https://man7.org/linux/man-pages/man7/inode.7.html).
 
-- `a`: as the access time.
-- `m`: as the modification time.
-- `b`: as both access and modification times.
+- `type`: Bit mask for the type of the file .
+- `socket`: Socket file type.
+- `link`: Symbolic link file type.
+- `file`: Regular file type.
+- `block`: Block device file type.
+- `directory`: Directory file type.
+- `character`: Character device file type.
+- `fifo`: FIFO file type.
+- `setuid`: Set-user-ID bit.
+- `setgid`: Set-group-ID bit.
+- `sticky`: Sticky bit.
+- `ruser`: Read permission bit for the file's onwer user ID.
+- `wuser`: Write permission bit for the file's onwer user ID.
+- `xuser`: Execute permission bit for the file's onwer user ID.
+- `rgroup`: Read permission bit for the file's owner group ID.
+- `wgroup`: Write permission bit for the file's owner group ID.
+- `xgroup`: Execute permission bit for the file's owner group ID.
+- `rother`: Read permission bit for others.
+- `wother`: Write permission bit for others.
+- `xother`: Execute permission bit for others.
 
-Whenever a time value is not provided for either the access or modification time,
-the current time set in the system is used.
+### `system.fileinfo (path, mode)`
 
-`mode` might also be prefixed with character `~` to execute it in [blocking mode](#blocking-mode).
-Unlike other characters,
-`~` does not consume a time value from `times...`.
+Similar to [`file:info`](#fileinfo-mode)
+but for file in path given by string `path`.
+In addition to the characters supported by [`file:info`](#fileinfo-mode),
+`mode` can also contain:
 
-**Note**: all time values are seconds relative to [UNIX Epoch](https://en.wikipedia.org/wiki/Unix_time) with sub-second precision.
+| Character | Type  | Description |
+| --------- | ----- | ----------- |
+| `p` | string <!-- uv_fs_realpath --> | Canonicalized absolute **path** name for the file. |
+| `=` | string <!-- uv_fs_readlink --> | The **value** of the symbolic link, or `nil` if `path` does not refer a symbolic link. |
+| `@` | string <!-- f_type --> | _Type_ of the **file system** of the file. |
+| `N` | integer <!-- f_type --> | **Numeric** ID of the _type_ of the file system of the file. |
+| `I` | integer <!-- f_bsize --> | **Ideal** transfer _block size_ for the file system of the file. |
+| `A` | integer <!-- f_bavail --> | Free blocks **available** to unprivileged user in the file system of the file. |
+| `F` | integer <!-- f_bfree --> | **Free** _blocks_ in the file system of the file. |
+| `f` | integer <!-- f_ffree --> | **Free** _inodes_ in the file system of the file. |
+| `T` | integer <!-- f_blocks --> | **Total** data _blocks_ in the file system of the file. |
+| `t` | integer <!-- f_files --> | **Total** _inodes_ in the file system of the file. |
 
-### `file:own (uid, gid [, mode])`
-
-Changes the onwer user ID of `file` to number `uid`,
-and the owner group ID of `file` to `gid`.
-If the `uid` or `gid` is specified as -1,
-then that ID is not changed.
-
-`mode` is a string,
-which might contain character `~` to execute it in [blocking mode](#blocking-mode).
-
-### `file:grant (perm [, mode])`
-
-Changes the permission bits of `file`.
-`perm` must be either a number with the [file bits](#systemfilebits),
-or a string with characters defining the bits to be set for the file to be created,
-as listed below:
-
-- `U` Set-**user**-ID _bit_.
-- `G` Set-**group**-ID _bit_.
-- `S` **Sticky** bit.
-- `r` **Read** permission for the file's onwer _user_ ID.
-- `w` **Write** permission for the file's onwer _user_ ID.
-- `x` **Execute** permission for the file's onwer _user_ ID.
-- `R` **Read** permission for the file's owner _group_ ID.
-- `W` **Write** permission for the file's owner _group_ ID.
-- `X` **Execute** permission for the file's owner _group_ ID.
-- `4` **Read** permission for _others_.
-- `2` **Write** permission for _others_.
-- `1` **Execute** permission for _others_.
-
-`mode` is a string,
-which might contain character `~` to execute it in [blocking mode](#blocking-mode).
-
-### `file:read (buffer [, i [, j [, offset [, mode]]]])`
-
-[Await function](#await-function) that awaits until it reads from file `file` at most the number of bytes necessary to fill [memory](https://github.com/renatomaia/lua-memory) `buffer` from position `i` until `j`,
-following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
-
-If `offset` is provided,
-the file is read from the `offset` provided from the begin of the file.
-In such case,
-the file offset is not changed by this call.
-In the other case,
-the current file offset is used and updated.
-
-`mode` is a string,
-which might contain character `~` to execute it in [blocking mode](#blocking-mode).
-
-In case of success,
-this function returns the number of bytes copied to `buffer`.
-
-### `file:write (data [, i [, j [, offset [, mode]]]])`
-
-[Await function](#await-function) that awaits until it writes to file `file` the substring of `data` that starts at `i` and continues until `j`,
-following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
-
-If `offset` is provided,
-the data is written from the `offset` provided from the begin of the file.
-In such case,
-the file offset is not changed by this call.
-In the other case,
-the current file offset is used and updated.
-
-If `data` is a file opened for reading,
-it works as if the contents of the file were the string `data`.
-However,
-`i` and `j` are mandatory,
-and `offset` is ignored,
-thus the current offset of `file` is used and updated in this case.
-
-`mode` is a string,
-which might contain character `~` to execute it in [blocking mode](#blocking-mode).
-
-In case of success,
-this function returns the number of bytes written to `file`.
-
-### `file:resize (length [, mode])`
-
-[Await function](#await-function) that awaits until it resizes `file` to `length` bytes.
-If the file previously was larger than this size, the extra data is lost.
-If the file previously was shorter,
-it is extended,
-and the extended part reads as null bytes.
-
-`mode` is a string,
-which might contain character `~` to execute it in [blocking mode](#blocking-mode).
-
-### `file:flush ([mode])`
-
-Saves any written data to `file`.
-
-If string `mode` contains `d`,
-it minimizes the disk activity by skipping metadata not necessary for proper data retrieval.
-
-`mode` might also contain character `~` to execute it in [blocking mode](#blocking-mode).
+Moreover,
+`mode` can also be prefixed with `l` to indicate that,
+if `path` refers a symbolic link,
+the values corresponding to characters supported by [`file:info`](#fileinfo-mode) shall be about the symbolic link file instead of the link's target file.
+The value of the other options are not affected.
+Similar to `~`,
+`l` does not produce a value to be returned.
 
 System Information
 ------------------
@@ -1547,6 +1581,9 @@ The following characters present in string `which` define the values to be retur
 - `x`: _voluntary_ **context** switches of the process.
 - `X`: _involuntary_ **context** switches of the process.
 
+This function never [fails](#failures).
+It raises errors instead.
+
 **Note**: option `"e"` may raise an error on Unix and AIX systems when used in the [standard standalone interpreter](http://www.lua.org/manual/5.4/manual.html#7) or any program that does not execute [`uv_setup_args`](http://docs.libuv.org/en/v1.x/misc.html#c.uv_setup_args) properly.
 
 ### `system.cpuinfo (which)`
@@ -1563,7 +1600,7 @@ The values of the other _loop variables_ are given by the following characters i
 - `d`: time the CPU spent servicing **device** interrupts. (milliseconds).
 - `i`: time the CPU was **idle** (milliseconds).
 
-This function never fails.
+This function never [fails](#failures).
 It raises errors instead.
 
 **Note**: The _state value_ is the value `which`,
@@ -1605,8 +1642,8 @@ The values of the other _loop variables_ are given by the following characters i
 from position `i` until `j`,
 following the same sematics of the arguments of [memory.get](https://github.com/renatomaia/lua-memory/blob/master/doc/manual.md#memoryget-m--i--j).
 
-`mode` is a string,
-which might contain character `~` to execute it in [blocking mode](#blocking-mode).
+If string `mode` is provided with character `~`,
+it executes in [blocking mode](#blocking-mode).
 
 In case of success,
 this function returns `buffer`.
@@ -1678,7 +1715,7 @@ Index
 	- [`system.grantfile`](#systemgrantfile-path-perm--mode)
 	- [`system.halt`](#systemhalt-)
 	- [`system.isrunning`](#systemisrunning-)
-	- [`system.linkfile`](#systemlinkfile-path-linkpath--mode)
+	- [`system.linkfile`](#systemlinkfile-path-destiny--mode)
 	- [`system.listdir`](#systemlistdir-path--mode)
 	- [`system.makedir`](#systemmakedir-path-perm--mode)
 	- [`system.maketemp`](#systemmaketemp-prefix--mode)
@@ -1687,13 +1724,13 @@ Index
 	- [`system.nanosecs`](#systemnanosecs-)
 	- [`system.netinfo`](#systemnetinfo-option-which)
 	- [`system.openfile`](#systemopenfile-path--mode--perm)
-		- [`file:close`](#fileclose-)
+		- [`file:close`](#fileclose-mode)
 		- [`file:flush`](#fileflush-mode)
 		- [`file:grant`](#filegrant-perm--mode)
 		- [`file:info`](#fileinfo-mode)
 		- [`file:own`](#fileown-uid-gid--mode)
 		- [`file:read`](#fileread-buffer--i--j--offset--mode)
-		- [`file:resize`](#fileresize-length--mode)
+		- [`file:resize`](#fileresize-size--mode)
 		- [`file:touch`](#filetouch-mode-times)
 		- [`file:write`](#filewrite-data--i--j--offset--mode)
 	- [`system.ownfile`](#systemownfile-path-uid-gid--mode)
