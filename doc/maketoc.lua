@@ -54,7 +54,7 @@ for line in file:lines() do
 			}
 			if previous then table.insert(newsection, previous) end
 			table.insert(newsection, line)
-			local funcname, arguments = name:match("`([%w%.:]+)([^`]-)`")
+			local funcname = name:match("`([^%s`]+)")
 			if funcname then
 				newsection.indexed = "`"..funcname.."`"
 				if funcname:find(":", 1, true) then
