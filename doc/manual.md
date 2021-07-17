@@ -25,6 +25,7 @@ Summary
 	- [System Processes](#system-processes)
 	- [Network & IPC](#network--ipc)
 	- [File System](#file-system)
+	- [Standard Streams](#standard-streams)
 	- [System Information](#system-information)
 - [Index](#index)
 
@@ -1560,6 +1561,45 @@ The value of the other options are not affected.
 Similar to `~`,
 `l` does not produce a value to be returned.
 
+Standard Streams
+----------------
+
+This section describes objects provided in `coutil.system` to access the current process standard streams.
+
+### `system.stdin|stdout|stderr`
+
+Terminal, [socket](#systemsocket-type-domain) or [file](#systemopenfile-path--mode--perm) representing the standard input (`stdin`), output (`stdout`), or error (`stderr`) stream of the current process.
+Or `nil` if the type of such stream is unsupported.
+
+### `terminal:close ()`
+
+Closes terminal `terminal`.
+
+### `terminal:read (buffer [, i [, j]])`
+
+Same as [read](#socketread-buffer--i--j--address) of stream sockets.
+
+### `terminal:write (data [, i [, j]])`
+
+Same as [write](#socketwrite-data--i--j--address) of stream sockets.
+
+### `terminal:shutdown ()`
+
+Same as [shutdown](#socketshutdown-) of stream sockets.
+
+### `terminal:setmode (mode)`
+
+Sets the terminal mode,
+according the following values of `mode`:
+
+- `"normal"`: normal terminal mode
+- `"raw"`: raw input mode (on Windows, [ENABLE_WINDOW_INPUT](https://docs.microsoft.com/en-us/windows/console/setconsolemode) is also enabled)
+- `"binary"`: binary-safe I/O mode for IPC (Unix-only)
+
+### `terminal:winsize ()`
+
+Returns the width and height of the current terminal window size (in number of characters).
+
 System Information
 ------------------
 
@@ -1718,9 +1758,9 @@ Index
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#promisecreate-'><code>promise.create</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#promiseonlypending-p-'><code>promise.onlypending</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#promisepickready-p-'><code>promise.pickready</code></a><br>
-</td><td>
 <a href='#queued-events'><code>coutil.queued</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#queuedawait-e'><code>queued.await</code></a><br>
+</td><td>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#queuedawaitall-e1-'><code>queued.awaitall</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#queuedawaitany-e1-'><code>queued.awaitany</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#queuedemitall-e-'><code>queued.emitall</code></a><br>
@@ -1748,11 +1788,11 @@ Index
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#addressesnext-'><code>addresses:next</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#addressesreset-'><code>addresses:reset</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemgetdir-'><code>system.getdir</code></a><br>
-</td><td>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemgetenv-name'><code>system.getenv</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemgetpriority-pid'><code>system.getpriority</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemgrantfile-path-perm--mode'><code>system.grantfile</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemhalt-'><code>system.halt</code></a><br>
+</td><td>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemisrunning-'><code>system.isrunning</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemlinkfile-path-destiny--mode'><code>system.linkfile</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemlistdir-path--mode'><code>system.listdir</code></a><br>
@@ -1778,13 +1818,13 @@ Index
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemrandom-buffer--i--j--mode'><code>system.random</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemremovefile-path--mode'><code>system.removefile</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemresume-co-'><code>system.resume</code></a><br>
-</td><td>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemrun-mode'><code>system.run</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemsetdir-path'><code>system.setdir</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemsetenv-name-value'><code>system.setenv</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemsetpriority-pid-value'><code>system.setpriority</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemsocket-type-domain'><code>system.socket</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketaccept-'><code>socket:accept</code></a><br>
+</td><td>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketbind-address'><code>socket:bind</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketclose-'><code>socket:close</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketconnect-address'><code>socket:connect</code></a><br>
@@ -1795,6 +1835,13 @@ Index
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketsetoption-name-value-'><code>socket:setoption</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketshutdown-'><code>socket:shutdown</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#socketwrite-data--i--j--address'><code>socket:write</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemstdinstdoutstderr'><code>system.stdin|stdout|stderr</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#terminalclose-'><code>terminal:close</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#terminalread-buffer--i--j'><code>terminal:read</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#terminalsetmode-mode'><code>terminal:setmode</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#terminalshutdown-'><code>terminal:shutdown</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#terminalwinsize-'><code>terminal:winsize</code></a><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href='#terminalwrite-data--i--j'><code>terminal:write</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemsuspend-seconds--mode'><code>system.suspend</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemtime-mode'><code>system.time</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#systemtouchfile-path--mode-times'><code>system.touchfile</code></a><br>
@@ -1806,6 +1853,7 @@ Index
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#threadsdofile-pool-filepath--mode-'><code>threads.dofile</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#threadsdostring-pool-chunk--chunkname--mode-'><code>threads.dostring</code></a><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<a href='#threadsresize-pool-size--create'><code>threads.resize</code></a><br>
+<br>
 <br>
 <br>
 </td></tr></table>
