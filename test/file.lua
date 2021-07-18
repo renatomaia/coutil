@@ -37,6 +37,7 @@ do case "list contents"
 	local function newexpected()
 		return {
 			[".git"] = "directory",
+			[".github"] = "directory",
 			demo = "directory",
 			doc = "directory",
 			etc = "directory",
