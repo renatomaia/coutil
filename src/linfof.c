@@ -1,4 +1,5 @@
 #include "lmodaux.h"
+#include "loperaux.h"
 
 
 typedef struct CpuInfoList {
@@ -197,6 +198,57 @@ static int system_procinfo (lua_State *L) {
 }
 
 
+/*
+ * Random
+ */
+
+/* system.random(buffer [, i [, j]]) */
+static int returnrand (lua_State *L) {
+	int err = (int)lua_tointeger(L, 2);
+	lua_settop(L, 1);
+	return lcuL_pushresults(L, 1, err);
+}
+static void uv_onrandom (uv_random_t *random, int err, void *buf, size_t sz) {
+	uv_loop_t *loop = random->loop;
+	uv_req_t *request = (uv_req_t *)random;
+	lua_State *thread = lcuU_endcoreq(loop, request);
+	(void)buf;
+	(void)sz;
+	if (thread) {
+		lua_pushinteger(thread, err);
+		lcuU_resumecoreq(loop, request, 1);
+	}
+}
+static int callrandom (lua_State *L,
+                       uv_loop_t *loop,
+                       uv_random_t *random,
+                       uv_random_cb callback) {
+	uv_buf_t buf;
+	lcu_getoutputbuf(L, 1, &buf);
+	lua_settop(L, 1);
+	return uv_random(loop, random, buf.base, buf.len, 0, callback);
+}
+static int k_setuprand (lua_State *L,
+                        uv_req_t *request,
+                        uv_loop_t *loop,
+                        lcu_Operation *op) {
+	uv_random_t *random = (uv_random_t *)request;
+	int err = callrandom(L, loop, random, uv_onrandom);
+	lcuT_armcoreq(L, loop, op, err);
+	if (err < 0) return lcuL_pusherrres(L, err);
+	return -1;  /* yield on success */
+}
+static int system_random (lua_State *L) {
+	if (lcuL_checknoyieldmode(L, 4)) {
+		int err = callrandom(L, NULL, NULL, NULL);
+		return lcuL_pushresults(L, 1, err);
+	} else {
+		lcu_Scheduler *sched = lcu_getsched(L);
+		return lcuT_resetcoreqk(L, sched, k_setuprand, returnrand, NULL);
+	}
+}
+
+
 static const luaL_Reg userinfomt[] = {
 	{"__gc", userinfo_gc},
 	{NULL, NULL}
@@ -213,6 +265,10 @@ static const luaL_Reg modulef[] = {
 	{"procinfo", system_procinfo},
 	{NULL, NULL}
 };
+static const luaL_Reg upvaluef[] = {
+	{"random", system_random},
+	{NULL, NULL}
+};
 
 LCUI_FUNC void lcuM_addinfof (lua_State *L) {
 	luaL_newmetatable(L, USERINFOCLS);
@@ -224,4 +280,5 @@ LCUI_FUNC void lcuM_addinfof (lua_State *L) {
 	lua_pop(L, 1);  /* pop metatable */
 
 	luaL_setfuncs(L, modulef, 0);
+	lcuM_setfuncs(L, upvaluef, LCU_MODUPVS);
 }
