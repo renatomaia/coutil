@@ -1,0 +1,26 @@
+name: Feature Request
+description: Propose an improvement.
+title: Summary of the proposed improvement.
+labels: [enhancement]
+body:
+- type: checkboxes
+  attributes:
+    label: Is there an existing issue for this?
+    description: Please search to see if a related issue already exists.
+    options:
+      - label: "I have searched the [existing issues](https://www.github.com/renatomaia/coutil/issues)."
+        required: true
+- type: textarea
+  id: motivation
+  attributes:
+    label: Motivation
+    description: |
+      Concise description of use cases that the proposed improvement could address and why.
+      Whenever possible provide code examples using the current or an hypothetical modified API.
+  validations:
+    required: true
+- type: textarea
+  id: proposal
+  attributes:
+    label: Proposal
+    description: Describe any specific ideas about how this improvement could be done, like a new API, demo, test case, etc.
