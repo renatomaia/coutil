@@ -1,3 +1,6 @@
+-- Adaptation of demo from libuv repository:
+-- https://github.com/libuv/libuv/blob/v1.x/docs/code/multi-echo-server/main.c
+
 local spawn = require "coutil.spawn"
 local system = require "coutil.system"
 
