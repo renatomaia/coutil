@@ -3,7 +3,7 @@ description: Report a problem.
 title: Summary of what needs to be fixed.
 labels: [bug]
 assignees:
-  - maia
+  - renatomaia
 body:
 - type: checkboxes
   attributes:
@@ -16,9 +16,7 @@ body:
   id: steps
   attributes:
     label: Steps To Reproduce
-    description: |
-      Steps to reproduce the behavior,
-      including code to be executed.
+    description: Steps to reproduce the behavior, including code to be executed.
     placeholder: |
       1. In this environment...
       2. With this config...
@@ -31,59 +29,59 @@ body:
   attributes:
     label: Expected Behavior
     description: What did you expect to happen and why?
-  validations:
-    required: false
 - type: textarea
   id: usage
   attributes:
     label: Use Case
-    description: |
-      Overview of the actual use case where the problem was noticed.
-      the consequences of the faulty behavior,
-      and if there was a workaround.
-  validations:
-    required: false
+    description: Overview of the actual use case where the problem was noticed, the consequences of the faulty behavior, and if there was a workaround.
 - type: input
+  id: coutil
   attributes:
-    label: Coutil Version
-    description: What version of Coutil are you using?
-    placeholder: 2.0.0
-  validations:
-    required: true
-- type: dropdown
-  attributes:
-    label: What operating system are you using?
-    options:
-      - Windows
-      - macOS
-      - Ubuntu
-      - Other Linux
-      - Other (specify below)
-  validations:
-    required: true
+    label: Coutil version
+    description: What version of Coutil you are using?
+    placeholder: Version name or a link to a commit
 - type: input
+  id: libuv
   attributes:
-    label: Operating System Version
+    label: libuv version
+    description: What is the version of libuv you are using?
+    placeholder: Version name or a link to a commit
+- type: input
+  id: luamemory
+  attributes:
+    label: LuaMemory version
+    description: What is the version of LuaMemory you are using?
+    placeholder: Version name or a link to a commit
+- type: input
+  id: luavararg
+  attributes:
+    label: LuaVararg version
+    description: What is the version of module 'vararg' you are using?
+    placeholder: Version name or a link to a commit
+- type: input
+  id: lua
+  attributes:
+    label: Lua version
+    description: What is the version of Lua you are using?
+    placeholder: Version name or a link to a commit
+- type: input
+  id: system
+  attributes:
+    label: Operating System
     description: |
       What operating system version are you using?
       On Windows, click Start button > Settings > System > About.
       On macOS, click the Apple Menu > About This Mac.
       On Linux, use lsb_release or uname -a.
     placeholder: |
-      e.g.
-      Windows 10 version 1909,
-      macOS Catalina 10.15.7,
-      or Ubuntu 20.04
+      e.g. Windows 10 version 1909, macOS Catalina 10.15.7, or Ubuntu 20.04.
 - type: dropdown
+  id: arch
   attributes:
-    label: What arch are you using?
+    label: Architecture
+    description: What architecture are you using?
     options:
       - x64
       - ia32
-      - arm64 (including Apple Silicon)
-      - Other (specify below)
-- type: input
-  attributes:
-    label: Last known working Coutil version
-    description: What is the last version of Electron this worked in, if applicable?
-    placeholder: 1.0.0
+      - arm64
+      - Other (specify in "Steps To Reproduce")

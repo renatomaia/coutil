@@ -1,9 +1,8 @@
-General Guidelines for Contributing
-===================================
+Guidelines for Contributing
+===========================
 
 You don't need to be a developer in the repository to contribute.
-Anyone is welcome to become a contributor by creating [issues](#issues),
-or [pull requests](#pullrequests).
+Anyone is welcome to become a contributor by creating [issues](#issues) or [pull requests](#pullrequests).
 
 Commits
 -------
@@ -74,8 +73,8 @@ Please make sure the submitted commits follow the [guidelines](#commits).
 Issues
 ------
 
-Try to use the provided [templates](https://www.github.com/renatomaia/coutil/issues/new) whenever is fit,
-but feel free to create a blank issue if the templates are not appropriate.
+Try to use the provided [templates](https://github.com/renatomaia/coutil/issues/new/choose) whenever is fit,
+but feel free to create a [blank issue](https://github.com/renatomaia/coutil/issues/new) if the templates are not appropriate.
 
 Please make sure to search the [current issues](https://www.github.com/renatomaia/coutil/issues) for already existing ones dealing with the same or similar matter,
 and consider improving and contributing to the issue instead of creating a new one.

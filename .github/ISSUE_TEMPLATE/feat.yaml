@@ -5,7 +5,7 @@ labels: [enhancement]
 body:
 - type: checkboxes
   attributes:
-    label: "Is there an [existing issues](https://www.github.com/renatomaia/coutil/issues) for this?"
+    label: Is there an existing issue for this?
     description: Please search to see if a related issue already exists.
     options:
       - label: "I have searched the [existing issues](https://www.github.com/renatomaia/coutil/issues)."
@@ -23,8 +23,4 @@ body:
   id: proposal
   attributes:
     label: Proposal
-    description: |
-      Describe any specific ideas about how this improvement could be done,
-      like a new API, demo, test case, etc.
-  validations:
-    required: false
+    description: Describe any specific ideas about how this improvement could be done, like a new API, demo, test case, etc.
