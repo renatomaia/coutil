@@ -808,19 +808,22 @@ local function timeequals(a, b)
 	return math.abs(a-b) <= 1e-6
 end
 
+local linkpath = "link.lua"
+assert(system.linkfile(path, linkpath, "~s"))
+
 for _, spec in ipairs{
 	{
 		name = "touchfile",
 		func = system.touchfile,
 		arg = path,
-		get = function (path) return system.fileinfo(path, "~am") end,
+		get = function (path, mode) return system.fileinfo(path, mode.."am") end,
 		prefix = "l",
 	},
 	{
 		name = "file:touch",
 		func = file.touch,
 		arg = file,
-		get = function (file) return file:info("~am") end,
+		get = function (file, mode) return file:info(mode.."am") end,
 	},
 } do
 
@@ -828,7 +831,7 @@ for _, spec in ipairs{
 
 	local options = "amb"
 
-	local access, modify = spec.get(spec.arg)
+	local access, modify = spec.get(spec.arg, "~")
 
 	do case "errors"
 		for i = 1, 255 do
@@ -847,7 +850,7 @@ for _, spec in ipairs{
 
 		asserterr("unable to yield", pcall(spec.func, spec.arg, options, 0, 0, 0))
 
-		local newaccess, newmodify = spec.get(spec.arg)
+		local newaccess, newmodify = spec.get(spec.arg, "~")
 		assert(newaccess == access)
 		assert(newmodify == modify)
 
@@ -855,53 +858,66 @@ for _, spec in ipairs{
 	end
 
 	do case "change times"
-		local function testchange(mode)
+		local function testchange(block, link)
+			local mode = block..link
 			if standard == "win32" and spec.name == "file:touch" then -- TODO: check if this is a bug in libuv
 				asserterr("operation not permitted", spec.func(spec.arg, mode))
 			else
 				assert(spec.func(spec.arg, mode) == true)
 
-				local access1, modify1 = spec.get(spec.arg)
+				local access1, modify1 = spec.get(spec.arg, mode)
 				assert(access1 > access)
 				assert(modify1 > modify)
 
-				system.suspend(0.01, mode)
+				system.suspend(0.01, block)
 				assert(spec.func(spec.arg, mode.."a", access) == true)
 
-				local access2, modify2 = spec.get(spec.arg)
+				local access2, modify2 = spec.get(spec.arg, mode)
 				assert(timeequals(access2, access))
 				assert(modify2 > modify1)
 
-				system.suspend(0.01, mode)
+				system.suspend(0.01, block)
 				assert(spec.func(spec.arg, mode.."m", modify) == true)
 
-				local access3, modify3 = spec.get(spec.arg)
+				local access3, modify3 = spec.get(spec.arg, mode)
 				assert(access3 > access2)
 				assert(timeequals(modify3, modify))
 
 				assert(spec.func(spec.arg, mode.."b", access1) == true)
 
-				local access4, modify4 = spec.get(spec.arg)
+				local access4, modify4 = spec.get(spec.arg, mode)
 				assert(timeequals(access4, access1))
 				assert(timeequals(modify4, access1))
 
 				assert(spec.func(spec.arg, mode.."am", access, modify) == true)
 
-				local access5, modify5 = spec.get(spec.arg)
+				local access5, modify5 = spec.get(spec.arg, mode)
 				assert(timeequals(access5, access))
 				assert(timeequals(modify5, modify))
 			end
 		end
 
-		testchange("~")
+		testchange("~", "")
 
-		spawn(testchange, "")
+		spawn(testchange, "", "")
 		assert(system.run() == false)
+
+		if spec.name == "touchfile" then
+			spec.arg = linkpath
+			access, modify = system.fileinfo(linkpath, "~lam")
+
+			testchange("~", "l")
+
+			spawn(testchange, "", "l")
+			assert(system.run() == false)
+		end
 
 		done()
 	end
 
 end
+
+assert(system.removefile(linkpath, "~"))
 
 --------------------------------------------------------------------------------
 
