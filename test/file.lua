@@ -277,7 +277,7 @@ do
 	local testcases = {}
 	function testcases.file(mode)
 		assert(system.movefile("../LICENSE", "license.txt", mode) == true)
-		local filesize = standard == "win32" and 1098 or 1080
+		local filesize = standard == "win32" and 1103 or 1085
 		assert(system.fileinfo("license.txt", mode.."B") == filesize)
 		assert(system.movefile("license.txt", "../LICENSE", mode) == true)
 	end
@@ -463,17 +463,17 @@ do case "read contents"
 	spawn(function ()
 		file = assert(system.openfile("../LICENSE"))
 		assert(file:read(buffer) == #buffer)
-		assert(not buffer:diff("Copyright (C) 2017  "))
-		local offset = standard == "win32" and 59 or 57  -- due to line breaks
+		assert(not buffer:diff("Copyright (C) 2017-2"))
+		local offset = standard == "win32" and 64 or 62  -- due to line breaks
 		assert(file:read(buffer, 11, 20, offset) == 10)
 		assert(not buffer:diff("Copyright Permission"))
 	end)
 	system.run()
 
 	assert(file:read(buffer, 1, 12, nil, "~") == 12)
-	assert(not buffer:diff("Renato Maia rmission"))
+	assert(not buffer:diff("021  Renato rmission"))
 	assert(file:read(buffer, 13, 20, 10, "~") == 8)
-	assert(not buffer:diff("Renato Maia (C) 2017"))
+	assert(not buffer:diff("021  Renato (C) 2017"))
 
 	file:close("~")
 
@@ -530,7 +530,7 @@ do case "from file"
 
 	spawn(function () assert(file:write(srcf, 1, 10) == 10) end)
 	system.run()
-	local first, last = 58, 67
+	local first, last = 63, 72
 	if standard == "win32" then
 		first, last = first+2, last+2
 	end
