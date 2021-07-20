@@ -6,6 +6,15 @@
 #include <string.h>
 #include <luamem.h>
 
+
+#if !LCU_LIBUVMINVER(3)
+#define uv_pipe_getpeername(H,B,S)	((void)(H),(void)(B),(void)(S),UV_ENOSYS)
+#endif
+#if !LCU_LIBUVMINVER(16)
+#define uv_pipe_chmod(H,F)	((void)(H),(void)(F),UV_ENOSYS)
+#endif
+
+
 /*
  * Addresses 
  */

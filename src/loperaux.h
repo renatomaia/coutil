@@ -8,6 +8,8 @@
 #include <lua.h>
 
 
+#define LCU_LIBUVMINVER(minor)  (UV_VERSION_HEX >= (0x10000 | (minor)<<8))
+
 #define LCU_MODUPVS	1
 #define LCU_NOYIELDMODE '~'
 
