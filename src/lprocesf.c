@@ -527,8 +527,10 @@ static int k_setupproc (lua_State *L,
 	lcuT_armcohdl(L, op, 0);  /* 'uv_spawn' always arms the operation */
 	if (err < 0) return lcuL_pusherrres(L, err);
 	if (tabarg) {
+#if LCU_LIBUVMINVER(19)
 		lua_pushinteger(L, uv_process_get_pid(process));
 		lua_setfield(L, 1, "pid");
+#endif
 	}
 	return -1;  /* yield on success */
 }

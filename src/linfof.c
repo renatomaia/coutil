@@ -2,6 +2,16 @@
 #include "loperaux.h"
 
 
+#if !LCU_LIBUVMINVER(9)
+#define uv_os_tmpdir(B,S)	((void)(B),(void)(S),UV_ENOSYS)
+#define uv_os_get_passwd(B)	((void)(B),UV_ENOSYS)
+#endif
+#if !LCU_LIBUVMINVER(29)
+#define uv_get_constrained_memory()	(UV_ENOSYS)
+#endif
+
+
+
 typedef struct CpuInfoList {
 	int count;
 	uv_cpu_info_t *cpu;
