@@ -8,6 +8,26 @@
 #include <luamem.h>
 
 
+#if !LCU_LIBUVMINVER(8)
+#define uv_fs_realpath(L,R,P,C)	((void)(L),(void)(R),(void)(P),(void)(C),UV_ENOSYS)
+#endif
+#if !LCU_LIBUVMINVER(14)
+#define uv_fs_copyfile(L,R,S,D,F,C)	((void)(L),(void)(R),(void)(S),(void)(D),(void)(F),(void)(C),UV_ENOSYS)
+#endif
+#if !LCU_LIBUVMINVER(21)
+#define uv_fs_lchown(L,R,P,U,G,C)	((void)(L),(void)(R),(void)(P),(void)(U),(void)(G),(void)(C),UV_ENOSYS)
+#endif
+#if !LCU_LIBUVMINVER(31)
+#define uv_fs_statfs(L,R,P,C)	((void)(L),(void)(R),(void)(P),(void)(C),UV_ENOSYS)
+#endif
+#if !LCU_LIBUVMINVER(34)
+#define uv_fs_mkstemp(L,R,T,C)	((void)(L),(void)(R),(void)(T),(void)(C),UV_ENOSYS)
+#endif
+#if !LCU_LIBUVMINVER(36)
+#define uv_fs_lutime(L,R,P,A,M,C)	((void)(L),(void)(R),(void)(P),(void)(A),(void)(M),(void)(C),UV_ENOSYS)
+#endif
+
+
 #ifdef _WIN32
 #define S_IFIFO _S_IFIFO
 #define S_ISUID 04000
@@ -875,8 +895,10 @@ static int system_copyfile (lua_State *L) {
 	int noyield = 0, flags = 0;
 	for (; *mode; mode++) switch (*mode) {
 		case 'n': flags |= UV_FS_COPYFILE_EXCL; break;
+#if LCU_LIBUVMINVER(20)
 		case 'c': flags |= UV_FS_COPYFILE_FICLONE; break;
 		case 'C': flags |= UV_FS_COPYFILE_FICLONE_FORCE; break;
+#endif
 		case LCU_NOYIELDMODE: noyield = 1; break;
 		default:
 			return luaL_error(L, "bad argument #%d, unknown mode char (got '%c')", 3, *mode);
