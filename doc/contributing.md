@@ -73,10 +73,10 @@ Please make sure the submitted commits follow the [guidelines](#commits).
 Issues
 ------
 
-Try to use the provided [templates](https://github.com/renatomaia/coutil/issues/new/choose) whenever is fit,
+Try to use the provided [templates](https://github.com/renatomaia/coutil/issues/new/choose) whenever they fit,
 but feel free to create a [blank issue](https://github.com/renatomaia/coutil/issues/new) if the templates are not appropriate.
 
-Please make sure to search the [current issues](https://www.github.com/renatomaia/coutil/issues) for already existing ones dealing with the same or similar matter,
+Please make sure to search the [current issues](https://www.github.com/renatomaia/coutil/issues) for already existing ones dealing with the same or similar matters,
 and consider improving and contributing to the issue instead of creating a new one.
 
 Labels
@@ -97,9 +97,9 @@ Labels to describe the relation with the current product design
 **Note**: these labels have no direct implication on [Semantic Versioning](https://semver.org/spec/v2.0.0.html),
 which shall be later specified by the [commit messages](#messages) addressing the issue.
 
-### Analisys Decisions
+### Analysys Decisions
 
-Labels to reflect the perceived concesus of analisys by the developers and the other contributors.
+Labels to reflect the perceived concesus of analysys by the developers and the other contributors.
 
 - `duplicate`: should be addressed together with some other issues.
 - `invalid`: is not addressable as currently specified (not reproducible, not applicable anymore).
@@ -107,7 +107,7 @@ Labels to reflect the perceived concesus of analisys by the developers and the o
 
 ### Action Requests
 
-Labels to sinalize required actions by contributors.
+Labels to identify required actions by contributors.
 
 - `good first issue`: intended for newcomers.
 - `help wanted`: intended for contributors.
