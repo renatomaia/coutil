@@ -119,7 +119,29 @@ static int coroutine_status(lua_State *L) {
 
 /* succ [, errmsg] = system.resume(coroutine) */
 static int returnvalues (lua_State *L) {
-	return lua_gettop(L)-1;  /* return all except the coroutine (arg #1) */
+	lua_State *co = lua_touserdata(L, 2);
+	if (co) {
+		int status = (int)lua_tointeger(co, -1);
+		int nret = (int)lua_tointeger(co, -2);
+		lua_pop(co, 2);  /* remove lstatus and nret values */
+		if (status != LUA_OK && status != LUA_YIELD) {
+			lua_pushboolean(L, 0);
+			lcuL_pushfrom(L, co, -1, "error");
+			return 2;
+		}
+		lua_pushboolean(L, 1);  /* return 'true' to signal success */
+		status = lcuL_copyfrom(L, co, nret, "return value");
+		lua_pop(co, nret);  /* remove results anyway */
+		if (status != LUA_OK) {
+			lua_pushboolean(L, 0);
+			lua_replace(L, -3);  /* remove 'true' that signals success */
+			return 2;
+		}
+		return 1;
+	}
+	lua_pushboolean(L, 0);
+	lua_pushliteral(L, "canceled");
+	return 2;
 }
 static void uv_onworking(uv_work_t* request) {
 	StateCoro *stateco = (StateCoro *)lcu_req2ud(request);
@@ -127,7 +149,7 @@ static void uv_onworking(uv_work_t* request) {
 	int narg = lua_gettop(co);
 	int status;
 	if (lua_status(co) == LUA_OK) --narg;  /* function on stack */
-	status = lua_resume(co, NULL, narg, &narg);
+	status = lcuL_resume(co, narg, &narg);
 	lcu_assert(lua_checkstack(co, 2));
 	lua_pushinteger(co, narg);
 	lua_pushinteger(co, status);
@@ -139,33 +161,13 @@ static void uv_onworked(uv_work_t* work, int status) {
 	lua_State *co = stateco->L;
 	lua_State *thread = lcuU_endudreq(loop, request);
 	if (thread) {
-		int nret;
 		if (status == UV_ECANCELED) {
-			lua_settop(co, lua_status(co) == LUA_OK);
-			lua_pushboolean(thread, 0);
-			lua_pushliteral(thread, "canceled");
-			nret = 2;
+			lua_settop(co, 1+(lua_status(co) == LUA_OK));
+			lua_pushnil(thread);
 		} else {
-			int lstatus = (int)lua_tointeger(co, -1);
-			nret = (int)lua_tointeger(co, -2);
-			lua_pop(co, 2);  /* remove lstatus and nret values */
-			if (lstatus == LUA_OK || lstatus == LUA_YIELD) {
-				lua_pushboolean(thread, 1);  /* return 'true' to signal success */
-				if (lcuL_movefrom(thread, co, nret, "return value") != LUA_OK) {
-					lua_pop(co, nret);  /* remove results anyway */
-					lua_pushboolean(thread, 0);
-					lua_replace(thread, -3);  /* remove 'true' that signals success */
-					nret = 2;
-				}
-			} else {
-				lua_pushboolean(thread, 0);
-				if (lcuL_pushfrom(thread, co, -1, "error") != LUA_OK) {
-					lua_pop(co, 1);  /* remove error anyway */
-				}
-				nret = 2;
-			}
+			lua_pushlightuserdata(thread, co);
 		}
-		lcuU_resumeudreq(loop, request, nret);
+		lcuU_resumeudreq(loop, request, 1);
 	} else {
 		/* if not executed, remove arguments (LUA_OK when function is on stack) */
 		lua_settop(co, status == UV_ECANCELED && lua_status(co) == LUA_OK);
@@ -185,11 +187,9 @@ static int k_setupwork (lua_State *L,
 	int err;
 	lcu_assert(request == (uv_req_t *)&stateco->work);
 	lcu_assert(op == NULL);
-	if (lcuL_movefrom(co, L, narg, "argument") != LUA_OK) {
-		const char *msg = lua_tostring(co, -1);
+	if (lcuL_copyto(L, co, narg, "argument") != LUA_OK) {
 		lua_pushboolean(L, 0);
-		lua_pushstring(L, msg);
-		lua_pop(co, 1);
+		lua_insert(L, -2);
 		return 2;
 	}
 	err = uv_queue_work(loop, &stateco->work, uv_onworking, uv_onworked);

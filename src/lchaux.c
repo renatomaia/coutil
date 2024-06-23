@@ -111,62 +111,69 @@ LCUI_FUNC int lcuCS_checksyncargs (lua_State *L) {
 	return -1;
 }
 
-static int auxpusherrfrom (lua_State *L) {
-	lua_State *failed = (lua_State *)lua_touserdata(L, 1);
-	const char *msg = lua_tostring(failed, -1);
-	if (strncmp(msg, "unable to receive argument #", 28) == 0) {
-		lua_pushfstring(L, "unable to send argument %s", msg+27);
+typedef PushErrArgs {
+	lua_State *L;
+	const char *msg;
+} PushErrArgs;
+
+static int lpusherr (lua_State *L) {
+	PushErrAgs *args = (const char *)lua_touserdata(L, 1);
+	if (strncmp(args->msg, "unable to receive argument #", 28) == 0) {
+		lua_pushfstring(args->L, "unable to send argument %s", args->msg+27);
 	} else {
-		lua_pushstring(L, msg);
+		lua_pushstring(args->L, args->msg);
 	}
-	return 1;
+	return 0;
 }
 
-static void pusherrfrom (lua_State *L, lua_State *failed) {
-	lua_replace(failed, 1);
-	lua_settop(failed, 1);
-	lua_pushboolean(failed, 0);
-	lua_insert(failed, 1);
+static void copyerrmsg (lua_State *L, lua_State *co) {
+	PushErrAgs args;
 
-	lua_settop(L, 0);
+	lua_replace(L, 1);
+	lua_settop(L, 1);
 	lua_pushboolean(L, 0);
-	lua_pushcfunction(L, auxpusherrfrom);
-	lua_pushlightuserdata(L, failed);
-	lua_pcall(L, 1, 1, 0);
+	lua_insert(L, 1);
+
+	lua_settop(co, 0);
+	lua_pushboolean(co, 0);
+	args.L = co;
+	args.msg = lua_tostring(L, -1);
+	lcuL_cpcall(lua_tothread(co, 1), lpusherr, &args, 0);
 }
 
 static void swapvalues (lua_State *src, lua_State *dst) {
 	int i, err;
 	int nsrc = lua_gettop(src);
 	int ndst = lua_gettop(dst);
+	int nmin = nsrc < ndst ? nsrc : ndst;
 
-	if (nsrc < ndst) {
-		{ lua_State *L = dst; dst = src; src = L; }
-		{ int n = ndst; ndst = nsrc; nsrc = n; }
-	}
-
-	for (i = 3; i <= ndst; i++) {
+	for (i = 3; i <= nmin; i++) {
 		err = lcuL_pushfrom(src, dst, i, "argument");
 		if (err == LUA_OK) {
 			lua_replace(src, i-1);
 		} else {
-			pusherrfrom(dst, src);
+			copyerrmsg(src, dst);
 			return;
 		}
-		err = lcuL_pushfrom(dst, src, i, "argument");
+		err = lcuL_pushto(src, dst, i, "argument");
 		if (err == LUA_OK) {
 			lua_replace(dst, i-1);
 		} else {
-			pusherrfrom(src, dst);
+			copyerrmsg(src, dst);
 			return;
 		}
 	}
 
-	lua_settop(dst, ndst-1);
-	err = lcuL_movefrom(dst, src, nsrc-ndst, "argument");
-	if (err != LUA_OK) pusherrfrom(src, dst);
+	if (nsrc < ndst) {
+		lua_settop(src, nsrc-1);
+		err = lcuL_copyfrom(src, dst, ndst-nsrc, "argument");
+	} else {
+		lua_settop(dst, ndst-1);
+		err = lcuL_copyto(src, dst, nsrc-ndst, "argument");
+	}
+	if (err != LUA_OK) copyerrmsg(src, dst);
 	else {
-		lua_settop(src, ndst-1);
+		lua_settop(nsrc < ndst ? dst : src, ndst-1);
 		lua_pushboolean(src, 1);
 		lua_replace(src, 1);
 		lua_pushboolean(dst, 1);

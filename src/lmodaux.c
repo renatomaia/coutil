@@ -206,7 +206,20 @@ LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
 	}
 	lua_pop(NL, 2);  /* remove 'package' and 'LUA_PRELOAD_TABLE' */
 	lua_pop(L, 1);  /* remove 'LUA_PRELOAD_TABLE' */
+
+	lua_assert(lua_gettop(NL) == 0);
+	lua_newthread(NL);
+
 	return NL;
+}
+
+LCUI_FUNC int lcuL_cpcall (lua_State *L,
+                           lua_CFunction func,
+                           void *arg,
+                           int nret) {
+	lua_pushcfunction(L, func);
+	lua_pushlightuserdata(L, arg);
+	return lua_pcall(L, 1, nret, 0);
 }
 
 #define doerrmsg(F,L,I,M,T) (I > 0 ? \
@@ -269,52 +282,114 @@ static void pushfrom (lua_State *to,
 	}
 }
 
-static int auxpushfrom (lua_State *to) {
-	lua_State *from = (lua_State *)lua_touserdata(to, 1);
-	int idx = lua_tointeger(to, 2);
-	const char *msg = lua_tostring(to, 3);
-	pushfrom(to, from, idx, msg);
+LCUI_FUNC int lcuL_resume (lua_State *L, int *narg) {
+	lua_State *co = lua_tothread(L, 1);
+	*narg = lua_gettop(co);
+	if (lua_status(co) == LUA_OK) *narg--;
+	return lua_resume(co, NULL, *narg, narg);
+}
+
+static void copyfrom (lua_State *L, lua_State *from, int n, const char *msg) {
+	int top = lua_gettop(from);
+	int idx;
+	luaL_checkstack(L, n, "too many values");
+	for (idx = 1+top-n; idx <= top; idx++) pushfrom(L, from, idx, msg);
+}
+
+typedef struct PushArgs {
+	lua_State *from;
+	int n;
+	const char *msg;
+} PushArgs;
+
+static int lcopyfrom (lua_State *L) {
+	PushArgs *args = (PushArgs *)lua_touserdata(L, 1);
+	lua_settop(L, 0);
+	copyfrom(L, args->from, args->n, args->msg);
+	return args->n;
+}
+
+static int lcopyto (lua_State *L) {
+	PushArgs *args = (PushArgs *)lua_touserdata(L, 1);
+	lua_State *target = lua_tothread(L, 1);
+	copyfrom(L, args->from, args->n, args->msg);  /* errors rollback the stack */
+	lua_xmove(L, target, args->n);  /* if we get here target gets all values */
+	return 0;  /* rollback the stack in success as well */
+}
+
+static int lpushfrom (lua_State *L) {
+	PushArgs *args = (PushArgs *)lua_touserdata(L, 1);
+	lua_settop(L, 0);
+	pushfrom(L, args->from, args->n, args->msg);
 	return 1;
 }
 
-LCUI_FUNC int lcuL_pushfrom (lua_State *to,
-                             lua_State *from,
+static int lpushto (lua_State *L) {
+	PushArgs *args = (PushArgs *)lua_touserdata(L, 1);
+	lua_State *target = lua_tothread(L, 1);
+	pushfrom(L, args->from, args->n, args->msg);  /* errors rollback the stack */
+	lua_xmove(L, target, 1);  /* if we get here target gets the value */
+	return 0;  /* rollback the stack in success as well */
+}
+
+static int trypusherr (lua_State *L, lua_State *co, int status) {
+	if (status != LUA_OK) {
+		PushArgs args;
+		args.from = co;
+		args.n = -1;
+		args.msg = "error";
+		int errstat = lcuL_cpcall(L, lpushfrom, &args, 1);
+		if (errstat != LUA_OK) {
+			lcuL_warnmsg(L, "transfer", lua_tostring(co, -1));
+			status = errstat;
+		}
+		lua_pop(co, 1);
+	}
+	return status;
+}
+
+LCUI_FUNC int lcuL_pushto (lua_State *L,
+                           lua_State *co,
+                           int idx,
+                           const char *msg) {
+	PushArgs args;
+	args.from = L;
+	args.n = idx;
+	args.msg = msg;
+	return trypusherr(L, co, lcuL_cpcall(co, lpushto, &args, 0));
+}
+
+LCUI_FUNC int lcuL_pushfrom (lua_State *L,
+                             lua_State *co,
                              int idx,
                              const char *msg) {
-	if (!lua_checkstack(to, 4)) return LUA_ERRMEM;
-	lua_pushcfunction(to, auxpushfrom);
-	lua_pushlightuserdata(to, from);
-	lua_pushinteger(to, idx);
-	lua_pushstring(to, msg);
-	return lua_pcall(to, 3, 1, 0);
+	PushArgs args;
+	args.from = lua_tothread(co, 1);
+	args.n = idx;
+	args.msg = msg;
+	return lcuL_cpcall(L, lpushfrom, &args, 1);
 }
 
-static int auxmovefrom (lua_State *to) {
-	lua_State *from = (lua_State *)lua_touserdata(to, 1);
-	int n = lua_tointeger(to, 2);
-	const char *msg = lua_tostring(to, 3);
-	int top = lua_gettop(from);
-	int idx;
-	lua_settop(to, 0);
-	luaL_checkstack(to, n, "too many values");
-	for (idx = 1+top-n; idx <= top; idx++) pushfrom(to, from, idx, msg);
-	return n;
+LCUI_FUNC int lcuL_copyto (lua_State *L,
+                           lua_State *co,
+                           int n,
+                           const char *msg) {
+	PushArgs args;
+	args.from = L;
+	args.n = n;
+	args.msg = msg;
+	return trypusherr(L, co, lcuL_cpcall(co, lcopyto, &args, 0));
 }
 
-LCUI_FUNC int lcuL_movefrom (lua_State *to,
-                             lua_State *from,
+LCUI_FUNC int lcuL_copyfrom (lua_State *L,
+                             lua_State *co,
                              int n,
                              const char *msg) {
-	int status;
-	lcu_assert(lua_gettop(from) >= n);
-	if (!lua_checkstack(to, 4)) return LUA_ERRMEM;
-	lua_pushcfunction(to, auxmovefrom);
-	lua_pushlightuserdata(to, from);
-	lua_pushinteger(to, n);
-	lua_pushstring(to, msg);
-	status = lua_pcall(to, 3, n, 0);
-	if (status == LUA_OK) lua_pop(from, n);
-	return status;
+	PushArgs args;
+	args.from = lua_tothread(co, 1);
+	args.n = idx;
+	args.msg = msg;
+	return lcuL_cpcall(L, lcopyfrom, &args, n);
 }
 
 

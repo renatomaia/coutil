@@ -87,8 +87,9 @@ static int returnsynced (lua_State *L) {
 	LuaChannel *channel = (LuaChannel *)lua_touserdata(L, 1);
 	lua_State *cL = channel->L;
 	int nret = lua_gettop(cL);
-	int err = lcuL_movefrom(L, cL, nret, "");
+	int err = lcuL_copyfrom(L, cL, nret, "");
 	lcu_assert(err == LUA_OK);
+	lua_pop(cL, nret);
 	restorechannel(channel);
 	return nret;
 }
@@ -148,13 +149,13 @@ static lua_State *armsynced (lua_State *L, void *data) {
 	lua_pushlightuserdata(cL, args->async);
 	lua_setfield(cL, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
 	lua_settop(cL, 2);  /* placeholder for 'channel' and 'endname' */
-	err = lcuL_movefrom(cL, L, lua_gettop(L)-2, "argument");
+	err = lcuL_copyto(L, cL, lua_gettop(L)-2, "argument");
 	if (err != LUA_OK) {
-		const char *msg = lua_tostring(cL, -1);
-		lua_settop(L, 0);
+		const char *msg = lua_tostring(L, -1);
+		lua_replace(L, 1);
+		lua_settop(L, 1);
 		lua_pushboolean(L, 0);
-		lua_pushstring(L, msg);
-		lua_settop(cL, 0);
+		lua_insert(L, 1);
 		return NULL;
 	}
 	if (args->loop != NULL) {

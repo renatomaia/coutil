@@ -806,15 +806,14 @@ end
 			assert(stream:read(buffer) == 64)
 			assert(memory.tostring(buffer, 1, 64) == data1)
 			asserterr("end of file", stream:read(buffer))
+			asserterr("socket is not connected", stream:read(buffer))
 			if standard == "win32" then -- TODO: check if this is a bug in libuv
-				asserterr("socket is not connected", stream:read(buffer))
 				if tostring(stream):find("pipe") then
 					asserterr("broken pipe", stream:write(data2))
 				else
 					assert(stream:write(data2))
 				end
 			else
-				asserterr("end of file", stream:read(buffer))
 				assert(stream:write(data2))
 			end
 			done1 = true
