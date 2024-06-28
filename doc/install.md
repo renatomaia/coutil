@@ -2,7 +2,7 @@ Install
 =======
 
 To build it from the sources,
-the following additional libraries are required.
+the following additional C libraries are required.
 
 - [libuv](https://libuv.org) (version 1.x)
 - [LuaMemory](https://github.com/renatomaia/lua-memory) (version 2.0)

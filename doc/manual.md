@@ -261,7 +261,7 @@ The arguments `filepath` and `mode` are the same of [`loadfile`](http://www.lua.
 ### `threads.close (pool)`
 
 When this function is called from a [_task_](#threadsdostring-pool-chunk--chunkname--mode-) of [_thread pool_](#threadscreate-size) `pool`
-(that is, using a reference obtained by calling [`system.threads()`](#threadscreate-size) without any argument),
+(that is, using a reference obtained by calling [`thread.create()`](#threadscreate-size) without any argument),
 it has no effect other than prevent further use of `pool`.
 
 Otherwise, it waits until there are either no more _tasks_ or no more system threads,
@@ -1448,7 +1448,7 @@ it executes in [blocking mode](#blocking-mode).
 
 [Await function](#await-function) that awaits until it changes the permission bits of `file`.
 `perm` must be either a number with the [permission bits](#permissions),
-or a string with characters defining the bits to be set for the file to be created,
+or a string with characters defining the bits to be set for the file,
 as listed below:
 
 - `U` Set-**user**-ID _bit_.
@@ -1476,7 +1476,7 @@ returns values according to the following characters in string `mode`:
 
 | Character | Value | Description |
 | --------- | ----- | ----------- |
-| `?` | string <!-- st_mode --> | **Type** of the file as one of the field names of bit masks for [file types](#file-types). |
+| `?` | string <!-- st_mode --> | **Type** of the file as one of the field names of bitmasks for [file types](#file-types). |
 | `M` | integer <!-- st_mode --> | [_Bit flags_](#systemfilebits) of the file (_imode_ **mode**). |
 | `_` | integer <!-- st_flags --> | **User defined** flags for the file. |
 | `u` | integer <!-- st_uid --> | Owner **user** _identifier_ (uid). |
@@ -1505,11 +1505,11 @@ Unlike other characters,
 
 ### `system.filebits`
 
-Table with the following fields numbers with the values of [file mode](https://man7.org/linux/man-pages/man7/inode.7.html) bits.
+Table with the following fields with numberic values of the [bitmask](https://en.wikipedia.org/wiki/Mask_(computing)) for [file mode bits](https://man7.org/linux/man-pages/man7/inode.7.html).
 
 #### File Types
 
-- `type`: Bit mask for the following fields identifying different file types:
+- `type`: Bitmask for the following fields identifying different file types:
 	- `socket`: Socket file type.
 	- `link`: Symbolic link file type.
 	- `file`: Regular file type.
