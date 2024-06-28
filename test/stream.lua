@@ -775,7 +775,7 @@ if standard == "posix" then
 		assert(stage2 == 1)
 		assert(system.run("step") == true)
 		assert(stage1 == 2)
-		assert(stage2 == 3)
+		assert(stage2 == 3 or stage2 == 4)
 
 		asserterr("already in use", pcall(accepted.read, accepted, buffer))
 

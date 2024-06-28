@@ -130,7 +130,7 @@ if standard == "posix" then case "tranfer socket"
 	spawn(function ()
 		local childspec = {
 			execfile = luabin,
-			arguments = { "--" },
+			arguments = { "-" },
 			stdin = "w",
 		}
 		spawn(function ()
