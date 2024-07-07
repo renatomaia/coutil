@@ -499,8 +499,6 @@ LCUI_FUNC int lcu_closeudhdl (lua_State *L, int idx) {
 		lua_State *thread = (lua_State *)handle->data;
 		if (thread) {
 			int nret, status;
-			lua_pushnil(L);
-			lua_setiuservalue(L, idx, UPV_THREAD);  /* allow thread to be collected */
 			lua_pushboolean(thread, 0);
 			lua_pushliteral(thread, "closed");
 			status = lua_resume(thread, L, 2, &nret);  /* explicit resume to cancel operation */
@@ -511,6 +509,8 @@ LCUI_FUNC int lcu_closeudhdl (lua_State *L, int idx) {
 				lcuL_warnmsg(L, "object:close", err);
 				lua_pop(thread, 1);
 			}
+			lua_pushnil(L);
+			lua_setiuservalue(L, idx, UPV_THREAD);  /* allow thread to be collected */
 		}
 		lua_pushvalue(L, idx);
 		savevalue(L, (void *)handle);
@@ -534,12 +534,15 @@ static void stopudhdl (lua_State *L, lcu_UdataHandle *udhdl) {
 	int err = 0;
 	if (udhdl->stop) err = udhdl->stop(handle);
 	lcu_assert(handle->data == NULL);
-	pushsaved(L, handle);  /* restore saved object being stopped */
+	pushsaved(L, (void *)handle);  /* restore saved object being stopped */
 	if (err < 0) {
 		lcu_closeudhdl(L, -1);
 		lcuL_warnerr(L, "object:stop", err);
+	} else {
+		lua_pushnil(L);
+		lua_setiuservalue(L, -2, UPV_THREAD);
+		if (!lcuL_maskflag(udhdl, LCU_HANDLECLOSEDFLAG)) freevalue(L, (void *)handle);
 	}
-	else freevalue(L, (void *)handle);
 	lua_pop(L, 1);  /* discard restored saved object */
 	udhdl->stop = NULL;
 	udhdl->step = NULL;
@@ -564,8 +567,6 @@ static int k_endudhdlk (lua_State *L, int status, lua_KContext kctx) {
 	uv_handle_t *handle = lcu_ud2hdl(udhdl);
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(handle->data != NULL);
-	lua_pushnil(L);
-	lua_setiuservalue(L, 1, UPV_THREAD);  /* allow thread to be collected */
 	handle->data = NULL;
 	if (!haltedop(L, handle->loop)) {
 		int nret = udhdl->step(L);
@@ -613,7 +614,10 @@ LCUI_FUNC void lcuU_resumeudhdl (uv_handle_t *handle, int narg) {
 	uv_loop_t *loop = handle->loop;
 	lua_State *L = (lua_State *)loop->data;
 	lua_State *thread = (lua_State *)handle->data;
+	lua_pushthread(thread);
+	lua_xmove(thread, L, 1);  /* save thread in case it is replaced in UPV_THREAD */
 	resumethread(thread, L, narg, loop);
+	lua_pop(L, 1);
 	if (handle->data == NULL) stopudhdl(L, lcu_hdl2ud(handle));
 	lcuU_checksuspend(loop);
 }
@@ -633,9 +637,13 @@ LCUI_FUNC lcu_UdataRequest *lcuT_createudreq (lua_State *L, size_t sz) {
 
 static void freeudreq (lua_State *L, uv_req_t *request) {
 	lcu_assert(request->type == UV_REQ_TYPE_MAX);
-	lcu_assert(request->data == NULL);
+	pushsaved(L, (void *)request);  /* restore saved object being stopped */
+	lua_pushnil(L);
+	lua_setiuservalue(L, -2, UPV_THREAD);
+	request->data = NULL;
 	freevalue(L, (void *)request);
 	request->type = UV_UNKNOWN_REQ;
+	lua_pop(L, 1);  /* discard restored saved object */
 }
 
 static int k_endudreq (lua_State *L, int status, lua_KContext kctx) {
@@ -646,10 +654,10 @@ static int k_endudreq (lua_State *L, int status, lua_KContext kctx) {
 	lcu_assert(status == LUA_YIELD);
 	lcu_assert(request->data == L);
 	lua_remove(L, narg--);  /* remove 'sched' */
-	lua_pushnil(L);
-	lua_setiuservalue(L, 1, UPV_THREAD);  /* allow thread to be collected */
 	request->data = NULL;  /* mark 'udreq' as free */
 	if (haltedop(L, sched)) {
+		lua_pushnil(L);
+		lua_setiuservalue(L, 1, UPV_THREAD);
 		lcu_log(request, L, "resumed coroutine");
 		if (udreq->cancel == NULL || udreq->cancel(L)) uv_cancel(request);
 	} else {
@@ -676,9 +684,6 @@ static int startedudreqk (lua_State *L,
 	sched->nactive++;
 	udreq->results = results;
 	udreq->cancel = cancel;
-	lua_pushthread(L);
-	lua_setiuservalue(L, 1, UPV_THREAD);
-	request->data = (void *)L;
 	lua_pushlightuserdata(L, (void *)sched);
 	lcu_log(request, L, "suspended operation");
 	return lua_yieldk(L, 0, (lua_KContext)lua_gettop(L), k_endudreq);
@@ -702,7 +707,10 @@ static int k_resetudreqk (lua_State *L, int status, lua_KContext kctx) {
 		nret = setup(L, request, loop, NULL);
 		return startedudreqk(L, sched, udreq, nret, results, cancel);
 	}
-	else lcu_log(request, L, "resumed coroutine");
+	lua_pushnil(L);
+	lua_setiuservalue(L, 1, UPV_THREAD);
+	request->data = NULL;
+	lcu_log(request, L, "resumed coroutine");
 	return lua_gettop(L)-narg; /* return yield */
 }
 
@@ -720,6 +728,9 @@ LCUI_FUNC int lcuT_resetudreqk (lua_State *L,
 		savevalue(L, (void *)request);  /* save now, because it may raise memory error */
 		request->type = UV_REQ_TYPE_MAX;  /* 'request' is free but not collectable */
 	}
+	lua_pushthread(L);
+	lua_setiuservalue(L, 1, UPV_THREAD);
+	request->data = (void *)L;
 	if (request->type == UV_REQ_TYPE_MAX) {  /* while previous call returned */
 		uv_loop_t *loop = lcu_toloop(sched);
 		int nret = setup(L, request, loop, NULL);
@@ -751,7 +762,10 @@ LCUI_FUNC lua_State *lcuU_endudreq (uv_loop_t *loop, uv_req_t *request) {
 LCUI_FUNC void lcuU_resumeudreq (uv_loop_t *loop, uv_req_t *request, int narg) {
 	lua_State *L = (lua_State *)loop->data;
 	lua_State *thread = (lua_State *)request->data;
+	lua_pushthread(thread);
+	lua_xmove(thread, L, 1);  /* save thread in case it is replaced in UPV_THREAD */
 	resumethread(thread, L, narg, loop);
+	lua_pop(L, 1);
 	if (request->type == UV_REQ_TYPE_MAX) freeudreq(L, request);
 	lcuU_checksuspend(loop);
 }
