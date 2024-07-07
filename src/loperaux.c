@@ -108,8 +108,9 @@ static void resumethread (lua_State *thread,
 		const char *errmsg = lua_tostring(thread, -1);
 		if (errmsg == NULL) errmsg = "(error object is not a string)";
 		lcuL_warnmsg(L, "system.run", errmsg);
+		lua_pop(thread, 1);
 	}
-	lua_pop(thread, nret);  /* dicard yielded values */
+	else lua_pop(thread, nret);  /* dicard yielded values */
 }
 
 static int haltedop (lua_State *L, void *token) {
@@ -497,13 +498,19 @@ LCUI_FUNC int lcu_closeudhdl (lua_State *L, int idx) {
 		uv_handle_t *handle = lcu_ud2hdl(udhdl);
 		lua_State *thread = (lua_State *)handle->data;
 		if (thread) {
-			int nret;
+			int nret, status;
 			lua_pushnil(L);
 			lua_setiuservalue(L, idx, UPV_THREAD);  /* allow thread to be collected */
 			lua_pushboolean(thread, 0);
 			lua_pushliteral(thread, "closed");
-			lua_resume(thread, L, 2, &nret);  /* explicit resume to cancel operation */
-			lua_pop(thread, nret);  /* dicard yielded values */
+			status = lua_resume(thread, L, 2, &nret);  /* explicit resume to cancel operation */
+			if (status == LUA_YIELD || status == LUA_OK) {
+				lua_pop(thread, nret);  /* dicard yielded values */
+			} else {
+				const char *err = lua_tostring(thread, -1);
+				lcuL_warnmsg(L, "object:close", err);
+				lua_pop(thread, 1);
+			}
 		}
 		lua_pushvalue(L, idx);
 		savevalue(L, (void *)handle);
