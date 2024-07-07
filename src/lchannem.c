@@ -74,7 +74,7 @@ static int channel_close (lua_State *L) {
 	return 1;
 }
 
-/* res [, errmsg] = channel:await(endpoint, ...) */
+/* res [, errmsg] = system.awaitch(channel, endpoint, ...) */
 static void restorechannel (LuaChannel * channel) {
 	lua_State *L = channel->L;
 	lua_settop(L, 0);  /* discard arguments */

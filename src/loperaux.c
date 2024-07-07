@@ -388,6 +388,7 @@ LCUI_FUNC void lcuU_resumecoreq (uv_loop_t *loop, uv_req_t *request, int narg) {
 	lua_State *thread = (lua_State *)request->data;
 	lcu_Operation *op = (lcu_Operation *)request;
 	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST|FLAG_THRSAVED|FLAG_PENDING) == (FLAG_REQUEST|FLAG_THRSAVED|FLAG_PENDING));
+	lcu_assert(request->type == UV_UNKNOWN_REQ);
 	resumethread(thread, L, narg, loop);
 	if (lcuL_maskflag(op, FLAG_REQUEST) && request->type == UV_UNKNOWN_REQ) {
 		lcuL_clearflag(op, FLAG_THRSAVED);
@@ -451,8 +452,7 @@ LCUI_FUNC void lcuU_resumecohdl (uv_handle_t *handle, int narg) {
 	lua_State *L = (lua_State *)loop->data;
 	lua_State *thread = (lua_State *)handle->data;
 	lcu_Operation *op = (lcu_Operation *)handle;
-	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST));
-	lcu_assert(lcuL_maskflag(op, FLAG_PENDING));
+	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST|FLAG_PENDING) == FLAG_PENDING);
 	resumethread(thread, L, narg, loop);
 	if (!lcuL_maskflag(op, FLAG_PENDING)) cancelop(op);
 	lcuU_checksuspend(loop);
@@ -571,23 +571,23 @@ static int k_endudhdlk (lua_State *L, int status, lua_KContext kctx) {
 }
 
 LCUI_FUNC int lcuT_resetudhdlk (lua_State *L,
-                              lcu_UdataHandle *udhdl,
-                              lcu_HandleAction start,
-                              lcu_HandleAction stop,
-                              lua_CFunction step) {
+                                lcu_UdataHandle *udhdl,
+                                lcu_HandleAction start,
+                                lcu_HandleAction stop,
+                                lua_CFunction step) {
 	uv_handle_t *handle = lcu_ud2hdl(udhdl);
 	lcu_Scheduler *sched = lcu_tosched(handle->loop);
 	luaL_argcheck(L, handle->data == NULL, 1, "already in use");
 	checkyieldable(L);
 	udhdl->step = step;
-	if (udhdl->stop == NULL) {
+	if (udhdl->stop == NULL) {  /* 'handle' was started, calling op again */
 		int err;
 		lua_pushvalue(L, 1);
-		savevalue(L, (void *)handle);  /* may raise memory error */
+		savevalue(L, (void *)handle);  /* save now, because it may raise memory error */
 		handle->data = (void *)L;  /* this is eventually done if 'start' returns no error, */
 		                           /* but libuv might call 'uv_alloc_cb' inside 'uv_*_start', */
 		                           /* therefore we must set everything up prematurely. */
-		                           /* Ref.: https://groups.google.com/g/libuv/c/bTwH1X_F4p4 */
+		                           /* Ref.: https://groups.google.com/g/libuv/c/hWqdJ35jafk/m/VuZgalktAQAJ */
 		err = start(handle);
 		if (err < 0) {
 			udhdl->step = NULL; 
@@ -636,11 +636,11 @@ static int k_endudreq (lua_State *L, int status, lua_KContext kctx) {
 	lcu_UdataRequest *udreq = (lcu_UdataRequest *)lua_touserdata(L, 1);
 	uv_req_t *request = lcu_ud2req(udreq);
 	lcu_assert(status == LUA_YIELD);
-	lcu_assert(request->data != NULL);
+	lcu_assert(request->data == L);
 	lua_remove(L, narg--);  /* remove 'sched' */
 	lua_pushnil(L);
 	lua_setiuservalue(L, 1, UPV_THREAD);  /* allow thread to be collected */
-	request->data = NULL;
+	request->data = NULL;  /* mark 'udreq' as free */
 	if (haltedop(L, sched)) {
 		lcu_log(request, L, "resumed coroutine");
 		if (udreq->cancel == NULL || udreq->cancel(L)) uv_cancel(request);
@@ -664,6 +664,7 @@ static int startedudreqk (lua_State *L,
 	}
 	lcu_assert(request->type != UV_UNKNOWN_REQ);
 	lcu_assert(request->type != UV_REQ_TYPE_MAX);
+	lcu_assert(request->data == L);
 	sched->nactive++;
 	udreq->results = results;
 	udreq->cancel = cancel;
@@ -706,16 +707,17 @@ LCUI_FUNC int lcuT_resetudreqk (lua_State *L,
 	uv_req_t *request = lcu_ud2req(udreq);
 	luaL_argcheck(L, request->data == NULL, 1, "already in use");
 	checkyieldable(L);
-	if (request->type == UV_UNKNOWN_REQ) {
+	if (request->type == UV_UNKNOWN_REQ) {  /* 'request' is free and collectable */
 		lua_pushvalue(L, 1);
-		savevalue(L, (void *)request);
-		request->type = UV_REQ_TYPE_MAX;
+		savevalue(L, (void *)request);  /* save now, because it may raise memory error */
+		request->type = UV_REQ_TYPE_MAX;  /* 'request' is free but not collectable */
 	}
-	if (request->type == UV_REQ_TYPE_MAX) {
+	if (request->type == UV_REQ_TYPE_MAX) {  /* while previous call returned */
 		uv_loop_t *loop = lcu_toloop(sched);
 		int nret = setup(L, request, loop, NULL);
 		return startedudreqk(L, sched, udreq, nret, results, cancel);
 	}
+	/* previous caller was resumed while request was still pending */
 	lua_pushlightuserdata(L, (void *)sched);
 	lua_pushlightuserdata(L, (void *)setup);
 	lua_pushlightuserdata(L, (void *)results);

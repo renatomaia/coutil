@@ -175,6 +175,7 @@ static void swapvalues (lua_State *src, lua_State *dst) {
 }
 
 static lua_State *getsuspendedtask (lua_State *L) {
+	/* only the state of a channel has a light userdata in 'LCU_CHANNELTASKREGKEY' */
 	if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY) == LUA_TLIGHTUSERDATA) {
 		uv_async_t *async;
 		lcu_ChannelTask *channeltask = (lcu_ChannelTask *)lua_touserdata(L, -1);
@@ -192,7 +193,7 @@ static lua_State *getsuspendedtask (lua_State *L) {
 			uv_mutex_unlock(&channeltask->mutex);
 		}
 	}
-	else lua_pop(L, 1);
+	else lua_pop(L, 1);  /* 'L' a task (value is either full userdata or false) */
 	return L;
 }
 

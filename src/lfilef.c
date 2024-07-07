@@ -1196,7 +1196,7 @@ static int system_listdir (lua_State *L) {
 		return returnlistdir(L);
 	} else {
 		return lcuT_resetudreqk(L, sched, (lcu_UdataRequest *)dirlist,
-		                              k_setuplistdir, returnlistdir, NULL);
+		                           k_setuplistdir, returnlistdir, NULL);
 	}
 }
 
