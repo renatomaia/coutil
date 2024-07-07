@@ -7,7 +7,7 @@
 #define FLAG_REQUEST  0x01
 #define FLAG_THRSAVED  0x02
 #define FLAG_PENDING  0x04
-#define FLAG_NOCANCEL  0x08
+#define FLAG_CLEANUP  0x08
 
 #define torequest(O) ((uv_req_t *)&((O)->kind.request))
 #define tohandle(O) ((uv_handle_t *)&((O)->kind.handle))
@@ -200,15 +200,14 @@ static void closedhdl (uv_handle_t *handle) {
 }
 
 static void cancelop (lcu_Operation *op) {
+	lcu_assert(!lcuL_maskflag(op, FLAG_CLEANUP));
 	if (lcuL_maskflag(op, FLAG_REQUEST)) {
 		uv_req_t *request = torequest(op);
-		if (!lcuL_maskflag(op, FLAG_NOCANCEL)) {
-			uv_cancel(request);
-			lcu_log(op, request->data, "canceled operation request");
-		}
+		uv_cancel(request);
+		lcu_log(op, request->data, "canceled operation request");
 	} else {
 		uv_handle_t *handle = tohandle(op);
-		if (!lcuL_maskflag(op, FLAG_NOCANCEL) && !uv_is_closing(handle)) {
+		if (!uv_is_closing(handle)) {
 			uv_close(handle, closedhdl);
 			lcu_log(op, handle->data, "closing operation handle...");
 		}
@@ -220,12 +219,13 @@ static int k_endop (lua_State *L, int status, lua_KContext kctx) {
 	int narg = (int)kctx;
 	lcu_Scheduler *sched = (lcu_Scheduler *)lua_touserdata(L, narg);
 	lcu_assert(status == LUA_YIELD);
+	lcu_assert(lcuL_maskflag(op, FLAG_PENDING|FLAG_CLEANUP) == FLAG_PENDING);
 	lua_remove(L, narg--);  /* remove 'sched' */
 	lcuL_clearflag(op, FLAG_PENDING);
 	if (haltedop(L, sched)) {
 		lcu_log(op, L, "resumed coroutine");
 		if (op->cancel == NULL || op->cancel(L)) cancelop(op);
-		else lcuL_setflag(op, FLAG_NOCANCEL);
+		else lcuL_setflag(op, FLAG_CLEANUP);
 	} else {
 		lcu_log(op, L, "resumed operation");
 		if (op->results) return op->results(L);
@@ -237,7 +237,7 @@ static int startedopk (lua_State *L,
                        lcu_Scheduler *sched,
                        lcu_Operation *op,
                        int nret) {
-	lcu_assert(!lcuL_maskflag(op, FLAG_PENDING));
+	lcu_assert(!lcuL_maskflag(op, FLAG_PENDING|FLAG_CLEANUP));
 	if (nret < 0) {  /* shall yield, and wait for callback */
 		lcuL_setflag(op, FLAG_PENDING);
 		lua_pushlightuserdata(L, (void *)sched);
@@ -304,9 +304,10 @@ static OpStatus checkreset (lcu_Operation *op,
 		if (request->type == UV_UNKNOWN_REQ) return FREEOP;
 	} else {
 		uv_handle_t *handle = tohandle(op);
-		if (!lcuL_maskflag(op, FLAG_NOCANCEL) && !uv_is_closing(handle)) {
+		int nocleanup = !lcuL_maskflag(op, FLAG_CLEANUP);
+		if (nocleanup && !uv_is_closing(handle)) {
 			if (type && handle->type == type) return SAMEOP;
-			if (!lcuL_maskflag(op, FLAG_NOCANCEL)) uv_close(handle, closedhdl);
+			if (nocleanup) uv_close(handle, closedhdl);
 		}
 	}
 	return WAITOP;
@@ -377,7 +378,7 @@ LCUI_FUNC lua_State *lcuU_endcoreq (uv_loop_t *loop, uv_req_t *request) {
 	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST|FLAG_THRSAVED) == (FLAG_REQUEST|FLAG_THRSAVED));
 	request->type = UV_UNKNOWN_REQ;
 	if (lcuL_maskflag(op, FLAG_PENDING)) return (lua_State *)request->data;
-	lcuL_clearflag(op, FLAG_THRSAVED|FLAG_NOCANCEL);
+	lcuL_clearflag(op, FLAG_THRSAVED|FLAG_CLEANUP);
 	freevalue(L, (void *)request);
 	lcuU_checksuspend(loop);
 	return NULL;
@@ -440,8 +441,8 @@ LCUI_FUNC int lcuT_armcohdl (lua_State *L, lcu_Operation *op, int err) {
 LCUI_FUNC int lcuU_endcohdl (uv_handle_t *handle) {
 	lcu_Operation *op = (lcu_Operation *)handle;
 	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST));
-	if (lcuL_maskflag(op, FLAG_PENDING|FLAG_NOCANCEL) == FLAG_PENDING) return 1;
-	lcuL_clearflag(op, FLAG_NOCANCEL);
+	if (lcuL_maskflag(op, FLAG_PENDING|FLAG_CLEANUP) == FLAG_PENDING) return 1;
+	lcuL_clearflag(op, FLAG_CLEANUP);
 	cancelop(op);
 	lcuU_checksuspend(handle->loop);
 	return 0;
@@ -454,7 +455,7 @@ LCUI_FUNC void lcuU_resumecohdl (uv_handle_t *handle, int narg) {
 	lcu_Operation *op = (lcu_Operation *)handle;
 	lcu_assert(lcuL_maskflag(op, FLAG_REQUEST|FLAG_PENDING) == FLAG_PENDING);
 	resumethread(thread, L, narg, loop);
-	if (!lcuL_maskflag(op, FLAG_PENDING)) cancelop(op);
+	if (!lcuL_maskflag(op, FLAG_PENDING|FLAG_CLEANUP)) cancelop(op);
 	lcuU_checksuspend(loop);
 }
 

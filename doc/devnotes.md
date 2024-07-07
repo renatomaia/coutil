@@ -441,7 +441,7 @@ _______________________
 - R: `FLAG_REQUEST` is set in coroutines's `Operation.flags`.
 - S: `FLAG_THRSAVED` is set in coroutines's `Operation.flags`.
 - P: `FLAG_PENDING` is set in coroutines's `Operation.flags`.
-- C: `FLAG_NOCANCEL` is set in coroutines's `Operation.flags`.
+- C: `FLAG_CLEANUP` is set in coroutines's `Operation.flags`.
 
 Userdata Handle
 ---------------
