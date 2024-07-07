@@ -76,9 +76,11 @@ function teststream(create, addresses)
 		assert(server:listen(backlog))
 		assert(server:close())
 
-		garbage.server = assert(create("passive"))
-		assert(garbage.server:bind(addresses.bindable))
-		assert(garbage.server:listen(backlog))
+		local collectable = assert(create("passive"))
+		assert(collectable:bind(addresses.bindable))
+		assert(collectable:listen(backlog))
+		garbage.server = collectable
+		collectable = nil
 
 		done()
 	end
@@ -543,6 +545,7 @@ function teststream(create, addresses)
 			assert(b == nil)
 			assert(c == 3)
 			stage = 1
+			stream:close()
 			coroutine.yield()
 			stage = 2
 		end)
@@ -1007,6 +1010,7 @@ end
 			assert(b == nil)
 			assert(c == 3)
 			stage = 2
+			stream:close()
 			coroutine.yield()
 			stage = 3
 		end)
@@ -1251,6 +1255,7 @@ end
 			assert(b == nil)
 			assert(c == 3)
 			stage = 2
+			stream:close()
 			coroutine.yield()
 			stage = 3
 		end)
@@ -1264,7 +1269,11 @@ end
 			local bytes = 1<<24
 			local buffer = memory.create(1<<24)
 			repeat
-				bytes = bytes-stream:read(buffer)
+				local read, errmsg = stream:read(buffer)
+				if not read and errmsg == "end of file" then
+					break
+				end
+				bytes = bytes-read
 			until bytes <= 0
 		end)
 		assert(stage == 0)
@@ -1304,7 +1313,11 @@ end
 			local bytes = (1<<24)+64
 			local buffer = memory.create(bytes)
 			repeat
-				bytes = bytes-stream:read(buffer)
+				local read, errmsg = stream:read(buffer)
+				if not read and errmsg == "end of file" then
+					break
+				end
+				bytes = bytes-read
 			until bytes <= 0
 		end)
 		assert(stage == 1)
