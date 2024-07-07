@@ -547,7 +547,7 @@ static const char *checkinfomode (lua_State *L, int arg, int *bits) {
 		else luaL_error(L, "unknown mode char (got '%c')", mode[i]);
 	}
 	lua_settop(L, arg);
-	luaL_checkstack(L, i+5, "too many values");  /* 5 extra slots */
+	luaL_checkstack(L, i+arg+5, "too many values");  /* 2=lua_push, 3=tothrop() */
 	return mode;
 }
 
