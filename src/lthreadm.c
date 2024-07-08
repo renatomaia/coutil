@@ -80,29 +80,24 @@ static int threads_count (lua_State *L) {
 	return lua_gettop(L)-2;
 }
 
+static int returntoperrmsg (lua_State *L, lua_State *NL) {
+	lua_pushboolean(L, 0);
+	if (lcuL_pushfrom(L, NL, -1, "error") != LUA_OK)
+		lcuL_warnmsg(L, "threads.dostring", lua_tostring(NL, -1));
+	lua_close(NL);
+	return 2;  /* return false plus error message */
+}
+
 static int dochunk (lua_State *L,
                     lcu_ThreadPool *pool,
                     lua_State *NL,
                     int status,
                     int narg) {
 	int top;
-	if (status != LUA_OK) {  /* error (message is on top of the stack) */
-		size_t len;
-		const char *errmsg = lua_tolstring(NL, -1, &len);
-		lua_pushboolean(L, 0);
-		lua_pushlstring(L, errmsg, len);
-		lua_close(NL);
-		return 2;  /* return nil plus error message */
-	}
+	if (status != LUA_OK) return returntoperrmsg(L, NL);
 	top = lua_gettop(L);
 	status = lcuL_movefrom(NL, L, top > narg ? top-narg : 0, "argument");
-	if (status != LUA_OK) {
-		const char *msg = lua_tostring(NL, -1);
-		lua_pushboolean(L, 0);
-		lua_pushfstring(L, msg);
-		lua_close(NL);
-		return 2;  /* return nil plus error message */
-	}
+	if (status != LUA_OK) return returntoperrmsg(L, NL);
 	status = lcuTP_addtpooltask(pool, NL);
 	if (status) {
 		lua_close(NL);

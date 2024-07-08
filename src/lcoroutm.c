@@ -160,6 +160,7 @@ static void uv_onworked(uv_work_t* work, int status) {
 			} else {
 				lua_pushboolean(thread, 0);
 				if (lcuL_pushfrom(thread, co, -1, "error") != LUA_OK) {
+					lcuL_warnmsg(thread, "system.resume", lua_tostring(co, -1));
 					lua_pop(co, 1);  /* remove error anyway */
 				}
 				nret = 2;
@@ -186,9 +187,9 @@ static int k_setupwork (lua_State *L,
 	lcu_assert(request == (uv_req_t *)&stateco->work);
 	lcu_assert(op == NULL);
 	if (lcuL_movefrom(co, L, narg, "argument") != LUA_OK) {
-		const char *msg = lua_tostring(co, -1);
 		lua_pushboolean(L, 0);
-		lua_pushstring(L, msg);
+		if (lcuL_pushfrom(L, co, -1, "error") != LUA_OK)
+			lcuL_warnmsg(L, "system.resume", lua_tostring(co, -1));
 		lua_pop(co, 1);
 		return 2;
 	}
