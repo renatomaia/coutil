@@ -82,7 +82,7 @@ static int threads_count (lua_State *L) {
 
 static int returntoperrmsg (lua_State *L, lua_State *NL) {
 	lua_pushboolean(L, 0);
-	if (lcuL_pushfrom(L, NL, -1, "error") != LUA_OK)
+	if (lcuL_pushfrom(NULL, L, NL, -1, "error") != LUA_OK)
 		lcuL_warnmsg(L, "threads.dostring", lua_tostring(NL, -1));
 	lua_close(NL);
 	return 2;  /* return false plus error message */
@@ -96,7 +96,7 @@ static int dochunk (lua_State *L,
 	int top;
 	if (status != LUA_OK) return returntoperrmsg(L, NL);
 	top = lua_gettop(L);
-	status = lcuL_movefrom(NL, L, top > narg ? top-narg : 0, "argument");
+	status = lcuL_movefrom(NULL, NL, L, top > narg ? top-narg : 0, "argument");
 	if (status != LUA_OK) return returntoperrmsg(L, NL);
 	status = lcuTP_addtpooltask(pool, NL);
 	if (status) {

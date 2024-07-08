@@ -88,7 +88,7 @@ static int coroutine_close(lua_State *L) {
 		lua_pushboolean(L, 1);
 	} else {
 		lua_pushboolean(L, 0);
-		lcuL_pushfrom(L, co, -1, "error");
+		lcuL_pushfrom(L, L, co, -1, "error");
 	}
 	coroutine_gc(L);
 	return lua_gettop(L)-1;
@@ -134,6 +134,7 @@ static void uv_onworking(uv_work_t* request) {
 }
 static void uv_onworked(uv_work_t* work, int status) {
 	uv_loop_t *loop = work->loop;
+	lua_State *L = (lua_State *)loop->data;
 	uv_req_t *request = (uv_req_t *)work;
 	StateCoro *stateco = (StateCoro *)lcu_req2ud(request);
 	lua_State *co = stateco->L;
@@ -151,7 +152,7 @@ static void uv_onworked(uv_work_t* work, int status) {
 			lua_pop(co, 2);  /* remove lstatus and nret values */
 			if (lstatus == LUA_OK || lstatus == LUA_YIELD) {
 				lua_pushboolean(thread, 1);  /* return 'true' to signal success */
-				if (lcuL_movefrom(thread, co, nret, "return value") != LUA_OK) {
+				if (lcuL_movefrom(L, thread, co, nret, "return value") != LUA_OK) {
 					lua_pop(co, nret);  /* remove results anyway */
 					lua_pushboolean(thread, 0);
 					lua_replace(thread, -3);  /* remove 'true' that signals success */
@@ -159,7 +160,7 @@ static void uv_onworked(uv_work_t* work, int status) {
 				}
 			} else {
 				lua_pushboolean(thread, 0);
-				if (lcuL_pushfrom(thread, co, -1, "error") != LUA_OK) {
+				if (lcuL_pushfrom(L, thread, co, -1, "error") != LUA_OK) {
 					lcuL_warnmsg(thread, "system.resume", lua_tostring(co, -1));
 					lua_pop(co, 1);  /* remove error anyway */
 				}
@@ -186,9 +187,9 @@ static int k_setupwork (lua_State *L,
 	int err;
 	lcu_assert(request == (uv_req_t *)&stateco->work);
 	lcu_assert(op == NULL);
-	if (lcuL_movefrom(co, L, narg, "argument") != LUA_OK) {
+	if (lcuL_movefrom(NULL, co, L, narg, "argument") != LUA_OK) {
 		lua_pushboolean(L, 0);
-		if (lcuL_pushfrom(L, co, -1, "error") != LUA_OK)
+		if (lcuL_pushfrom(L, L, co, -1, "error") != LUA_OK)
 			lcuL_warnmsg(L, "system.resume", lua_tostring(co, -1));
 		lua_pop(co, 1);
 		return 2;

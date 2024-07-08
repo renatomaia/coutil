@@ -111,17 +111,6 @@ LCUI_FUNC int lcuCS_checksyncargs (lua_State *L) {
 	return -1;
 }
 
-static int auxpusherrfrom (lua_State *L) {
-	lua_State *failed = (lua_State *)lua_touserdata(L, 1);
-	const char *msg = lua_tostring(failed, -1);
-	if (strncmp(msg, "unable to receive argument #", 28) == 0) {
-		lua_pushfstring(L, "unable to send argument %s", msg+27);
-	} else {
-		lua_pushstring(L, msg);
-	}
-	return 1;
-}
-
 static void pusherrfrom (lua_State *L, lua_State *failed) {
 	lua_replace(failed, 1);
 	lua_settop(failed, 1);
@@ -130,9 +119,7 @@ static void pusherrfrom (lua_State *L, lua_State *failed) {
 
 	lua_settop(L, 0);
 	lua_pushboolean(L, 0);
-	lua_pushcfunction(L, auxpusherrfrom);
-	lua_pushlightuserdata(L, failed);
-	lua_pcall(L, 1, 1, 0);
+	lcuL_pushfrom(NULL, L, failed, -1, "error");
 }
 
 static void swapvalues (lua_State *src, lua_State *dst) {
@@ -146,14 +133,14 @@ static void swapvalues (lua_State *src, lua_State *dst) {
 	}
 
 	for (i = 3; i <= ndst; i++) {
-		err = lcuL_pushfrom(src, dst, i, "argument");
+		err = lcuL_pushfrom(NULL, src, dst, i, "argument");
 		if (err == LUA_OK) {
 			lua_replace(src, i-1);
 		} else {
 			pusherrfrom(dst, src);
 			return;
 		}
-		err = lcuL_pushfrom(dst, src, i, "argument");
+		err = lcuL_pushfrom(NULL, dst, src, i, "argument");
 		if (err == LUA_OK) {
 			lua_replace(dst, i-1);
 		} else {
@@ -163,7 +150,7 @@ static void swapvalues (lua_State *src, lua_State *dst) {
 	}
 
 	lua_settop(dst, ndst-1);
-	err = lcuL_movefrom(dst, src, nsrc-ndst, "argument");
+	err = lcuL_movefrom(NULL, dst, src, nsrc-ndst, "argument");
 	if (err != LUA_OK) pusherrfrom(src, dst);
 	else {
 		lua_settop(src, ndst-1);
