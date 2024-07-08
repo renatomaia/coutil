@@ -257,6 +257,17 @@ LCUI_FUNC int lcuL_canmove (lua_State *L,
 	return 1;
 }
 
+static lua_State *state2normal (lua_State *to) {
+	lua_State *L = to;
+	if (lua_status(to) == LUA_YIELD) {
+		lua_rawgeti(to, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
+		L = lua_tothread(to, -1);
+		lua_pop(to, 1);
+		lcu_assert(lua_tothread(L, 1) == to);
+	}
+	return L;
+}
+
 static void pushfrom (lua_State *to,
                       lua_State *from,
                       int idx,
@@ -291,27 +302,33 @@ static void pushfrom (lua_State *to,
 static int auxpushfrom (lua_State *to) {
 	lua_State *from = (lua_State *)lua_touserdata(to, 1);
 	int idx = lua_tointeger(to, 2);
-	const char *msg = lua_tostring(to, 3);
+	const char *msg = (const char *)lua_touserdata(to, 3);
 	pushfrom(to, from, idx, msg);
 	return 1;
 }
 
-LCUI_FUNC int lcuL_pushfrom (lua_State *to,
+LCUI_FUNC int lcuL_pushfrom (lua_State *L,
+                             lua_State *to,
                              lua_State *from,
                              int idx,
                              const char *msg) {
+	int status;
+	if (L == NULL) L = state2normal(to);
+	lcu_assert(lua_status(L) == LUA_OK);
 	if (!lua_checkstack(to, 4)) return LUA_ERRMEM;
-	lua_pushcfunction(to, auxpushfrom);
-	lua_pushlightuserdata(to, from);
-	lua_pushinteger(to, idx);
-	lua_pushstring(to, msg);
-	return lua_pcall(to, 3, 1, 0);
+	lua_pushcfunction(L, auxpushfrom);
+	lua_pushlightuserdata(L, from);
+	lua_pushinteger(L, idx);
+	lua_pushlightuserdata(L, (void *)msg);
+	status = lua_pcall(L, 3, 1, 0);
+	if (to != L) lua_xmove(L, to, 1);
+	return status;
 }
 
 static int auxmovefrom (lua_State *to) {
 	lua_State *from = (lua_State *)lua_touserdata(to, 1);
 	int n = lua_tointeger(to, 2);
-	const char *msg = lua_tostring(to, 3);
+	const char *msg = (const char *)lua_touserdata(to, 3);
 	int top = lua_gettop(from);
 	int idx;
 	lua_settop(to, 0);
@@ -320,19 +337,23 @@ static int auxmovefrom (lua_State *to) {
 	return n;
 }
 
-LCUI_FUNC int lcuL_movefrom (lua_State *to,
+LCUI_FUNC int lcuL_movefrom (lua_State *L,
+                             lua_State *to,
                              lua_State *from,
                              int n,
                              const char *msg) {
 	int status;
+	if (L == NULL) L = state2normal(to);
 	lcu_assert(lua_gettop(from) >= n);
+	lcu_assert(lua_status(L) == LUA_OK);
 	if (!lua_checkstack(to, 4)) return LUA_ERRMEM;
-	lua_pushcfunction(to, auxmovefrom);
-	lua_pushlightuserdata(to, from);
-	lua_pushinteger(to, n);
-	lua_pushstring(to, msg);
-	status = lua_pcall(to, 3, n, 0);
+	lua_pushcfunction(L, auxmovefrom);
+	lua_pushlightuserdata(L, from);
+	lua_pushinteger(L, n);
+	lua_pushlightuserdata(L, (void *)msg);
+	status = lua_pcall(L, 3, n, 0);
 	if (status == LUA_OK) lua_pop(from, n);
+	if (to != L) lua_xmove(L, to, status == LUA_OK ? n : 1);
 	return status;
 }
 
