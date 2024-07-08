@@ -318,6 +318,10 @@ LCUI_FUNC int lcuL_movefrom (lua_State *to,
 }
 
 
+/*
+ * Lua module creation
+ */
+
 LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
 	luaL_checkstack(L, nup, "too many upvalues");
 	for (; l->name != NULL; l++) {  /* fill the table with given functions */
