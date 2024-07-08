@@ -251,7 +251,7 @@ Returns `true` if `chunk` is loaded successfully.
 
 **Note**: the loaded `chunk` can [yield](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) a string with a channel name followed by an endpoint name and the other arguments of [`system.awaitch`](#systemawaitch-ch-endpoint-) to suspend the _task_ awaiting on a channel without the need to load other modules.
 In such case,
-[coroutine.yield](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) returns just like [`system.awaitch`](#systemawaitch-ch-endpoint-).
+[`coroutine.yield`](http://www.lua.org/manual/5.4/manual.html#pdf-coroutine.yield) returns just like [`system.awaitch`](#systemawaitch-ch-endpoint-).
 
 ### `threads.dofile (pool, filepath [, mode, ...])`
 
