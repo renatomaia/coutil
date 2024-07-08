@@ -142,30 +142,23 @@ static void copylightud (lua_State *L, lua_State *NL, const void *field) {
 
 static void warnf (void *ud, const char *message, int tocont);
 
-LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
+static int initluastate (lua_State *NL) {
 	const luaL_Reg *lib;
-	void *allocud;
-	lua_Alloc allocf = lua_getallocf(L, &allocud);
-	lua_CFunction panic = lua_atpanic(L, NULL);  /* changes panic function */
-	lua_State *NL = lua_newstate(allocf, allocud);
-	int *warnstate;  /* space for warning state */
-
-	lua_atpanic(L, panic);  /* restore panic function */
-	lua_atpanic(NL, panic);
-
-	warnstate = (int *)lua_newuserdatauv(NL, sizeof(int), 0);
-	luaL_ref(NL, LUA_REGISTRYINDEX);  /* make sure it won't be collected */
+	lua_State *L = lua_touserdata(NL, 1);
+	int *warnstate = (int *)lua_newuserdatauv(NL, sizeof(int), 0);
 	*warnstate = 0;  /* default is warnings off */
+	luaL_ref(NL, LUA_REGISTRYINDEX);  /* make sure it won't be collected */
 	lua_setwarnf(NL, warnf, warnstate);
 
-	luaL_checkstack(NL, 3, "not enough memory");
+	lua_settop(NL, 0);
+	lua_newthread(NL);  /* thread to be used to execute code */
 
 	copylightud(L, NL, LCU_CHANNELSREGKEY);  /* copy channel map reference */
 	copylightud(L, NL, LCU_STDIOFDREGKEY);  /* copy duplicated stdio files */
 
 	luaL_requiref(NL, LUA_LOADLIBNAME, luaopen_package, 0);
 	luaL_getsubtable(NL, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
-	luaL_getsubtable(L, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
+	lua_getfield(L, LUA_REGISTRYINDEX, LUA_PRELOAD_TABLE);
 
 	/* add standard libraries to 'package.preload' */
 	for (lib = stdlibs; lib->func; lib++) {
@@ -206,7 +199,33 @@ LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
 	}
 	lua_pop(NL, 2);  /* remove 'package' and 'LUA_PRELOAD_TABLE' */
 	lua_pop(L, 1);  /* remove 'LUA_PRELOAD_TABLE' */
-	return NL;
+
+	return 1;  /* return the thread to be used to execute code */
+}
+
+LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
+	void *allocud;
+	lua_Alloc allocf = lua_getallocf(L, &allocud);
+	lua_CFunction panic = lua_atpanic(L, NULL);  /* changes panic function */
+	lua_State *NL = lua_newstate(allocf, allocud);
+	int status;
+
+	lua_atpanic(L, panic);  /* restore panic function */
+	lua_atpanic(NL, panic);
+
+	lua_pushcfunction(NL, initluastate);
+	lua_pushlightuserdata(NL, L);
+	status = lua_pcall(NL, 1, 1, 0);
+	if (status != LUA_OK) {
+		if (lcuL_pushfrom(NULL, L, NL, -1, "error") != LUA_OK) {
+			lcu_log(NULL, L, "failure: unable copy error of a new Lua state!");
+			lcuL_warnmsg(L, "discarded error", lua_tostring(NL, -1));
+		}
+		lua_close(NL);
+		lua_error(L);
+	}
+
+	return lua_tothread(NL, 1);  /* returns the thread instead of the created state */
 }
 
 #define doerrmsg(F,L,I,M,T) (I > 0 ? \

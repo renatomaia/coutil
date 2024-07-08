@@ -31,7 +31,7 @@ static int lcuM_run (lua_State *L) {
 			lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
 			mainL = lua_tothread(L, -1);
 			lua_pop(L, 1);
-			if (L == mainL) {
+			if (L == lua_tothread(mainL, 1)) {
 				lua_KContext kctx = (lua_KContext)loop;
 				loop->data = (void *)L;
 				if (lcu_shallsuspend(sched)) {
