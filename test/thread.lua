@@ -1120,6 +1120,8 @@ do case "transfer values"
 				tasks[2](t, case[2], case[1], name, path2)
 				waitsignal(path1, system.suspend)
 				waitsignal(path2, system.suspend)
+				io.write(".")
+				io.flush()
 			end
 		end
 		assert(t:close())
@@ -1203,6 +1205,8 @@ do case "transfer errors"
 			for _, task in ipairs(chunks) do
 				task(t, args, errmsg, name, path)
 				waitsignal(path, system.suspend)
+				io.write(".")
+				io.flush()
 			end
 		end
 		assert(t:close())
@@ -1269,6 +1273,8 @@ do case "invalid endpoint"
 				local path = os.tmpname()
 				task(t, arg, errmsg, tostring({}), path)
 				waitsignal(path, system.suspend)
+				io.write(".")
+				io.flush()
 			end
 		end
 		assert(t:close())
@@ -1412,6 +1418,9 @@ do case "resume listed channels"
 			waitsignal(path, system.suspend)
 
 			assert(next(channel.getnames()) == nil)
+
+			io.write(".")
+			io.flush()
 		end
 
 		assert(t:close())
