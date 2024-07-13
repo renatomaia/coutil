@@ -36,6 +36,7 @@ typedef lua_State *(*lcu_GetAsyncState) (lua_State *L, void *userdata);
 LCUI_FUNC int lcuCS_matchchsync (lcu_ChannelSync *sync,
                                  int endpoint,
                                  lua_State *L,
+                                 int base,
                                  lcu_GetAsyncState getstate,
                                  void *userdata);
 

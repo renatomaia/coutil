@@ -89,7 +89,7 @@ static void threadmain (void *arg) {
 				lcu_ChannelMap *map = lcuCS_tochannelmap(L);
 				lcu_ChannelSync *sync = lcuCS_getchsync(map, channelname);
 				int endpoint = lcuCS_checksyncargs(L);
-				if (endpoint != -1 && !lcuCS_matchchsync(sync, endpoint, L, NULL, NULL))
+				if (endpoint != -1 && !lcuCS_matchchsync(sync, endpoint, L, 0, NULL, NULL))
 					L = NULL;
 				lcuCS_freechsync(map, channelname);
 			} else if (lcuCS_suspendedchtask(L)) {
