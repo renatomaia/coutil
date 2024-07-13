@@ -138,20 +138,17 @@ static void swapvalues (lua_State *src, int bsrc, lua_State *dst, int bdst) {
 
 	for (i = 3; i <= ndst; i++) {
 		err = lcuL_pushfrom(NULL, src, dst, i, "argument");
-		if (err == LUA_OK) {
-			lua_replace(src, bsrc+i-1);
-		} else {
+		if (err != LUA_OK) {
 			pusherrfrom(dst, bdst, src, bsrc);
 			return;
 		}
-
 		err = lcuL_pushfrom(NULL, dst, src, i, "argument");
-		if (err == LUA_OK) {
-			lua_replace(dst, bdst+i-1);
-		} else {
+		if (err != LUA_OK) {
 			pusherrfrom(src, bsrc, dst, bdst);
 			return;
 		}
+		lua_replace(src, bsrc+i-1);
+		lua_replace(dst, bdst+i-1);
 	}
 
 	lua_settop(dst, bdst+ndst-1);
