@@ -150,10 +150,10 @@ static lua_State *armsynced (lua_State *L, void *data) {
 	lua_settop(cL, 2);  /* placeholder for 'channel' and 'endname' */
 	err = lcuL_movefrom(NULL, cL, L, lua_gettop(L)-2, "argument");
 	if (err != LUA_OK) {
-		const char *msg = lua_tostring(cL, -1);
 		lua_settop(L, 0);
 		lua_pushboolean(L, 0);
-		lua_pushstring(L, msg);
+		err = lcuL_pushfrom(L, L, cL, -1, "error");
+		if (err != LUA_OK) lcuL_warnmsg(L, "discarded error", lua_tostring(cL, -1));
 		lua_settop(cL, 0);
 		return NULL;
 	}
