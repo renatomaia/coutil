@@ -111,53 +111,58 @@ LCUI_FUNC int lcuCS_checksyncargs (lua_State *L) {
 	return -1;
 }
 
-static void pusherrfrom (lua_State *L, lua_State *failed) {
-	lua_replace(failed, 1);
-	lua_settop(failed, 1);
+static void pusherrfrom (lua_State *L, int bL, lua_State *failed, int bfailed) {
+	lua_replace(failed, bfailed+1);
+	lua_settop(failed, bfailed+1);
 	lua_pushboolean(failed, 0);
-	lua_insert(failed, 1);
+	lua_insert(failed, bfailed+1);
 
-	lua_settop(L, 0);
+	lua_settop(L, bL);
 	lua_pushboolean(L, 0);
 	lcuL_pushfrom(NULL, L, failed, -1, "error");
 }
 
-static void swapvalues (lua_State *src, lua_State *dst) {
+static void swapvalues (lua_State *src, int bsrc, lua_State *dst, int bdst) {
 	int i, err;
 	int nsrc = lua_gettop(src);
 	int ndst = lua_gettop(dst);
 
+	lcu_assert(bsrc < 2);
+	lcu_assert(bdst < 2);
+
 	if (nsrc < ndst) {
 		{ lua_State *L = dst; dst = src; src = L; }
 		{ int n = ndst; ndst = nsrc; nsrc = n; }
+		{ int b = bdst; bdst = bsrc; bsrc = b; }
 	}
 
 	for (i = 3; i <= ndst; i++) {
 		err = lcuL_pushfrom(NULL, src, dst, i, "argument");
 		if (err == LUA_OK) {
-			lua_replace(src, i-1);
+			lua_replace(src, bsrc+i-1);
 		} else {
-			pusherrfrom(dst, src);
+			pusherrfrom(dst, bdst, src, bsrc);
 			return;
 		}
+
 		err = lcuL_pushfrom(NULL, dst, src, i, "argument");
 		if (err == LUA_OK) {
-			lua_replace(dst, i-1);
+			lua_replace(dst, bdst+i-1);
 		} else {
-			pusherrfrom(src, dst);
+			pusherrfrom(src, bsrc, dst, bdst);
 			return;
 		}
 	}
 
-	lua_settop(dst, ndst-1);
+	lua_settop(dst, bdst+ndst-1);
 	err = lcuL_movefrom(NULL, dst, src, nsrc-ndst, "argument");
-	if (err != LUA_OK) pusherrfrom(src, dst);
+	if (err != LUA_OK) pusherrfrom(src, bsrc, dst, bdst);
 	else {
-		lua_settop(src, ndst-1);
+		lua_settop(src, bsrc+ndst-1);
 		lua_pushboolean(src, 1);
-		lua_replace(src, 1);
+		lua_replace(src, bsrc+1);
 		lua_pushboolean(dst, 1);
-		lua_replace(dst, 1);
+		lua_replace(dst, bdst+1);
 	}
 }
 
@@ -187,6 +192,7 @@ static lua_State *getsuspendedtask (lua_State *L) {
 LCUI_FUNC int lcuCS_matchchsync (lcu_ChannelSync *sync,
                                  int endpoint,
                                  lua_State *L,
+                                 int base,
                                  lcu_GetAsyncState getstate,
                                  void *userdata) {
 	uv_mutex_lock(&sync->mutex);
@@ -196,7 +202,7 @@ LCUI_FUNC int lcuCS_matchchsync (lcu_ChannelSync *sync,
 	} else if (sync->expected&endpoint) {
 		lua_State *match = lcuCS_dequeuestateq(&sync->queue);
 		uv_mutex_unlock(&sync->mutex);
-		swapvalues(L, match);  /* 'match' may be a task or a channel */
+		swapvalues(L, base, match, 0);  /* 'match' may be a task or a channel */
 		match = getsuspendedtask(match);  /* if a channel, gets its task */
 		if (match) lcuTP_resumetask(match);
 		return 1;

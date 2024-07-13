@@ -57,7 +57,7 @@ static int channelsync (lcu_ChannelSync *sync,
                         void *userdata) {
 	int endpoint = lcuCS_checksyncargs(L);
 	if (endpoint == -1) lua_error(L);
-	return lcuCS_matchchsync(sync, endpoint, L, getstate, userdata);
+	return lcuCS_matchchsync(sync, endpoint, L, 1, getstate, userdata);
 }
 
 /* getmetatable(channel).__gc(channel) */
@@ -148,9 +148,9 @@ static lua_State *armsynced (lua_State *L, void *data) {
 	lua_pushlightuserdata(cL, args->async);
 	lua_setfield(cL, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
 	lua_settop(cL, 2);  /* placeholder for 'channel' and 'endname' */
-	err = lcuL_movefrom(NULL, cL, L, lua_gettop(L)-2, "argument");
+	err = lcuL_movefrom(cL, cL, L, lua_gettop(L)-2, "argument");
 	if (err != LUA_OK) {
-		lua_settop(L, 0);
+		lua_settop(L, 1);
 		lua_pushboolean(L, 0);
 		err = lcuL_pushfrom(L, L, cL, -1, "error");
 		if (err != LUA_OK) lcuL_warnmsg(L, "discarded error", lua_tostring(cL, -1));
@@ -161,7 +161,7 @@ static lua_State *armsynced (lua_State *L, void *data) {
 		err = uv_async_init(args->loop, args->async, uv_onsynced);
 		lcuT_armcohdl(L, args->op, err);
 		if (err < 0) {
-			lua_settop(L, 0);
+			lua_settop(L, 1);
 			lcuL_pusherrres(L, err);
 			lua_settop(cL, 0);
 			return NULL;
@@ -184,7 +184,7 @@ static int k_setupsynced (lua_State *L,
 	args.async = (uv_async_t *)handle;
 	args.op = op;
 	args.channel = channel;
-	if (channelsync(channel->sync, L, armsynced, &args)) return lua_gettop(L);
+	if (channelsync(channel->sync, L, armsynced, &args)) return lua_gettop(L)-1;
 	return -1;
 }
 
@@ -198,7 +198,7 @@ static int system_awaitch (lua_State *L) {
 /* res [, errmsg] = channel:sync(endpoint) */
 static lua_State *cancelsuspension (lua_State *L, void *data) {
 	lcu_assert(data == NULL);
-	lua_settop(L, 0);
+	lua_settop(L, 1);
 	lua_pushboolean(L, 0);
 	lua_pushliteral(L, "empty");
 	return NULL;
@@ -207,7 +207,7 @@ static lua_State *cancelsuspension (lua_State *L, void *data) {
 static int channel_sync (lua_State *L) {
 	LuaChannel *channel = chklchannel(L, 1);
 	channelsync(channel->sync, L, cancelsuspension, NULL);
-	return lua_gettop(L);
+	return lua_gettop(L)-1;
 }
 
 static int channel_getname (lua_State *L) {
