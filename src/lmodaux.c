@@ -337,6 +337,8 @@ static int auxmovefrom (lua_State *to) {
 	return n;
 }
 
+#define EXTRA	3  /* slots for operations like 'lcuCS_dequeuestateq' */
+
 LCUI_FUNC int lcuL_movefrom (lua_State *L,
                              lua_State *to,
                              lua_State *from,
@@ -346,7 +348,8 @@ LCUI_FUNC int lcuL_movefrom (lua_State *L,
 	if (L == NULL) L = state2normal(to);
 	lcu_assert(lua_gettop(from) >= n);
 	lcu_assert(lua_status(L) == LUA_OK);
-	if (!lua_checkstack(to, 4)) return LUA_ERRMEM;
+	if (!lua_checkstack(L, n > 3 ? n+1+EXTRA : 4+EXTRA) || !lua_checkstack(to, n+EXTRA))
+		return LUA_ERRMEM;
 	lua_pushcfunction(L, auxmovefrom);
 	lua_pushlightuserdata(L, from);
 	lua_pushinteger(L, n);
