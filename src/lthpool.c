@@ -32,7 +32,7 @@ static int hasextraidle_mx (lcu_ThreadPool *pool) {
 static void checkhalted_mx (lcu_ThreadPool *pool) {
 	if (pool->tasks == 0 && pool->size > 0) {
 		pool->size = 0;
-		uv_cond_signal(&pool->onwork);
+		uv_cond_broadcast(&pool->onwork);
 	}
 }
 
@@ -42,7 +42,6 @@ static int addthread_mx (lcu_ThreadPool *pool, lua_State *L) {
 	/* starting or waking threads won't get this new task */
 	if (pool->threads-pool->running-pool->idle <= pool->pending) {
 		if (pool->idle > 0) {
-			pool->idle--;
 			uv_cond_signal(&pool->onwork);
 		} else if (pool->threads < pool->size) {
 			uv_thread_t tid;
@@ -76,6 +75,7 @@ static void threadmain (void *arg) {
 			} else {
 				pool->idle++;
 				uv_cond_wait(&pool->onwork, &pool->mutex);
+				pool->idle--;
 			}
 		}
 		pool->running++;
@@ -123,7 +123,6 @@ static void threadmain (void *arg) {
 	thread_end:
 	pool->threads--;
 	if (hasextraidle_mx(pool)) {
-		pool->idle--;
 		uv_cond_signal(&pool->onwork);
 	} else if (pool->status == TPOOL_CLOSING) {
 		if (pool->threads == 0) uv_cond_signal(&pool->onterm);
@@ -195,7 +194,7 @@ LCUI_FUNC void lcuTP_closetpool (lcu_ThreadPool *pool) {
 
 	uv_mutex_lock(&pool->mutex);
 	pool->status = TPOOL_CLOSING;
-	if (pool->threads > 0) {
+	while (pool->threads > 0) {
 		checkhalted_mx(pool);
 		uv_cond_wait(&pool->onterm, &pool->mutex);
 	}
@@ -233,7 +232,6 @@ LCUI_FUNC int lcuTP_resizetpool (lcu_ThreadPool *pool, int size, int create) {
 			pool->threads++;
 		}
 	} else if (hasextraidle_mx(pool)) {
-		pool->idle--;
 		uv_cond_signal(&pool->onwork);
 	}
 	uv_mutex_unlock(&pool->mutex);
