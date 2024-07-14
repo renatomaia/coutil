@@ -6,7 +6,14 @@
 #include <uv.h>
 
 
-typedef enum { TPOOL_OPEN, TPOOL_CLOSING, TPOOL_CLOSED } TPoolStatus;
+#define STATUS_MASK     0x03
+#define STATUS_OPEN     0x00
+#define STATUS_CLOSING  0x01
+#define STATUS_CLOSED   0x02
+#define JOIN_PENDING    0x04  /* flat when 'last_terminated' is set */
+
+#define getstatus(P)  ((P)->flags&STATUS_MASK)
+#define setstatus(P,V)  ((P)->flags = ((P)->flags & (~STATUS_MASK)) | (V))
 
 struct lcu_ThreadPool {
 	lua_Alloc allocf;
@@ -14,7 +21,7 @@ struct lcu_ThreadPool {
 	uv_mutex_t mutex;
 	uv_cond_t onwork;
 	uv_cond_t onterm;
-	TPoolStatus status;
+	int flags;  /* STATUS_MASK|JOIN_PENDING */
 	int size;  /* expected number of system threads */
 	int threads;  /* current number of system threads */
 	int idle;  /* number of system threads waiting on 'onwork' */
@@ -22,6 +29,7 @@ struct lcu_ThreadPool {
 	int running;  /* number of system threads running tasks */
 	int pending;  /* number of tasks in 'queue' */
 	lcu_StateQ queue;
+	uv_thread_t last_terminated;  /* terminated worker thread pending join */
 };
 
 
@@ -50,7 +58,7 @@ static int addthread_mx (lcu_ThreadPool *pool, lua_State *L) {
 			else lcuL_warnerr(L, "system.threads", err);
 		}
 	}
-	if (pool->status == TPOOL_CLOSED) return 0;
+	if (getstatus(pool) == STATUS_CLOSED) return 0;
 	lcuCS_enqueuestateq(&pool->queue, L);
 	pool->pending++;
 	return 1;
@@ -70,7 +78,7 @@ static void threadmain (void *arg) {
 				pool->pending--;
 				L = lcuCS_dequeuestateq(&pool->queue);
 				break;
-			} else if (pool->status == TPOOL_CLOSING && pool->tasks == 0) {  /* if halted? */
+			} else if (getstatus(pool) == STATUS_CLOSING && pool->tasks == 0) {  /* if halted? */
 				pool->size = 0;
 			} else {
 				pool->idle++;
@@ -124,10 +132,15 @@ static void threadmain (void *arg) {
 	pool->threads--;
 	if (hasextraidle_mx(pool)) {
 		uv_cond_signal(&pool->onwork);
-	} else if (pool->status == TPOOL_CLOSING) {
+	} else if (getstatus(pool) == STATUS_CLOSING) {
 		if (pool->threads == 0) uv_cond_signal(&pool->onterm);
 		else checkhalted_mx(pool);
 	}
+
+	if (lcuL_maskflag(pool, JOIN_PENDING)) uv_thread_join(&pool->last_terminated);
+	else lcuL_setflag(pool, JOIN_PENDING);
+	pool->last_terminated = uv_thread_self();
+
 	uv_mutex_unlock(&pool->mutex);
 }
 
@@ -162,7 +175,7 @@ LCUI_FUNC int lcuTP_createtpool (lcu_ThreadPool **ref,
 
 	pool->allocf = allocf;
 	pool->allocud = allocud;
-	pool->status = TPOOL_OPEN;
+	pool->flags = STATUS_OPEN;
 	pool->size = 0;
 	pool->threads = 0;
 	pool->idle = 0;
@@ -184,7 +197,16 @@ LCUI_FUNC int lcuTP_createtpool (lcu_ThreadPool **ref,
 }
 
 LCUI_FUNC void lcuTP_destroytpool (lcu_ThreadPool *pool) {
+	lcu_assert(getstatus(pool) == STATUS_CLOSED);
+	lcu_assert(pool->threads == 0);
+	lcu_assert(pool->idle == 0);
+	lcu_assert(pool->tasks == 0);
+	lcu_assert(pool->running == 0);
+	lcu_assert(pool->pending == 0);
+	lcu_assert(pool->queue.head == NULL);
+	lcu_assert(pool->queue.tail == NULL);
 	uv_mutex_destroy(&pool->mutex);
+	if (lcuL_maskflag(pool, JOIN_PENDING)) uv_thread_join(&pool->last_terminated);
 	pool->allocf(pool->allocud, pool, sizeof(lcu_ThreadPool), 0);
 }
 
@@ -193,7 +215,7 @@ LCUI_FUNC void lcuTP_closetpool (lcu_ThreadPool *pool) {
 	lcu_StateQ queue;
 
 	uv_mutex_lock(&pool->mutex);
-	pool->status = TPOOL_CLOSING;
+	setstatus(pool, STATUS_CLOSING);
 	while (pool->threads > 0) {
 		checkhalted_mx(pool);
 		uv_cond_wait(&pool->onterm, &pool->mutex);
@@ -203,7 +225,7 @@ LCUI_FUNC void lcuTP_closetpool (lcu_ThreadPool *pool) {
 	queue = pool->queue;
 	pool->pending = 0;
 	lcuCS_initstateq(&pool->queue);
-	pool->status = TPOOL_CLOSED;
+	setstatus(pool, STATUS_CLOSED);
 	uv_mutex_unlock(&pool->mutex);
 
 	uv_cond_destroy(&pool->onterm);
@@ -243,10 +265,10 @@ static int collectthreadpool (lua_State *L) {
 	lcu_ThreadPool *pool = *((lcu_ThreadPool **)lua_touserdata(L, 1));
 	int status, tasks;
 	uv_mutex_lock(&pool->mutex);
-	status = pool->status;
+	status = getstatus(pool);
 	tasks = --pool->tasks;
 	uv_mutex_unlock(&pool->mutex);
-	if (status == TPOOL_CLOSED && tasks == 0) lcuTP_destroytpool(pool);
+	if (status == STATUS_CLOSED && tasks == 0) lcuTP_destroytpool(pool);
 	return 0;
 }
 
