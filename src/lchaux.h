@@ -23,7 +23,7 @@ LCUI_FUNC lua_State *lcuCS_dequeuestateq (lcu_StateQ *q);
 LCUI_FUNC lua_State *lcuCS_removestateq (lcu_StateQ *q, lua_State *L);
 
 
-LCUI_FUNC int lcuCS_checksyncargs (lua_State *L);
+LCUI_FUNC int lcuCS_checksyncargs (lua_State *L, int narg);
 
 typedef struct lcu_ChannelSync lcu_ChannelSync;
 
@@ -37,6 +37,7 @@ LCUI_FUNC int lcuCS_matchchsync (lcu_ChannelSync *sync,
                                  int endpoint,
                                  lua_State *L,
                                  int base,
+                                 int narg,
                                  lcu_GetAsyncState getstate,
                                  void *userdata);
 
@@ -55,7 +56,7 @@ LCUI_FUNC void lcuCS_freechsync (lcu_ChannelMap *map, const char *name);
 
 #define LCU_CHANNELSYNCREGKEY	LCU_PREFIX"uv_async_t channelWake"
 
-LCUI_FUNC int lcuCS_suspendedchtask (lua_State *L);
+LCUI_FUNC int lcuCS_suspendedchtask (lua_State *L, int idx);
 
 
 #endif

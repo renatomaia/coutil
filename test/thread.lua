@@ -537,6 +537,26 @@ do case "state coroutine"
 	done()
 end
 
+do case "keeping values on stack"
+	local path = os.tmpname()
+	do
+		local threads = require "coutil.threads"
+		local pool<close> = threads.create(1)
+		pool:dostring(utilschunk..[[
+			local _ENV = require "_G"
+			warn("@on")
+			local cotest = require "coutil_test"
+			assert(cotest.yieldsaved() == nil)
+			assert(cotest.yieldsaved() == nil)
+			assert(cotest.yieldsaved() == nil)
+			sendsignal("]]..path..[[")
+		]])
+	end
+	waitsignal(path)
+
+	done()
+end
+
 newtest "channels" --------------------------------------------------------------
 
 do case "errors"

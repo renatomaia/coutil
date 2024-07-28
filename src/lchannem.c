@@ -55,9 +55,14 @@ static int channelsync (lcu_ChannelSync *sync,
                         lua_State *L,
                         lcu_GetAsyncState getstate,
                         void *userdata) {
-	int endpoint = lcuCS_checksyncargs(L);
+	int endpoint = lcuCS_checksyncargs(L, 2);
 	if (endpoint == -1) lua_error(L);
-	return lcuCS_matchchsync(sync, endpoint, L, 1, getstate, userdata);
+	if (lcuCS_matchchsync(sync, endpoint, L, 1, lua_gettop(L), getstate, userdata)) {
+		lcu_assert(lua_tointeger(L, -1) == lua_gettop(L)-2);
+		lua_pop(L, 1);  /* discard 'narg' */
+		return 1;
+	}
+	return 0;
 }
 
 /* getmetatable(channel).__gc(channel) */
@@ -86,8 +91,11 @@ static void restorechannel (LuaChannel * channel) {
 static int returnsynced (lua_State *L) {
 	LuaChannel *channel = (LuaChannel *)lua_touserdata(L, 1);
 	lua_State *cL = channel->L;
-	int nret = lua_gettop(cL);
-	int err = lcuL_movefrom(NULL, L, cL, nret, "");
+	int err, nret;
+	lcu_assert(lua_tointeger(cL, -1) == lua_gettop(cL)-1);
+	lua_pop(cL, 1);  /* discard 'narg' */
+	nret = lua_gettop(cL);
+	err = lcuL_movefrom(NULL, L, cL, nret, "");
 	lcu_assert(err == LUA_OK);
 	restorechannel(channel);
 	return nret;
@@ -143,34 +151,48 @@ typedef struct ArmSyncedArgs {
 static lua_State *armsynced (lua_State *L, void *data) {
 	ArmSyncedArgs *args = (ArmSyncedArgs *)data;
 	lua_State *cL = args->channel->L;
-	int err;
+	int top = lua_gettop(L);
+	int narg = top > 2 ? top-2 : 0;
 	lcu_assert(lua_gettop(cL) == 0);
-	lua_pushlightuserdata(cL, args->async);
-	lua_setfield(cL, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
-	lua_settop(cL, 2);  /* placeholder for 'channel' and 'endname' */
-	err = lcuL_movefrom(cL, cL, L, lua_gettop(L)-2, "argument");
-	if (err != LUA_OK) {
+	if (!lua_checkstack(cL, narg+3)) {  /* boolean, nargs, and two integers */
 		lua_settop(L, 1);
 		lua_pushboolean(L, 0);
-		err = lcuL_pushfrom(L, L, cL, -1, "error");
-		if (err != LUA_OK) lcuL_warnmsg(L, "discarded error", lua_tostring(cL, -1));
-		lua_settop(cL, 0);
+		lua_pushliteral(L, "insufficient memory");
 		return NULL;
-	}
-	if (args->loop != NULL) {
-		err = uv_async_init(args->loop, args->async, uv_onsynced);
-		lcuT_armcohdl(L, args->op, err);
-		if (err < 0) {
-			lua_settop(L, 1);
-			lcuL_pusherrres(L, err);
-			lua_settop(cL, 0);
-			return NULL;
+	} else {
+		int err;
+		if (narg > 0) {
+			lua_settop(cL, 1);  /* placeholder for boolean first return */
+			err = lcuL_movefrom(cL, cL, L, narg, "argument");
+			if (err != LUA_OK) {
+				lua_settop(L, 1);
+				lua_pushboolean(L, 0);
+				err = lcuL_pushfrom(L, L, cL, -1, "error");
+				if (err != LUA_OK) lcuL_warnmsg(L, "discarded error", lua_tostring(cL, -1));
+				lua_settop(cL, 0);
+				return NULL;
+			}
 		}
+		if (args->loop != NULL) {
+			err = uv_async_init(args->loop, args->async, uv_onsynced);
+			lcuT_armcohdl(L, args->op, err);
+			if (err < 0) {
+				lua_settop(L, 1);
+				lcuL_pusherrres(L, err);
+				lua_settop(cL, 0);
+				return NULL;
+			}
+		}
+
+		lua_pushlightuserdata(cL, args->async);
+		lua_setfield(cL, LUA_REGISTRYINDEX, LCU_CHANNELSYNCREGKEY);
+		lua_pushinteger(cL, 0);  /* base */
+		lua_pushinteger(cL, narg);
+
+		args->channel->handle = args->async;
+
+		return cL;
 	}
-
-	args->channel->handle = args->async;
-
-	return cL;
 }
 
 static int k_setupsynced (lua_State *L,
@@ -201,6 +223,7 @@ static lua_State *cancelsuspension (lua_State *L, void *data) {
 	lua_settop(L, 1);
 	lua_pushboolean(L, 0);
 	lua_pushliteral(L, "empty");
+	lua_pushinteger(L, 2);  /* push 'narg' */
 	return NULL;
 }
 

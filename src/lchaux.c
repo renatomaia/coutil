@@ -89,46 +89,41 @@ LCUI_FUNC lua_State *lcuCS_removestateq (lcu_StateQ *q, lua_State *L) {
 }
 
 
-LCUI_FUNC int lcuCS_checksyncargs (lua_State *L) {
+LCUI_FUNC int lcuCS_checksyncargs (lua_State *L, int idx) {
 	static const char *const options[] = { "in", "out", "any", NULL };
 	static const int endpoints[] = { LCU_CHSYNCIN, LCU_CHSYNCOUT, LCU_CHSYNCANY };
-	const char *name = luaL_optstring(L, 2, "any");
+	const char *name = luaL_optstring(L, idx, "any");
 	int i;
 	for (i = 0; options[i]; i++) {
 		if (strcmp(options[i], name) == 0) {
-			int narg = lua_gettop(L);
-			if (narg < 2) {
-				lua_settop(L, 2);
-			} else if (!lcuL_canmove(L, narg-2, "argument")) {
-				return -1;
-			}
-			return endpoints[i];
+			int narg = lua_gettop(L)-idx;
+			if (narg <= 0 || lcuL_canmove(L, narg, "argument")) return endpoints[i];
+			return -1;
 		}
 	}
-	lua_settop(L, 0);
-	lua_pushboolean(L, 0);
 	lua_pushfstring(L, "bad argument #2 (invalid option '%s')", name);
 	return -1;
 }
 
-static void pusherrfrom (lua_State *L, int bL, lua_State *failed, int bfailed) {
+static void pusherrfrom (lua_State *L, int base, lua_State *failed, int bfailed) {
 	lua_replace(failed, bfailed+1);
 	lua_settop(failed, bfailed+1);
 	lua_pushboolean(failed, 0);
 	lua_insert(failed, bfailed+1);
+	lua_pushinteger(failed, 2);  /* push narg */
 
-	lua_settop(L, bL);
+	lua_settop(L, base);
 	lua_pushboolean(L, 0);
 	lcuL_pushfrom(NULL, L, failed, -1, "error");
+	lua_pushinteger(L, 2);  /* push narg */
 }
 
-static void swapvalues (lua_State *src, int bsrc, lua_State *dst, int bdst) {
-	int i, err;
-	int nsrc = lua_gettop(src);
-	int ndst = lua_gettop(dst);
+static void swapvalues (lua_State *src, int bsrc, int nsrc, lua_State *dst) {
+	int bdst = lua_tointeger(dst, -2);
+	int ndst = lua_tointeger(dst, -1);
+	int err;
 
-	lcu_assert(bsrc < 2);
-	lcu_assert(bdst < 2);
+	lua_pop(dst, 2);  /* discard 'ndst' and 'ndst' from top */
 
 	if (nsrc < ndst) {
 		{ lua_State *L = dst; dst = src; src = L; }
@@ -136,30 +131,46 @@ static void swapvalues (lua_State *src, int bsrc, lua_State *dst, int bdst) {
 		{ int b = bdst; bdst = bsrc; bsrc = b; }
 	}
 
-	for (i = 3; i <= ndst; i++) {
-		err = lcuL_pushfrom(NULL, src, dst, i, "argument");
-		if (err != LUA_OK) {
-			pusherrfrom(dst, bdst, src, bsrc);
-			return;
+	if (ndst) {
+		int tsrc = lua_gettop(src)-nsrc;
+		int tdst = lua_gettop(dst)-ndst;
+		int i;
+
+		lcu_assert(bsrc < tsrc);
+		lcu_assert(bdst < tdst);
+
+		for (i = 1; i <= ndst; i++) {
+			err = lcuL_pushfrom(NULL, src, dst, tdst+i, "argument");
+			if (err != LUA_OK) {
+				pusherrfrom(dst, bdst, src, bsrc);
+				return;
+			}
+			err = lcuL_pushfrom(NULL, dst, src, tsrc+i, "argument");
+			if (err != LUA_OK) {
+				pusherrfrom(src, bsrc, dst, bdst);
+				return;
+			}
+			lua_replace(src, bsrc+i+1);
+			lua_replace(dst, bdst+i+1);
 		}
-		err = lcuL_pushfrom(NULL, dst, src, i, "argument");
-		if (err != LUA_OK) {
-			pusherrfrom(src, bsrc, dst, bdst);
-			return;
-		}
-		lua_replace(src, bsrc+i-1);
-		lua_replace(dst, bdst+i-1);
 	}
 
-	lua_settop(dst, bdst+ndst-1);
+	lua_settop(dst, bdst+ndst+1);
+
 	err = lcuL_movefrom(NULL, dst, src, nsrc-ndst, "argument");
 	if (err != LUA_OK) pusherrfrom(src, bsrc, dst, bdst);
 	else {
-		lua_settop(src, bsrc+ndst-1);
+		lua_settop(src, bsrc+ndst+1);
+
 		lua_pushboolean(src, 1);
 		lua_replace(src, bsrc+1);
+		lcu_assert(lua_gettop(src) == bsrc+ndst+1);
+		lua_pushinteger(src, ndst+1);  /* push narg */
+
 		lua_pushboolean(dst, 1);
 		lua_replace(dst, bdst+1);
+		lcu_assert(lua_gettop(dst) == bdst+nsrc+1);
+		lua_pushinteger(dst, nsrc+1);  /* push narg */
 	}
 }
 
@@ -190,8 +201,10 @@ LCUI_FUNC int lcuCS_matchchsync (lcu_ChannelSync *sync,
                                  int endpoint,
                                  lua_State *L,
                                  int base,
+                                 int narg,
                                  lcu_GetAsyncState getstate,
                                  void *userdata) {
+	narg = narg > 2 ? narg-2 : 0;  /* exclude 'channel' and 'endpoint' args */
 	uv_mutex_lock(&sync->mutex);
 	if (sync->queue.head == NULL) {
 		sync->expected = endpoint == LCU_CHSYNCANY ? LCU_CHSYNCANY
@@ -199,7 +212,7 @@ LCUI_FUNC int lcuCS_matchchsync (lcu_ChannelSync *sync,
 	} else if (sync->expected&endpoint) {
 		lua_State *match = lcuCS_dequeuestateq(&sync->queue);
 		uv_mutex_unlock(&sync->mutex);
-		swapvalues(L, base, match, 0);  /* 'match' may be a task or a channel */
+		swapvalues(L, base, narg, match);  /* 'match' may be a task or a channel */
 		match = getsuspendedtask(match);  /* if a channel, gets its task */
 		if (match) lcuTP_resumetask(match);
 		return 1;
@@ -207,6 +220,10 @@ LCUI_FUNC int lcuCS_matchchsync (lcu_ChannelSync *sync,
 	if (getstate != NULL) {
 		L = getstate(L, userdata);
 		if (L == NULL) goto match_end;
+	} else {
+		/* push 'base' and 'narg' to be used in 'swapvalues' */
+		lua_pushinteger(L, base);
+		lua_pushinteger(L, narg);
 	}
 	lcuCS_enqueuestateq(&sync->queue, L);
 
@@ -320,8 +337,8 @@ LCUI_FUNC void lcuCS_freechsync (lcu_ChannelMap *map, const char *name) {
 }
 
 
-LCUI_FUNC int lcuCS_suspendedchtask (lua_State *L) {
-	lcu_ChannelTask *channeltask = (lcu_ChannelTask *)luaL_testudata(L, 1, LCU_CHANNELTASKCLS);
+LCUI_FUNC int lcuCS_suspendedchtask (lua_State *L, int idx) {
+	lcu_ChannelTask *channeltask = (lcu_ChannelTask *)luaL_testudata(L, idx, LCU_CHANNELTASKCLS);
 	if (channeltask == NULL) return 0;
 	uv_mutex_lock(&channeltask->mutex);
 	if (channeltask->wakes == 0) {

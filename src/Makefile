@@ -46,6 +46,8 @@ MOD_M= coutil.so
 MOD_O= lmodaux.o loperaux.o lchaux.o lthpool.o lttyaux.o \
        lcommunf.o lfilef.o linfof.o lprocesf.o lscheduf.o lstdiof.o ltimef.o \
        lchannem.o lcoroutm.o lsystemm.o lthreadm.o
+TST_O= ../test/ltestm.o
+TST_M= ../test/coutil_test.so
 
 ALL_O= $(MOD_O)
 ALL_A= $(LIB_A)
@@ -70,8 +72,14 @@ $(LIB_A): $(ALL_O)
 	$(AR) $@ $?
 	$(RANLIB) $@
 
+$(TST_M): $(TST_O) $(LIB_S)
+	$(LD) -o $@ $(LDFLAGS) $^ $(LIBS)
+
+test: $(TST_M)
+	$(LUA_DIR)/bin/lua -e 'package.cpath="./?.so;../test/?.so"' ../test/testall.lua
+
 clean:
-	$(RM) $(ALL_T) $(ALL_O)
+	$(RM) $(ALL_T) $(ALL_O) $(TST_O) $(TST_M)
 
 depend:
 	@$(CC) $(CFLAGS) -MM l*.c

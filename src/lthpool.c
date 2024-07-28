@@ -66,11 +66,11 @@ static int addthread_mx (lcu_ThreadPool *pool, lua_State *L) {
 
 static void threadmain (void *arg) {
 	lcu_ThreadPool *pool = (lcu_ThreadPool *)arg;
-	lua_State *L = NULL;
 
 	uv_mutex_lock(&pool->mutex);
 	while (1) {
-		int narg, status;
+		lua_State *L = NULL;
+		int narg, status, enqueue;
 		while (1) {
 			if (pool->threads > pool->size) {
 				goto thread_end;
@@ -88,42 +88,56 @@ static void threadmain (void *arg) {
 		}
 		pool->running++;
 		uv_mutex_unlock(&pool->mutex);
-		narg = lua_gettop(L);
-		if (lua_status(L) == LUA_OK) narg--;
+		if (lua_status(L) == LUA_OK) narg = lua_gettop(L)-1;
+		else {
+			narg = lua_tointeger(L, -1);
+			lua_pop(L, 1);  /* discard 'narg' */
+		}
 		status = lua_resume(L, NULL, narg, &narg);
 		if (status == LUA_YIELD) {
-			const char *channelname = lua_tostring(L, 1);
+			int base = lua_gettop(L)-narg;
+			const char *channelname = lua_tostring(L, base+1);
 			if (channelname) {
 				lcu_ChannelMap *map = lcuCS_tochannelmap(L);
 				lcu_ChannelSync *sync = lcuCS_getchsync(map, channelname);
-				int endpoint = lcuCS_checksyncargs(L);
-				if (endpoint != -1 && !lcuCS_matchchsync(sync, endpoint, L, 0, NULL, NULL))
-					L = NULL;
+				int endpoint = lcuCS_checksyncargs(L, base+2);
+				if (endpoint == -1) {
+					enqueue = 1;
+					lcu_assert(lua_gettop(L) > base+2);
+					lua_replace(L, base+2);  /* place errmsg as 2nd return */
+					lua_pushboolean(L, 0);
+					lua_replace(L, base+1);  /* place false as 1st return */
+					lua_settop(L, base+2);  /* discard other values */
+					lua_pushinteger(L, 2);  /* push 'narg' */
+				} else {
+					enqueue = lcuCS_matchchsync(sync, endpoint, L, base, narg, NULL, NULL);
+				}
 				lcuCS_freechsync(map, channelname);
-			} else if (lcuCS_suspendedchtask(L)) {
-				L = NULL;
+			} else if (lcuCS_suspendedchtask(L, base+1)) {
+				enqueue = 0;
+				lcu_assert(lua_gettop(L) == base+1);
+				lua_pushinteger(L, 1);  /* push 'narg' to resume with the LCU_CHANNELTASKCLS */
 			} else {
-				lua_settop(L, 0);  /* discard returned values */
+				enqueue = 1;
+				lua_settop(L, base);  /* discard returned values */
+				lua_pushinteger(L, 0);  /* push 'narg' */
 			}
 		} else {
-			if (status != LUA_OK) {
-				lcuL_warnmsg(L, "threads", lua_tostring(L, -1));
-			}
+			enqueue = 0;
+			if (status != LUA_OK) lcuL_warnmsg(L, "threads", lua_tostring(L, -1));
 			/* avoid 'pool->tasks--' */
 			lua_settop(L, 0);
 			lua_getfield(L, LUA_REGISTRYINDEX, LCU_TASKTPOOLREGKEY);
 			lua_pushnil(L);
 			lua_setmetatable(L, -2);
 			lua_close(L);
-			L = NULL;
 		}
 
 		uv_mutex_lock(&pool->mutex);
 		pool->running--;
-		if (L) {
+		if (enqueue) {
 			pool->pending++;
 			lcuCS_enqueuestateq(&pool->queue, L);
-			L = NULL;
 		} else if (status != LUA_YIELD) {
 			pool->tasks--;
 		}

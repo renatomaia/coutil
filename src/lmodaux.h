@@ -64,8 +64,11 @@ LCUI_FUNC int lcuL_movefrom (lua_State *L,
 
 LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup);
 
-LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
-                                              const char *func);
+LCUI_FUNC void lcuL_printstack (uv_thread_t tid,
+                                lua_State *L,
+                                const char *file,
+                                int line,
+                                const char *func);
 
 
 
