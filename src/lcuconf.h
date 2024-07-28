@@ -51,9 +51,9 @@
 
 #include <assert.h>
 #define lcu_assert assert
-//#define lcu_assert(X) (printf("%s:%d: %s\n", __FILE__, __LINE__, __func__), assert(X))
-//#define lcu_log(O,L,M) printf("[%p,%p]%s:%d:%s(%s)\n",L,O,__FILE__,__LINE__,__func__,M)
-//#define lcuL_printlua(L) lcuL_printstack(L,__FILE__,__LINE__,__func__)
+// #define lcu_assert(X) (printf("[%lx]%s:%d: %s\n", uv_thread_self(), __FILE__, __LINE__, __func__), assert(X))
+// #define lcu_log(O,L,M) printf("[%lx,%p,%p]%s:%d:%s(%s)\n",uv_thread_self(),L,O,__FILE__,__LINE__,__func__,M)
+// #define lcuL_printlua(L) lcuL_printstack(uv_thread_self(),L,__FILE__,__LINE__,__func__)
 
 
 #if !defined(lcu_assert)
