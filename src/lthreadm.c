@@ -84,7 +84,7 @@ static int returntoperrmsg (lua_State *L, lua_State *NL) {
 	lua_pushboolean(L, 0);
 	if (lcuL_pushfrom(NULL, L, NL, -1, "error") != LUA_OK)
 		lcuL_warnmsg(L, "threads.dostring", lua_tostring(NL, -1));
-	lua_close(NL);
+	lua_close(lcuL_tomain(NL));
 	return 2;  /* return false plus error message */
 }
 
@@ -100,7 +100,7 @@ static int dochunk (lua_State *L,
 	if (status != LUA_OK) return returntoperrmsg(L, NL);
 	status = lcuTP_addtpooltask(pool, NL);
 	if (status) {
-		lua_close(NL);
+		lua_close(lcuL_tomain(NL));
 		return lcuL_pusherrres(L, status);
 	}
 	lua_pushboolean(L, 1);

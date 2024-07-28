@@ -228,17 +228,23 @@ LCUI_FUNC lua_State *lcuL_newstate (lua_State *L) {
 	return lua_tothread(NL, 1);  /* returns the thread instead of the created state */
 }
 
+LCUI_FUNC lua_State *lcuL_tomain (lua_State *L) {
+	lua_State *main;
+	lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
+	main = lua_tothread(L, -1);
+	lua_pop(L, 1);
+	lcu_assert(lua_tothread(main, 1) == L);
+	return main;
+}
+
 #define doerrmsg(F,L,I,M,T) (I > 0 ? \
 	F(L, "unable to transfer %s #%d (got %s)", M, I, T) : \
 	F(L, "unable to transfer %s (got %s)", M, T))
 
-LCUI_FUNC int lcuL_canmove (lua_State *L,
-                            int n,
-                            const char *msg) {
-	int i, top = lua_gettop(L);
-	for (i = 1+top-n; i <= top; i++) {
-		int type = lua_type(L, i);
-		switch (type) {
+LCUI_FUNC int lcuL_canmove (lua_State *L, int narg, const char *msg) {
+	int i;
+	for (i = -narg; i < 0; i++) {
+		switch (lua_type(L, i)) {
 			case LUA_TNIL:
 			case LUA_TBOOLEAN:
 			case LUA_TNUMBER:
@@ -247,25 +253,12 @@ LCUI_FUNC int lcuL_canmove (lua_State *L,
 				break;
 			default: {
 				const char *tname = luaL_typename(L, i);
-				lua_settop(L, 0);
-				lua_pushboolean(L, 0);
-				doerrmsg(lua_pushfstring, L, i, msg, tname);
+				doerrmsg(lua_pushfstring, L, 3+narg+i, msg, tname);
 				return 0;
 			}
 		}
 	}
 	return 1;
-}
-
-static lua_State *state2normal (lua_State *to) {
-	lua_State *L = to;
-	if (lua_status(to) == LUA_YIELD) {
-		lua_rawgeti(to, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
-		L = lua_tothread(to, -1);
-		lua_pop(to, 1);
-		lcu_assert(lua_tothread(L, 1) == to);
-	}
-	return L;
 }
 
 static void pushfrom (lua_State *to,
@@ -306,6 +299,8 @@ static int auxpushfrom (lua_State *to) {
 	pushfrom(to, from, idx, msg);
 	return 1;
 }
+
+#define state2normal(L) ((lua_status(L) == LUA_YIELD) ? lcuL_tomain(L) : L)
 
 LCUI_FUNC int lcuL_pushfrom (lua_State *L,
                              lua_State *to,
@@ -381,10 +376,13 @@ LCUI_FUNC void lcuM_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
  * Debugging
  */
 
-LCUI_FUNC void lcuL_printstack (lua_State *L, const char *file, int line,
-                                              const char *func) {
+LCUI_FUNC void lcuL_printstack (uv_thread_t tid,
+                                lua_State *L,
+                                const char *file,
+                                int line,
+                                const char *func) {
 	int i;
-	printf("%s:%d: function '%s'\n", file, line, func);
+	printf("[%lx]%s:%d: function '%s'\n", tid, file, line, func);
 	for(i = 1; i <= lua_gettop(L); i++) {
 		const char *typename = NULL;
 		printf("\t[%d] = ", i);

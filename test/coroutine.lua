@@ -763,3 +763,32 @@ do case "inherit preload"
 	done()
 end
 
+do case "keep values on stack"
+	local system = require "coutil.system"
+	local stateco = require "coutil.coroutine"
+
+	spawn(function ()
+		local co = stateco.load[[
+			local _ENV = require "_G"
+			local cotest = require "coutil_test"
+			assert(... == "start")
+			assert(cotest.yieldsaved("yield") == "resume")
+			assert(cotest.yieldsaved("yield") == "resume")
+			assert(cotest.yieldsaved("yield") == "resume")
+			return "end"
+		]]
+
+		local ok, res = assert(system.resume(co, "start"))
+		assert(ok == true and res == "yield")
+		ok, res = assert(system.resume(co, "resume"))
+		assert(ok == true and res == "yield")
+		ok, res = assert(system.resume(co, "resume"))
+		assert(ok == true and res == "yield")
+		ok, res = assert(system.resume(co, "resume"))
+		assert(ok == true and res == "end")
+	end)
+
+	assert(system.run() == false)
+
+	done()
+end
