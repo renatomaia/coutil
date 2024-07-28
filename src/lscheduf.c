@@ -7,9 +7,13 @@ static int k_resumeall (lua_State *L, int status, lua_KContext kctx) {
 	int pending;
 	lcu_assert(status == LUA_YIELD);
 	lua_settop(L, 0);
+	lcu_log(loop, L, "resuming threads (yieldable)");
 	pending = uv_run(loop, UV_RUN_DEFAULT);
-	if (pending && lua_isuserdata(L, 1))
+	if (pending && lua_isuserdata(L, 1)) {
+		lcu_log(loop, L, "suspending resuming threads");
 		return lua_yieldk(L, 1, kctx, k_resumeall);
+	}
+	lcu_log(loop, L, "done resuming threads (yieldable)");
 	loop->data = NULL;
 	lua_pushboolean(L, pending);
 	return 1;
@@ -35,6 +39,7 @@ static int lcuM_run (lua_State *L) {
 				lua_KContext kctx = (lua_KContext)loop;
 				loop->data = (void *)L;
 				if (lcu_shallsuspend(sched)) {
+					lcu_log(loop, L, "suspending resuming threads");
 					lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY);
 					return lua_yieldk(L, 1, kctx, k_resumeall);
 				}
@@ -43,7 +48,9 @@ static int lcuM_run (lua_State *L) {
 		}
 	}
 	loop->data = (void *)L;
+	lcu_log(loop, L, "resuming threads");
 	pending = uv_run(loop, mode);
+	lcu_log(loop, L, "done resuming threads");
 	loop->data = NULL;
 	lua_pushboolean(L, pending);
 	return 1;
