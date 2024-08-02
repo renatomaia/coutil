@@ -46,6 +46,8 @@ LCUI_FUNC void lcu_pushstrout(lua_State *L, lcu_GetStringFunc getter);
 
 LCUI_FUNC lua_State *lcuL_newstate (lua_State *L);
 
+LCUI_FUNC lua_State *lcuL_tomain (lua_State *L);
+
 LCUI_FUNC int lcuL_canmove (lua_State *L,
                             int n,
                             const char *msg);

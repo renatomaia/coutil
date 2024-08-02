@@ -22,7 +22,7 @@ static int doloaded (lua_State *L, lua_State *NL, int status) {
 		const char *errmsg = lua_tolstring(NL, -1, &len);
 		lua_pushboolean(L, 0);
 		lua_pushlstring(L, errmsg, len);
-		lua_close(NL);
+		lua_close(lcuL_tomain(NL));
 		return 2;  /* return nil plus error message */
 	} else {
 		StateCoro *stateco = lcuT_newudreq(L, StateCoro);

@@ -113,12 +113,8 @@ static void threadmain (void *arg) {
 					enqueue = lcuCS_matchchsync(sync, endpoint, L, base, narg, NULL, NULL);
 				}
 				lcuCS_freechsync(map, channelname);
-			} else if (lcuCS_suspendedchtask(L, base+1)) {
-				enqueue = 0;
-				lcu_assert(lua_gettop(L) == base+1);
-				lua_pushinteger(L, 1);  /* push 'narg' to resume with the LCU_CHANNELTASKCLS */
 			} else {
-				enqueue = 1;
+				enqueue = !lcuCS_suspendedchtask(L, base+1);
 				lua_settop(L, base);  /* discard returned values */
 				lua_pushinteger(L, 0);  /* push 'narg' */
 			}
