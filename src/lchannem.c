@@ -21,7 +21,7 @@ static LuaChannel *chklchannel(lua_State *L, int arg) {
 
 static int channelclose (lua_State *L, LuaChannel *channel) {
 	lcu_ChannelMap *map = lcuCS_tochannelmap(L);
-	if (lua_getuservalue(L, 1) == LUA_TSTRING) {
+	if (lua_getiuservalue(L, 1, 1) == LUA_TSTRING) {
 		const char *name = lua_tostring(L, -1);
 		if (channel->handle) {
 			/* whole lua_State is closing, but still waiting on channel */
@@ -45,7 +45,7 @@ static int channelclose (lua_State *L, LuaChannel *channel) {
 		/* DEBUG: channel->L = NULL; */
 		/* DEBUG: channel->handle = NULL; */
 		lua_pushnil(L);
-		lua_setuservalue(L, 1);
+		lua_setiuservalue(L, 1, 1);
 		return 1;
 	}
 	return 0;
@@ -235,7 +235,7 @@ static int channel_sync (lua_State *L) {
 
 static int channel_getname (lua_State *L) {
 	chklchannel(L, 1);
-	lua_getuservalue(L, 1);
+	lua_getiuservalue(L, 1, 1);
 	return 1;
 }
 
