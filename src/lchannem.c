@@ -41,6 +41,7 @@ static int channelclose (lua_State *L, LuaChannel *channel) {
 		}
 		lua_close(channel->L);
 		lcuCS_freechsync(map, name);
+		lua_pop(L, 1);  /* channel name */
 		/* DEBUG: channel->sync = NULL; */
 		/* DEBUG: channel->L = NULL; */
 		/* DEBUG: channel->handle = NULL; */
