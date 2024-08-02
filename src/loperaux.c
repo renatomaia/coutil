@@ -15,7 +15,7 @@
 struct lcu_Scheduler {
 	uv_loop_t loop;
 	int nasync;  /* number of active 'uv_async_t' handles */
-	int nactive;  /* number of other active handles */
+	int nactive;  /* number of all active handles */
 };
 
 
@@ -188,8 +188,7 @@ static void closedhdl (uv_handle_t *handle) {
 	lcu_Scheduler *sched = lcu_tosched(loop);
 	lcu_log(op, thread, "closed operation handle");
 	lcu_assert(!lcuL_maskflag(op, FLAG_REQUEST|FLAG_THRSAVED));
-	if (handle->type == UV_ASYNC) sched->nasync--;
-	else sched->nactive--;
+	sched->nactive--;
 	lcuL_setflag(op, FLAG_REQUEST|FLAG_THRSAVED);
 	request->type = UV_UNKNOWN_REQ;
 	request->data = thread;
@@ -198,6 +197,14 @@ static void closedhdl (uv_handle_t *handle) {
 		freevalue(L, (void *)request);
 	}
 	else lcuU_resumecoreq(loop, request, 0);
+}
+
+static void closehdl (uv_handle_t *handle) {
+	if (handle->type == UV_ASYNC) {
+		lcu_Scheduler *sched = lcu_tosched(handle->loop);
+		sched->nasync--;
+	}
+	uv_close(handle, closedhdl);
 }
 
 static void cancelop (lcu_Operation *op) {
@@ -209,7 +216,7 @@ static void cancelop (lcu_Operation *op) {
 	} else {
 		uv_handle_t *handle = tohandle(op);
 		if (!uv_is_closing(handle)) {
-			uv_close(handle, closedhdl);
+			closehdl(handle);
 			lcu_log(op, handle->data, "closing operation handle...");
 		}
 	}
@@ -308,7 +315,7 @@ static OpStatus checkreset (lcu_Operation *op,
 		int nocleanup = !lcuL_maskflag(op, FLAG_CLEANUP);
 		if (nocleanup && !uv_is_closing(handle)) {
 			if (type && handle->type == type) return SAMEOP;
-			if (nocleanup) uv_close(handle, closedhdl);
+			if (nocleanup) closehdl(handle);
 		}
 	}
 	return WAITOP;
@@ -320,7 +327,7 @@ LCUI_FUNC uv_loop_t *lcu_toloop (lcu_Scheduler *sched) {
 }
 
 LCUI_FUNC int lcu_shallsuspend (lcu_Scheduler *sched) {
-	return sched->nactive == 0 && sched->nasync > 0;
+	return sched->nasync > 0 && sched->nasync == sched->nactive;
 }
 
 LCUI_FUNC void lcuU_checksuspend (uv_loop_t *loop) {
@@ -433,7 +440,7 @@ LCUI_FUNC int lcuT_armcohdl (lua_State *L, lcu_Operation *op, int err) {
 		handle->data = (void *)L;
 		lcuL_clearflag(op, FLAG_REQUEST|FLAG_THRSAVED);
 		if (handle->type == UV_ASYNC) sched->nasync++;
-		else sched->nactive++;
+		sched->nactive++;
 	} else {
 		uv_req_t *request = torequest(op);
 		request->type = UV_UNKNOWN_REQ;

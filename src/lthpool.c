@@ -126,7 +126,7 @@ static void threadmain (void *arg) {
 			lua_getfield(L, LUA_REGISTRYINDEX, LCU_TASKTPOOLREGKEY);
 			lua_pushnil(L);
 			lua_setmetatable(L, -2);
-			lua_close(L);
+			lua_close(lcuL_tomain(L));
 		}
 
 		uv_mutex_lock(&pool->mutex);
@@ -165,7 +165,7 @@ LCUI_FUNC void lcuTP_resumetask (lua_State *L) {
 	uv_mutex_lock(&pool->mutex);
 	added = addthread_mx(pool, L);
 	uv_mutex_unlock(&pool->mutex);
-	if (!added) lua_close(L);
+	if (!added) lua_close(lcuL_tomain(L));
 }
 
 
@@ -245,7 +245,7 @@ LCUI_FUNC void lcuTP_closetpool (lcu_ThreadPool *pool) {
 		lcuTP_destroytpool(pool);
 	} else if (pending > 0) {
 		lua_State *L;
-		while ((L = lcuCS_dequeuestateq(&queue))) lua_close(L);
+		while ((L = lcuCS_dequeuestateq(&queue))) lua_close(lcuL_tomain(L));
 	}
 }
 
