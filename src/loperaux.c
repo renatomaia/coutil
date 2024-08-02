@@ -326,10 +326,12 @@ LCUI_FUNC int lcu_shallsuspend (lcu_Scheduler *sched) {
 LCUI_FUNC void lcuU_checksuspend (uv_loop_t *loop) {
 	lua_State *L = (lua_State *)loop->data;
 	lcu_Scheduler *sched = lcu_tosched(loop);
-	if (lcu_shallsuspend(sched) &&
-	    lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY) == LUA_TUSERDATA) {
-		uv_stop(loop);
-		lcu_log(loop, L, "halting loop");
+	if (lcu_shallsuspend(sched)) {
+		if (lua_getfield(L, LUA_REGISTRYINDEX, LCU_CHANNELTASKREGKEY) == LUA_TUSERDATA) {
+			uv_stop(loop);
+			lcu_log(loop, L, "halting loop");
+		}
+		else lua_pop(L, 1);
 	}
 }
 
