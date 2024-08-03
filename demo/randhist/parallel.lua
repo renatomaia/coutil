@@ -1,8 +1,4 @@
-local vararg = require "vararg"
-local channel = require "coutil.channel"
 local threads = require "coutil.threads"
-
-local repeats<const> = 100
 
 local ncpu<const> = #system.cpuinfo()
 local pool<const> = threads.create(ncpu)
@@ -11,6 +7,11 @@ local worker<const> = arg[0]:gsub("parallel%.lua$", "worker.lua")
 for i = 1, ncpu do
 	assert(pool:dofile(console, "t", worker, i))
 end
+
+local vararg = require "vararg"
+local channel = require "coutil.channel"
+
+local repeats<const> = 100
 
 spawn.call(function ()
 	local histoch<close> = channel.create("histogram")

@@ -269,7 +269,7 @@ end, ...)
 runall()
 
 --[============================================================================[
-spawn(function ()
+spawn.call(function ()
 	for i = 9, 0, -1 do
 		system.suspend(1)
 		system.stderr:send(i)
