@@ -41,15 +41,28 @@ local stdout = system.stdout
 local runall = system.run
 
 _G._G = _G
+_G.coroutine = require "coroutine"
 _G.debug = debug
 _G.io = io
 _G.math = math
+_G.package = package
 _G.os = os
 _G.string = string
 _G.table = table
+_G.utf8 = require "utf8"
+
 _G.memory = memory
+_G.vararg = require "vararg"
+
+_G.channel = require "coutil.channel"
+_G.stateco = require "coutil.coroutine"
+_G.event = require "coutil.event"
+_G.mutex = require "coutil.mutex"
+_G.promise = require "coutil.promise"
+_G.queued = require "coutil.queued"
 _G.spawn = spawn
 _G.system = system
+_G.threads = require "coutil.threads"
 
 local function writeto(file, ...)
 	for i = 1, select("#", ...) do
@@ -298,7 +311,7 @@ end, ...)
 runall()
 
 --[============================================================================[
-spawn(function ()
+spawn.call(function ()
 	for i = 9, 0, -1 do
 		system.suspend(1)
 		system.stderr:write(i)

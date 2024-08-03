@@ -22,12 +22,15 @@ These are examples designed to illustrate uses of particular features provided.
 
 These are complete examples making use of multiple features to illustrate an application using Coutil.
 
-- [Multithreaded Lua Console](console.lua): a Lua interpreter console with support for Coutil.
+- [Histogram of Random Bytes](randhist): the examples from [overview](../README.md#overview),
+but without the use of [`console.lua`](console.lua).
+- [Multiprocess Echo Server](multiecho): based on example from [libuv Guide](http://docs.libuv.org/en/v1.x/guide/processes.html#sending-file-descriptors-over-pipes).
+- [Coutil Console](console.lua): emulates the [Lua standalone interpreter](https://www.lua.org/manual/5.4/manual.html#7),
+but runs all the code in a coroutine and along with Coutil's [event loop](doc/manual.md#event-processing).
 - [LuaSocket 2.0.2 API](luasocket.lua): a coroutine enabled version of module `socket.core`.
-- [Multiprocess Echo Server](mutiecho): based on example from [libuv Guide](http://docs.libuv.org/en/v1.x/guide/processes.html#sending-file-descriptors-over-pipes).
 - [TCP Server to Run Lua Chunks](remoteexec): includes server and client implentations,
 either using Coutil,
-or using callback-based library [luv](https://github.com/luvit/luv).
+or using the callback-based library [luv](https://github.com/luvit/luv).
 
 | Library | Client | Server |
 | ------- | ------ | ------ |
