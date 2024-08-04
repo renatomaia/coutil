@@ -7,7 +7,7 @@ Summary
 	- [Independent State](#independent-state)
 	- [Transferable Values](#transferable-values)
 	- [Failures](#failures)
-	- [Object-Oriented Style](#objectoriented-style)
+	- [Object-Oriented Style](#object-oriented-style)
 - [Multithreading](#multithreading)
 	- [Coroutine Finalizers](#coroutine-finalizers)
 	- [State Coroutines](#state-coroutines)
@@ -157,7 +157,7 @@ but for _state coroutines_.
 In contrast to standard _thread coroutines_ that execute a function in a [Lua thread](http://www.lua.org/manual/5.4/manual.html#lua_newthread),
 _state coroutines_ execute a chunk in an [independent state](#independent-state) (see [`system.resume`](#systemresume-co-)).
 
-You can access these library functions on _state coroutines_ in [object-oriented style](#objectoriented-style).
+You can access these library functions on _state coroutines_ in [object-oriented style](#object-oriented-style).
 For instance, `coroutine.status(co, ...)` can be written as `co:status()`, where `co` is a _state coroutine_.
 
 ### `coroutine.close (co)`
@@ -196,7 +196,7 @@ Thread Pools
 
 Module `coutil.threads` provides functions for manipulation of [_thread pools_](#threadscreate-size) that execute code chunks loaded as [_tasks_](#threadsdostring-pool-chunk--chunkname--mode-) using a set of distinct system threads.
 
-You can access these library functions on _thread pools_ in [object-oriented style](#objectoriented-style).
+You can access these library functions on _thread pools_ in [object-oriented style](#object-oriented-style).
 For instance, `threads.dostring(pool, ...)` can be written as `pool:dostring(...)`, where `pool` is a _thread pool_.
 
 ### `threads.create ([size])`
@@ -291,7 +291,7 @@ Module `coutil.channel` provides functions for manipulation of _channels_ to be 
 _Channels_ can also be used by coroutines in the same _state_.
 However [events](#events) are usually more flexible and efficient in such case.
 
-You can access these library functions on _channels_ in [object-oriented style](#objectoriented-style).
+You can access these library functions on _channels_ in [object-oriented style](#object-oriented-style).
 For instance, `channel.sync(ch, ...)` can be written as `ch:sync(...)`, where `ch` is a _channel_.
 
 ### `channel.close (ch)`
