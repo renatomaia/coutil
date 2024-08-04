@@ -1241,7 +1241,7 @@ or an empty directory if `mode` is a string with character `d`.
 
 ### `system.maketemp (prefix [, mode])`
 
-[Await function](#await-function) that awaits for the creation of a uniquely named temporary directory with the prefix given by string `prefix`.
+[Await function](#await-function) that awaits for the creation of a uniquely named temporary directory or file with the prefix given by string `prefix`.
 
 String `mode` might contain any of the following characters to make it create a file instead of a directory.
 These characters also define the sequence of values returned by the call in case of success.
