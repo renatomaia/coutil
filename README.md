@@ -83,7 +83,7 @@ and just called [`system.random`](doc/manual.md#systemrandom-buffer--i--j--mode)
 The same way we call [`system.random`](doc/manual.md#systemrandom-buffer--i--j--mode) in this example,
 we can call any other Coutil function described in the [manual](doc/manual.md).
 Check the [demos](demo/README.md) for usage examples of other Coutil functions,
-and a version of this [script with the boilerplate](demo/randhist/singlethread.lua) required to be executed without the `console.lua` script.
+and also for a version of the [scripts in this page with the boilerplate](demo/randhist) required to be executed without the `console.lua` script.
 
 If you execute the script above,
 you might notice it can take quite some time to complete.
@@ -99,7 +99,7 @@ local buffer<const> = memory.create(8192)
 local startch<close> = channel.create("start")
 local histoch<close> = channel.create("histogram")
 
-repeat
+while true do
 	assert(system.awaitch(startch, "in"))
 	local histogram<const> = { 0, 0, 0, 0, 0, 0, 0, 0 }
 	system.random(buffer)
@@ -109,14 +109,14 @@ repeat
 	end
 	io.write(name); io.flush()
 	assert(system.awaitch(histoch, "out", table.unpack(histogram)))
-until false
+end
 ```
 
 This script repeatedly awaits on [channel](doc/manual.md#channels) `startch` for a signal to calculate a histogram of random bytes just like we did in first script `singlethread.lua`.
 Then it awaits on [channel](doc/manual.md#channels) `histoch` to publish the calculated histogram to an aggregator that shall sum them to produce the final result.
 
 Now,
-we can write a second script that will start by creating the thread pool with [tasks](#threadsdostring-pool-chunk--chunkname--mode-) running the code from `worker.lua` script:
+we can write a second script that will start by creating the thread pool with [tasks](doc/manual.md#threadsdostring-pool-chunk--chunkname--mode-) running the code from `worker.lua` script:
 
 ```lua
 local ncpu<const> = #system.cpuinfo()
@@ -129,7 +129,7 @@ end
 ```
 
 Here we create a thread pool with one thread for each CPU core.
-We use Coutil's function [`system.cpuinfo`](#systemcpuinfo-which) to get the number of CPU cores available in the system.
+We use Coutil's function [`system.cpuinfo`](doc/manual.md#systemcpuinfo-which) to get the number of CPU cores available in the system.
 We use `arg` global variable from the console to get the path to the scripts.
 Finally,
 we start one worker task for each CPU core with [`threads:dofile`](doc/manual.md#threadsdofile-pool-filepath--mode-) method.

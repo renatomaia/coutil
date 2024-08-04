@@ -15,7 +15,7 @@ spawn.catch(print, function (...)
 	local startch<close> = channel.create("start")
 	local histoch<close> = channel.create("histogram")
 
-	repeat
+	while true do
 		assert(system.awaitch(startch, "in"))
 		local histogram<const> = { 0, 0, 0, 0, 0, 0, 0, 0 }
 		system.random(buffer)
@@ -25,7 +25,7 @@ spawn.catch(print, function (...)
 		end
 		io.write(name); io.flush()
 		assert(system.awaitch(histoch, "out", table.unpack(histogram)))
-	until false
+	end
 
 end, ...)
 
