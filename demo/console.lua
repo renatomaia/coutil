@@ -15,6 +15,12 @@ local stderr = io.stderr
 local math = require "math"
 local inf = math.huge
 
+local os = require "os"
+local getenv = os.getenv
+
+local package = require "package"
+local config = package.config
+
 local string = require "string"
 local format = string.format
 
@@ -22,9 +28,6 @@ local table = require "table"
 local concat = table.concat
 local insert = table.insert
 local unpack = table.unpack
-
-local os = require "os"
-local getenv = os.getenv
 
 local memory = require "memory"
 local alloc = memory.create
@@ -41,11 +44,12 @@ _G._G = _G
 _G.debug = debug
 _G.io = io
 _G.math = math
+_G.os = os
 _G.string = string
 _G.table = table
 _G.memory = memory
-_G.system = system
 _G.spawn = spawn
+_G.system = system
 
 local function writeto(file, ...)
 	for i = 1, select("#", ...) do
@@ -57,8 +61,17 @@ local function traceerr(errmsg, level)
 	return traceback(errmsg, level or 2)
 end
 
+local progname
+
+local function report(message)
+	if progname then
+		writeto(stderr, progname, ": ");
+	end
+	writeto(stderr, message, "\n");
+end
+
 local function catcherr(errmsg)
-	writeto(stderr, traceerr(errmsg, 3), "\n")
+	report(traceerr(errmsg, 3))
 	return errmsg
 end
 
@@ -69,23 +82,37 @@ end
 local buffer<const> = alloc(512)
 local EOFMARK<const> = "<eof>"
 
-local function loadline()
-	writeto(stdout, _PROMPT or "> ")
+local function readline()
 	local result, errmsg = stdin:read(buffer)
 	if not result then
 		return false, errmsg
 	end
-	local line = buffer:tostring(1, result)
-	result, errmsg = load("return "..line)
+	if buffer:get(result) == string.byte("\n") then
+		result = result - 1
+	end
+	return buffer:tostring(1, result)
+end
+
+local function loadline()
+	writeto(stdout, _PROMPT or "> ")
+	local result, errmsg = readline()
+	if not result then
+		return false, errmsg
+	end
+	local line = result
+	result, errmsg = load("return "..line, "=stdin")
 	while not result do
-		result, errmsg = load(line)
-		if not result and errmsg:sub(-#EOFMARK) == EOFMARK then
-			writeto(stdout, _PROMPT2 or ">> ")
-			result, errmsg = stdin:read(buffer)
-			if not result then  -- no input
+		result, errmsg = load(line, "=stdin")
+		if not result then
+			if errmsg:sub(-#EOFMARK) ~= EOFMARK then
 				return false, errmsg
 			end
-			line = line.."\n"..buffer:tostring(1, result)
+			writeto(stdout, _PROMPT2 or ">> ")
+			result, errmsg = readline()
+			if not result then
+				return false, errmsg
+			end
+			line = line.."\n"..result
 			result = false
 		end
 	end
@@ -94,7 +121,7 @@ end
 
 local function handleresults(ok, ...)
 	if not ok then
-		writeto(stderr, (...), "\n")
+		report(...)
 	elseif select("#", ...) > 0 then
 		print(...)
 	end
@@ -102,27 +129,29 @@ local function handleresults(ok, ...)
 end
 
 local function doREPL()
+	local oldprogname = progname
+	progname = nil
 	while true do
 		local result, errmsg = loadline()
 		if result then
 			handleresults(xpcall(result, traceerr))
-		elseif not errmsg == "end of file" then
-			writeto(stderr, errmsg, "\n")
-		else
+		elseif errmsg == "end of file" then
 			break
+		else
+			report(errmsg)
 		end
 	end
+	progname = oldprogname
 end
 
 local function dochunk(argv, result, errmsg)
 	if result then
 		return handleresults(xpcall(result, traceerr, unpack(argv or {})))
 	end
-	writeto(stderr, errmsg, "\n")
+	report(errmsg)
 	return false
 end
 
-local progname = "lua"
 local usage = [=[
 usage: %s [options] [script [args]]
 Available options are:
@@ -139,7 +168,7 @@ Available options are:
 
 local function printusage(message)
 	if message then
-		writeto(stderr, progname, ": ", message, "\n");
+		report(message);
 	end
 	writeto(stderr, usage:format(progname));
 end
@@ -148,8 +177,11 @@ local function printversion()
 	writeto(stdout, _VERSION, "  Copyright (C) 1994-2024 Lua.org, PUC-Rio", "\n")
 end
 
-local coroutine = require "coroutine"
-_DBG_MAIN_THREAD = coroutine.running()
+local pkgcfg = {}
+for value in config:gmatch("([^\n]+)") do
+	table.insert(pkgcfg, value)
+end
+local LUA_IGMARK<const> = pkgcfg[5]
 
 spawn.call(function (...)
 
@@ -161,11 +193,11 @@ spawn.call(function (...)
 			progname = arg[i]
 		end
 	else
-		progname = getinfo(1, "S").source
-		if progname:sub(1, 1) == "@" then
-			progname = progname:sub(2)
+		script = getinfo(1, "S").source
+		if script:sub(1, 1) == "@" then
+			script = script:sub(2)
 		end
-		arg = { [0] = progname, ... }
+		arg = { [0] = script, ... }
 	end
 
 	local flags = { i = false, v = false, E = false, ["-"] = false }
@@ -205,7 +237,6 @@ spawn.call(function (...)
 			break
 		end
 		arg[i-argi] = argv[i]
-		progname = argv[i]
 	end
 
 	if flags.v then
@@ -214,20 +245,15 @@ spawn.call(function (...)
 
 	if flags.E then
 		getregistry().LUA_NOENV = true
-	else
-		local name = _VERSION:gsub("Lua (%d+).(%d+)", "LUA_INIT_%1_%2")
-		local luainit = getenv(name)
-		if not luainit then
-			name = "LUA_INIT"
-			luainit = getenv(name)
-		end
-		if luainit then
-			if luainit:sub(1, 1) == "@" then
-				luainit = dochunk(nil, loadfile(luainit:sub(2)))
+	elseif not getregistry().LUA_NOENV then
+		local init = getenv("COUTIL_INIT")
+		if init then
+			if init:sub(1, 1) == "@" then
+				init = dochunk(nil, loadfile(init:sub(2)))
 			else
-				luainit = dochunk(nil, load(luainit, "="..name))
+				init = dochunk(nil, load(init, "="..name))
 			end
-			if not luainit then
+			if not init then
 				return
 			end
 		end
@@ -238,11 +264,14 @@ spawn.call(function (...)
 			warn("@on")
 		elseif options[index] == 'l' then
 			local global, modname = value:match("^(.+)=(.+)$")
-			if global then
-				_G[global] = require(modname)
-			else
-				require(value)
+			if not global then
+				global, modname = value, value
+				local pos = global:find(LUA_IGMARK)
+				if pos then
+					global = global:sub(1, pos-1)
+				end
 			end
+			_G[global] = require(modname)
 		elseif not dochunk(nil, load(value, "=(command line)")) then
 			return
 		end
@@ -272,7 +301,7 @@ runall()
 spawn.call(function ()
 	for i = 9, 0, -1 do
 		system.suspend(1)
-		system.stderr:send(i)
+		system.stderr:write(i)
 	end
 end)
 
@@ -286,7 +315,7 @@ for i = 1, 3 do
 		assert(coroutine.resume(coroutine.create(function ()
 			for i = 9, 0, -1 do
 				system.suspend(1)
-				system.stderr:send(i)
+				system.stderr:write(i)
 			end
 		end)))
 		system.run()
