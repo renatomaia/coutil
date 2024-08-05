@@ -5,7 +5,7 @@ local system = require "coutil.system"
 spawn.catch(print, function ()
 
 	local histogram<const> = { 0, 0, 0, 0, 0, 0, 0, 0 }
-	local buffer<const> = memory.create(8192)
+	local buffer<const> = memory.create(131072)
 
 	for i = 1, 100 do
 		system.random(buffer)

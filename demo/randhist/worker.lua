@@ -11,7 +11,7 @@ spawn.catch(print, function (...)
 
 	local i<const> = ...
 	local name<const> = string.char(string.byte("A") + i - 1)
-	local buffer<const> = memory.create(8192)
+	local buffer<const> = memory.create(131072)
 	local startch<close> = channel.create("start")
 	local histoch<close> = channel.create("histogram")
 

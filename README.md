@@ -48,7 +48,7 @@ and calculates a histogram of its values.
 
 ```lua
 local histogram<const> = { 0, 0, 0, 0, 0, 0, 0, 0 }
-local buffer<const> = memory.create(8192)
+local buffer<const> = memory.create(131072)
 
 for i = 1, 100 do
 	system.random(buffer)
@@ -95,7 +95,7 @@ which is intended to be executed by worker threads:
 ```lua
 local i<const> = ...
 local name<const> = string.char(string.byte("A") + i - 1)
-local buffer<const> = memory.create(8192)
+local buffer<const> = memory.create(131072)
 local startch<close> = channel.create("start")
 local histoch<close> = channel.create("histogram")
 
@@ -167,7 +167,7 @@ The use of this other thread is important to process the results as soon as they
 independently from the code we will run in the main chunk.
 
 Notice that after the coroutine sums all the 100 expected histograms,
-it resizes the thread pool to remove all its threads.
+it [resizes](doc/manual.md#threadsresize-pool-size--create) the thread pool to remove all its threads.
 This allows the tasks to be destroyed and the pool to be terminated.
 Without this,
 the script would hang indefinitely waiting for the tasks to terminate.
