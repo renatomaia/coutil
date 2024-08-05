@@ -76,7 +76,7 @@ $(TST_M): $(TST_O) $(LIB_S)
 	$(LD) -o $@ $(LDFLAGS) $^ $(LIBS)
 
 test: $(TST_M)
-	$(LUA_DIR)/bin/lua -e 'package.cpath="./?.so;../test/?.so"' ../test/testall.lua
+	cd ../test && env LD_LIBRARY_PATH=$(LUAMEM_LIBDIR) LUA_CPATH="../src/?.so;./?.so;;" $(LUA_DIR)/bin/lua ./testall.lua
 
 clean:
 	$(RM) $(ALL_T) $(ALL_O) $(TST_O) $(TST_M)
