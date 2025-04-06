@@ -38,6 +38,7 @@ do case "list contents"
 		return {
 			[".git"] = "directory",
 			[".github"] = "directory",
+			[".gitignore"] = "file",
 			demo = "directory",
 			doc = "directory",
 			etc = "directory",
