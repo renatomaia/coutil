@@ -1,3 +1,7 @@
+#if defined(__linux__)
+#define _GNU_SOURCE		/* for 'dup3' */
+#endif
+
 #include "lttyaux.h"
 #include "lmodaux.h"
 
@@ -99,6 +103,7 @@ int lcu_dupfd(int fd) {
 }
 
 
+#if defined(LUA_USE_POSIX)		/* https://github.com/libuv/libuv/issues/2062 */
 
 static int stdiofd_gc (lua_State *L) {
 	int i, *stdiofd = (int *)lua_touserdata(L, 1);
@@ -115,7 +120,7 @@ LCUI_FUNC int *lcuTY_tostdiofd (lua_State *L) {
 		int fd;
 		stdiofd = (int *)lua_newuserdatauv(L, sizeof(int)*LCU_STDIOFDCOUNT, 0);
 		for (fd = 0; fd < LCU_STDIOFDCOUNT; fd++) {
-			stdiofd[fd] = (uv_guess_handle(fd) == UV_TTY) ? lcu_dupfd(fd) : fd;
+			stdiofd[fd] = lcu_dupfd(fd);
 		}
 		lcuL_setfinalizer(L, stdiofd_gc);
 		lua_setfield(L, LUA_REGISTRYINDEX, LCU_STDIOFDREGKEY);
@@ -126,3 +131,14 @@ LCUI_FUNC int *lcuTY_tostdiofd (lua_State *L) {
 	lua_pop(L, 1);
 	return stdiofd;
 }
+
+#else
+
+static int stdiofd[3] = { 0, 1, 2 };
+
+LCUI_FUNC int *lcuTY_tostdiofd (lua_State *L) {
+	(void)L;
+	return stdiofd;
+}
+
+#endif

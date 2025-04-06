@@ -18,7 +18,7 @@ LIBUV_LIB= uv
 
 LD= ld
 CC= gcc -std=gnu89
-CFLAGS= -O2 -Wall -Wextra -DLCU_ENABLESTDIODUP -I. \
+CFLAGS= -O2 -Wall -Wextra -I. \
         -I$(LUA_INCDIR) -I$(LUAMEM_INCDIR) -I$(LIBUV_INCDIR) \
         $(SYSCFLAGS) $(MYCFLAGS)
 LDFLAGS= -L$(LUAMEM_LIBDIR) -L$(LIBUV_LIBDIR) $(SYSLDFLAGS) $(MYLDFLAGS)
@@ -112,7 +112,7 @@ guess:
 generic: $(ALL)
 
 Linux linux:
-	$(MAKE) $(ALL) SYSCFLAGS="-DLUA_USE_LINUX -D_GNU_SOURCE -fPIC" \
+	$(MAKE) $(ALL) SYSCFLAGS="-DLUA_USE_LINUX -fPIC" \
 	               SYSLDFLAGS="-shared"
 
 Darwin macos macosx:
