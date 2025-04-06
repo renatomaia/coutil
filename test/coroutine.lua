@@ -735,24 +735,27 @@ end
 
 do case "inherit preload"
 	spawn(function ()
-		package.preload["coutil.spawn"] =
-			assert(package.searchers[2]("coutil.spawn"))
-		package.preload["coutil.system"] =
-			assert(package.searchers[4]("coutil.system"))
+		package.preload["module"] = function ()
+			return {name = "module"}
+		end
+		package.preload["module.submodule"] = function ()
+			return {name = "submodule"}
+		end
 
-		local co = stateco.load[[
+		local co = assert(stateco.load[[
 			local package = require "package"
 			package.path = ""
 			package.cpath = ""
 
-			require "coutil.spawn"
-			require "coutil.system"
+			module = require "module"
+			submodule = require "module.submodule"
 
-			return true
-		]]
+			return module.name == "module"
+			   and submodule.name == "submodule"
+		]])
 
-		package.preload["coutil.spawn"] = nil
-		package.preload["coutil.system"] = nil
+		package.preload["module"] = nil
+		package.preload["module.submodule"] = nil
 
 		local ok, res = system.resume(co)
 		assert(ok == true and res == true)
