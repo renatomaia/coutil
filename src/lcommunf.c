@@ -1022,32 +1022,19 @@ static int k_udprecv (lua_State *L) {
 	}
 	return lua_gettop(L)-5;
 }
-static int k_udpbuffer (lua_State *L) {
-	lcu_UdataHandle *udhdl = (lcu_UdataHandle *)lua_touserdata(L, 1);
-	uv_buf_t *buf = (uv_buf_t *)lua_touserdata( L, -1);
-	lcu_assert(buf);
-	lua_pop(L, 1);  /* discard 'buf' */
-	lcu_getoutputbuf(L, 2, buf);
-	if (buf->len > 65536) buf->len = 65536;  /* avoid use of recvmmsg by libuv */
-	udhdl->step = k_udprecv;  /* update continuation function */
-	return -1;  /* yield on success */
-}
 static void uv_onudprecv (uv_udp_t *udp,
                           ssize_t nread,
                           const uv_buf_t *buf,
                           const struct sockaddr *addr,
                           unsigned int flags) {
-	uv_handle_t *handle = (uv_handle_t *)udp;
-	if (nread == 0 && addr == NULL) {
-		/* 'libuv' indication of datagram end (meaning?!), ignore it and */
-		/* get ready to restart all over again from obtaining the buffer */
-		lcu_UdataHandle *udhdl = lcu_hdl2ud(handle);
-		udhdl->step = k_udpbuffer;
-	} else {
+	(void)buf;
+	/* 'libuv' indication of datagram end (meaning?!), ignore it and */
+	/* it will restart all over again from obtaining the buffer */
+	if (nread != 0 || addr != NULL) {
+		uv_handle_t *handle = (uv_handle_t *)udp;
 		lua_State *thread = (lua_State *)handle->data;
 		int nret;
 		lcu_assert(thread);
-		lcu_assert(buf->base != (char *)buf);
 		lcu_assert(addr);
 		if (nread >= 0) {
 			lua_pushinteger(thread, nread);
@@ -1063,26 +1050,11 @@ static void uv_ongetbuffer (uv_handle_t *handle,
                             size_t suggested_size,
                             uv_buf_t *buf) {
 	(void)suggested_size;
-	do {
-		lua_State *thread = (lua_State *)handle->data;
-		buf->base = (char *)buf;
-		buf->len = 0;
-		lcu_assert(thread);
-		lua_pushlightuserdata(thread, buf);
-		if (lua_status(thread) == LUA_OK) {
-			/* this might happen because libuv might call 'uv_alloc_cb' inside */
-			/* 'uv_*_start' before it returns successfully. In such case, we */
-			/* are still running inside the calling coroutine. */
-			/* Ref.: https://groups.google.com/g/libuv/c/bTwH1X_F4p4 */
-			lcu_UdataHandle *udhdl = lcu_hdl2ud(handle);
-			int nret = udhdl->step(thread);
-			lcu_assert(nret == -1);  /* must yield, we can't return from here */
-		} else {
-			lcu_assert(lua_status(thread) == LUA_YIELD);
-			lcuU_resumeudhdl(handle, 1);
-		}
-	} /* while 'socket:read' is called again after error getting buffer */
-	while (handle->data && buf->base == (char *)buf);
+	lua_State *thread = (lua_State *)handle->data;
+	lcu_assert(thread);
+	lcu_getoutputbuf(thread, 2, buf);
+	lcu_assert(buf->len);
+	lcu_assert(buf->base);
 }
 static int udpstoprecv (uv_handle_t *handle) {
 	lcu_log(handle, handle->data, "uv_udp_recv_stop");
@@ -1094,8 +1066,11 @@ static int udpstartrecv (uv_handle_t *handle) {
 }
 static int udp_read (lua_State *L) {
 	lcu_UdataHandle *udhdl = lcu_openedudhdl(L, 1, LCU_UDPSOCKETCLS);
+	luamem_checkmemory(L, 2, NULL);
+	luaL_optinteger(L, 3, 1);
+	luaL_optinteger(L, 4, -1);
 	lua_settop(L, 5);
-	return lcuT_resetudhdlk(L, udhdl, udpstartrecv, udpstoprecv, k_udpbuffer);
+	return lcuT_resetudhdlk(L, udhdl, udpstartrecv, udpstoprecv, k_udprecv);
 }
 
 /*
@@ -1203,40 +1178,25 @@ static int pipe_write (lua_State *L) {
 
 /* bytes [, errmsg] = stream:read(buffer [, i [, j]]) */
 static int k_recvdata (lua_State *L) {
-	return lua_gettop(L)-5;
-}
-static int k_getbuffer (lua_State *L) {
-	lcu_UdataHandle *udhdl = (lcu_UdataHandle *)lua_touserdata(L, 1);
-	lua_CFunction nextstep = (lua_CFunction)lua_touserdata(L, 5);
-	uv_buf_t *buf = (uv_buf_t *)lua_touserdata(L, -1);
-	lua_pop(L, 1);  /* discard 'buf' pointer */
-	lcu_assert(nextstep);
-	lcu_assert(buf);
-	lcu_getoutputbuf(L, 2, buf);
-	udhdl->step = nextstep;
-	return -1;
+	return lua_gettop(L)-4;
 }
 static void uv_onrecvdata (uv_stream_t *stream,
                            ssize_t nread,
                            const uv_buf_t *buf) {
+	(void)buf;
 	uv_handle_t *handle = (uv_handle_t *)stream;
 	lua_State *thread = (lua_State *)handle->data;
 	lcu_UdataHandle *udhdl = lcu_hdl2ud(handle);
-	if (nread == 0) {
-		/* 'libuv' indication of EAGAIN or EWOULDBLOCK, ignore it and */
-		/* get ready to restart all over again from obtaining the buffer */
-		udhdl->step = k_getbuffer;
-	} else {
+	/* 'libuv' indication of EAGAIN or EWOULDBLOCK, ignore it and */
+	/* it will restart all over again from obtaining the buffer */
+	if (nread != 0) {
 		int nret;
 		lcu_assert(thread);
-		lcu_assert(buf->base != (char *)buf);
 		if (nread >= 0) {
 			lua_pushinteger(thread, nread);
 			nret = 1;
 		} else {
-			/* in case of errors, 'libuv' might not call 'uv_ongetbuffer' */
-			/* so 'udhdl->step==k_getbuffer' making the resume below fail. */
-			udhdl->step = k_recvdata;  /* also avoid calling 'k_recvpipedata' on error */
+			udhdl->step = k_recvdata;  /* avoid calling 'k_recvpipedata' on error */
 			if (nread == UV_EOF) udhdl->stop = NULL;  /* implies 'handle' is already stopped */
 			nret = lcuL_pusherrres(thread, nread);
 		}
@@ -1253,9 +1213,11 @@ static int startrecvdata (uv_handle_t *handle) {
 }
 static int active_read (lua_State *L) {
 	lcu_UdataHandle *udhdl = lcu_openedudhdl(L, 1, toclass(L));
+	luamem_checkmemory(L, 2, NULL);
+	luaL_optinteger(L, 3, 1);
+	luaL_optinteger(L, 4, -1);
 	lua_settop(L, 4);
-	lua_pushlightuserdata(L, k_recvdata);
-	return lcuT_resetudhdlk(L, udhdl, startrecvdata, stoprecvdata, k_getbuffer);
+	return lcuT_resetudhdlk(L, udhdl, startrecvdata, stoprecvdata, k_recvdata);
 }
 
 
@@ -1292,9 +1254,9 @@ static int k_recvpipedata (lua_State *L) {
 	uv_pipe_t *pipe = (uv_pipe_t *)handle;
 	if (uv_pipe_pending_count(pipe)) {  /* only if read was successful? */
 		int err = pushstreamread(L, pipe);
-		return lcuL_pushresults(L, lua_gettop(L)-5, err);
+		return lcuL_pushresults(L, lua_gettop(L)-4, err);
 	}
-	return lua_gettop(L)-5;
+	return lua_gettop(L)-4;
 }
 static int pipe_read (lua_State *L) {
 	lcu_UdataHandle *udhdl = lcu_openedudhdl(L, 1, LCU_PIPESHARECLS);
@@ -1306,9 +1268,11 @@ static int pipe_read (lua_State *L) {
 		err = pushstreamread(L, pipe);
 		return lcuL_pushresults(L, 2, err);
 	}
+	luamem_checkmemory(L, 2, NULL);
+	luaL_optinteger(L, 3, 1);
+	luaL_optinteger(L, 4, -1);
 	lua_settop(L, 4);
-	lua_pushlightuserdata(L, k_recvpipedata);
-	return lcuT_resetudhdlk(L, udhdl, startrecvdata, stoprecvdata, k_getbuffer);
+	return lcuT_resetudhdlk(L, udhdl, startrecvdata, stoprecvdata, k_recvpipedata);
 }
 
 

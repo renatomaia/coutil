@@ -777,7 +777,7 @@ if standard == "posix" then
 		end)
 		assert(stage2 == 1)
 		assert(system.run("step") == true)
-		assert(stage1 == 2)
+		assert(stage1 == 3)
 		assert(stage2 == 3 or stage2 == 4)
 
 		asserterr("already in use", pcall(accepted.read, accepted, buffer))
@@ -924,7 +924,7 @@ end
 			thread = coroutine.running()
 			coroutine.yield()
 			if standard == "posix" then
-				asserterr("already in use", pcall(stream.read, stream))
+				asserterr("already in use", pcall(stream.read, stream, buffer))
 				coroutine.yield()
 			end
 			thread = nil

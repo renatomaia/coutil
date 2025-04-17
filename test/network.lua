@@ -242,7 +242,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			assert(connected:close() == true)
 			stage1 = 5
 		end)
-		assert(stage1 == 2)
+		assert(stage1 == 3)
 
 		local stage2 = 0
 		spawn(function ()
@@ -337,7 +337,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 		spawn(function ()
 			thread = coroutine.running()
 			coroutine.yield()
-			asserterr("already in use", pcall(unconnected.read, unconnected))
+			asserterr("already in use", pcall(unconnected.read, unconnected, buffer))
 			coroutine.yield()
 			assert(unconnected:read(buffer) == size)
 			assert(not memory.diff(buffer, string.rep("b", size)))
