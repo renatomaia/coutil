@@ -1723,6 +1723,7 @@ static const luaL_Reg terminal[] = {
 static const luaL_Reg modulef[] = {
 	{"address", system_address},
 	{"netinfo", system_netinfo},
+	{NULL, NULL}
 };
 
 static const luaL_Reg upvaluef[] = {
