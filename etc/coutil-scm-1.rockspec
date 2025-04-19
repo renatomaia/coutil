@@ -47,6 +47,9 @@ build = {
 	},
 	install_pass = false,
 	install = {
+		bin = {
+			["coutil"] = "demo/console.lua",
+		},
 		lua = {
 			["coutil.event"] = "lua/coutil/event.lua",
 			["coutil.mutex"] = "lua/coutil/mutex.lua",

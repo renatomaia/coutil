@@ -16,7 +16,7 @@
 
 
 /*
- * Addresses 
+ * Addresses
  */
 
 #ifndef LCU_ADDRBINSZ_IPV4

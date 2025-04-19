@@ -1,3 +1,5 @@
+#!/usr/bin/env lua
+
 local _G = require "_G"
 local load = _G.load
 local loadfile = _G.loadfile
@@ -309,32 +311,3 @@ spawn.call(function (...)
 end, ...)
 
 runall()
-
---[============================================================================[
-spawn.call(function ()
-	for i = 9, 0, -1 do
-		system.suspend(1)
-		system.stderr:write(i)
-	end
-end)
-
-local threads = require "coutil.threads"
-local pool = threads.create(0)
-for i = 1, 3 do
-	pool:dostring([[
-		local _G = require "_G"
-		local coroutine = require "coroutine"
-		local system = require "coutil.system"
-		assert(coroutine.resume(coroutine.create(function ()
-			for i = 9, 0, -1 do
-				system.suspend(1)
-				system.stderr:write(i)
-			end
-		end)))
-		system.run()
-	]])
-end
-pool:resize(3)
-
-print "Hello, World!"
---]============================================================================]
