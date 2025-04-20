@@ -139,7 +139,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 		asserterr("invalid argument", datagram:setoption("mcastiface", "localhost"))
 
 		if domain == "ipv6" then
-			if standard == "win32" then
+			if standard ~= "posix" then
 				asserterr("invalid argument", datagram:setoption("mcastiface", ipaddr.ipv4.localhost))
 			else
 				assert(datagram:setoption("mcastiface", ipaddr.ipv4.localhost) == true)
@@ -181,13 +181,13 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 			datagram:setoption("mcastjoin", addr.multicast, addr.localhost, "localhost"))
 
 		if domain == "ipv4" then
-			asserterr(standard == "win32" and "invalid argument" or "protocol not available",
+			asserterr(standard ~= "posix" and "invalid argument" or "protocol not available",
 				datagram:setoption("mcastjoin", ipaddr.ipv6.multicast))
 			asserterr("invalid argument",
 				datagram:setoption("mcastjoin", addr.multicast, ipaddr.ipv6.localhost))
 			asserterr("invalid argument",
 				datagram:setoption("mcastjoin", addr.multicast, addr.localhost, ipaddr.ipv6.dnshost1))
-			asserterr(standard == "win32" and "invalid argument" or "protocol not available",
+			asserterr(standard ~= "posix" and "invalid argument" or "protocol not available",
 				datagram:setoption("mcastleave", ipaddr.ipv6.multicast))
 			asserterr("invalid argument",
 				datagram:setoption("mcastleave", addr.multicast, ipaddr.ipv6.localhost))
@@ -195,7 +195,7 @@ for _, domain in ipairs{ "ipv4", "ipv6" } do
 				datagram:setoption("mcastleave", addr.multicast, addr.localhost, ipaddr.ipv6.dnshost1))
 		else
 			local addr = ipaddr.ipv4
-			if standard == "win32" then
+			if standard ~= "posix" then
 				asserterr("invalid argument", datagram:setoption("mcastjoin", addr.multicast, addr.localhost, addr.dnshost1))
 				asserterr("invalid argument", datagram:setoption("mcastleave", addr.multicast, addr.localhost, addr.dnshost1))
 				asserterr("invalid argument", datagram:setoption("mcastjoin", addr.multicast, addr.localhost))
@@ -895,7 +895,7 @@ do case "used after library collection"
 	dostring(utilschunk..[===[
 		local system = require "coutil.system"
 		local addr = system.address("ipv4", "8.8.8.8:80")
-		local path = os.tmpname()
+		local path = tempfilename()
 		local cases = {}
 		table.insert(cases, { socket = system.socket("datagram", addr.type), op = "write", "xxx", nil, nil, addr })
 		table.insert(cases, { socket = system.socket("stream", addr.type), op = "connect", addr })

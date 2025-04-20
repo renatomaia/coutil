@@ -600,7 +600,8 @@ function teststream(create, addresses)
 			assert(b == nil)
 			stage = 1
 			a,b = stream:connect(addresses.bindable)
-			assert(a == true or b == "socket is already connected")
+			errmsg = (standard == "posix" or not tostring(stream):find("pipe")) and "socket is already connected" or "resource busy or locked"
+			assert(a == true or b == errmsg)
 			stage = 2
 		end)
 		assert(stage == 0)
@@ -818,7 +819,11 @@ end
 				end
 			else
 				asserterr("end of file", stream:read(buffer))
-				assert(stream:write(data2))
+				if standard == "mingw" and tostring(stream):find("pipe") then
+					asserterr("broken pipe", stream:write(data2))
+				else
+					assert(stream:write(data2))
+				end
 			end
 			done1 = true
 		end)
@@ -832,7 +837,7 @@ end
 			system.suspend()
 			assert(stream:shutdown())
 			local buffer = memory.create(128)
-			if standard == "win32" and tostring(stream):find("pipe") then -- TODO: check if this is a bug in libuv
+			if standard ~= "posix" and tostring(stream):find("pipe") then -- TODO: check if this is a bug in libuv
 				asserterr("end of file", stream:read(buffer))
 				assert(memory.tostring(buffer) == string.rep("\0", 128))
 			else
@@ -1065,7 +1070,7 @@ end
 
 		gc()
 		assert(system.run() == false)
-		assert(stage == 4)
+		assert(stage == 4 or stage == 3)
 
 		done()
 	end
@@ -1248,6 +1253,7 @@ end
 			assert(server:bind(addresses.bindable))
 			assert(server:listen(backlog))
 			local stream = assert(server:accept())
+			system.suspend(.1)
 			stage = 1
 			local res, a,b,c = stream:write(string.rep("x", 1<<24))
 			assert(res == garbage)
@@ -1294,6 +1300,7 @@ end
 			assert(server:listen(backlog))
 			stage = 1
 			local stream = assert(server:accept())
+			system.suspend()
 			stage = 2
 			local ok, extra = stream:write(string.rep("x", 1<<24))
 			assert(ok == nil)

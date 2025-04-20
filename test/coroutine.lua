@@ -99,7 +99,7 @@ do case "type errors"
 end
 
 do case "preemptive execution"
-	local path = os.tmpname()
+	local path = tempfilename()
 	os.remove(path)
 
 	assert(not io.open(path))
@@ -695,7 +695,7 @@ do case "ignore errors after cancel"
 end
 
 do case "chunk from file"
-	local path = os.tmpname()
+	local path = tempfilename()
 	local file = io.open(path, "w")
 	file:write[[
 		local coroutine = require "coroutine"

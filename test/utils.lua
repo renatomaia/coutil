@@ -12,9 +12,11 @@ package.path = "../lua/?.lua;"..package.path
 local vararg = require "vararg"
 local system = require "coutil.system"
 
-local kernel = system.procinfo("k")
-if kernel:find("Windows", 1, "plain search") then
+local kernel = system.procinfo("k"):lower()
+if kernel:find("windows", 1, "plain") then
 	standard = "win32"
+elseif  kernel:find("mingw", 1, "plain") then
+	standard = "mingw"
 else
 	standard = "posix"
 end
@@ -95,9 +97,17 @@ function readfrom(path)
 	end
 end
 
+function tempfilename()
+	local name = os.tmpname()
+	if standard == "mingw" then
+		name = "."..name
+	end
+	return name
+end
+
 do
-	local scriptfile = os.tmpname()
-	local successfile = os.tmpname()
+	local scriptfile = tempfilename()
+	local successfile = tempfilename()
 
 	function dostring(chunk, ...)
 		writeto(scriptfile, string.format([[

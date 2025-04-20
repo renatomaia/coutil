@@ -558,7 +558,7 @@ do newtest "signal" ------------------------------------------------------------
 end
 
 do newtest "process" ------------------------------------------------------------
-	local script = os.tmpname()
+	local script = tempfilename()
 	writeto(script, utilschunk..[[
 		local path = ...
 		waitsignal(path)
@@ -566,7 +566,7 @@ do newtest "process" -----------------------------------------------------------
 	testOp(newTestOpCase{
 		signals = {},
 		await = function (self, cfgid)
-			local path = os.tmpname()
+			local path = tempfilename()
 			table.insert(self.signals, path)
 			return system.execute(luabin, script, path)
 		end,
@@ -628,7 +628,7 @@ do newtest "coroutine" ---------------------------------------------------------
 	]]
 	testOp(newTestOpCase{
 		coroutines = { stateco.load(chunk), stateco.load(chunk) },
-		paths = { os.tmpname(), os.tmpname() },
+		paths = { tempfilename(), tempfilename() },
 		await = function (self, cfgid)
 			assert(io.open(self.paths[cfgid], "w")):close()
 			return system.resume(self.coroutines[cfgid], cfgid, self.paths[cfgid])
@@ -746,7 +746,7 @@ end
 for title, domain in pairs{ tcp = "ipv4", pipe = "local" } do
 	local addr = addr
 	if domain == "local" then
-		addr = { os.tmpname(), os.tmpname() }
+		addr = { tempfilename(), tempfilename() }
 		os.remove(addr[1])
 		os.remove(addr[2])
 	end

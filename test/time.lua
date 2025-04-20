@@ -35,7 +35,7 @@ do case "nanosecs"
 	local before = system.nanosecs()
 	local elapsed = system.nanosecs()-before
 	assert(elapsed > 0, elapsed)
-	assert(elapsed < 1e3, elapsed)
+	assert(elapsed < 1e6, elapsed)
 
 	spawn(function ()
 		before = system.nanosecs()

@@ -4,8 +4,8 @@ local system = require "coutil.system"
 newtest("stdio") --------------------------------------------------------------
 
 do case "file"
-	local inputpath = os.tmpname()
-	local outputpath = os.tmpname()
+	local inputpath = tempfilename()
+	local outputpath = tempfilename()
 	writeto(inputpath, "Hello world!\n")
 	local stdin = assert(io.open(inputpath, "r"))
 	local stdout = assert(io.open(outputpath, "w"))
@@ -20,7 +20,7 @@ do case "file"
 				spawn(function ()
 					local buffer = memory.create(1024)
 					local bytes = system.stdin:read(buffer)
-					if standard == "win32" then
+					if standard ~= "posix" then
 						assert(bytes == 14)
 						assert(buffer:tostring(1, 14) == "Hello world!\r\n")
 					else

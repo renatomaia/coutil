@@ -13,8 +13,8 @@ end
 
 local runscript
 do
-	local scriptfile = os.tmpname()
-	local successfile = os.tmpname()
+	local scriptfile = tempfilename()
+	local successfile = tempfilename()
 
 	function runscript(info, ...)
 		local command = luabin
@@ -105,7 +105,7 @@ do case "invalid variable names"
 
 	assert(system.setenv("COUTIL_TEST", "abc=def"))
 	assert(system.getenv("COUTIL_TEST") == "abc=def")
-	if standard == "win32" then
+	if standard ~= "posix" then
 		assert(os.getenv("COUTIL_TEST") == nil)
 		asserterr("no such", system.getenv("COUTIL_TEST=abc"))
 	else
@@ -442,7 +442,7 @@ end
 
 do case "redirected streams"
 	spawn(function ()
-		local tempfile = os.tmpname()
+		local tempfile = tempfilename()
 		local outcases = {
 			"Hello, World!",
 			"\0\1\2\3",
@@ -481,9 +481,9 @@ end
 
 do case "redirect streams to files"
 	spawn(function ()
-		local infile = os.tmpname()
-		local outfile = os.tmpname()
-		local errfile = os.tmpname()
+		local infile = tempfilename()
+		local outfile = tempfilename()
+		local errfile = tempfilename()
 		writeto(infile, "stdin")
 		local stdin = io.open(infile, "r")
 		local stdout = io.open(outfile, "w")
@@ -556,7 +556,7 @@ do case "redirect streams to a socket"
 	testsocketstdstream("ipv4", system.address("ipv4", "127.0.0.1:0"))
 	testsocketstdstream("ipv6", system.address("ipv6", "[::1]:0"))
 
-	local filepath = os.tmpname()
+	local filepath = tempfilename()
 	os.remove(filepath)
 	testsocketstdstream("local", filepath)
 	os.remove(filepath)
@@ -852,7 +852,7 @@ do case "own priority"
 	assert(type(name) == "string")
 	assert(type(value) == "number")
 
-	if standard == "win32" then
+	if standard ~= "posix" then
 		assert(system.setpriority(pid, "below"))
 
 		local name, newval = system.getpriority(pid)

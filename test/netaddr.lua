@@ -242,7 +242,7 @@ local function allexpected(ips, hostname, servport)
 end
 
 local function clearexpected(missing, found, scktype)
-	if standard == "win32" and scktype == nil then
+	if standard ~= "posix" and scktype == nil then
 		missing[found.literal.." "..found.port.." datagram"] = nil
 		missing[found.literal.." "..found.port.." stream"] = nil
 		missing[found.literal.." "..found.port.." passive"] = nil
@@ -271,7 +271,7 @@ do case "reusing addresses"
 							assert(found.port == servport)
 							scktype = addrlist:getsocktype()
 							assert(domain == nil or addrtypes[domain] ~= nil)
-							assert(standard == "win32" and scktype == nil or scktypes[scktype] == true)
+							assert(standard ~= "posix" and scktype == nil or scktypes[scktype] == true)
 							clearexpected(missing, found, scktype)
 						until not addrlist:next()
 						assert(domain == addrlist:getdomain())
@@ -300,7 +300,7 @@ do case "create addresses"
 						assert(addrlist:getdomain() == found.type)
 						assert(ips[found.literal] ~= nil)
 						assert(found.port == servport)
-						assert(standard == "win32" and scktype == nil or scktypes[scktype] == true)
+						assert(standard ~= "posix" and scktype == nil or scktypes[scktype] == true)
 						clearexpected(missing, found, scktype)
 					until not addrlist:next()
 				end

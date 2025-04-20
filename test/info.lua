@@ -51,7 +51,7 @@ local options, typeof = buildopts{
 	["X"] = "number",
 }
 
-if standard == "win32" then
+if standard == "win32" or standard == "mingw" then
 	typeof["$"] = "nil"
 end
 

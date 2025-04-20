@@ -3,7 +3,7 @@ local threads = require "coutil.threads"
 local channel = require "coutil.channel"
 local stateco = require "coutil.coroutine"
 
-local waitscript = os.tmpname()
+local waitscript = tempfilename()
 do
 	local file = io.open(waitscript, "w")
 	local main = string.format([[
@@ -82,7 +82,7 @@ end
 
 do case "runtime errors"
 	spawn(function ()
-		local errpath = os.tmpname()
+		local errpath = tempfilename()
 		local errfile = assert(io.open(errpath, "w"))
 		assert(system.execute{
 			execfile = luabin,
@@ -174,7 +174,7 @@ end
 do case "no arguments"
 	local t = assert(threads.create(1))
 
-	local path = os.tmpname()
+	local path = tempfilename()
 	local code = string.format([[%s
 		assert(select("#", ...) == 0)
 		sendsignal(%q)
@@ -190,7 +190,7 @@ end
 do case "transfer arguments"
 	local t = assert(threads.create(1))
 
-	local path = os.tmpname()
+	local path = tempfilename()
 	local code = string.format([[%s
 		assert(select("#", ...) == 5)
 		local a,b,c,d,e = ...
@@ -215,7 +215,7 @@ do case "yielding tasks"
 	local t = assert(threads.create(1))
 	local path = { n = 5 }
 	for i = 1, path.n do
-		path[i] = os.tmpname()
+		path[i] = tempfilename()
 		assert(t:dofile(waitscript, "t", path[i], "yield") == true)
 	end
 
@@ -244,7 +244,7 @@ do case "many threads, even more tasks"
 	local m, n = 50, 5
 	local t = assert(threads.create(n))
 	for i = 1, m do
-		path[i] = os.tmpname()
+		path[i] = tempfilename()
 		assert(t:dostring([[
 			local _G = require "_G"
 			local io = require "io"
@@ -294,12 +294,12 @@ end
 
 do case "pending tasks"
 	local t = assert(threads.create(1))
-	local path1 = os.tmpname()
+	local path1 = tempfilename()
 	assert(t:dofile(waitscript, "t", path1) == true)
 	repeat until (checkcount(t, "r", 1))
 	assert(checkcount(t, "nrpsea", 1, 1, 0, 0, 1, 1))
 
-	local path2 = os.tmpname()
+	local path2 = tempfilename()
 	assert(t:dofile(waitscript, "t", path2) == true)
 	assert(checkcount(t, "nrpsea", 2, 1, 1, 0, 1, 1))
 
@@ -321,12 +321,12 @@ do case "idle threads"
 	assert(t:resize(4) == true)
 	assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 4, 2))
 
-	local path3 = os.tmpname()
+	local path3 = tempfilename()
 	assert(t:dofile(waitscript, "t", path3) == true)
 	repeat until (checkcount(t, "r", 1))
 	assert(checkcount(t, "nrpsea", 1, 1, 0, 0, 4, 2))
 
-	local path4 = os.tmpname()
+	local path4 = tempfilename()
 	assert(t:dofile(waitscript, "t", path4) == true)
 	repeat until (checkcount(t, "r", 2))
 	assert(checkcount(t, "nrpsea", 2, 2, 0, 0, 4, 2))
@@ -343,9 +343,9 @@ end
 
 do case "increase size"
 	local t = assert(threads.create(1))
-	local path1 = os.tmpname()
+	local path1 = tempfilename()
 	assert(t:dofile(waitscript, "t", path1) == true)
-	local path2 = os.tmpname()
+	local path2 = tempfilename()
 	assert(t:dofile(waitscript, "t", path2) == true)
 
 	repeat until (checkcount(t, "r", 1))
@@ -375,9 +375,9 @@ do case "decrease size"
 	repeat until (checkcount(t, "a", 4))
 	assert(checkcount(t, "nrpsea", 0, 0, 0, 0, 4, 4))
 
-	local path1 = os.tmpname()
+	local path1 = tempfilename()
 	assert(t:dofile(waitscript, "t", path1) == true)
-	local path2 = os.tmpname()
+	local path2 = tempfilename()
 	assert(t:dofile(waitscript, "t", path2) == true)
 	repeat until (checkcount(t, "r", 2))
 	assert(checkcount(t, "nrpsea", 2, 2, 0, 0, 4, 4))
@@ -413,7 +413,7 @@ do case "collect pending"
 end
 
 do case "collect running"
-	local path1 = os.tmpname()
+	local path1 = tempfilename()
 
 	do
 		local t = assert(threads.create(1))
@@ -428,8 +428,8 @@ do case "collect running"
 end
 
 do case "nested task"
-	local path1 = os.tmpname()
-	local path2 = os.tmpname()
+	local path1 = tempfilename()
+	local path2 = tempfilename()
 
 	local t = assert(threads.create(1))
 	local code = string.format([[%s
@@ -460,8 +460,8 @@ do case "nested task"
 end
 
 do case "nested pool"
-	local path1 = os.tmpname()
-	local path2 = os.tmpname()
+	local path1 = tempfilename()
+	local path2 = tempfilename()
 
 	local t = assert(threads.create(1))
 	local code = string.format([[%s
@@ -498,7 +498,7 @@ do case "inherit preload"
 	package.preload["coutil.system"] =
 		assert(package.searchers[4]("coutil.system"))
 
-	local path = os.tmpname()
+	local path = tempfilename()
 	local t = assert(threads.create(1))
 	local code = string.format([[%s
 		local package = require "package"
@@ -538,19 +538,19 @@ do case "state coroutine"
 end
 
 do case "keeping values on stack"
-	local path = os.tmpname()
+	local path = tempfilename()
 	do
 		local threads = require "coutil.threads"
 		local pool<close> = threads.create(1)
-		pool:dostring(utilschunk..[[
+		assert(pool:dostring(utilschunk..[[
 			local _ENV = require "_G"
 			warn("@on")
 			local cotest = require "coutil_test"
 			assert(cotest.yieldsaved() == nil)
 			assert(cotest.yieldsaved() == nil)
 			assert(cotest.yieldsaved() == nil)
-			sendsignal("]]..path..[[")
-		]])
+			sendsignal(]]..string.format("%q", path)..[[)
+		]]))
 	end
 	waitsignal(path)
 
@@ -1013,14 +1013,14 @@ do case "queueing on endpoints"
 				for consumer in combine(chunks, n) do
 					local paths = { producer = {}, consumer = {} }
 					for i = 1, n do
-						paths.producer[i] = os.tmpname()
+						paths.producer[i] = tempfilename()
 						producer[i](t, chname, e1, paths.producer[i], true)
 					end
 					for i = 1, n do
 						waitsignal(paths.producer[i], system.suspend)
 					end
 					for i = 1, n do
-						paths.consumer[i] = os.tmpname()
+						paths.consumer[i] = tempfilename()
 						consumer[i](t, chname, e2, paths.consumer[i], false)
 					end
 					for i = 1, n do
@@ -1134,8 +1134,8 @@ do case "transfer values"
 		}) do
 			for tasks in combine(chunks, 2) do
 				local name = tostring(tasks)
-				local path1 = os.tmpname()
-				local path2 = os.tmpname()
+				local path1 = tempfilename()
+				local path2 = tempfilename()
 				tasks[1](t, case[1], case[2], name, path1)
 				tasks[2](t, case[2], case[1], name, path2)
 				waitsignal(path1, system.suspend)
@@ -1217,7 +1217,7 @@ do case "transfer errors"
 			{ arg = #many, values = many },
 		}) do
 			local name = tostring(case)
-			local path = os.tmpname()
+			local path = tempfilename()
 			local errval = assert(load("return "..case.values[case.arg]))()
 			local errmsg = string.format("unable to transfer argument #%d (got %s)",
 			                             2+case.arg, type(errval))
@@ -1290,7 +1290,7 @@ do case "invalid endpoint"
 		for _, arg in ipairs({ "i", "o", "input", "output", "" }) do
 			local errmsg = string.format("bad argument #2 (invalid option '%s')", arg)
 			for _, task in ipairs(chunks) do
-				local path = os.tmpname()
+				local path = tempfilename()
 				task(t, arg, errmsg, tostring({}), path)
 				waitsignal(path, system.suspend)
 				io.write(".")
@@ -1421,7 +1421,7 @@ do case "resume listed channels"
 		local t = assert(threads.create(1))
 
 		for _, chunk in ipairs(chunks) do
-			local path = os.tmpname()
+			local path = tempfilename()
 
 			assert(next(channel.getnames()) == nil)
 

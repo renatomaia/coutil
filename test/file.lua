@@ -222,19 +222,21 @@ do
 		assert(system.removefile("link.lua", mode))
 		assert(system.fileinfo("file.lua", mode.."*") == 1)
 	end
-	function testcases.symbolic(mode)
-		assert(system.linkfile("file.lua", "link.lua", "s"..mode) == true)
-		assert(system.fileinfo("link.lua", mode.."l?") == "link")
-		assert(system.fileinfo("link.lua", mode.."?") == "file")
-		assert(system.fileinfo("link.lua", mode.."=") == "file.lua")
-		assert(system.removefile("link.lua", mode))
-	end
-	function testcases.directory(mode)
-		assert(system.linkfile("benchmarks", "link.dir", "d"..mode) == true)
-		assert(system.fileinfo("link.dir", mode.."l?") == "link")
-		assert(system.fileinfo("link.dir", mode.."?") == "directory")
-		assert(system.fileinfo("link.dir", mode.."=") == "benchmarks")
-		assert(system.removefile("link.dir", mode))
+	if standard == "posix" then
+		function testcases.symbolic(mode)
+			assert(system.linkfile("file.lua", "link.lua", "s"..mode) == true)
+			assert(system.fileinfo("link.lua", mode.."l?") == "link")
+			assert(system.fileinfo("link.lua", mode.."?") == "file")
+			assert(system.fileinfo("link.lua", mode.."=") == "file.lua")
+			assert(system.removefile("link.lua", mode))
+		end
+		function testcases.directory(mode)
+			assert(system.linkfile("benchmarks", "link.dir", "d"..mode) == true)
+			assert(system.fileinfo("link.dir", mode.."l?") == "link")
+			assert(system.fileinfo("link.dir", mode.."?") == "directory")
+			assert(system.fileinfo("link.dir", mode.."=") == "benchmarks")
+			assert(system.removefile("link.dir", mode))
+		end
 	end
 
 	for casename, casefunc in pairs(testcases) do
@@ -262,7 +264,7 @@ do case "errors"
 
 	local function testerr(mode)
 		asserterr("no such", system.movefile("LICENSE", "link.lua", mode))
-		if standard ~= "win32" then
+		if standard == "posix" then
 			asserterr("not a directory", system.movefile("benchmarks", "file.lua", mode))
 		end
 	end
@@ -313,7 +315,7 @@ do case "errors"
 	local function testerr(mode)
 		asserterr("no such", system.copyfile("LICENSE", "copied.lua", mode))
 		asserterr("already exists", system.copyfile("../LICENSE", "file.lua", mode.."n"))
-		asserterr(standard == "win32" and "operation not permitted" or "directory",
+		asserterr(standard ~= "posix" and "operation not permitted" or "directory",
 			system.copyfile("benchmarks", "copied.dir", mode))
 	end
 
@@ -354,7 +356,7 @@ do case "errors"
 	local function testerr(mode)
 		asserterr("no such", system.removefile("MISSING.FILE", mode))
 		asserterr("no such", system.removefile("MISSING.DIR", "d"..mode))
-		asserterr(standard == "win32" and "operation not permitted" or "directory",
+		asserterr(standard ~= "posix" and "operation not permitted" or "directory",
 			system.removefile("benchmarks", mode))
 		asserterr("not empty", system.removefile("benchmarks", "d"..mode))
 	end
@@ -558,7 +560,7 @@ do case "errors"
 		end
 	end
 
-	local expectederrmsg = standard == "win32" and "operation not permitted" or "invalid argument"
+	local expectederrmsg = standard ~= "posix" and "operation not permitted" or "invalid argument"
 	asserterr(expectederrmsg, file:resize(32, "~"))
 
 	file:close("~")
@@ -810,7 +812,9 @@ local function timeequals(a, b)
 end
 
 local linkpath = "link.lua"
-assert(system.linkfile(path, linkpath, "~s"))
+if standard == "posix" then
+	assert(system.linkfile(path, linkpath, "~s"))
+end
 
 for _, spec in ipairs{
 	{
@@ -861,7 +865,7 @@ for _, spec in ipairs{
 	do case "change times"
 		local function testchange(block, link)
 			local mode = block..link
-			if standard == "win32" and spec.name == "file:touch" then -- TODO: check if this is a bug in libuv
+			if standard ~= "posix" and spec.name == "file:touch" then -- TODO: check if this is a bug in libuv
 				asserterr("operation not permitted", spec.func(spec.arg, mode))
 			else
 				assert(spec.func(spec.arg, mode) == true)
@@ -903,7 +907,7 @@ for _, spec in ipairs{
 		spawn(testchange, "", "")
 		assert(system.run() == false)
 
-		if spec.name == "touchfile" then
+		if standard == "posix" and spec.name == "touchfile" then
 			spec.arg = linkpath
 			access, modify = system.fileinfo(linkpath, "~lam")
 
@@ -918,7 +922,9 @@ for _, spec in ipairs{
 
 end
 
-assert(system.removefile(linkpath, "~"))
+if standard == "posix" then
+	assert(system.removefile(linkpath, "~"))
+end
 
 --------------------------------------------------------------------------------
 

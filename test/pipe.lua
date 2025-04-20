@@ -6,7 +6,7 @@ local pipenames = {
 	bindable = "./localaddress.usock",
 	denied = "/dev/null",
 }
-if standard == "win32" then
+if standard ~= "posix" then
 	pipenames.free = [[\\?\pipe\freeaddress.pipe]]
 	pipenames.bindable = [[\\?\pipe\localaddress.pipe]]
 	pipenames.denied = nil
@@ -84,8 +84,8 @@ testgetaddr(create)
 teststream(create, pipenames)
 
 if standard == "posix" then case "tranfer socket"
-	local serveraddr = os.tmpname()
-	local parentaddr = os.tmpname()
+	local serveraddr = tempfilename()
+	local parentaddr = tempfilename()
 	os.remove(parentaddr)
 	os.remove(serveraddr)
 	if standard == "win32" then
