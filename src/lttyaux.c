@@ -5,6 +5,8 @@
 #include "lttyaux.h"
 #include "lmodaux.h"
 
+#if defined(LUA_USE_POSIX)		/* https://github.com/libuv/libuv/issues/2062 */
+
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -102,8 +104,6 @@ int lcu_dupfd(int fd) {
 	return newfd;
 }
 
-
-#if defined(LUA_USE_POSIX)		/* https://github.com/libuv/libuv/issues/2062 */
 
 static int stdiofd_gc (lua_State *L) {
 	int i, *stdiofd = (int *)lua_touserdata(L, 1);
