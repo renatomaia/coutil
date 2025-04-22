@@ -1,3 +1,5 @@
+#define LUA_LIB
+
 #include "lthpool.h"
 #include "lmodaux.h"
 #include "lttyaux.h"

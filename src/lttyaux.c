@@ -5,7 +5,18 @@
 #include "lttyaux.h"
 #include "lmodaux.h"
 
-#if defined(LUA_USE_POSIX)		/* https://github.com/libuv/libuv/issues/2062 */
+/* https://github.com/libuv/libuv/issues/2062 */
+#if defined(_AIX) || \
+defined(__APPLE__) || \
+defined(__DragonFly__) || \
+defined(__FreeBSD__) || \
+defined(__FreeBSD_kernel__) || \
+defined(__linux__) || \
+defined(__OpenBSD__) || \
+defined(__NetBSD__) || \
+defined(__CYGWIN__) || \
+defined(__MSYS__) || \
+defined(__HAIKU__)
 
 #include <errno.h>
 #include <fcntl.h>

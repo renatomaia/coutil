@@ -31,6 +31,13 @@ local concat = table.concat
 local insert = table.insert
 local unpack = table.unpack
 
+if not package.loaded["memory"] and not package.preload["memory"] then
+	local libpath = package.searchpath("memory", package.cpath)
+	if libpath then
+		package.loadlib(libpath, "*")
+	end
+end
+
 local memory = require "memory"
 local alloc = memory.create
 

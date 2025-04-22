@@ -1,3 +1,5 @@
+#define LUA_LIB
+
 #include "loperaux.h"
 #include "lttyaux.h"
 #include "lchaux.h"

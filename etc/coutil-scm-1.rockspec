@@ -1,5 +1,6 @@
-package="coutil"
-version="scm-1"
+rockspec_format = "3.1"
+package = "coutil"
+version = "scm-1"
 source = {
 	url = "git://github.com/renatomaia/coutil",
 }
@@ -17,39 +18,29 @@ description = {
 	license = "MIT/X11"
 }
 dependencies = {
-	"lua >= 5.4",
-	"vararg >= 2.1",
+	"lua >= 5.4, < 5.5",
+	"vararg >= 2.1, < 3.0",
+	"memory >= 2.1, < 3.0",
 }
 external_dependencies = {
-	LUAMEM = {
-		header = "luamem.h",
-		library = "luamem",
-	},
 	LIBUV = {
 		header = "uv.h",
 		library = "uv",
 	},
 }
 build = {
-	type = "make",
-	makefile = "src/Makefile",
-	build_target = "fromrockspec",
-	build_variables = {
-		SYSCFLAGS = "$(CFLAGS)",
-		SYSLIBFLAG = "$(LIBFLAG)",
-		LUA_LIB = "$(LUALIB)",
-		LUA_LIBDIR = "$(LUA_LIBDIR)",
-		LUA_INCDIR = "$(LUA_INCDIR)",
-		LUAMEM_LIBDIR = "$(LUAMEM_LIBDIR)",
-		LUAMEM_INCDIR = "$(LUAMEM_INCDIR)",
-		LIBUV_LIBDIR = "$(LIBUV_LIBDIR)",
-		LIBUV_INCDIR = "$(LIBUV_INCDIR)",
+	type = "cmake",
+	variables = {
+		CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS = "ON",
+		CMAKE_INSTALL_PREFIX = "$(PREFIX)",
+		CMAKE_LIBRARY_PATH = "$(LUA_LIBDIR);$(MEMORY_ROCKDIR)/library;$(LIBUV_LIBDIR)",
+		LUA_INCLUDE_DIR = "$(LUA_INCDIR)",
+		LUAMEM_INCLUDE_DIR = "$(MEMORY_ROCKDIR)/include",
+		LIBUV_INCLUDE_DIR = "$(LIBUV_INCDIR)",
+		MODULE_DESTINATION = "$(LIBDIR)",
 	},
-	install_pass = false,
 	install = {
-		bin = {
-			["coutil"] = "demo/console.lua",
-		},
+		bin = { coutil = "demo/console.lua" },
 		lua = {
 			["coutil.event"] = "lua/coutil/event.lua",
 			["coutil.mutex"] = "lua/coutil/mutex.lua",
@@ -57,19 +48,10 @@ build = {
 			["coutil.queued"] = "lua/coutil/queued.lua",
 			["coutil.spawn"] = "lua/coutil/spawn.lua",
 		},
-		lib = {
-			["coutil"] = "src/coutil.so",
-		},
 	},
-	platforms = {
-		windows = {
-			makefile = "etc/Makefile.win",
-			build_target = "mod",
-			install = {
-				lib = {
-					["coutil"] = "coutil.dll",
-				},
-			},
-		},
+	copy_directories = {
+		"demo",
+		"doc",
+		"test",
 	},
 }
