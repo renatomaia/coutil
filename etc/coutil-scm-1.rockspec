@@ -1,4 +1,5 @@
-rockspec_format = "3.1"
+local luamem_release = "2.1.0-1"
+
 package = "coutil"
 version = "scm-1"
 source = {
@@ -20,7 +21,7 @@ description = {
 dependencies = {
 	"lua >= 5.4, < 5.5",
 	"vararg >= 2.1, < 3.0",
-	"memory >= 2.1, < 3.0",
+	"memory == "..luamem_release,
 }
 external_dependencies = {
 	LIBUV = {
@@ -33,9 +34,9 @@ build = {
 	variables = {
 		CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS = "ON",
 		CMAKE_INSTALL_PREFIX = "$(PREFIX)",
-		CMAKE_LIBRARY_PATH = "$(LUA_LIBDIR);$(MEMORY_ROCKDIR)/library;$(LIBUV_LIBDIR)",
+		CMAKE_LIBRARY_PATH = "$(LUA_LIBDIR);$(ROCKS_TREE)/memory/"..luamem_release.."/library;$(LIBUV_LIBDIR)",
 		LUA_INCLUDE_DIR = "$(LUA_INCDIR)",
-		LUAMEM_INCLUDE_DIR = "$(MEMORY_ROCKDIR)/include",
+		LUAMEM_INCLUDE_DIR = "$(ROCKS_TREE)/memory/"..luamem_release.."/include",
 		LIBUV_INCLUDE_DIR = "$(LIBUV_INCDIR)",
 		MODULE_DESTINATION = "$(LIBDIR)",
 	},
