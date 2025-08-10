@@ -39,6 +39,7 @@ do case "list contents"
 			[".git"] = "directory",
 			[".github"] = "directory",
 			[".gitignore"] = "file",
+			["CMakeLists.txt"] = "file",
 			demo = "directory",
 			doc = "directory",
 			etc = "directory",

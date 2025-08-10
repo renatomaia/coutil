@@ -26,7 +26,7 @@ These are complete examples making use of multiple features to illustrate an app
 but without the use of [`console.lua`](console.lua).
 - [Multiprocess Echo Server](multiecho): based on example from [libuv Guide](http://docs.libuv.org/en/v1.x/guide/processes.html#sending-file-descriptors-over-pipes).
 - [Coutil Console](console.lua): emulates the [Lua standalone interpreter](https://www.lua.org/manual/5.4/manual.html#7),
-but runs all the code in a coroutine and along with Coutil's [event loop](doc/manual.md#event-processing).
+but runs all the code in a coroutine and along with Coutil's [event loop](../doc/manual.md#event-processing).
 - [LuaSocket 2.0.2 API](luasocket.lua): a coroutine enabled version of module `socket.core`.
 - [TCP Server to Run Lua Chunks](remoteexec): includes server and client implentations,
 either using Coutil,

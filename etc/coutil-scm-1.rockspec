@@ -1,5 +1,4 @@
-local luamem_release = "2.1.0-1"
-
+rockspec_format = "3.1"
 package = "coutil"
 version = "scm-1"
 source = {
@@ -19,9 +18,9 @@ description = {
 	license = "MIT/X11"
 }
 dependencies = {
-	"lua >= 5.4, < 5.5",
+	"lua >= 5.4, < 5.6",
 	"vararg >= 2.1, < 3.0",
-	"memory == "..luamem_release,
+	"memory >= 2.1, < 3.0",
 }
 external_dependencies = {
 	LIBUV = {
@@ -34,11 +33,13 @@ build = {
 	variables = {
 		CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS = "ON",
 		CMAKE_INSTALL_PREFIX = "$(PREFIX)",
-		CMAKE_LIBRARY_PATH = "$(LUA_LIBDIR);$(ROCKS_TREE)/memory/"..luamem_release.."/library;$(LIBUV_LIBDIR)",
+		CMAKE_LIBRARY_PATH = "$(MEMORY_ROCKDIR)/library;$(LIBUV_LIBDIR)",
+		LUA_MODULE_DIR = "$(LIBDIR)",
 		LUA_INCLUDE_DIR = "$(LUA_INCDIR)",
-		LUAMEM_INCLUDE_DIR = "$(ROCKS_TREE)/memory/"..luamem_release.."/include",
+		LUA_LIBRARY_DIR = "$(LUA_LIBDIR)",
+		LUA_LIBRARY_FILE = "$(LUA_LIBDIR_FILE)",
+		LUAMEM_INCLUDE_DIR = "$(MEMORY_ROCKDIR)/include",
 		LIBUV_INCLUDE_DIR = "$(LIBUV_INCDIR)",
-		MODULE_DESTINATION = "$(LIBDIR)",
 	},
 	install = {
 		bin = { coutil = "demo/console.lua" },
