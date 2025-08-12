@@ -45,5 +45,4 @@ cmake --install build
 **Note:** You can add `-DLINK_TO_LUAMEM_LIB=OFF` to the first command to avoid linking Coutil's binary module to LuaMemory's C library.
 This might be useful to make Coutil use a LuaMemory implementation from the Lua runtime.
 For instance,
-when [Lua is built with LuaMemory](https://github.com/renatomaia/coutil/blob/master/doc/install.md#added-to-lua),
-or [LuaMemory's library loaded in Lua is exposed to modules](https://github.com/renatomaia/coutil/blob/master/doc/install.md#expose-the-c-api-dynamically).
+when [LuaMemory's library loaded in Lua is exposed to modules](https://github.com/renatomaia/coutil/blob/master/doc/install.md#expose-the-c-api-dynamically).
