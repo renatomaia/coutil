@@ -31,7 +31,6 @@ external_dependencies = {
 build = {
 	type = "cmake",
 	variables = {
-		CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS = "ON",
 		CMAKE_INSTALL_PREFIX = "$(PREFIX)",
 		CMAKE_LIBRARY_PATH = "$(MEMORY_ROCKDIR)/library;$(LIBUV_LIBDIR)",
 		LUA_MODULE_DIR = "$(LIBDIR)",
